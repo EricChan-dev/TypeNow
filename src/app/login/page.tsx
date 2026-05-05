@@ -1,3 +1,4 @@
+import { Suspense } from "react"
 import Link from "next/link"
 import Image from "next/image"
 import { ArrowLeft, BookOpen } from "lucide-react"
@@ -91,7 +92,9 @@ export default function LoginPage() {
                 登录以开始你的英语学习之旅
               </p>
 
-              <LoginForm />
+              <Suspense fallback={<div className="text-sm text-muted-foreground text-center">加载中...</div>}>
+                <LoginForm />
+              </Suspense>
             </div>
           </div>
         </section>

@@ -1,24 +1,7 @@
 import Link from "next/link"
-import { Check, Minus, ArrowRight, Sparkles } from "lucide-react"
-import { PricingCard } from "@/components/pricing/PricingCard"
+import { Minus, ArrowRight, Sparkles } from "lucide-react"
+import { PricingClient } from "@/components/pricing/PricingClient"
 import { PricingFAQ } from "@/components/pricing/PricingFAQ"
-
-const freeFeatures = [
-  "每天 30 句打字练习",
-  "2 个开放场景",
-  "最近 50 个错误智能复习",
-  "每周 2 次 AI 强化",
-  "基础学习统计",
-]
-
-const proFeatures = [
-  "无限打字练习",
-  "全部 6 个开放场景",
-  "全部历史错误智能复习",
-  "无限次 AI 强化训练",
-  "深度统计 & 学习报告导出",
-  "会员专属徽章",
-]
 
 interface ComparisonRow {
   feature: string
@@ -29,49 +12,13 @@ interface ComparisonRow {
 }
 
 const comparisonRows: ComparisonRow[] = [
-  {
-    feature: "打字练习",
-    free: "每天 30 句",
-    monthly: "无限",
-    yearly: "无限",
-  },
-  {
-    feature: "开放场景",
-    free: "2 个",
-    monthly: "全部 6 个",
-    yearly: "全部 6 个",
-  },
-  {
-    feature: "智能复习",
-    free: "最近 50 个错误",
-    monthly: "全部历史，无上限",
-    yearly: "全部历史，无上限",
-  },
-  {
-    feature: "AI 强化",
-    free: "每周 2 次",
-    monthly: "无限次",
-    yearly: "无限次",
-  },
-  {
-    feature: "学习统计",
-    free: "基础统计",
-    monthly: "深度统计 + 报告导出",
-    yearly: "深度统计 + 报告导出",
-  },
-  {
-    feature: "专属标识",
-    free: "-",
-    monthly: "会员徽章",
-    yearly: "会员徽章",
-    freeMuted: true,
-  },
-  {
-    feature: "价格",
-    free: "¥0 永久免费",
-    monthly: "¥29/月",
-    yearly: "¥199/年",
-  },
+  { feature: "打字练习", free: "每天 30 句", monthly: "无限", yearly: "无限" },
+  { feature: "开放场景", free: "2 个", monthly: "全部 6 个", yearly: "全部 6 个" },
+  { feature: "智能复习", free: "最近 50 个错误", monthly: "全部历史，无上限", yearly: "全部历史，无上限" },
+  { feature: "AI 强化", free: "每周 2 次", monthly: "无限次", yearly: "无限次" },
+  { feature: "学习统计", free: "基础统计", monthly: "深度统计 + 报告导出", yearly: "深度统计 + 报告导出" },
+  { feature: "专属标识", free: "-", monthly: "会员徽章", yearly: "会员徽章", freeMuted: true },
+  { feature: "价格", free: "¥0 永久免费", monthly: "¥29/月", yearly: "¥199/年" },
 ]
 
 export default function PricingPage() {
@@ -87,43 +34,10 @@ export default function PricingPage() {
         </p>
       </section>
 
-      {/* Pricing Cards */}
+      {/* Pricing Cards (client component with checkout modal) */}
       <section className="bg-background px-5 xl:px-20 pb-12 xl:pb-16">
-        <div className="mx-auto max-w-[1200px] grid grid-cols-1 md:grid-cols-3 gap-6">
-          <PricingCard
-            name="普通会员"
-            description="快速上手，体验核心打字练习功能"
-            price="¥0"
-            period="永久免费"
-            features={freeFeatures}
-            ctaText="免费开始"
-            ctaHref="/login"
-            variant="neutral"
-          />
-          <PricingCard
-            name="月度会员"
-            description="解锁全部功能，高效提升英语能力"
-            price="¥29"
-            period="/月"
-            features={proFeatures}
-            ctaText="立即订阅"
-            ctaHref="/login"
-            variant="emphasized"
-          />
-          <PricingCard
-            name="年度会员"
-            description="最划算的选择，解锁全部功能"
-            price="¥199"
-            period="/年"
-            originalPrice="¥348"
-            subPeriod="≈ ¥16.6/月"
-            features={proFeatures}
-            ctaText="立即订阅"
-            ctaHref="/login"
-            variant="prominent"
-            badge="推荐"
-            saveBadge="省 ¥149"
-          />
+        <div className="mx-auto max-w-[1200px]">
+          <PricingClient />
         </div>
       </section>
 
@@ -147,23 +61,13 @@ export default function PricingPage() {
           </h2>
 
           <div className="rounded-2xl bg-card border border-border overflow-hidden">
-            {/* Table Header */}
             <div className="grid grid-cols-4 px-8 py-5 border-b border-border">
-              <div className="text-sm font-bold text-muted-foreground">
-                功能
-              </div>
-              <div className="text-sm font-bold text-muted-foreground text-center">
-                普通会员
-              </div>
-              <div className="text-sm font-bold text-muted-foreground text-center">
-                月度会员
-              </div>
-              <div className="text-sm font-bold text-accent text-center">
-                年度会员
-              </div>
+              <div className="text-sm font-bold text-muted-foreground">功能</div>
+              <div className="text-sm font-bold text-muted-foreground text-center">普通会员</div>
+              <div className="text-sm font-bold text-muted-foreground text-center">月度会员</div>
+              <div className="text-sm font-bold text-accent text-center">年度会员</div>
             </div>
 
-            {/* Table Rows */}
             {comparisonRows.map((row, i) => (
               <div
                 key={row.feature}
@@ -171,26 +75,16 @@ export default function PricingPage() {
                   i % 2 === 0 ? "bg-transparent" : "bg-muted/50"
                 } ${i < comparisonRows.length - 1 ? "border-b border-border" : ""}`}
               >
-                <div className="text-sm text-foreground self-center">
-                  {row.feature}
-                </div>
-                <div
-                  className={`text-sm text-center self-center ${
-                    row.freeMuted ? "text-muted-foreground" : "text-muted-foreground"
-                  }`}
-                >
+                <div className="text-sm text-foreground self-center">{row.feature}</div>
+                <div className="text-sm text-muted-foreground text-center self-center">
                   {row.free === "-" ? (
                     <Minus className="h-4 w-4 inline text-muted-foreground/50" />
                   ) : (
                     row.free
                   )}
                 </div>
-                <div className="text-sm font-semibold text-success text-center self-center">
-                  {row.monthly}
-                </div>
-                <div className="text-sm font-semibold text-success text-center self-center">
-                  {row.yearly}
-                </div>
+                <div className="text-sm font-semibold text-success text-center self-center">{row.monthly}</div>
+                <div className="text-sm font-semibold text-success text-center self-center">{row.yearly}</div>
               </div>
             ))}
           </div>
@@ -200,9 +94,7 @@ export default function PricingPage() {
       {/* FAQ */}
       <section className="bg-background px-5 xl:px-20 py-16 xl:py-24">
         <div className="mx-auto max-w-[800px] flex flex-col gap-10">
-          <h2 className="text-[32px] font-bold text-foreground text-center">
-            常见问题
-          </h2>
+          <h2 className="text-[32px] font-bold text-foreground text-center">常见问题</h2>
           <PricingFAQ />
         </div>
       </section>

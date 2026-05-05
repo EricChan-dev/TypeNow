@@ -15,6 +15,7 @@ interface PricingCardProps {
   variant: "neutral" | "emphasized" | "prominent"
   badge?: string
   saveBadge?: string
+  onCheckout?: () => void
 }
 
 export function PricingCard({
@@ -30,6 +31,7 @@ export function PricingCard({
   variant,
   badge,
   saveBadge,
+  onCheckout,
 }: PricingCardProps) {
   const isProminent = variant === "prominent"
   const isNeutral = variant === "neutral"
@@ -111,20 +113,35 @@ export function PricingCard({
       </ul>
 
       {/* CTA Button */}
-      <Link
-        href={ctaHref}
-        className={cn(
-          "inline-flex items-center justify-center rounded-lg py-3 text-[15px] font-semibold transition-all",
-          isNeutral &&
-            "border border-border text-card-foreground hover:bg-muted",
-          variant === "emphasized" &&
-            "bg-primary text-primary-foreground hover:bg-primary/90",
-          isProminent &&
-            "bg-gradient-to-r from-indigo-500 via-purple-500 to-blue-500 text-white hover:opacity-90"
-        )}
-      >
-        {ctaText}
-      </Link>
+      {onCheckout ? (
+        <button
+          onClick={onCheckout}
+          className={cn(
+            "inline-flex items-center justify-center rounded-lg py-3 text-[15px] font-semibold transition-all w-full",
+            variant === "emphasized" &&
+              "bg-primary text-primary-foreground hover:bg-primary/90",
+            isProminent &&
+              "bg-gradient-to-r from-indigo-500 via-purple-500 to-blue-500 text-white hover:opacity-90"
+          )}
+        >
+          {ctaText}
+        </button>
+      ) : (
+        <Link
+          href={ctaHref}
+          className={cn(
+            "inline-flex items-center justify-center rounded-lg py-3 text-[15px] font-semibold transition-all",
+            isNeutral &&
+              "border border-border text-card-foreground hover:bg-muted",
+            variant === "emphasized" &&
+              "bg-primary text-primary-foreground hover:bg-primary/90",
+            isProminent &&
+              "bg-gradient-to-r from-indigo-500 via-purple-500 to-blue-500 text-white hover:opacity-90"
+          )}
+        >
+          {ctaText}
+        </Link>
+      )}
     </div>
   )
 }

@@ -102,3 +102,29 @@ export interface ReviewItem {
   chinese?: string
   english?: string
 }
+
+export interface PaymentOrder {
+  id: string
+  user_id: string
+  plan: "monthly" | "yearly"
+  amount: number
+  out_trade_no: string
+  transaction_id?: string
+  code_url?: string
+  status: "pending" | "paid" | "expired" | "cancelled"
+  paid_at?: string
+  created_at: string
+  expires_at?: string
+}
+
+export interface Subscription {
+  id: string
+  user_id: string
+  plan: "monthly" | "yearly"
+  status: "active" | "cancelled" | "expired"
+  payment_order_id?: string
+  starts_at: string
+  expires_at: string
+  cancelled_at?: string
+  created_at: string
+}
