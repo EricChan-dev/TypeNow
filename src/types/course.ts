@@ -14,6 +14,15 @@ export interface Course {
   subCategoryKey: string
   createdAt: string
   usageCount: number
+  description: string
+}
+
+export interface Lesson {
+  id: string
+  courseId: string
+  title: string
+  summary: string
+  order: number
 }
 
 export interface CourseCategory {

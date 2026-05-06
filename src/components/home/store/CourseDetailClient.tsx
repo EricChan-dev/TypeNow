@@ -1,0 +1,195 @@
+"use client"
+
+import { useState } from "react"
+import Link from "next/link"
+import { ChevronLeft, BookOpen, Users, Play, Check } from "lucide-react"
+import { toast } from "sonner"
+import { mockCourses, mockLessons } from "@/lib/mock-data/courses"
+import { useAcquiredCourses } from "@/lib/hooks/useAcquiredCourses"
+import { cn } from "@/lib/utils"
+
+function getCoverGradient(categoryKey: string, subCategoryKey: string): string {
+  const seed = (categoryKey + subCategoryKey).split("").reduce((acc, c) => acc + c.charCodeAt(0), 0)
+  const hue = seed % 360
+  return `linear-gradient(135deg, hsl(${hue}, 50%, 35%) 0%, hsl(${(hue + 40) % 360}, 45%, 20%) 100%)`
+}
+
+function formatLearnerCount(n: number): string {
+  if (n >= 10000) return `${(n / 10000).toFixed(1)}万`
+  if (n >= 1000) return `${(n / 1000).toFixed(1)}k`
+  return String(n)
+}
+
+interface CourseDetailClientProps {
+  courseId: string
+}
+
+export function CourseDetailClient({ courseId }: CourseDetailClientProps) {
+  const course = mockCourses.find((c) => c.id === courseId)
+  const lessons = mockLessons.filter((l) => l.courseId === courseId).sort((a, b) => a.order - b.order)
+  const { isAcquired, acquire } = useAcquiredCourses()
+
+  const [activeTab, setActiveTab] = useState<"outline" | "reviews">("outline")
+
+  if (!course) {
+    return (
+      <div className="flex flex-col items-center justify-center py-24 px-6 text-center">
+        <BookOpen className="h-12 w-12 text-muted-foreground/40 mb-4" />
+        <p className="text-sm font-medium text-muted-foreground">课程未找到</p>
+        <Link
+          href="/home/store"
+          className="mt-4 inline-flex items-center gap-1.5 text-sm text-accent hover:text-accent/80 transition-colors"
+        >
+          <ChevronLeft className="h-4 w-4" />
+          返回课程列表
+        </Link>
+      </div>
+    )
+  }
+
+  const acquired = isAcquired(courseId)
+  const coverGradient = getCoverGradient(course.categoryKey, course.subCategoryKey)
+
+  return (
+    <div className="px-6 lg:px-10 xl:px-14 py-6">
+      {/* Back button */}
+      <Link
+        href="/home/store"
+        className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors mb-5"
+      >
+        <ChevronLeft className="h-4 w-4" />
+        返回课程列表
+      </Link>
+
+      {/* Header Card */}
+      <div className="rounded-2xl border border-border bg-card overflow-hidden mb-6 flex flex-col sm:flex-row">
+        {/* Cover - left side */}
+        <div
+          className="relative sm:w-[280px] lg:w-[320px] shrink-0 aspect-[16/10] sm:aspect-auto flex items-center justify-center"
+          style={{ background: coverGradient }}
+        >
+          <span className="text-white/20 text-4xl font-extrabold tracking-wider select-none">
+            {course.title.slice(0, 4)}
+          </span>
+          {course.source === "official" && (
+            <span className="absolute top-3 left-3 rounded-full bg-white/15 backdrop-blur-sm px-2.5 py-0.5 text-[10px] font-medium text-white/90">
+              官方
+            </span>
+          )}
+        </div>
+
+        {/* Info - right side */}
+        <div className="p-5 sm:p-6 flex-1 flex flex-col justify-center min-w-0">
+          <h1 className="text-lg sm:text-xl font-bold text-foreground">{course.title}</h1>
+          <p className="mt-2 text-sm text-muted-foreground leading-relaxed line-clamp-3">
+            {course.description}
+          </p>
+
+          <div className="mt-3 flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
+            <div className="flex items-center gap-1.5">
+              <div className={cn(
+                "flex items-center justify-center h-5 w-5 rounded-full shrink-0 text-[10px] font-bold",
+                course.source === "official" ? "bg-accent text-white" : "bg-muted text-muted-foreground"
+              )}>
+                {course.source === "official" ? "官" : (course.sourceName || "U")[0]}
+              </div>
+              {course.sourceName}
+            </div>
+            <div className="flex items-center gap-1.5">
+              <BookOpen className="h-3.5 w-3.5" />
+              {lessons.length} 课
+            </div>
+            <div className="flex items-center gap-1.5">
+              <Users className="h-3.5 w-3.5" />
+              {formatLearnerCount(course.learnerCount)} 人学习
+            </div>
+          </div>
+
+          {/* Action buttons */}
+          <div className="mt-4 flex items-center gap-3">
+            {acquired ? (
+              <>
+                <span className="inline-flex items-center gap-1.5 rounded-lg bg-muted px-5 py-2.5 text-sm font-medium text-muted-foreground cursor-not-allowed">
+                  <Check className="h-4 w-4" />
+                  已获取
+                </span>
+                <button
+                  onClick={() => toast("即将上线", { description: "学习功能正在开发中…" })}
+                  className="inline-flex items-center gap-1.5 rounded-lg bg-accent px-5 py-2.5 text-sm font-semibold text-white hover:bg-accent/90 transition-colors"
+                >
+                  <Play className="h-4 w-4" />
+                  开始学习
+                </button>
+              </>
+            ) : (
+              <button
+                onClick={() => acquire(courseId)}
+                className="inline-flex items-center gap-1.5 rounded-lg bg-primary px-5 py-2.5 text-sm font-semibold text-primary-foreground hover:bg-primary/90 transition-colors"
+              >
+                <BookOpen className="h-4 w-4" />
+                获取课程
+              </button>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* Tabs */}
+      <div className="border-b border-border mb-5">
+        <div className="flex items-center gap-0">
+          <button
+            onClick={() => setActiveTab("outline")}
+            className={cn(
+              "relative px-4 py-3 text-sm font-medium transition-colors",
+              activeTab === "outline"
+                ? "text-accent after:absolute after:bottom-0 after:left-0 after:right-0 after:h-[2px] after:bg-accent after:rounded-full"
+                : "text-muted-foreground hover:text-foreground"
+            )}
+          >
+            大纲 ({lessons.length})
+          </button>
+          <button
+            onClick={() => setActiveTab("reviews")}
+            className={cn(
+              "relative px-4 py-3 text-sm font-medium transition-colors",
+              activeTab === "reviews"
+                ? "text-accent after:absolute after:bottom-0 after:left-0 after:right-0 after:h-[2px] after:bg-accent after:rounded-full"
+                : "text-muted-foreground hover:text-foreground"
+            )}
+          >
+            评价
+          </button>
+        </div>
+      </div>
+
+      {/* Tab Content */}
+      {activeTab === "outline" ? (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
+          {lessons.map((lesson) => (
+            <div
+              key={lesson.id}
+              className="flex items-start gap-3 rounded-xl border border-border bg-card p-4 hover:border-accent/30 transition-colors"
+            >
+              <div className="flex items-center justify-center h-7 w-7 rounded-full bg-accent/10 text-accent text-xs font-bold shrink-0">
+                {lesson.order}
+              </div>
+              <div className="min-w-0">
+                <h3 className="text-sm font-medium text-foreground truncate">
+                  {lesson.title}
+                </h3>
+                <p className="mt-1 text-xs text-muted-foreground leading-relaxed line-clamp-2">
+                  {lesson.summary}
+                </p>
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <div className="flex flex-col items-center justify-center py-20 text-center">
+          <p className="text-sm font-medium text-muted-foreground">功能开发中…</p>
+          <p className="text-xs text-muted-foreground/70 mt-1">课程评价功能即将上线</p>
+        </div>
+      )}
+    </div>
+  )
+}

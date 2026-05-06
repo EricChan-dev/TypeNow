@@ -131,31 +131,46 @@ export function UserActions({ serverUser, variant = "public" }: UserActionsProps
       <div className="hidden sm:flex items-center relative rounded-[24px] border border-border bg-muted p-[3px]">
         <div
           className={cn(
-            "absolute top-[3px] h-[28px] w-[56px] rounded-[20px] transition-all duration-300 ease-out",
+            "absolute top-[3px] h-[28px] w-[56px] rounded-[20px]",
             !mounted && "left-[3px] bg-background",
-            mounted && theme === "dark" && "left-[3px] bg-background",
-            mounted && theme === "light" && "left-[59px] bg-card shadow-sm"
+            mounted && theme === "dark" && "left-[3px] bg-background shadow-sm",
+            mounted && theme === "light" && "left-[59px] bg-card shadow-md"
           )}
+          style={{
+            transition: "left 0.5s cubic-bezier(0.34, 1.56, 0.64, 1), background-color 0.35s ease, box-shadow 0.35s ease",
+          }}
         />
         <button
           onClick={() => { setTheme("dark"); trackThemeToggle("dark") }}
           className={cn(
-            "relative z-10 flex items-center justify-center gap-1 rounded-[20px] w-[56px] py-[5px] text-[13px] font-medium transition-colors duration-300",
-            mounted && theme === "dark" ? "text-foreground" : "text-muted-foreground"
+            "relative z-10 flex items-center justify-center gap-1.5 rounded-[20px] w-[56px] py-[5px] text-[13px] font-medium transition-all duration-300",
+            mounted && theme === "dark" ? "text-foreground" : "text-muted-foreground hover:text-foreground/70"
           )}
           aria-label="深色模式"
         >
-          <Moon className="h-3.5 w-3.5" />深色
+          <Moon
+            className="h-3.5 w-3.5 transition-all duration-500"
+            style={{
+              transform: mounted && theme === "dark" ? "scale(1.15)" : "scale(1)",
+            }}
+          />
+          深色
         </button>
         <button
           onClick={() => { setTheme("light"); trackThemeToggle("light") }}
           className={cn(
-            "relative z-10 flex items-center justify-center gap-1 rounded-[20px] w-[56px] py-[5px] text-[13px] font-medium transition-colors duration-300",
-            mounted && theme === "light" ? "text-card-foreground" : mounted && theme === "dark" ? "text-white/80" : "text-muted-foreground"
+            "relative z-10 flex items-center justify-center gap-1.5 rounded-[20px] w-[56px] py-[5px] text-[13px] font-medium transition-all duration-300",
+            mounted && theme === "light" ? "text-card-foreground" : "text-muted-foreground hover:text-foreground/70"
           )}
           aria-label="浅色模式"
         >
-          <Sun className="h-3.5 w-3.5" />浅色
+          <Sun
+            className="h-3.5 w-3.5 transition-all duration-500"
+            style={{
+              transform: mounted && theme === "light" ? "scale(1.15) rotate(0deg)" : "rotate(-30deg)",
+            }}
+          />
+          浅色
         </button>
       </div>
 

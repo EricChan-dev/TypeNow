@@ -1,7 +1,7 @@
 "use client"
 
+import Link from "next/link"
 import { Users } from "lucide-react"
-import { toast } from "sonner"
 import { cn } from "@/lib/utils"
 import type { Course } from "@/types/course"
 
@@ -25,9 +25,9 @@ export function CourseCard({ course }: CourseCardProps) {
   const coverGradient = getCoverGradient(course.categoryKey, course.subCategoryKey)
 
   return (
-    <button
-      onClick={() => toast("即将上线", { description: "课程详情页正在开发中…" })}
-      className="group w-full text-left rounded-xl border border-border bg-card overflow-hidden hover:border-accent/50 hover:shadow-lg transition-all"
+    <Link
+      href={`/home/store/${course.id}`}
+      className="group block w-full text-left rounded-xl border border-border bg-card overflow-hidden hover:border-accent/50 hover:shadow-lg transition-all"
     >
       {/* Cover */}
       <div
@@ -73,6 +73,6 @@ export function CourseCard({ course }: CourseCardProps) {
           </div>
         </div>
       </div>
-    </button>
+    </Link>
   )
 }
