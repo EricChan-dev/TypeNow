@@ -1,4 +1,4 @@
-import Link from "next/link"
+import { Suspense } from "react"
 import {
   Keyboard,
   Brain,
@@ -13,6 +13,10 @@ import {
   ArrowRight,
 } from "lucide-react"
 import { PricingCard } from "@/components/pricing/PricingCard"
+import { PricingFAQ } from "@/components/pricing/PricingFAQ"
+import { ScrollToSection } from "@/components/layout/ScrollToSection"
+import { ScrollToTop } from "@/components/layout/ScrollToTop"
+import { AuthLink } from "@/components/layout/AuthLink"
 
 const freeFeatures = [
   "每天 30 句打字练习",
@@ -34,10 +38,14 @@ const proMemberFeatures = [
 export default function LandingPage() {
   return (
     <div className="flex flex-col">
+      <Suspense fallback={null}>
+        <ScrollToSection />
+      </Suspense>
+      <ScrollToTop />
       {/* ════════════════════════════════════════
           Section 1: Hero
           ════════════════════════════════════════ */}
-      <section className="flex flex-col items-center justify-center bg-muted min-h-[680px] px-5 xl:px-20 py-16 xl:py-0 text-center">
+      <section id="hero" className="flex flex-col items-center justify-center bg-muted min-h-[680px] px-5 xl:px-20 py-16 xl:py-0 text-center">
         {/* Badge */}
         <span className="inline-flex items-center rounded-full bg-accent/10 px-4 py-1.5 text-[13px] font-medium text-accent mb-6">
           &middot; 智能复习 + AI 强化训练 &middot;
@@ -57,18 +65,18 @@ export default function LandingPage() {
 
         {/* CTA Buttons */}
         <div className="mt-8 flex items-center gap-4">
-          <Link
-            href="/login"
+          <AuthLink
             className="inline-flex items-center justify-center rounded-[10px] bg-primary px-7 py-3.5 text-base font-semibold text-primary-foreground hover:bg-primary/90 transition-colors"
+            loggedInChildren="开始练习"
           >
             免费开始练习
-          </Link>
-          <Link
-            href="/login"
+          </AuthLink>
+          <AuthLink
+            hideIfLoggedIn
             className="inline-flex items-center justify-center rounded-[10px] border-[1.5px] border-accent px-7 py-3.5 text-base font-semibold text-accent hover:bg-accent/10 transition-colors"
           >
             去登录
-          </Link>
+          </AuthLink>
         </div>
 
         {/* Trust line */}
@@ -80,7 +88,7 @@ export default function LandingPage() {
       {/* ════════════════════════════════════════
           Section 2: Layer 1 — 打字练习
           ════════════════════════════════════════ */}
-      <section className="bg-background px-5 xl:px-20 py-20 xl:py-24">
+      <section id="features" className="bg-background px-5 xl:px-20 py-20 xl:py-24">
         <div className="mx-auto max-w-[1280px] flex flex-col lg:flex-row items-center gap-12 lg:gap-20">
           {/* Left: Text */}
           <div className="flex-1 max-w-[580px] flex flex-col gap-7">
@@ -113,12 +121,11 @@ export default function LandingPage() {
               ))}
             </ul>
 
-            <Link
-              href="/login"
+            <AuthLink
               className="inline-flex items-center justify-center self-start rounded-[10px] bg-primary px-7 py-3.5 text-[15px] font-bold text-primary-foreground hover:bg-primary/90 transition-colors"
             >
               立即体验 &rarr;
-            </Link>
+            </AuthLink>
           </div>
 
           {/* Right: Stat Card */}
@@ -452,7 +459,7 @@ export default function LandingPage() {
       {/* ════════════════════════════════════════
           Section 6: Pricing — 3 卡同层
           ════════════════════════════════════════ */}
-      <section className="bg-background px-5 xl:px-20 py-20 xl:py-24">
+      <section id="pricing" className="bg-background px-5 xl:px-20 py-20 xl:py-24">
         <div className="mx-auto max-w-[1200px] flex flex-col items-center gap-14">
           <div className="flex flex-col items-center gap-4 text-center">
             <h2 className="text-[36px] font-bold text-foreground">
@@ -503,7 +510,19 @@ export default function LandingPage() {
       </section>
 
       {/* ════════════════════════════════════════
-          Section 7: Final CTA
+          Section 7: FAQ
+          ════════════════════════════════════════ */}
+      <section id="faq" className="bg-background px-5 xl:px-20 py-20 xl:py-24">
+        <div className="mx-auto max-w-[800px] flex flex-col gap-10">
+          <h2 className="text-[32px] font-bold text-foreground text-center">
+            常见问题
+          </h2>
+          <PricingFAQ />
+        </div>
+      </section>
+
+      {/* ════════════════════════════════════════
+          Section 8: Final CTA
           ════════════════════════════════════════ */}
       <section className="flex flex-col items-center justify-center bg-muted min-h-[420px] px-5 xl:px-20 py-20 text-center">
         <span className="inline-flex items-center gap-1.5 rounded-full bg-foreground/10 px-3.5 py-1.5 text-[13px] font-medium text-foreground mb-6">
@@ -520,13 +539,12 @@ export default function LandingPage() {
         </p>
 
         <div className="mt-10">
-          <Link
-            href="/login"
+          <AuthLink
             className="inline-flex items-center justify-center gap-2 rounded-[10px] bg-primary px-8 py-4 text-base font-semibold text-primary-foreground hover:bg-primary/90 transition-colors"
           >
             立即开始
             <ArrowRight className="h-[18px] w-[18px]" />
-          </Link>
+          </AuthLink>
         </div>
       </section>
     </div>

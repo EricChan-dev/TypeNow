@@ -1,27 +1,95 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useCallback } from "react"
 import Link from "next/link"
-import { usePathname } from "next/navigation"
-import { useTheme } from "next-themes"
-import { BookOpen, Moon, Sun, Menu, X } from "lucide-react"
-import { trackThemeToggle } from "@/lib/analytics"
+import { usePathname, useRouter } from "next/navigation"
+import { BookOpen, GraduationCap, Menu, X, User, Settings, Crown, LogOut } from "lucide-react"
+import { createClient } from "@/lib/supabase/client"
+import { cn } from "@/lib/utils"
+import { UserActions } from "@/components/layout/UserActions"
 
 const navLinks = [
-  { href: "/", label: "首页" },
-  { href: "/learn-path", label: "学习路径" },
-  { href: "/pricing", label: "定价" },
-  { href: "/help", label: "帮助中心" },
+  { href: "#hero", label: "首页", section: "hero" },
+  { href: "#features", label: "功能", section: "features" },
+  { href: "#pricing", label: "定价", section: "pricing" },
+  { href: "#faq", label: "常见问题", section: "faq" },
 ]
+
+interface UserProfile {
+  name: string | null
+  avatar: string | null
+  is_pro: boolean
+  level: number
+}
 
 export function Navbar() {
   const pathname = usePathname()
-  const { theme, setTheme } = useTheme()
-  const [mounted, setMounted] = useState(false)
+  const router = useRouter()
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
+  const [user, setUser] = useState<UserProfile | null>(null)
+  const [authLoading, setAuthLoading] = useState(true)
 
-  // Prevent hydration mismatch from next-themes
-  useEffect(() => { setMounted(true) }, [])
+  // Auth state for mobile menu
+  useEffect(() => {
+    const supabase = createClient()
+    if (!supabase) { setAuthLoading(false); return }
+
+    let cancelled = false
+    async function refresh() {
+      if (!supabase) return
+      try {
+        const { data: { user: authUser }, error } = await supabase.auth.getUser()
+        if (cancelled) return
+        if (error || !authUser) {
+          setUser(null)
+          setAuthLoading(false)
+          return
+        }
+
+        const { data: profile } = await supabase
+          .from("profiles")
+          .select("name, avatar, is_pro, level")
+          .maybeSingle()
+
+        if (cancelled) return
+        setUser({
+          name: profile?.name || null,
+          avatar: profile?.avatar || null,
+          is_pro: profile?.is_pro || false,
+          level: profile?.level || 1,
+        })
+      } catch {
+        if (!cancelled) setUser(null)
+      }
+      if (!cancelled) setAuthLoading(false)
+    }
+
+    refresh()
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(() => refresh())
+    return () => { cancelled = true; subscription?.unsubscribe() }
+  }, [])
+
+  async function handleLogout() {
+    const supabase = createClient()
+    if (supabase) await supabase.auth.signOut()
+    setUser(null)
+    router.push("/")
+  }
+
+  const scrollToSection = useCallback((sectionId: string) => {
+    if (pathname === "/") {
+      if (sectionId === "hero") {
+        window.scrollTo({ top: 0, behavior: "smooth" })
+      } else {
+        const el = document.getElementById(sectionId)
+        if (el) el.scrollIntoView({ behavior: "smooth" })
+      }
+    } else {
+      router.push(`/?scroll=${sectionId}`)
+    }
+  }, [pathname, router])
+
+  const isLoggedIn = !!user
 
   return (
     <header className="w-full border-b border-border bg-background">
@@ -37,73 +105,32 @@ export function Navbar() {
         {/* Desktop nav */}
         <nav className="hidden lg:flex items-center gap-8">
           {navLinks.map((link) => (
-            <Link
-              key={link.href}
-              href={link.href}
+            <button
+              key={link.section}
+              onClick={() => scrollToSection(link.section)}
               className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
             >
               {link.label}
-            </Link>
+            </button>
           ))}
+          {isLoggedIn && (
+            <Link
+              href="/home"
+              className="inline-flex items-center gap-1.5 rounded-lg bg-accent px-4 py-2 text-sm font-semibold text-white hover:bg-accent/90 transition-colors"
+            >
+              <GraduationCap className="h-4 w-4" />
+              学习中心
+            </Link>
+          )}
         </nav>
 
         {/* Right actions */}
-        <div className="flex items-center gap-5">
-          {/* Theme toggle pill */}
-          <div className="hidden sm:flex items-center rounded-[24px] border border-border bg-muted p-[3px]">
-            <button
-              onClick={() => { setTheme("dark"); trackThemeToggle("dark") }}
-              className={`flex items-center gap-1 rounded-[20px] px-2.5 py-[5px] text-[13px] font-medium transition-colors ${
-                mounted && theme === "dark"
-                  ? "bg-background text-foreground"
-                  : "text-muted-foreground"
-              }`}
-              aria-label="深色模式"
-            >
-              <Moon className="h-3.5 w-3.5" />
-              深色
-            </button>
-            <button
-              onClick={() => { setTheme("light"); trackThemeToggle("light") }}
-              className={`flex items-center gap-1 rounded-[20px] px-2.5 py-[5px] text-[13px] font-medium transition-colors ${
-                mounted && theme === "light"
-                  ? "bg-card text-card-foreground shadow-sm"
-                  : "text-muted-foreground"
-              }`}
-              aria-label="浅色模式"
-            >
-              <Sun className="h-3.5 w-3.5" />
-              浅色
-            </button>
-          </div>
-
-          {/* Desktop auth */}
-          <div className="hidden lg:flex items-center gap-5">
-            <Link
-              href="/login"
-              className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
-            >
-              免费开始
-            </Link>
-            <Link
-              href="/login"
-              className="inline-flex items-center justify-center rounded-lg bg-primary px-6 py-2.5 text-sm font-semibold text-primary-foreground hover:bg-primary/90 transition-colors"
-            >
-              登录
-            </Link>
-          </div>
+        <div className="flex items-center gap-3">
+          <UserActions variant="public" />
 
           {/* Mobile menu toggle */}
-          <button
-            onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-            className="lg:hidden p-1.5 text-muted-foreground hover:text-foreground"
-            aria-label="菜单"
-          >
-            {mobileMenuOpen ? (
-              <X className="h-5 w-5" />
-            ) : (
-              <Menu className="h-5 w-5" />
-            )}
+          <button onClick={() => setMobileMenuOpen(!mobileMenuOpen)} className="lg:hidden p-1.5 text-muted-foreground hover:text-foreground" aria-label="菜单">
+            {mobileMenuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
           </button>
         </div>
       </div>
@@ -112,31 +139,29 @@ export function Navbar() {
       {mobileMenuOpen && (
         <div className="lg:hidden border-t border-border bg-background px-5 py-4 space-y-3">
           {navLinks.map((link) => (
-            <Link
-              key={link.href}
-              href={link.href}
-              onClick={() => setMobileMenuOpen(false)}
-              className="block text-sm text-muted-foreground py-1.5"
-            >
-              {link.label}
-            </Link>
+            <button key={link.section} onClick={() => { scrollToSection(link.section); setMobileMenuOpen(false) }}
+              className="block text-sm text-muted-foreground py-1.5 w-full text-left">{link.label}</button>
           ))}
-          <div className="flex gap-3 pt-2">
-            <Link
-              href="/login"
-              onClick={() => setMobileMenuOpen(false)}
-              className="flex-1 text-center rounded-lg border border-border px-4 py-2 text-sm font-medium text-foreground"
-            >
-              免费开始
-            </Link>
-            <Link
-              href="/login"
-              onClick={() => setMobileMenuOpen(false)}
-              className="flex-1 text-center rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground"
-            >
-              登录
-            </Link>
-          </div>
+          {authLoading ? (
+            <div className="py-2 text-sm text-muted-foreground">加载中...</div>
+          ) : isLoggedIn ? (
+            <>
+              <Link href="/home" onClick={() => setMobileMenuOpen(false)} className="flex items-center gap-2 text-sm text-foreground py-1.5"><User className="h-4 w-4" /> 个人主页</Link>
+              <Link href="/home/settings" onClick={() => setMobileMenuOpen(false)} className="flex items-center gap-2 text-sm text-foreground py-1.5"><Settings className="h-4 w-4" /> 设置</Link>
+              {!user.is_pro && <Link href="/pricing" onClick={() => setMobileMenuOpen(false)} className="flex items-center gap-2 text-sm text-foreground py-1.5"><Crown className="h-4 w-4 text-amber-500" /> 升级会员</Link>}
+              <div className="pt-2 border-t border-border">
+                <div className="flex items-center gap-3 py-2">
+                  <div className={cn("flex items-center justify-center h-8 w-8 rounded-full text-xs font-bold", user.avatar ? "" : "bg-accent text-white")}>{(user.name || "U")[0].toUpperCase()}</div>
+                  <div><p className="text-sm font-medium text-foreground">{user.name || "用户"}</p><p className="text-xs text-muted-foreground">Lv.{user.level} · {user.is_pro ? "PRO 会员" : "普通会员"}</p></div>
+                </div>
+                <button onClick={() => { handleLogout(); setMobileMenuOpen(false) }} className="flex items-center gap-2 text-sm text-muted-foreground py-1.5 w-full"><LogOut className="h-4 w-4" /> 退出登录</button>
+              </div>
+            </>
+          ) : (
+            <div className="pt-2">
+              <Link href="/login" onClick={() => setMobileMenuOpen(false)} className="block text-center rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground">登录</Link>
+            </div>
+          )}
         </div>
       )}
     </header>
