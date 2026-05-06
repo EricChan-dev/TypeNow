@@ -44,6 +44,29 @@ export async function proxy(request: NextRequest) {
     return NextResponse.redirect(redirectUrl)
   }
 
+  // Admin routes: require admin role (except login page)
+  if (pathname.startsWith("/admin") && pathname !== "/admin/login") {
+    if (!user) {
+      const redirectUrl = new URL("/login", request.url)
+      return NextResponse.redirect(redirectUrl)
+    }
+
+    const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+    if (serviceKey) {
+      const { createClient } = await import("@supabase/supabase-js")
+      const adminSupabase = createClient(url, serviceKey)
+      const { data: profile } = await adminSupabase
+        .from("profiles")
+        .select("role")
+        .eq("id", user.id)
+        .single()
+
+      if (profile?.role !== "admin") {
+        return NextResponse.redirect(new URL("/", request.url))
+      }
+    }
+  }
+
   return response
 }
 

@@ -45,6 +45,8 @@ export function LoginForm() {
   const [cooldown, setCooldown] = useState(0)
   const [loading, setLoading] = useState(false)
 
+  const redirectTo = searchParams.get("redirect") || "/home"
+
   const isSupabaseConfigured =
     !!process.env.NEXT_PUBLIC_SUPABASE_URL?.startsWith("http")
   const isDevMode = !isSupabaseConfigured
@@ -139,7 +141,7 @@ export function LoginForm() {
       if (isDevMode) {
         if (trimmedCode === "123456") {
           toast.success("登录成功（开发模式）")
-          router.push("/home")
+          router.push(redirectTo)
           router.refresh()
           return
         }
@@ -161,7 +163,7 @@ export function LoginForm() {
       }
 
       toast.success("登录成功")
-      router.push("/home")
+      router.push(redirectTo)
       router.refresh()
     } catch {
       toast.error("登录失败，请重试")

@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation"
 import { PricingCard } from "@/components/pricing/PricingCard"
 import { CheckoutModal } from "@/components/payment/CheckoutModal"
 import { createClient } from "@/lib/supabase/client"
+import { trackSubscribeClick } from "@/lib/analytics"
 
 const freeFeatures = [
   "每天 30 句打字练习",
@@ -31,6 +32,10 @@ export function PricingClient() {
 
   useEffect(() => {
     const supabase = createClient()
+    if (!supabase) {
+      setCheckingAuth(false)
+      return
+    }
     supabase.auth.getSession().then(({ data }) => {
       setIsLoggedIn(!!data.session)
       setCheckingAuth(false)
@@ -38,6 +43,7 @@ export function PricingClient() {
   }, [])
 
   function handleCheckout(plan: "monthly" | "yearly") {
+    trackSubscribeClick(plan, "pricing")
     if (!isLoggedIn) {
       router.push("/login?redirect=/pricing")
       return

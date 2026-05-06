@@ -4,6 +4,7 @@ import { useEffect, useState, useRef, useCallback } from "react"
 import { X, Clock, Sparkles } from "lucide-react"
 import QRCode from "qrcode"
 import { cn } from "@/lib/utils"
+import { trackSubscribeSuccess } from "@/lib/analytics"
 
 interface CheckoutModalProps {
   plan: "monthly" | "yearly"
@@ -81,6 +82,7 @@ export function CheckoutModal({ plan, onClose, onSuccess }: CheckoutModalProps) 
         if (data.status === "paid") {
           stopPolling()
           setStep("paid")
+          trackSubscribeSuccess(plan, orderInfo.amount)
           setTimeout(() => onSuccess(), 1500)
         }
       } catch {

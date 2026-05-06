@@ -1,10 +1,11 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { useTheme } from "next-themes"
 import { BookOpen, Moon, Sun, Menu, X } from "lucide-react"
+import { trackThemeToggle } from "@/lib/analytics"
 
 const navLinks = [
   { href: "/", label: "首页" },
@@ -16,7 +17,11 @@ const navLinks = [
 export function Navbar() {
   const pathname = usePathname()
   const { theme, setTheme } = useTheme()
+  const [mounted, setMounted] = useState(false)
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
+
+  // Prevent hydration mismatch from next-themes
+  useEffect(() => { setMounted(true) }, [])
 
   return (
     <header className="w-full border-b border-border bg-background">
@@ -47,9 +52,9 @@ export function Navbar() {
           {/* Theme toggle pill */}
           <div className="hidden sm:flex items-center rounded-[24px] border border-border bg-muted p-[3px]">
             <button
-              onClick={() => setTheme("dark")}
+              onClick={() => { setTheme("dark"); trackThemeToggle("dark") }}
               className={`flex items-center gap-1 rounded-[20px] px-2.5 py-[5px] text-[13px] font-medium transition-colors ${
-                theme === "dark"
+                mounted && theme === "dark"
                   ? "bg-background text-foreground"
                   : "text-muted-foreground"
               }`}
@@ -59,9 +64,9 @@ export function Navbar() {
               深色
             </button>
             <button
-              onClick={() => setTheme("light")}
+              onClick={() => { setTheme("light"); trackThemeToggle("light") }}
               className={`flex items-center gap-1 rounded-[20px] px-2.5 py-[5px] text-[13px] font-medium transition-colors ${
-                theme === "light"
+                mounted && theme === "light"
                   ? "bg-card text-card-foreground shadow-sm"
                   : "text-muted-foreground"
               }`}
