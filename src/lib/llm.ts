@@ -1,0 +1,80 @@
+interface LLMCallOptions {
+  systemPrompt: string
+  userMessage: string
+  temperature?: number
+  responseFormat?: "text" | "json"
+}
+
+export async function llmCall(options: LLMCallOptions): Promise<string> {
+  const apiKey = process.env.NEXT_PUBLIC_DEEPSEEK_API_KEY
+  if (!apiKey) {
+    throw new Error("DEEPSEEK_API_KEY not configured")
+  }
+
+  const res = await fetch("https://api.deepseek.com/v1/chat/completions", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${apiKey}`,
+    },
+    body: JSON.stringify({
+      model: "deepseek-v4-pro",
+      messages: [
+        { role: "system", content: options.systemPrompt },
+        { role: "user", content: options.userMessage },
+      ],
+      temperature: options.temperature ?? 0.7,
+    }),
+  })
+
+  if (!res.ok) {
+    const errText = await res.text().catch(() => "")
+    console.error("LLM API error:", res.status, errText)
+    throw new Error(`LLM API error: ${res.status}`)
+  }
+
+  const data = await res.json()
+  return data.choices[0].message.content
+}
+
+function extractJson(raw: string): string {
+  // try to extract JSON from markdown code blocks or surrounding text
+  const jsonBlock = raw.match(/```(?:json)?\s*([\s\S]*?)```/)
+  if (jsonBlock) return jsonBlock[1].trim()
+  const firstBrace = raw.indexOf("{")
+  const lastBrace = raw.lastIndexOf("}")
+  if (firstBrace !== -1 && lastBrace > firstBrace) {
+    return raw.slice(firstBrace, lastBrace + 1)
+  }
+  return raw
+}
+
+/**
+ * Convenience: generate structured knowledge for an English sentence.
+ * Returns parsed JSON or null on failure.
+ */
+export async function analyzeSentence(english: string): Promise<Record<string, string> | null> {
+  try {
+    const raw = await llmCall({
+      systemPrompt: `你是一个专业的英语教学助手，精通英语语法、词汇和文化背景知识。请分析给定的英语句子，只返回纯JSON，不要包含任何markdown标记或其他文字。
+
+JSON 格式如下：
+{
+  "chineseExplanation": "用中文准确翻译并解释这句话的完整含义",
+  "englishExplanation": "用简单英文解释这句话的含义和语境，帮助学习者理解",
+  "wordAnnotations": "逐词详细注解。按以下格式输出每个单词：\\n[单词]\\n发音：/音标/\\n中文含义\\n词性\\n基本含义：...\\n上下文含义：在句中的具体意思\\n同义词：...\\n反义词：...\\n常用短语：...\\n例句：...\\n记忆技巧：...\\n\\n注意：介词、连词、冠词等虚词也应详细解释其语法功能",
+  "grammarAnalysis": "语法分析。包含以下内容：\\n句子成分拆解：逐词标注主语/谓语/宾语/表语/定语/状语等\\n句型：简单句/复合句/并列句\\n时态语气：...\\n重点语法：2-3个关键语法点详解\\n常见错误：学习者容易犯的2-3个错误\\n词序：句子词序规则分析\\n语法规则应用：...",
+  "cultureNotes": "文化与实用知识。包含：\\n文化元素：句子反映的文化背景或价值观\\n实际应用：在什么具体情境下使用\\n背景信息：相关的英语国家文化知识",
+  "usageScenarios": "功能和使用场景。详细说明这句话的交际功能和典型使用场景",
+  "relatedExamples": "相关例句。提供3个结构或功能相似的英语句子，每个例句附带简短解释说明它与原句的异同"
+}
+所有字段不能为空。内容必须像专业英语教材一样详细、深入、实用。只返回JSON，不要任何其他内容。`,
+      userMessage: english,
+      temperature: 0.5,
+    })
+    return JSON.parse(extractJson(raw))
+  } catch (e) {
+    console.error("analyzeSentence error:", e)
+    return null
+  }
+}

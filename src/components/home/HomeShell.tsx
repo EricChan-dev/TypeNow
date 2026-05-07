@@ -17,7 +17,12 @@ export function HomeShell({ children }: { children: React.ReactNode }) {
   const [collapsed, setCollapsed] = useState(false)
   const pathname = usePathname()
 
+  const isFullPage = pathname.startsWith("/home/learn/")
   const title = pageTitles[pathname] || ""
+
+  if (isFullPage) {
+    return <div className="flex-1 min-h-0 bg-black">{children}</div>
+  }
 
   return (
     <div className="flex flex-1 min-h-0">

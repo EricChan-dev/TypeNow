@@ -2,8 +2,8 @@
 
 import { useState } from "react"
 import Link from "next/link"
+import { useRouter } from "next/navigation"
 import { ChevronLeft, BookOpen, Users, Play, Check } from "lucide-react"
-import { toast } from "sonner"
 import { mockCourses, mockLessons } from "@/lib/mock-data/courses"
 import { useAcquiredCourses } from "@/lib/hooks/useAcquiredCourses"
 import { cn } from "@/lib/utils"
@@ -25,9 +25,11 @@ interface CourseDetailClientProps {
 }
 
 export function CourseDetailClient({ courseId }: CourseDetailClientProps) {
+  const router = useRouter()
   const course = mockCourses.find((c) => c.id === courseId)
   const lessons = mockLessons.filter((l) => l.courseId === courseId).sort((a, b) => a.order - b.order)
   const { isAcquired, acquire } = useAcquiredCourses()
+  const firstLessonId = lessons[0]?.id
 
   const [activeTab, setActiveTab] = useState<"outline" | "reviews">("outline")
 
@@ -114,7 +116,7 @@ export function CourseDetailClient({ courseId }: CourseDetailClientProps) {
                   已获取
                 </span>
                 <button
-                  onClick={() => toast("即将上线", { description: "学习功能正在开发中…" })}
+                  onClick={() => firstLessonId && router.push(`/home/learn/${courseId}?lesson=${firstLessonId}`)}
                   className="inline-flex items-center gap-1.5 rounded-lg bg-accent px-5 py-2.5 text-sm font-semibold text-white hover:bg-accent/90 transition-colors"
                 >
                   <Play className="h-4 w-4" />
@@ -166,8 +168,9 @@ export function CourseDetailClient({ courseId }: CourseDetailClientProps) {
       {activeTab === "outline" ? (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
           {lessons.map((lesson) => (
-            <div
+            <Link
               key={lesson.id}
+              href={`/home/learn/${courseId}?lesson=${lesson.id}`}
               className="flex items-start gap-3 rounded-xl border border-border bg-card p-4 hover:border-accent/30 transition-colors"
             >
               <div className="flex items-center justify-center h-7 w-7 rounded-full bg-accent/10 text-accent text-xs font-bold shrink-0">
@@ -181,7 +184,7 @@ export function CourseDetailClient({ courseId }: CourseDetailClientProps) {
                   {lesson.summary}
                 </p>
               </div>
-            </div>
+            </Link>
           ))}
         </div>
       ) : (

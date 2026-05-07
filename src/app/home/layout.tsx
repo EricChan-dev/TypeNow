@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation"
 import { getUser, isSupabaseConfigured } from "@/app/actions/auth"
 import { createClient } from "@/lib/supabase/server"
-import { HomeTopbar } from "@/components/home/HomeTopbar"
+import { ConditionalTopbar } from "@/components/home/ConditionalTopbar"
 import { HomeShell } from "@/components/home/HomeShell"
 
 export default async function HomeLayout({
@@ -41,7 +41,7 @@ export default async function HomeLayout({
 
   return (
     <div className="flex flex-col h-screen overflow-hidden bg-background">
-      <HomeTopbar serverUser={serverUser} />
+      <ConditionalTopbar serverUser={serverUser} />
       <HomeShell>{children}</HomeShell>
     </div>
   )

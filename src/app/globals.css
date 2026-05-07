@@ -18,14 +18,14 @@
 }
 
 :root {
-  --background: #0f172a;
+  --background: #000000;
   --foreground: #f1f5f9;
   --primary: #f59e0b;
   --primary-foreground: #ffffff;
-  --muted: #1e293b;
+  --muted: #111111;
   --muted-foreground: #94a3b8;
-  --border: #334155;
-  --card: #1e293b;
+  --border: #222222;
+  --card: #111111;
   --card-foreground: #f1f5f9;
   --accent: #6366f1;
   --success: #22c55e;
@@ -88,4 +88,17 @@ body {
 *:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
+}
+
+/* Shake animation for input errors */
+@keyframes shake {
+  0%, 100% { transform: translateX(0); }
+  20% { transform: translateX(-4px); }
+  40% { transform: translateX(4px); }
+  60% { transform: translateX(-3px); }
+  80% { transform: translateX(3px); }
+}
+
+.animate-shake {
+  animation: shake 0.4s ease-in-out;
 }

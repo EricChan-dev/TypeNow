@@ -98,6 +98,16 @@ export const COURSE_CATEGORIES: CourseCategory[] = [
   },
 ]
 
+export interface SentenceKnowledge {
+  chineseExplanation: string
+  englishExplanation: string
+  wordAnnotations: string
+  grammarAnalysis: string
+  cultureNotes: string
+  usageScenarios: string
+  relatedExamples: string
+}
+
 export const SORT_OPTIONS: { key: SortMode; label: string }[] = [
   { key: "latest", label: "最新发布" },
   { key: "most_used", label: "最多使用" },
