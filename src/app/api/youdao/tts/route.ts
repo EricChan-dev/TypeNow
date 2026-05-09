@@ -102,20 +102,24 @@ export async function POST(request: Request) {
 
   // 3. Store in cache (fire-and-forget)
   if (supabase) {
-    supabase
-      .from("tts_cache")
-      .upsert(
-        {
-          cache_key: cacheKey,
-          text,
-          voice_name: voice,
-          audio_data: audioBase64,
-        },
-        { onConflict: "cache_key" },
-      )
-      .then(({ error }) => {
+    void (async () => {
+      try {
+        const { error } = await supabase
+          .from("tts_cache")
+          .upsert(
+            {
+              cache_key: cacheKey,
+              text,
+              voice_name: voice,
+              audio_data: audioBase64,
+            },
+            { onConflict: "cache_key" },
+          )
         if (error) console.error("TTS cache upsert error:", error)
-      })
+      } catch (err) {
+        console.error("TTS cache upsert failed:", err)
+      }
+    })()
   }
 
   return new NextResponse(audioBuffer, {

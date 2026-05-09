@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react"
 import {
   Volume2, Loader2, MessageSquare, Globe, BookMarked,
-  PencilLine, Landmark, MessageCircle, Quote, Sparkles,
+  PencilLine, Landmark, MessageCircle, Quote, Sparkles, Database,
 } from "lucide-react"
 import type { Sentence } from "@/types"
 import type { SentenceKnowledge as TKnowledge } from "@/types/course"
@@ -37,18 +37,22 @@ interface SentenceKnowledgeProps {
 export function SentenceKnowledge({ sentence }: SentenceKnowledgeProps) {
   const [knowledge, setKnowledge] = useState<TKnowledge | null>(null)
   const [loading, setLoading] = useState(false)
+  const [isMock, setIsMock] = useState(false)
 
   useEffect(() => {
     let cancelled = false
+    const controller = new AbortController()
 
     async function load() {
       setLoading(true)
+      setIsMock(false)
       try {
         const json = await dedupRequest(`knowledge:${sentence.english}`, async () => {
           const res = await fetch("/api/knowledge/analyze", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ sentence: sentence.english }),
+            signal: controller.signal,
           })
           if (!res.ok) throw new Error("API error")
           return res.json()
@@ -60,13 +64,14 @@ export function SentenceKnowledge({ sentence }: SentenceKnowledgeProps) {
       } catch {
         if (!cancelled) {
           setKnowledge(getMockKnowledge(sentence.id))
+          setIsMock(true)
           setLoading(false)
         }
       }
     }
 
     load()
-    return () => { cancelled = true }
+    return () => { cancelled = true; controller.abort() }
   }, [sentence.id, sentence.english])
 
   if (loading) {
@@ -85,7 +90,7 @@ export function SentenceKnowledge({ sentence }: SentenceKnowledgeProps) {
 
   return (
     <div className="space-y-4">
-      {/* Header: original sentence */}
+      {/* Header: original sentence + offline badge */}
       <div className="flex items-center gap-3 px-1">
         <Sparkles className="h-4 w-4 text-accent shrink-0" />
         <p className="text-xl font-bold text-white leading-relaxed">{sentence.english}</p>
@@ -95,6 +100,12 @@ export function SentenceKnowledge({ sentence }: SentenceKnowledgeProps) {
         >
           <Volume2 className="h-4 w-4" />
         </button>
+        {isMock && (
+          <span className="inline-flex items-center gap-1 rounded-full border border-amber-500/30 bg-amber-500/[0.08] px-2 py-0.5 text-[10px] font-medium text-amber-400/70 shrink-0">
+            <Database className="h-3 w-3" />
+            缓存数据
+          </span>
+        )}
       </div>
 
       {/* Chinese + English explanation */}

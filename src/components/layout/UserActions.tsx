@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from "react"
 import Link from "next/link"
+import Image from "next/image"
 import { useRouter } from "next/navigation"
 import { useTheme } from "next-themes"
 import { Moon, Sun, User, Settings, Crown, LogOut, ChevronRight } from "lucide-react"
@@ -196,12 +197,12 @@ export function UserActions({ serverUser, variant = "public" }: UserActionsProps
             <button
               onClick={() => setDropdownOpen(!dropdownOpen)}
               className={cn(
-                "flex items-center justify-center h-9 w-9 rounded-full text-sm font-bold shrink-0 transition-opacity hover:opacity-80",
+                "flex items-center justify-center h-9 w-9 rounded-full text-sm font-bold shrink-0 transition-opacity hover:opacity-80 overflow-hidden",
                 user.avatar ? "" : "bg-accent text-white"
               )}
             >
               {user.avatar ? (
-                <img src={user.avatar} alt={user.name || "用户"} className="h-9 w-9 rounded-full object-cover" />
+                <Image src={user.avatar} alt={user.name || "用户"} width={36} height={36} className="object-cover" />
               ) : (
                 (user.name || "U")[0].toUpperCase()
               )}
@@ -211,8 +212,8 @@ export function UserActions({ serverUser, variant = "public" }: UserActionsProps
               <div className="absolute right-0 top-full mt-2 w-64 rounded-xl bg-card border border-border shadow-xl z-50 py-2">
                 <div className="px-4 py-3 border-b border-border">
                   <div className="flex items-center gap-3">
-                    <div className={cn("flex items-center justify-center h-10 w-10 rounded-full text-sm font-bold shrink-0", user.avatar ? "" : "bg-accent text-white")}>
-                      {user.avatar ? <img src={user.avatar} alt="" className="h-10 w-10 rounded-full object-cover" /> : (user.name || "U")[0].toUpperCase()}
+                    <div className={cn("flex items-center justify-center h-10 w-10 rounded-full text-sm font-bold shrink-0 overflow-hidden", user.avatar ? "" : "bg-accent text-white")}>
+                      {user.avatar ? <Image src={user.avatar} alt="" width={40} height={40} className="object-cover" /> : (user.name || "U")[0].toUpperCase()}
                     </div>
                     <div className="min-w-0">
                       <p className="text-sm font-semibold text-foreground truncate">{user.name || "用户"}</p>

@@ -1,6 +1,6 @@
 "use client"
 
-import React, { useState, useEffect, useRef, useCallback } from "react"
+import React, { useState, useEffect, useRef, useCallback, useMemo } from "react"
 import Link from "next/link"
 import { ChevronLeft, ChevronRight, ArrowLeft, BookOpen, ShoppingBag, Pause, Play, RotateCcw, Shuffle, Maximize, Minimize, Keyboard, List, Settings, Eye, EyeOff } from "lucide-react"
 import type { Sentence, Word } from "@/types"
@@ -190,7 +190,27 @@ export function LearnClient({
   }, [lessonId])
 
   const sentence = sentences[currentIndex]
-  const inputWords = sentence ? getInputWords(sentence.words || []) : []
+  const inputWords = useMemo(
+    () => sentence ? getInputWords(sentence.words || []) : [],
+    [sentence],
+  )
+
+  const isFinished = useMemo(
+    () => currentIndex >= sentences.length - 1 && status === "complete",
+    [currentIndex, sentences.length, status],
+  )
+  const completedCount = useMemo(
+    () => currentIndex + (status === "complete" ? 1 : 0),
+    [currentIndex, status],
+  )
+  const progressPercent = useMemo(
+    () => sentences.length > 0 ? (completedCount / sentences.length) * 100 : 0,
+    [completedCount, sentences.length],
+  )
+  const timerStr = useMemo(
+    () => `${String(Math.floor(timer / 3600)).padStart(2, "0")}:${String(Math.floor((timer % 3600) / 60)).padStart(2, "0")}:${String(timer % 60).padStart(2, "0")}`,
+    [timer],
+  )
 
   // Initialize word states for current sentence
   useEffect(() => {
@@ -494,11 +514,6 @@ export function LearnClient({
       </div>
     )
   }
-
-  const isFinished = currentIndex >= sentences.length - 1 && status === "complete"
-  const completedCount = currentIndex + (status === "complete" ? 1 : 0)
-  const progressPercent = sentences.length > 0 ? (completedCount / sentences.length) * 100 : 0
-  const timerStr = `${String(Math.floor(timer / 3600)).padStart(2, "0")}:${String(Math.floor((timer % 3600) / 60)).padStart(2, "0")}:${String(timer % 60).padStart(2, "0")}`
 
   function doReset() {
     setTransition({ show: true, message: "正在重置进度…", onComplete: () => {

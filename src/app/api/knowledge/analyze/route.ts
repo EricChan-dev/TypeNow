@@ -86,10 +86,9 @@ export async function POST(request: Request) {
       return NextResponse.json({ data: cached.data, cached: true })
     }
 
-    // PGRST205 = table not found (migration not yet applied)
     if (cacheError?.code === "PGRST205") {
       tableExists = false
-      console.warn("sentence_knowledge table not found — skipping cache, running migration is recommended")
+      console.warn("sentence_knowledge table not found — skipping cache")
     }
   }
 
@@ -97,18 +96,22 @@ export async function POST(request: Request) {
   try {
     const knowledge = await callDeepSeek(sentence.trim())
 
-    // 3. Store in cache (fire-and-forget, skip if table doesn't exist)
+    // 3. Store in cache (fire-and-forget)
     if (supabase && tableExists) {
-      supabase
-        .from("sentence_knowledge")
-        .upsert({
-          sentence_hash: sentenceHash,
-          sentence_text: sentence.trim(),
-          data: knowledge,
-        }, { onConflict: "sentence_hash" })
-        .then(({ error }) => {
+      void (async () => {
+        try {
+          const { error } = await supabase
+            .from("sentence_knowledge")
+            .upsert({
+              sentence_hash: sentenceHash,
+              sentence_text: sentence.trim(),
+              data: knowledge,
+            }, { onConflict: "sentence_hash" })
           if (error) console.error("Cache upsert error:", error)
-        })
+        } catch (err) {
+          console.error("Cache upsert failed:", err)
+        }
+      })()
     }
 
     return NextResponse.json({ data: knowledge, cached: false })

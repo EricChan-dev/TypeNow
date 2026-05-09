@@ -109,3 +109,42 @@ CSS 变量在 `globals.css` 中定义，`:root` 为暗色模式，`.light` 为�
 ### 导航滚动
 - 首页锚点包含导航栏区域，点击"首页"应滚动到页面顶部（`window.scrollTo({ top: 0 })`），而非 `#hero` 元素
 - 其他锚点（`#features`, `#pricing`, `#faq`）使用 `scrollIntoView`
+
+## 可用技能 (Skills)
+
+本项目已安装 gstack 和 superpowers 两套技能，开发时应优先使用。
+
+### gstack（工程团队角色）
+- `/review` — 代码审查与 bug 查找
+- `/qa` — 系统化 QA 测试
+- `/qa-only` — 仅测试不修改代码
+- `/ship` — 发布自动化与 PR 创建
+- `/cso` — 安全审计（OWASP + STRIDE）
+- `/plan-eng-review` — 架构锁定与评审
+- `/plan-ceo-review` — 产品范围与愿景验证
+- `/plan-design-review` — 设计评审
+- `/investigate` — 问题排查与根因分析
+- `/retro` — 回顾总结
+- `/benchmark` — 性能基准测试
+- `/office-hours` — 产品策略咨询
+- `/browse` — 浏览器 UI 交互测试
+- `/autoplan` — 自主规划
+
+### superpowers（开发工作流）
+- `superpowers:brainstorming` — 需求头脑风暴（写代码前先规划）
+- `superpowers:writing-plans` — 编写开发计划
+- `superpowers:executing-plans` — 执行开发计划
+- `superpowers:requesting-code-review` — 请求代码审查
+- `superpowers:receiving-code-review` — 接收代码审查反馈
+- `superpowers:test-driven-development` — TDD 测试驱动开发
+- `superpowers:systematic-debugging` — 系统化调试
+- `superpowers:verification-before-completion` — 完成前验证
+- `superpowers:finishing-a-development-branch` — 分支完成与合并
+- `superpowers:subagent-driven-development` — 子代理驱动开发
+- `superpowers:dispatching-parallel-agents` — 并行子代理调度
+
+### 使用原则
+- 代码改动前先做 plan/design review
+- 安全相关改动必须用 `/cso` 审计
+- 复杂功能开发遵循 superpowers 的 brainstorm → plan → execute → review 流程
+- PR 提交前用 `/review` 自查
