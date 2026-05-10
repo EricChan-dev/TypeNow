@@ -1,7 +1,7 @@
 #!/bin/bash
 set -e
 
-PROJECT_DIR="/path/to/TypeNow"  # ← 改成你的实际路径
+PROJECT_DIR="/home/admin/TypeNow"  # ← 改成你的实际路径
 LOG_FILE="$PROJECT_DIR/deploy.log"
 
 log() {
