@@ -36,7 +36,7 @@ export function PricingClient() {
       setCheckingAuth(false)
       return
     }
-    supabase.auth.getSession().then(({ data }) => {
+    supabase.auth.getSession().then(({ data }: { data: { session: { user: { id: string } } | null } }) => {
       setIsLoggedIn(!!data.session)
       setCheckingAuth(false)
     })

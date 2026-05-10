@@ -5,7 +5,7 @@ const { exec } = require("child_process")
 const PORT = process.env.WEBHOOK_PORT || 9000
 const SECRET = process.env.WEBHOOK_SECRET || ""  // 在 GitHub Webhook 设置里填写，留空则不验证
 
-const DEPLOY_CMD = "bash /path/to/TypeNow/deploy.sh"  // ← 改成实际路径
+const DEPLOY_CMD = "bash /home/admin/TypeNow/deploy.sh"  // ← 改成实际路径
 
 function verifySignature(req, body) {
   if (!SECRET) return true

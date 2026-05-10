@@ -32,13 +32,16 @@ export function AuthLink({
       return
     }
 
-    supabase.auth.getUser().then(({ data }) => {
+    supabase.auth.getUser().then(({ data }: { data: { user: { id: string } | null } }) => {
       setIsLoggedIn(!!data.user)
     })
 
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, session) => {
+    } = supabase.auth.onAuthStateChange((
+      _event: string,
+      session: { user: Record<string, unknown> } | null,
+    ) => {
       setIsLoggedIn(!!session?.user)
     })
     return () => subscription?.unsubscribe()

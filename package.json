@@ -6,7 +6,8 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "deploy": "npm run build && rsync -avz --delete .next/ root@typenow.cn:/home/admin/TypeNow/.next/ && ssh root@typenow.cn 'pm2 restart typenow'"
   },
   "dependencies": {
     "@alicloud/dysmsapi20170525": "^4.5.1",

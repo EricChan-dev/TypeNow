@@ -55,7 +55,7 @@ export default function AdminDashboard() {
         .eq("status", "paid")
 
       const totalRev =
-        revenueData?.reduce((sum, p) => sum + (p.amount || 0), 0) || 0
+        revenueData?.reduce((sum: number, p: Record<string, unknown>) => sum + ((p.amount as number) || 0), 0) || 0
 
       setStats({
         totalUsers: userCount || 0,
