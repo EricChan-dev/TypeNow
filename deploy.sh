@@ -16,10 +16,10 @@ log "拉取最新代码..."
 git pull origin main 2>&1 | tee -a "$LOG_FILE"
 
 log "安装依赖..."
-pm2npm install 2>&1 | tee -a "$LOG_FILE"
+pnpm install 2>&1 | tee -a "$LOG_FILE"
 
 log "构建项目..."
-pm2npm run build 2>&1 | tee -a "$LOG_FILE"
+pnpm run build 2>&1 | tee -a "$LOG_FILE"
 
 log "重启 PM2..."
 pm2 restart typenow 2>&1 | tee -a "$LOG_FILE"
