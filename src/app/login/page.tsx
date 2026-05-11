@@ -62,7 +62,7 @@ export default function LoginPage() {
 
             {/* Slogan */}
             <p className="text-[26px] font-medium text-white tracking-[3px] mb-4">
-              码上一小句4，人生一大步
+              码上一小句，人生一大步
             </p>
 
             {/* Divider */}
