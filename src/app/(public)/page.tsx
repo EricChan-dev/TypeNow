@@ -53,7 +53,7 @@ export default function LandingPage() {
 
         {/* Headline */}
         <h1 className="text-[42px] sm:text-[56px] font-extrabold text-foreground leading-[1.15] tracking-tight max-w-3xl">
-          码上一小句3，人生一大步
+          码上一小句4，人生一大步
         </h1>
 
         {/* Subtitle */}
