@@ -50,7 +50,7 @@ export function CourseDetailClient({ courseId }: CourseDetailClientProps) {
   }
 
   const acquired = isAcquired(courseId)
-  const coverGradient = getCoverGradient(course.categoryKey, course.subCategoryKey)
+  const coverGradient = getCoverGradient(course.categoryKey ?? "", course.subCategoryKey ?? "")
 
   return (
     <div className="px-6 lg:px-10 xl:px-14 py-6">

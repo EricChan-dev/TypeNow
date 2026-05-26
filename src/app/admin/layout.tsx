@@ -3,7 +3,7 @@
 import { Refine } from "@refinedev/core"
 import routerProvider from "@refinedev/nextjs-router"
 import { ThemedLayout } from "@refinedev/antd"
-import { ConfigProvider, theme as antdTheme, Spin } from "antd"
+import { App, ConfigProvider, theme as antdTheme, Spin } from "antd"
 import { useTheme } from "next-themes"
 import { useEffect, useState } from "react"
 import { useRouter, usePathname } from "next/navigation"
@@ -13,7 +13,7 @@ import { resources } from "@/lib/refine/resources"
 import "@refinedev/antd/dist/reset.css"
 
 function isDevMode() {
-  return !process.env.NEXT_PUBLIC_DB_CONFIGURED
+  return process.env.NODE_ENV === "development"
 }
 
 function AuthGate({ children }: { children: React.ReactNode }) {
@@ -84,21 +84,23 @@ function AdminLayoutContent({ children }: { children: React.ReactNode }) {
         },
       }}
     >
-      <Refine
-        routerProvider={routerProvider}
-        authProvider={authProvider}
-        dataProvider={dataProvider}
-        resources={resources}
-        options={{ syncWithLocation: true, warnWhenUnsavedChanges: false }}
-      >
-        {isLoginPage ? (
-          children
-        ) : (
-          <AuthGate>
-            <ThemedLayout>{children}</ThemedLayout>
-          </AuthGate>
-        )}
-      </Refine>
+      <App>
+        <Refine
+          routerProvider={routerProvider}
+          authProvider={authProvider}
+          dataProvider={dataProvider}
+          resources={resources}
+          options={{ syncWithLocation: true, warnWhenUnsavedChanges: false }}
+        >
+          {isLoginPage ? (
+            children
+          ) : (
+            <AuthGate>
+              <ThemedLayout>{children}</ThemedLayout>
+            </AuthGate>
+          )}
+        </Refine>
+      </App>
     </ConfigProvider>
   )
 }

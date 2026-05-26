@@ -4,11 +4,11 @@ import { Edit, useForm } from "@refinedev/antd"
 import { Form, Input, InputNumber } from "antd"
 
 export default function LessonEdit() {
-  const { formProps, saveButtonProps } = useForm()
+  const { formProps, saveButtonProps, form } = useForm()
 
   return (
     <Edit saveButtonProps={saveButtonProps}>
-      <Form {...formProps} layout="vertical">
+      <Form {...formProps} form={form} layout="vertical">
         <Form.Item name="course_id" label="课程ID" rules={[{ required: true }]}>
           <Input />
         </Form.Item>

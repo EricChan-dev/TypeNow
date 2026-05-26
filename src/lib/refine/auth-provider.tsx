@@ -22,6 +22,10 @@ export const authProvider: AuthProvider = {
   },
 
   check: async () => {
+    // Dev mode: always authenticated
+    if (process.env.NODE_ENV === "development") {
+      return { authenticated: true }
+    }
     const res = await fetch("/api/auth/me")
     const { user } = await res.json().catch(() => ({ user: null }))
     if (!user || user.role !== "admin") {

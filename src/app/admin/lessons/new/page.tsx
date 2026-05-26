@@ -4,11 +4,11 @@ import { Create, useForm } from "@refinedev/antd"
 import { Form, Input, InputNumber } from "antd"
 
 export default function LessonCreate() {
-  const { formProps, saveButtonProps } = useForm()
+  const { formProps, saveButtonProps, form } = useForm()
 
   return (
     <Create saveButtonProps={saveButtonProps}>
-      <Form {...formProps} layout="vertical">
+      <Form {...formProps} form={form} layout="vertical">
         <Form.Item name="course_id" label="课程ID" rules={[{ required: true }]}>
           <Input placeholder="输入所属课程的 ID" />
         </Form.Item>

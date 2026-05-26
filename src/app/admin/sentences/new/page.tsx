@@ -4,11 +4,11 @@ import { Create, useForm } from "@refinedev/antd"
 import { Form, Input, InputNumber, Select } from "antd"
 
 export default function SentenceCreate() {
-  const { formProps, saveButtonProps } = useForm()
+  const { formProps, saveButtonProps, form } = useForm()
 
   return (
     <Create saveButtonProps={saveButtonProps}>
-      <Form {...formProps} layout="vertical">
+      <Form {...formProps} form={form} layout="vertical">
         <Form.Item name="chinese" label="中文" rules={[{ required: true }]}>
           <Input.TextArea rows={2} />
         </Form.Item>

@@ -2,6 +2,7 @@ import {
   mysqlTable,
   varchar,
   text,
+  mediumtext,
   int,
   tinyint,
   datetime,
@@ -73,7 +74,7 @@ export const courses = mysqlTable("courses", {
   id: varchar("id", { length: 36 }).primaryKey().default(sql`(UUID())`),
   title: varchar("title", { length: 255 }).notNull(),
   description: text("description"),
-  coverUrl: text("cover_url"),
+  coverUrl: mediumtext("cover_url"),
   source: mysqlEnum("source", ["official", "user"]).notNull().default("official"),
   sourceName: varchar("source_name", { length: 100 }).notNull().default("官方"),
   sourceAvatar: text("source_avatar"),
@@ -139,6 +140,7 @@ export const sentences = mysqlTable(
       text: string
       chinese: string
     }>>(),
+    sortOrder: int("sort_order").notNull().default(0),
     createdAt: datetime("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
   },
   (t) => [index("idx_sentences_lesson_id").on(t.lessonId)]

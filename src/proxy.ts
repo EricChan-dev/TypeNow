@@ -3,13 +3,15 @@ import { db } from "@/lib/db"
 import { sessions, users } from "@/lib/db/schema"
 import { and, eq, gt } from "drizzle-orm"
 
+const ADMIN_PHONES = ["16634482010"]
+
 async function getSessionUser(request: NextRequest) {
   if (!db) return null
   const sessionId = request.cookies.get("typenow_session")?.value
   if (!sessionId) return null
 
   const [row] = await db
-    .select({ userId: sessions.userId, role: users.role })
+    .select({ userId: sessions.userId, role: users.role, phone: users.phone })
     .from(sessions)
     .innerJoin(users, eq(sessions.userId, users.id))
     .where(and(eq(sessions.id, sessionId), gt(sessions.expiresAt, new Date())))
@@ -18,9 +20,14 @@ async function getSessionUser(request: NextRequest) {
   return row ?? null
 }
 
+function isAdmin(user: { role: string | null; phone: string | null } | null) {
+  if (!user) return false
+  return user.role === "admin" || (user.phone != null && ADMIN_PHONES.includes(user.phone))
+}
+
 export async function proxy(request: NextRequest) {
-  // DB not configured → dev mode, allow all
-  if (!db) return NextResponse.next()
+  // Dev mode: allow all
+  if (process.env.NODE_ENV === "development") return NextResponse.next()
 
   const { pathname } = request.nextUrl
 
@@ -38,7 +45,7 @@ export async function proxy(request: NextRequest) {
 
   if (isAdminRoute) {
     if (!sessionUser) return NextResponse.redirect(new URL("/login", request.url))
-    if (sessionUser.role !== "admin") return NextResponse.redirect(new URL("/", request.url))
+    if (!isAdmin(sessionUser)) return NextResponse.redirect(new URL("/", request.url))
   }
 
   return NextResponse.next()

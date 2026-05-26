@@ -22,7 +22,7 @@ interface CourseCardProps {
 }
 
 export function CourseCard({ course }: CourseCardProps) {
-  const coverGradient = getCoverGradient(course.categoryKey, course.subCategoryKey)
+  const coverGradient = getCoverGradient(course.categoryKey ?? "", course.subCategoryKey ?? "")
 
   return (
     <Link

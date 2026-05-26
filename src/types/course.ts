@@ -5,16 +5,17 @@ export type SortMode = "latest" | "most_used" | "name"
 export interface Course {
   id: string
   title: string
-  coverUrl: string
+  coverUrl: string | null
   source: CourseSource
   sourceName: string
   sourceAvatar?: string
   learnerCount: number
-  categoryKey: string
-  subCategoryKey: string
+  categoryKey: string | null
+  subCategoryKey: string | null
   createdAt: string
   usageCount: number
-  description: string
+  description: string | null
+  isPublished: number
 }
 
 export interface Lesson {

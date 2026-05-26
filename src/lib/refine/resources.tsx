@@ -5,7 +5,6 @@ import {
   FileTextOutlined,
   DollarOutlined,
   CrownOutlined,
-  SettingOutlined,
   BarChartOutlined,
   BookOutlined,
   UnorderedListOutlined,
@@ -59,11 +58,6 @@ export const resources: IResourceItem[] = [
     name: "subscriptions",
     list: "/admin/subscriptions",
     meta: { label: "订阅管理", icon: <CrownOutlined /> },
-  },
-  {
-    name: "site-config",
-    list: "/admin/pricing",
-    meta: { label: "定价配置", icon: <SettingOutlined /> },
   },
   {
     name: "analytics",

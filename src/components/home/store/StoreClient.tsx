@@ -2,8 +2,7 @@
 
 import { useState, useMemo, useEffect, useRef, useCallback } from "react"
 import { SearchX } from "lucide-react"
-import { mockCourses } from "@/lib/mock-data/courses"
-import type { SortMode } from "@/types/course"
+import type { Course, SortMode } from "@/types/course"
 import { SearchAndSortBar } from "./SearchAndSortBar"
 import { CourseTabs } from "./CourseTabs"
 import { CourseCard } from "./CourseCard"
@@ -16,13 +15,21 @@ export function StoreClient() {
   const [activeSubTab, setActiveSubTab] = useState<string | null>(null)
   const [sortMode, setSortMode] = useState<SortMode>("latest")
   const [displayCount, setDisplayCount] = useState(PAGE_SIZE)
+  const [allCourses, setAllCourses] = useState<Course[]>([])
+
+  useEffect(() => {
+    fetch("/api/courses/list?pageSize=200")
+      .then((r) => r.json())
+      .then((json) => { if (json.data) setAllCourses(json.data) })
+      .catch(() => {})
+  }, [])
 
   const sentinelRef = useRef<HTMLDivElement>(null)
   const [loadingMore, setLoadingMore] = useState(false)
   const loadingRef = useRef(false)
 
   const filteredCourses = useMemo(() => {
-    let result = mockCourses
+    let result = allCourses
 
     if (activeMainTab !== "all") {
       result = result.filter((c) => c.categoryKey === activeMainTab)
@@ -42,7 +49,7 @@ export function StoreClient() {
     }
 
     return result
-  }, [searchQuery, activeMainTab, activeSubTab])
+  }, [searchQuery, activeMainTab, activeSubTab, allCourses])
 
   const sortedCourses = useMemo(() => {
     const sorted = [...filteredCourses]
