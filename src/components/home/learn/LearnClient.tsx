@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from "react"
 import Link from "next/link"
 import { ChevronLeft, ChevronRight, ArrowLeft, BookOpen, ShoppingBag, Pause, Play, RotateCcw, Shuffle, Maximize, Minimize, Keyboard, List, Settings, Eye, EyeOff } from "lucide-react"
-import type { Sentence, Word } from "@/types"
+import type { Sentence, Word, Chunk } from "@/types"
 import { getMockSentencesByLesson } from "@/lib/mock-data/sentences"
 import { mockCourses } from "@/lib/mock-data/courses"
 import { TransitionOverlay } from "@/components/shared/TransitionOverlay"
@@ -31,6 +31,8 @@ interface WordState {
   value: string
   status: "idle" | "active" | "done" | "error"
 }
+
+type ChunkStatus = "idle" | "active" | "done" | "error"
 
 // Web Audio API sound effects
 let audioCtx: AudioContext | null = null
@@ -163,6 +165,11 @@ export function LearnClient({
   const [showShuffleConfirm, setShowShuffleConfirm] = useState(false)
   const [transition, setTransition] = useState<{ show: boolean; message: string; onComplete?: () => void }>({ show: false, message: "" })
   const [isFullscreen, setIsFullscreen] = useState(false)
+  // Chunk mode state
+  const [chunkInput, setChunkInput] = useState("")
+  const [activeChunkIndex, setActiveChunkIndex] = useState(0)
+  const [chunkStatuses, setChunkStatuses] = useState<ChunkStatus[]>([])
+  const [shakeChunk, setShakeChunk] = useState(false)
   const pauseRef = useRef(false)
   pauseRef.current = isPaused
   const timerRef = useRef(timer)
@@ -183,6 +190,12 @@ export function LearnClient({
   currentIndexRef.current = currentIndex
   const sentencesRef = useRef(sentences)
   sentencesRef.current = sentences
+  const chunkInputRef = useRef(chunkInput)
+  chunkInputRef.current = chunkInput
+  const activeChunkIndexRef = useRef(activeChunkIndex)
+  activeChunkIndexRef.current = activeChunkIndex
+  const chunkStatusesRef = useRef(chunkStatuses)
+  chunkStatusesRef.current = chunkStatuses
 
   // Load sentences (sync mock for now, future: fetch from API)
   useEffect(() => {
@@ -212,18 +225,28 @@ export function LearnClient({
     [timer],
   )
 
-  // Initialize word states for current sentence
+  // Initialize word/chunk states for current sentence
   useEffect(() => {
     if (!sentence) return
-    const states: WordState[] = inputWords.map((_w, i) => ({
-      value: "",
-      status: i === 0 ? "active" : "idle",
-    }))
-    setWordStates(states)
-    setActiveWordIndex(0)
     setStatus("input")
-    // Read sentence aloud on enter
     globalSpeak(sentence.english)
+    if (sentence.chunks && sentence.chunks.length > 0) {
+      setChunkInput("")
+      setActiveChunkIndex(0)
+      setChunkStatuses(sentence.chunks.map((_, i) => i === 0 ? "active" : "idle"))
+      setWordStates([])
+      setActiveWordIndex(0)
+    } else {
+      const states: WordState[] = inputWords.map((_w, i) => ({
+        value: "",
+        status: i === 0 ? "active" : "idle",
+      }))
+      setWordStates(states)
+      setActiveWordIndex(0)
+      setChunkInput("")
+      setActiveChunkIndex(0)
+      setChunkStatuses([])
+    }
   }, [sentence?.id])
 
   const goNext = useCallback(() => {
@@ -336,6 +359,49 @@ export function LearnClient({
     }
   }, [])
 
+  const confirmChunk = useCallback(() => {
+    const st = statusRef.current
+    if (st === "complete") return
+    const chunks = sentencesRef.current[currentIndexRef.current]?.chunks
+    if (!chunks || chunks.length === 0) return
+    const activeIdx = activeChunkIndexRef.current
+    const expected = chunks[activeIdx]?.text ?? ""
+    const input = chunkInputRef.current.trim()
+
+    if (input.toLowerCase() === expected.toLowerCase()) {
+      playTick()
+      const newStatuses = [...chunkStatusesRef.current]
+      newStatuses[activeIdx] = "done"
+      const isLast = activeIdx >= chunks.length - 1
+      if (isLast) {
+        setChunkStatuses(newStatuses)
+        setStatus("complete")
+        setShowConfetti(true)
+        setTimeout(() => setShowConfetti(false), 2000)
+        const s = sentencesRef.current[currentIndexRef.current]
+        if (s) globalSpeak(s.english)
+      } else {
+        const nextIdx = activeIdx + 1
+        newStatuses[nextIdx] = "active"
+        setChunkStatuses(newStatuses)
+        setActiveChunkIndex(nextIdx)
+        setChunkInput("")
+      }
+    } else {
+      playBuzz()
+      const newStatuses = [...chunkStatusesRef.current]
+      newStatuses[activeIdx] = "error"
+      setChunkStatuses(newStatuses)
+      setShakeChunk(true)
+      setTimeout(() => {
+        setShakeChunk(false)
+        const fixed = [...chunkStatusesRef.current]
+        fixed[activeChunkIndexRef.current] = "active"
+        setChunkStatuses(fixed)
+      }, 500)
+    }
+  }, [])
+
   // Debounced wrappers for button clicks
   const debouncedConfirmWord = useDebounce(confirmWord, 1000)
   const debouncedSubmitAll = useDebounce(submitAll, 1000)
@@ -408,6 +474,38 @@ export function LearnClient({
       if (e.ctrlKey && e.key === "1") {
         e.preventDefault()
         setShowOutline(true)
+        return
+      }
+
+      const currentSentence = sentencesRef.current[currentIndexRef.current]
+      const isChunkMode = !!(currentSentence?.chunks && currentSentence.chunks.length > 0)
+
+      if (isChunkMode) {
+        const chunks = currentSentence!.chunks!
+        const chunkIdx = activeChunkIndexRef.current
+        const expectedChunk = chunks[chunkIdx]
+        if (!expectedChunk) return
+
+        if (/^[a-zA-Z\s',-]$/.test(e.key)) {
+          e.preventDefault()
+          playTick()
+          setChunkInput((prev) => {
+            if (prev.length >= expectedChunk.text.length + 5) return prev
+            return prev + e.key
+          })
+          return
+        }
+        if (e.key === "Backspace") {
+          e.preventDefault()
+          playTick()
+          setChunkInput((prev) => prev.slice(0, -1))
+          return
+        }
+        if (e.key === " " || e.key === "Enter") {
+          e.preventDefault()
+          confirmChunk()
+          return
+        }
         return
       }
 
@@ -638,8 +736,62 @@ export function LearnClient({
               按 Enter 继续下一句
             </p>
           </div>
+        ) : sentence.chunks && sentence.chunks.length > 0 ? (
+          /* Chunk Mode Input */
+          <div className="w-full max-w-2xl space-y-8">
+            {/* Current chunk Chinese hint */}
+            <p className="text-center text-2xl font-medium text-foreground">
+              {sentence.chunks[activeChunkIndex]?.chinese ?? sentence.chinese}
+            </p>
+
+            {/* Chunk progress row */}
+            <div className="flex flex-wrap justify-center items-center gap-3">
+              {sentence.chunks.map((chunk, i) => {
+                const status = chunkStatuses[i]
+                return (
+                  <div key={i} className="flex flex-col items-center gap-1.5">
+                    <div
+                      className={`
+                        min-h-[64px] flex items-center justify-center px-4 text-4xl font-medium transition-colors rounded-xl
+                        ${status === "done"
+                          ? "text-foreground"
+                          : status === "error"
+                            ? "text-red-500"
+                            : status === "active"
+                              ? "text-accent"
+                              : "text-transparent"
+                        }
+                        ${i === activeChunkIndex && shakeChunk ? "animate-shake" : ""}
+                      `}
+                      style={{ minWidth: chunk.text.length * 28 + 24 }}
+                    >
+                      {status === "done"
+                        ? chunk.text
+                        : status === "active"
+                          ? chunkInput || " "
+                          : " "
+                      }
+                    </div>
+                    <div
+                      className={`h-[3px] rounded-full transition-all duration-200 ${
+                        status === "error"
+                          ? "bg-red-500"
+                          : status === "done"
+                            ? "bg-foreground/40"
+                            : status === "active"
+                              ? "bg-accent shadow-[0_0_6px_var(--accent)]"
+                              : "bg-foreground/20"
+                      }`}
+                      style={{ width: chunk.text.length * 28 + 24 }}
+                    />
+                    <span className="text-xs text-white/30">{chunk.chinese}</span>
+                  </div>
+                )
+              })}
+            </div>
+          </div>
         ) : (
-          /* Input Mode */
+          /* Word Mode Input */
           <div className="w-full max-w-2xl space-y-8">
             <p className="text-center text-2xl font-medium text-foreground">
               {sentence.chinese}

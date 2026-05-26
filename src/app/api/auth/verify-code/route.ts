@@ -1,15 +1,14 @@
+import { randomUUID } from "crypto"
 import { NextResponse } from "next/server"
-import { createServiceClient } from "@/lib/supabase/service"
-import { createServerClient } from "@supabase/ssr"
-import { cookies } from "next/headers"
+import { db } from "@/lib/db"
+import { verificationCodes, users } from "@/lib/db/schema"
+import { eq, and, gt } from "drizzle-orm"
+import { createSession } from "@/lib/auth/session"
 
 const PHONE_REGEX = /^1[3-9]\d{9}$/
 
 function isDevMode() {
-  return (
-    process.env.NODE_ENV === "development" &&
-    !process.env.NEXT_PUBLIC_SUPABASE_URL?.startsWith("http")
-  )
+  return process.env.NODE_ENV === "development" && !process.env.DATABASE_URL
 }
 
 export async function POST(request: Request) {
@@ -26,135 +25,58 @@ export async function POST(request: Request) {
   if (!phone || !PHONE_REGEX.test(phone)) {
     return NextResponse.json({ error: "请输入有效的手机号" }, { status: 400 })
   }
-
   if (!code || code.length !== 6) {
     return NextResponse.json({ error: "请输入6位验证码" }, { status: 400 })
   }
 
-  const supabaseAdmin = createServiceClient()
-
-  // Dev mode: accept 123456
-  if (isDevMode()) {
-    if (code === "123456") {
-      // If Supabase is not configured at all, just return success
-      if (!supabaseAdmin) {
-        return NextResponse.json({ success: true })
-      }
-
-      // Try to create a real session in dev mode if Supabase is configured
-      return await createSession(phone!, supabaseAdmin)
+  // Dev mode: accept 123456 without DB
+  if (isDevMode() || !db) {
+    if (code !== "123456") {
+      return NextResponse.json({ error: "验证码错误（开发模式请输入 123456）" }, { status: 400 })
     }
-    return NextResponse.json({ error: "验证码错误（开发模式请输入 123456）" }, { status: 400 })
+    return NextResponse.json({ success: true })
   }
 
-  if (!supabaseAdmin) {
-    return NextResponse.json({ error: "服务配置错误" }, { status: 500 })
-  }
-
-  // Verify code from database
-  const { data: record } = await supabaseAdmin
-    .from("verification_codes")
-    .select("*")
-    .eq("phone", phone!)
-    .eq("code", code!)
-    .eq("used", false)
-    .gt("expires_at", new Date().toISOString())
-    .order("created_at", { ascending: false })
+  // Verify code
+  const [record] = await db
+    .select()
+    .from(verificationCodes)
+    .where(
+      and(
+        eq(verificationCodes.phone, phone),
+        eq(verificationCodes.code, code),
+        eq(verificationCodes.used, 0),
+        gt(verificationCodes.expiresAt, new Date())
+      )
+    )
+    .orderBy(verificationCodes.createdAt)
     .limit(1)
-    .maybeSingle()
 
   if (!record) {
     return NextResponse.json({ error: "验证码错误或已过期" }, { status: 400 })
   }
 
   // Mark code as used
-  await supabaseAdmin
-    .from("verification_codes")
-    .update({ used: true })
-    .eq("id", record.id)
+  await db
+    .update(verificationCodes)
+    .set({ used: 1 })
+    .where(eq(verificationCodes.id, record.id))
 
-  return await createSession(phone!, supabaseAdmin)
-}
+  // Find or create user
+  let [user] = await db
+    .select()
+    .from(users)
+    .where(eq(users.phone, phone))
+    .limit(1)
 
-async function createSession(
-  phone: string,
-  supabaseAdmin: ReturnType<typeof createServiceClient>
-) {
-  if (!supabaseAdmin) {
-    return NextResponse.json({ error: "服务配置错误" }, { status: 500 })
+  if (!user) {
+    const id = randomUUID()
+    await db.insert(users).values({ id, phone })
+    const [newUser] = await db.select().from(users).where(eq(users.id, id)).limit(1)
+    user = newUser
   }
 
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL!
-  const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-  const email = `phone_${phone}@typenow.local`
-  const password = crypto.randomUUID()
+  await createSession(user.id)
 
-  try {
-    // Check if user exists by phone in profiles table
-    const { data: profile } = await supabaseAdmin
-      .from("profiles")
-      .select("id, phone")
-      .eq("phone", phone)
-      .maybeSingle()
-
-    if (profile) {
-      // Existing user: update password
-      await supabaseAdmin.auth.admin.updateUserById(profile.id, { password })
-    } else {
-      // New user: create with synthetic email + phone
-      const { error: createError } = await supabaseAdmin.auth.admin.createUser({
-        email,
-        password,
-        phone: `+86${phone}`,
-        email_confirm: true,
-        phone_confirm: true,
-        user_metadata: { phone },
-      })
-
-      if (createError) {
-        // If race condition, try signing in anyway (user might have been created)
-        if (createError.code !== "duplicate") {
-          return NextResponse.json(
-            { error: createError.message || "用户创建失败" },
-            { status: 500 }
-          )
-        }
-      }
-    }
-
-    // Sign in to create session
-    const cookieStore = await cookies()
-    const supabaseSsr = createServerClient(url, anonKey, {
-      cookies: {
-        getAll() {
-          return cookieStore.getAll()
-        },
-        setAll(cookiesToSet) {
-          cookiesToSet.forEach(({ name, value, options }) =>
-            cookieStore.set(name, value, options)
-          )
-        },
-      },
-    })
-
-    const { data: authData, error: authError } =
-      await supabaseSsr.auth.signInWithPassword({ email, password })
-
-    if (authError) {
-      return NextResponse.json(
-        { error: authError.message || "登录失败" },
-        { status: 500 }
-      )
-    }
-
-    return NextResponse.json({
-      success: true,
-      user: { id: authData.user?.id, phone },
-    })
-  } catch (err) {
-    return NextResponse.json(
-      { error: err instanceof Error ? err.message : "登录失败" },
-      { status: 500 }
-    )
-  }
+  return NextResponse.json({ success: true, user: { id: user.id, phone: user.phone } })
 }

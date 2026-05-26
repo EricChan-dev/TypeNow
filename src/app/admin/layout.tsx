@@ -13,8 +13,7 @@ import { resources } from "@/lib/refine/resources"
 import "@refinedev/antd/dist/reset.css"
 
 function isDevMode() {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL
-  return !url || !url.startsWith("http")
+  return !process.env.NEXT_PUBLIC_DB_CONFIGURED
 }
 
 function AuthGate({ children }: { children: React.ReactNode }) {

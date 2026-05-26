@@ -8,7 +8,6 @@ import {
   FileTextOutlined,
 } from "@ant-design/icons"
 import { useEffect, useState } from "react"
-import { createClient } from "@/lib/supabase/client"
 
 const { Title } = Typography
 
@@ -24,53 +23,39 @@ export default function AdminDashboard() {
 
   useEffect(() => {
     async function fetchStats() {
-      const supabase = createClient()
-      if (!supabase) { setLoading(false); return }
+      try {
+        const [usersRes, subsRes, sentencesRes, paymentsRes] = await Promise.all([
+          fetch("/api/admin/users?pageSize=1"),
+          fetch("/api/admin/subscriptions?pageSize=1"),
+          fetch("/api/admin/sentences?pageSize=1"),
+          fetch("/api/admin/payment-orders?pageSize=10"),
+        ])
+        const [usersData, subsData, sentencesData, paymentsData] = await Promise.all([
+          usersRes.json(), subsRes.json(), sentencesRes.json(), paymentsRes.json(),
+        ])
+        const payments: Array<Record<string, unknown>> = paymentsData.data ?? []
+        const totalRev = payments
+          .filter((p) => p.status === "paid")
+          .reduce((sum, p) => sum + ((p.amount as number) || 0), 0)
 
-      const [
-        { count: userCount },
-        { count: subCount },
-        { count: sentenceCount },
-        { data: payments },
-      ] = await Promise.all([
-        supabase.from("profiles").select("*", { count: "exact", head: true }),
-        supabase
-          .from("subscriptions")
-          .select("*", { count: "exact", head: true })
-          .eq("status", "active"),
-        supabase
-          .from("sentences")
-          .select("*", { count: "exact", head: true }),
-        supabase
-          .from("payment_orders")
-          .select("*, profiles(name)")
-          .eq("status", "paid")
-          .order("created_at", { ascending: false })
-          .limit(10),
-      ])
-
-      const { data: revenueData } = await supabase
-        .from("payment_orders")
-        .select("amount")
-        .eq("status", "paid")
-
-      const totalRev =
-        revenueData?.reduce((sum: number, p: Record<string, unknown>) => sum + ((p.amount as number) || 0), 0) || 0
-
-      setStats({
-        totalUsers: userCount || 0,
-        activeSubs: subCount || 0,
-        totalRevenue: totalRev / 100,
-        totalSentences: sentenceCount || 0,
-        recentPayments: payments || [],
-      })
-      setLoading(false)
+        setStats({
+          totalUsers: usersData.total ?? 0,
+          activeSubs: subsData.total ?? 0,
+          totalRevenue: totalRev / 100,
+          totalSentences: sentencesData.total ?? 0,
+          recentPayments: payments,
+        })
+      } catch {
+        // no-op
+      } finally {
+        setLoading(false)
+      }
     }
     fetchStats()
   }, [])
 
   const paymentColumns = [
-    { title: "用户", dataIndex: "profiles", key: "user", render: (p: unknown) => (p as { name?: string })?.name || "-" },
+    { title: "用户ID", dataIndex: "user_id", key: "user_id", ellipsis: true },
     { title: "方案", dataIndex: "plan", key: "plan" },
     {
       title: "金额",
@@ -88,48 +73,27 @@ export default function AdminDashboard() {
 
   return (
     <div>
-      <Title level={3} style={{ marginBottom: 24 }}>
-        管理仪表盘
-      </Title>
+      <Title level={3} style={{ marginBottom: 24 }}>管理仪表盘</Title>
 
       <Row gutter={[16, 16]}>
         <Col xs={24} sm={12} lg={6}>
           <Card loading={loading}>
-            <Statistic
-              title="注册用户"
-              value={stats.totalUsers}
-              prefix={<UserOutlined />}
-            />
+            <Statistic title="注册用户" value={stats.totalUsers} prefix={<UserOutlined />} />
           </Card>
         </Col>
         <Col xs={24} sm={12} lg={6}>
           <Card loading={loading}>
-            <Statistic
-              title="活跃订阅"
-              value={stats.activeSubs}
-              prefix={<CrownOutlined />}
-              valueStyle={{ color: "#6366F1" }}
-            />
+            <Statistic title="活跃订阅" value={stats.activeSubs} prefix={<CrownOutlined />} valueStyle={{ color: "#6366F1" }} />
           </Card>
         </Col>
         <Col xs={24} sm={12} lg={6}>
           <Card loading={loading}>
-            <Statistic
-              title="总收入"
-              value={stats.totalRevenue}
-              prefix={<DollarOutlined />}
-              precision={2}
-              valueStyle={{ color: "#22C55E" }}
-            />
+            <Statistic title="总收入" value={stats.totalRevenue} prefix={<DollarOutlined />} precision={2} valueStyle={{ color: "#22C55E" }} />
           </Card>
         </Col>
         <Col xs={24} sm={12} lg={6}>
           <Card loading={loading}>
-            <Statistic
-              title="句子库"
-              value={stats.totalSentences}
-              prefix={<FileTextOutlined />}
-            />
+            <Statistic title="句子库" value={stats.totalSentences} prefix={<FileTextOutlined />} />
           </Card>
         </Col>
       </Row>
@@ -137,7 +101,7 @@ export default function AdminDashboard() {
       <Card title="最近支付" style={{ marginTop: 24 }}>
         <Table
           columns={paymentColumns}
-          dataSource={stats.recentPayments as Record<string, unknown>[]}
+          dataSource={stats.recentPayments}
           rowKey={(r) => r.id as string}
           pagination={false}
           size="small"

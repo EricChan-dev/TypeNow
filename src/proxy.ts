@@ -1,73 +1,47 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { createServerClient } from "@supabase/ssr"
+import { db } from "@/lib/db"
+import { sessions, users } from "@/lib/db/schema"
+import { and, eq, gt } from "drizzle-orm"
+
+async function getSessionUser(request: NextRequest) {
+  if (!db) return null
+  const sessionId = request.cookies.get("typenow_session")?.value
+  if (!sessionId) return null
+
+  const [row] = await db
+    .select({ userId: sessions.userId, role: users.role })
+    .from(sessions)
+    .innerJoin(users, eq(sessions.userId, users.id))
+    .where(and(eq(sessions.id, sessionId), gt(sessions.expiresAt, new Date())))
+    .limit(1)
+
+  return row ?? null
+}
 
 export async function proxy(request: NextRequest) {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL
-  const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-
-  // Skip auth check if Supabase isn't configured
-  if (!url || !key || !url.startsWith("http")) {
-    return NextResponse.next()
-  }
-
-  let response = NextResponse.next({ request })
-
-  const supabase = createServerClient(url, key, {
-    cookies: {
-      getAll() {
-        return request.cookies.getAll()
-      },
-      setAll(cookiesToSet) {
-        cookiesToSet.forEach(({ name, value }) =>
-          request.cookies.set(name, value)
-        )
-        response = NextResponse.next({ request })
-        cookiesToSet.forEach(({ name, value, options }) =>
-          response.cookies.set(name, value, options)
-        )
-      },
-    },
-  })
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
+  // DB not configured → dev mode, allow all
+  if (!db) return NextResponse.next()
 
   const { pathname } = request.nextUrl
 
-  // Protected routes: require authentication
   const protectedPaths = ["/home", "/practice", "/profile", "/strengthen", "/share"]
   const isProtected = protectedPaths.some((p) => pathname.startsWith(p))
+  const isAdminRoute = pathname.startsWith("/admin") && pathname !== "/admin/login"
 
-  if (isProtected && !user) {
-    const redirectUrl = new URL("/login", request.url)
-    return NextResponse.redirect(redirectUrl)
+  if (!isProtected && !isAdminRoute) return NextResponse.next()
+
+  const sessionUser = await getSessionUser(request)
+
+  if (isProtected && !sessionUser) {
+    return NextResponse.redirect(new URL("/login", request.url))
   }
 
-  // Admin routes: require admin role (except login page)
-  if (pathname.startsWith("/admin") && pathname !== "/admin/login") {
-    if (!user) {
-      const redirectUrl = new URL("/login", request.url)
-      return NextResponse.redirect(redirectUrl)
-    }
-
-    const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
-    if (serviceKey) {
-      const { createClient } = await import("@supabase/supabase-js")
-      const adminSupabase = createClient(url, serviceKey)
-      const { data: profile } = await adminSupabase
-        .from("profiles")
-        .select("role")
-        .eq("id", user.id)
-        .single()
-
-      if (profile?.role !== "admin") {
-        return NextResponse.redirect(new URL("/", request.url))
-      }
-    }
+  if (isAdminRoute) {
+    if (!sessionUser) return NextResponse.redirect(new URL("/login", request.url))
+    if (sessionUser.role !== "admin") return NextResponse.redirect(new URL("/", request.url))
   }
 
-  return response
+  return NextResponse.next()
 }
 
 export const config = {

@@ -1,7 +1,9 @@
 import { NextResponse } from "next/server"
 import { verifyNotifySignature } from "@/lib/wechat-pay"
 import { activateSubscription } from "@/lib/subscription"
-import { createServiceClient } from "@/lib/supabase/service"
+import { db } from "@/lib/db"
+import { paymentOrders } from "@/lib/db/schema"
+import { eq } from "drizzle-orm"
 
 export async function POST(request: Request) {
   try {
@@ -11,10 +13,7 @@ export async function POST(request: Request) {
     const nonce = request.headers.get("Wechatpay-Nonce") || ""
 
     if (!verifyNotifySignature(timestamp, nonce, body, signature)) {
-      return NextResponse.json(
-        { code: "FAIL", message: "Invalid signature" },
-        { status: 401 }
-      )
+      return NextResponse.json({ code: "FAIL", message: "Invalid signature" }, { status: 401 })
     }
 
     const notify = JSON.parse(body)
@@ -24,55 +23,34 @@ export async function POST(request: Request) {
       return NextResponse.json({ code: "SUCCESS", message: "OK" })
     }
 
-    const serviceClient = createServiceClient()
-    if (!serviceClient) {
-      return NextResponse.json(
-        { code: "FAIL", message: "Service not configured" },
-        { status: 500 }
-      )
+    if (!db) {
+      return NextResponse.json({ code: "FAIL", message: "Service not configured" }, { status: 500 })
     }
 
-    const { data: existing } = await serviceClient
-      .from("payment_orders")
-      .select("id, user_id, plan, status")
-      .eq("out_trade_no", out_trade_no)
-      .maybeSingle()
+    const [existing] = await db
+      .select()
+      .from(paymentOrders)
+      .where(eq(paymentOrders.outTradeNo, out_trade_no))
+      .limit(1)
 
     if (!existing) {
-      return NextResponse.json(
-        { code: "FAIL", message: "Order not found" },
-        { status: 404 }
-      )
+      return NextResponse.json({ code: "FAIL", message: "Order not found" }, { status: 404 })
     }
 
     if (existing.status === "paid") {
       return NextResponse.json({ code: "SUCCESS", message: "OK" })
     }
 
-    const { error: updateError } = await serviceClient
-      .from("payment_orders")
-      .update({
-        status: "paid",
-        transaction_id,
-        paid_at: new Date().toISOString(),
-      })
-      .eq("id", existing.id)
+    await db
+      .update(paymentOrders)
+      .set({ status: "paid", transactionId: transaction_id, paidAt: new Date() })
+      .where(eq(paymentOrders.id, existing.id))
 
-    if (updateError) {
-      return NextResponse.json(
-        { code: "FAIL", message: "Update failed" },
-        { status: 500 }
-      )
-    }
-
-    await activateSubscription(existing.user_id, existing.plan, existing.id)
+    await activateSubscription(existing.userId, existing.plan, existing.id)
 
     return NextResponse.json({ code: "SUCCESS", message: "OK" })
   } catch (err) {
     console.error("Notify error:", err)
-    return NextResponse.json(
-      { code: "FAIL", message: "Internal error" },
-      { status: 500 }
-    )
+    return NextResponse.json({ code: "FAIL", message: "Internal error" }, { status: 500 })
   }
 }

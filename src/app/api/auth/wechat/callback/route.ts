@@ -1,7 +1,9 @@
+import { randomUUID } from "crypto"
 import { NextRequest, NextResponse } from "next/server"
-import { createServerClient } from "@supabase/ssr"
-import { cookies } from "next/headers"
-import { createServiceClient } from "@/lib/supabase/service"
+import { db } from "@/lib/db"
+import { users } from "@/lib/db/schema"
+import { eq } from "drizzle-orm"
+import { createSession } from "@/lib/auth/session"
 import {
   exchangeCodeForAccessToken,
   getUserInfo,
@@ -17,7 +19,6 @@ export async function GET(request: NextRequest) {
 
   const loginUrl = new URL("/login", request.url)
 
-  // Handle WeChat user denying authorization
   if (errorParam) {
     loginUrl.searchParams.set("error", "wechat_denied")
     return NextResponse.redirect(loginUrl)
@@ -30,190 +31,99 @@ export async function GET(request: NextRequest) {
 
   // Dev mode: mock WeChat login
   if (code === "dev_mock" && !isWeChatConfigured()) {
-    return await handleDevLogin(request)
+    return handleDevLogin(request)
   }
 
-  // Verify CSRF state token
+  // Verify CSRF state
   const cookieState = request.cookies.get("wechat_oauth_state")?.value
-
   if (!cookieState || cookieState !== state) {
     loginUrl.searchParams.set("error", "csrf_mismatch")
-    const response = NextResponse.redirect(loginUrl)
-    response.cookies.set("wechat_oauth_state", "", { maxAge: 0, path: "/" })
-    return response
+    const res = NextResponse.redirect(loginUrl)
+    res.cookies.set("wechat_oauth_state", "", { maxAge: 0, path: "/" })
+    return res
   }
 
   try {
-    // Exchange code for access token
     const tokenData = await exchangeCodeForAccessToken(code)
-
-    // Get user info
     const userInfo = await getUserInfo(tokenData.access_token, tokenData.openid)
-
-    // Create session
-    const redirectResponse = await createWeChatSession(userInfo, request)
-
-    // Clear the state cookie
-    redirectResponse.cookies.set("wechat_oauth_state", "", {
-      maxAge: 0,
-      path: "/",
-    })
-
-    return redirectResponse
+    const redirectRes = await upsertWeChatUser(userInfo, request)
+    redirectRes.cookies.set("wechat_oauth_state", "", { maxAge: 0, path: "/" })
+    return redirectRes
   } catch (err) {
     const message = err instanceof Error ? err.message : "登录失败"
-
     const errorMap: Record<string, string> = {
       "微信授权码无效": "wechat_invalid_code",
       "微信授权码已被使用": "code_used",
       "微信授权码已过期": "code_expired",
       "微信服务连接失败": "network_error",
     }
-
-    loginUrl.searchParams.set(
-      "error",
-      errorMap[message] || "server_error"
-    )
-    const response = NextResponse.redirect(loginUrl)
-    response.cookies.set("wechat_oauth_state", "", { maxAge: 0, path: "/" })
-    return response
+    loginUrl.searchParams.set("error", errorMap[message] || "server_error")
+    const res = NextResponse.redirect(loginUrl)
+    res.cookies.set("wechat_oauth_state", "", { maxAge: 0, path: "/" })
+    return res
   }
 }
 
-async function createWeChatSession(
+async function upsertWeChatUser(
   wechatUser: WechatUserInfo,
   request: NextRequest
 ): Promise<NextResponse> {
-  const supabaseAdmin = createServiceClient()
-  if (!supabaseAdmin) {
-    const loginUrl = new URL("/login", request.url)
+  const loginUrl = new URL("/login", request.url)
+
+  if (!db) {
     loginUrl.searchParams.set("error", "server_error")
     return NextResponse.redirect(loginUrl)
   }
 
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL!
-  const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-  const email = `wechat_${wechatUser.openid}@typenow.local`
-  const password = crypto.randomUUID()
+  let [user] = await db
+    .select()
+    .from(users)
+    .where(eq(users.wechatOpenid, wechatUser.openid))
+    .limit(1)
 
-  // Look up by wechat_openid
-  const { data: profile } = await supabaseAdmin
-    .from("profiles")
-    .select("id, wechat_openid")
-    .eq("wechat_openid", wechatUser.openid)
-    .maybeSingle()
-
-  if (profile) {
-    // Existing WeChat user: update password, refresh avatar/name
-    await supabaseAdmin.auth.admin.updateUserById(profile.id, { password })
-    await supabaseAdmin
-      .from("profiles")
-      .update({
+  if (user) {
+    await db
+      .update(users)
+      .set({
         name: wechatUser.nickname,
         avatar: wechatUser.headimgurl,
-        wechat_unionid: wechatUser.unionid || null,
+        wechatUnionid: wechatUser.unionid || null,
       })
-      .eq("id", profile.id)
+      .where(eq(users.id, user.id))
   } else {
-    // New WeChat user
-    const { error: createError } = await supabaseAdmin.auth.admin.createUser({
-      email,
-      password,
-      email_confirm: true,
-      user_metadata: {
-        name: wechatUser.nickname,
-        avatar: wechatUser.headimgurl,
-        wechat_openid: wechatUser.openid,
-        wechat_unionid: wechatUser.unionid || null,
-      },
+    const id = randomUUID()
+    await db.insert(users).values({
+      id,
+      wechatOpenid: wechatUser.openid,
+      wechatUnionid: wechatUser.unionid || null,
+      name: wechatUser.nickname,
+      avatar: wechatUser.headimgurl,
     })
-
-    if (createError && createError.code !== "duplicate") {
-      const loginUrl = new URL("/login", request.url)
-      loginUrl.searchParams.set("error", "server_error")
-      return NextResponse.redirect(loginUrl)
-    }
+    const [newUser] = await db.select().from(users).where(eq(users.id, id)).limit(1)
+    user = newUser
   }
 
-  // Sign in to create session
-  const cookieStore = await cookies()
-  const supabaseSsr = createServerClient(url, anonKey, {
-    cookies: {
-      getAll() {
-        return cookieStore.getAll()
-      },
-      setAll(cookiesToSet) {
-        cookiesToSet.forEach(({ name, value, options }) =>
-          cookieStore.set(name, value, options)
-        )
-      },
-    },
-  })
-
-  const { error: authError } = await supabaseSsr.auth.signInWithPassword({
-    email,
-    password,
-  })
-
-  if (authError) {
-    const loginUrl = new URL("/login", request.url)
-    loginUrl.searchParams.set("error", "signin_failed")
-    return NextResponse.redirect(loginUrl)
-  }
-
+  await createSession(user.id)
   return NextResponse.redirect(new URL("/home", request.url))
 }
 
 async function handleDevLogin(request: NextRequest): Promise<NextResponse> {
-  const supabaseAdmin = createServiceClient()
+  if (!db) return NextResponse.redirect(new URL("/home", request.url))
 
-  if (!supabaseAdmin) {
-    const homeUrl = new URL("/home", request.url)
-    return NextResponse.redirect(homeUrl)
-  }
-
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL!
-  const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
   const devOpenid = "dev_wechat_user"
-  const email = `wechat_${devOpenid}@typenow.local`
-  const password = crypto.randomUUID()
+  let [user] = await db
+    .select()
+    .from(users)
+    .where(eq(users.wechatOpenid, devOpenid))
+    .limit(1)
 
-  const { data: profile } = await supabaseAdmin
-    .from("profiles")
-    .select("id")
-    .eq("wechat_openid", devOpenid)
-    .maybeSingle()
-
-  if (profile) {
-    await supabaseAdmin.auth.admin.updateUserById(profile.id, { password })
-  } else {
-    await supabaseAdmin.auth.admin.createUser({
-      email,
-      password,
-      email_confirm: true,
-      user_metadata: {
-        name: "微信开发用户",
-        avatar: "",
-        wechat_openid: devOpenid,
-      },
-    })
+  if (!user) {
+    const id = randomUUID()
+    await db.insert(users).values({ id, wechatOpenid: devOpenid, name: "微信开发用户" })
+    const [newUser] = await db.select().from(users).where(eq(users.id, id)).limit(1)
+    user = newUser
   }
 
-  const cookieStore = await cookies()
-  const supabaseSsr = createServerClient(url, anonKey, {
-    cookies: {
-      getAll() {
-        return cookieStore.getAll()
-      },
-      setAll(cookiesToSet) {
-        cookiesToSet.forEach(({ name, value, options }) =>
-          cookieStore.set(name, value, options)
-        )
-      },
-    },
-  })
-
-  await supabaseSsr.auth.signInWithPassword({ email, password })
-
+  await createSession(user.id)
   return NextResponse.redirect(new URL("/home", request.url))
 }

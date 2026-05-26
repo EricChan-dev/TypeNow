@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server"
 import { createHash } from "crypto"
-import { createServiceClient } from "@/lib/supabase/service"
+import { db } from "@/lib/db"
+import { sentenceKnowledge } from "@/lib/db/schema"
+import { eq } from "drizzle-orm"
 
 const SYSTEM_PROMPT = `你是一个专业的英语教学助手，精通英语语法、词汇和文化背景知识。请分析给定的英语句子，只返回纯JSON，不要包含任何markdown标记或其他文字。
 
@@ -73,23 +75,14 @@ export async function POST(request: Request) {
   const sentenceHash = createHash("sha256").update(sentence.trim()).digest("hex")
 
   // 1. Try cache
-  let tableExists = true
-  const supabase = createServiceClient()
-  if (supabase) {
-    const { data: cached, error: cacheError } = await supabase
-      .from("sentence_knowledge")
-      .select("data")
-      .eq("sentence_hash", sentenceHash)
-      .maybeSingle()
+  if (db) {
+    const [cached] = await db
+      .select({ data: sentenceKnowledge.data })
+      .from(sentenceKnowledge)
+      .where(eq(sentenceKnowledge.sentenceHash, sentenceHash))
+      .limit(1)
 
-    if (!cacheError && cached) {
-      return NextResponse.json({ data: cached.data, cached: true })
-    }
-
-    if (cacheError?.code === "PGRST205") {
-      tableExists = false
-      console.warn("sentence_knowledge table not found — skipping cache")
-    }
+    if (cached) return NextResponse.json({ data: cached.data, cached: true })
   }
 
   // 2. Cache miss — call DeepSeek
@@ -97,21 +90,12 @@ export async function POST(request: Request) {
     const knowledge = await callDeepSeek(sentence.trim())
 
     // 3. Store in cache (fire-and-forget)
-    if (supabase && tableExists) {
-      void (async () => {
-        try {
-          const { error } = await supabase
-            .from("sentence_knowledge")
-            .upsert({
-              sentence_hash: sentenceHash,
-              sentence_text: sentence.trim(),
-              data: knowledge,
-            }, { onConflict: "sentence_hash" })
-          if (error) console.error("Cache upsert error:", error)
-        } catch (err) {
-          console.error("Cache upsert failed:", err)
-        }
-      })()
+    if (db) {
+      void db
+        .insert(sentenceKnowledge)
+        .values({ sentenceHash, sentenceText: sentence.trim(), data: knowledge })
+        .onDuplicateKeyUpdate({ set: { data: knowledge } })
+        .catch((err) => console.error("Cache upsert failed:", err))
     }
 
     return NextResponse.json({ data: knowledge, cached: false })

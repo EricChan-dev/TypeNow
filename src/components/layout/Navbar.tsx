@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback } from "react"
 import Link from "next/link"
 import { usePathname, useRouter } from "next/navigation"
 import { BookOpen, GraduationCap, Menu, X, User, Settings, Crown, LogOut } from "lucide-react"
-import { createClient } from "@/lib/supabase/client"
+import { signOutAction } from "@/app/actions/auth"
 import { cn } from "@/lib/utils"
 import { UserActions } from "@/components/layout/UserActions"
 
@@ -29,51 +29,18 @@ export function Navbar() {
   const [user, setUser] = useState<UserProfile | null>(null)
   const [authLoading, setAuthLoading] = useState(true)
 
-  // Auth state for mobile menu
   useEffect(() => {
-    const supabase = createClient()
-    if (!supabase) { setAuthLoading(false); return }
-
-    let cancelled = false
-    async function refresh() {
-      if (!supabase) return
-      try {
-        const { data: { user: authUser }, error } = await supabase.auth.getUser()
-        if (cancelled) return
-        if (error || !authUser) {
-          setUser(null)
-          setAuthLoading(false)
-          return
-        }
-
-        const { data: profile } = await supabase
-          .from("profiles")
-          .select("name, avatar, is_pro, level")
-          .maybeSingle()
-
-        if (cancelled) return
-        setUser({
-          name: profile?.name || null,
-          avatar: profile?.avatar || null,
-          is_pro: profile?.is_pro || false,
-          level: profile?.level || 1,
-        })
-      } catch {
-        if (!cancelled) setUser(null)
-      }
-      if (!cancelled) setAuthLoading(false)
-    }
-
-    refresh()
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(() => refresh())
-    return () => { cancelled = true; subscription?.unsubscribe() }
+    fetch("/api/auth/me")
+      .then((r) => r.json())
+      .then(({ user: u }) => { setUser(u); setAuthLoading(false) })
+      .catch(() => setAuthLoading(false))
   }, [])
 
   async function handleLogout() {
-    const supabase = createClient()
-    if (supabase) await supabase.auth.signOut()
     setUser(null)
+    await signOutAction()
     router.push("/")
+    router.refresh()
   }
 
   const scrollToSection = useCallback((sectionId: string) => {
@@ -97,9 +64,7 @@ export function Navbar() {
         {/* Logo */}
         <Link href="/" className="flex items-center gap-2 shrink-0">
           <BookOpen className="h-6 w-6 text-accent" />
-          <span className="text-xl font-bold text-accent">
-            TypeNow·码上英语
-          </span>
+          <span className="text-xl font-bold text-accent">TypeNow·码上英语</span>
         </Link>
 
         {/* Desktop nav */}
@@ -127,8 +92,6 @@ export function Navbar() {
         {/* Right actions */}
         <div className="flex items-center gap-3">
           <UserActions variant="public" />
-
-          {/* Mobile menu toggle */}
           <button onClick={() => setMobileMenuOpen(!mobileMenuOpen)} className="lg:hidden p-1.5 text-muted-foreground hover:text-foreground" aria-label="菜单">
             {mobileMenuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
           </button>

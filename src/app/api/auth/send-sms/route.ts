@@ -1,14 +1,13 @@
 import { NextResponse } from "next/server"
-import { createServiceClient } from "@/lib/supabase/service"
+import { db } from "@/lib/db"
+import { verificationCodes } from "@/lib/db/schema"
+import { eq, and, gt, gte } from "drizzle-orm"
 import { sendVerificationCode } from "@/lib/aliyun-sms"
 
 const PHONE_REGEX = /^1[3-9]\d{9}$/
 
 function isDevMode() {
-  return (
-    process.env.NODE_ENV === "development" &&
-    !process.env.NEXT_PUBLIC_SUPABASE_URL?.startsWith("http")
-  )
+  return process.env.NODE_ENV === "development" && !process.env.DATABASE_URL
 }
 
 export async function POST(request: Request) {
@@ -20,60 +19,45 @@ export async function POST(request: Request) {
   }
 
   const phone = body.phone?.trim()
-
   if (!phone || !PHONE_REGEX.test(phone)) {
     return NextResponse.json({ error: "请输入有效的手机号" }, { status: 400 })
   }
 
-  // Dev mode: skip real SMS, just store a dev code
-  if (isDevMode()) {
-    const supabase = createServiceClient()
-    if (supabase) {
-      await supabase.from("verification_codes").insert({
-        phone,
-        code: "123456",
-        expires_at: new Date(Date.now() + 5 * 60 * 1000).toISOString(),
-      })
-    }
+  // Dev mode (no DB): use fixed code 123456
+  if (isDevMode() || !db) {
     return NextResponse.json({ success: true, message: "验证码已发送（开发模式：输入 123456）" })
   }
 
-  // Rate limiting: check if code was sent to this phone in the last 60 seconds
-  const supabase = createServiceClient()
-  if (supabase) {
-    const sixtySecondsAgo = new Date(Date.now() - 60 * 1000).toISOString()
-    const { data: recent } = await supabase
-      .from("verification_codes")
-      .select("created_at")
-      .eq("phone", phone)
-      .gte("created_at", sixtySecondsAgo)
-      .order("created_at", { ascending: false })
-      .limit(1)
-      .maybeSingle()
+  // Rate limiting: max 1 SMS per 60 seconds per phone
+  const sixtySecondsAgo = new Date(Date.now() - 60 * 1000)
+  const [recent] = await db
+    .select({ createdAt: verificationCodes.createdAt })
+    .from(verificationCodes)
+    .where(
+      and(
+        eq(verificationCodes.phone, phone),
+        gte(verificationCodes.createdAt, sixtySecondsAgo)
+      )
+    )
+    .orderBy(verificationCodes.createdAt)
+    .limit(1)
 
-    if (recent) {
-      const elapsed = Math.floor(
-        (Date.now() - new Date(recent.created_at).getTime()) / 1000
-      )
-      const remaining = 60 - elapsed
-      return NextResponse.json(
-        { error: `发送过于频繁，请${remaining}秒后再试`, cooldown: remaining },
-        { status: 429 }
-      )
-    }
+  if (recent) {
+    const elapsed = Math.floor((Date.now() - recent.createdAt.getTime()) / 1000)
+    const remaining = 60 - elapsed
+    return NextResponse.json(
+      { error: `发送过于频繁，请${remaining}秒后再试`, cooldown: remaining },
+      { status: 429 }
+    )
   }
 
-  // Generate 6-digit code
   const code = Math.floor(100000 + Math.random() * 900000).toString()
 
-  // Check Aliyun credentials
   if (!process.env.ALIYUN_ACCESS_KEY_ID || !process.env.ALIYUN_ACCESS_KEY_SECRET) {
     return NextResponse.json({ error: "短信服务未配置" }, { status: 500 })
   }
 
-  // Send SMS via Aliyun
   const result = await sendVerificationCode(phone, code)
-
   if (!result.success) {
     return NextResponse.json(
       { error: result.error || "短信发送失败，请稍后重试" },
@@ -81,22 +65,19 @@ export async function POST(request: Request) {
     )
   }
 
-  // Store code in database
-  if (supabase) {
-    await supabase.from("verification_codes").insert({
-      phone,
-      code,
-      expires_at: new Date(Date.now() + 5 * 60 * 1000).toISOString(),
-    })
+  const expiresAt = new Date(Date.now() + 5 * 60 * 1000)
+  await db.insert(verificationCodes).values({ phone, code, expiresAt })
 
-    // Clean up old expired codes for this phone
-    await supabase
-      .from("verification_codes")
-      .delete()
-      .eq("phone", phone)
-      .eq("used", false)
-      .lt("expires_at", new Date().toISOString())
-  }
+  // Clean up old expired codes for this phone (fire-and-forget)
+  void db
+    .delete(verificationCodes)
+    .where(
+      and(
+        eq(verificationCodes.phone, phone),
+        gt(verificationCodes.expiresAt, new Date(0))
+      )
+    )
+    .catch(() => {})
 
   return NextResponse.json({ success: true, message: "验证码已发送" })
 }

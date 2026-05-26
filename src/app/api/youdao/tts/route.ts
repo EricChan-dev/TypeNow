@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server"
 import { createHash, randomUUID } from "crypto"
-import { createServiceClient } from "@/lib/supabase/service"
+import { db } from "@/lib/db"
+import { ttsCache } from "@/lib/db/schema"
+import { eq } from "drizzle-orm"
 
 function truncateInput(q: string): string {
   if (q.length <= 20) return q
@@ -29,18 +31,16 @@ export async function POST(request: Request) {
     .update(text + voice + spd + vol)
     .digest("hex")
 
-  const supabase = createServiceClient()
-
   // 1. Try cache
-  if (supabase) {
-    const { data: cached, error: cacheError } = await supabase
-      .from("tts_cache")
-      .select("audio_data")
-      .eq("cache_key", cacheKey)
-      .maybeSingle()
+  if (db) {
+    const [cached] = await db
+      .select({ audioData: ttsCache.audioData })
+      .from(ttsCache)
+      .where(eq(ttsCache.cacheKey, cacheKey))
+      .limit(1)
 
-    if (!cacheError && cached) {
-      const audioBuffer = Buffer.from(cached.audio_data, "base64")
+    if (cached) {
+      const audioBuffer = Buffer.from(cached.audioData, "base64")
       return new NextResponse(audioBuffer, {
         headers: {
           "Content-Type": "audio/mpeg",
@@ -101,25 +101,12 @@ export async function POST(request: Request) {
   const audioBase64 = Buffer.from(audioBuffer).toString("base64")
 
   // 3. Store in cache (fire-and-forget)
-  if (supabase) {
-    void (async () => {
-      try {
-        const { error } = await supabase
-          .from("tts_cache")
-          .upsert(
-            {
-              cache_key: cacheKey,
-              text,
-              voice_name: voice,
-              audio_data: audioBase64,
-            },
-            { onConflict: "cache_key" },
-          )
-        if (error) console.error("TTS cache upsert error:", error)
-      } catch (err) {
-        console.error("TTS cache upsert failed:", err)
-      }
-    })()
+  if (db) {
+    void db
+      .insert(ttsCache)
+      .values({ cacheKey, text, voiceName: voice, audioData: audioBase64 })
+      .onDuplicateKeyUpdate({ set: { audioData: audioBase64 } })
+      .catch((err) => console.error("TTS cache upsert failed:", err))
   }
 
   return new NextResponse(audioBuffer, {

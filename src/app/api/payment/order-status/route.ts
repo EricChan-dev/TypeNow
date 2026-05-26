@@ -1,59 +1,40 @@
 import { NextResponse } from "next/server"
-import { createClient as createSupabaseClient } from "@/lib/supabase/server"
-import { createServiceClient } from "@/lib/supabase/service"
+import { db } from "@/lib/db"
+import { paymentOrders } from "@/lib/db/schema"
+import { getSession } from "@/lib/auth/session"
+import { eq, and } from "drizzle-orm"
 import { queryOrder } from "@/lib/wechat-pay"
+import { activateSubscription } from "@/lib/subscription"
 
 export async function GET(request: Request) {
   try {
-    const supabase = await createSupabaseClient()
-    if (!supabase) {
-      return NextResponse.json({ error: "服务未配置" }, { status: 500 })
-    }
+    if (!db) return NextResponse.json({ error: "服务未配置" }, { status: 500 })
 
-    const { data: { session } } = await supabase.auth.getSession()
-    if (!session?.user?.id) {
-      return NextResponse.json({ error: "请先登录" }, { status: 401 })
-    }
+    const session = await getSession()
+    if (!session) return NextResponse.json({ error: "请先登录" }, { status: 401 })
 
     const { searchParams } = new URL(request.url)
     const outTradeNo = searchParams.get("out_trade_no")
-    if (!outTradeNo) {
-      return NextResponse.json({ error: "Missing out_trade_no" }, { status: 400 })
-    }
+    if (!outTradeNo) return NextResponse.json({ error: "Missing out_trade_no" }, { status: 400 })
 
-    const serviceClient = createServiceClient()
-    if (!serviceClient) {
-      return NextResponse.json({ error: "服务未配置" }, { status: 500 })
-    }
+    const [order] = await db
+      .select({ id: paymentOrders.id, status: paymentOrders.status, plan: paymentOrders.plan })
+      .from(paymentOrders)
+      .where(and(eq(paymentOrders.outTradeNo, outTradeNo), eq(paymentOrders.userId, session.userId)))
+      .limit(1)
 
-    const { data: order } = await serviceClient
-      .from("payment_orders")
-      .select("id, status, plan")
-      .eq("out_trade_no", outTradeNo)
-      .eq("user_id", session.user.id)
-      .maybeSingle()
+    if (!order) return NextResponse.json({ error: "订单不存在" }, { status: 404 })
 
-    if (!order) {
-      return NextResponse.json({ error: "订单不存在" }, { status: 404 })
-    }
-
-    // If still pending, check WeChat for real-time status
     if (order.status === "pending") {
       try {
         const wxOrder = await queryOrder(outTradeNo)
         if (wxOrder.trade_state === "SUCCESS") {
-          await serviceClient
-            .from("payment_orders")
-            .update({
-              status: "paid",
-              transaction_id: wxOrder.transaction_id,
-              paid_at: new Date().toISOString(),
-            })
-            .eq("out_trade_no", outTradeNo)
+          await db
+            .update(paymentOrders)
+            .set({ status: "paid", transactionId: wxOrder.transaction_id, paidAt: new Date() })
+            .where(eq(paymentOrders.outTradeNo, outTradeNo))
 
-          const { activateSubscription } = await import("@/lib/subscription")
-          await activateSubscription(session.user.id, order.plan as "monthly" | "yearly", order.id)
-
+          await activateSubscription(session.userId, order.plan as "monthly" | "yearly", order.id)
           return NextResponse.json({ status: "paid", plan: order.plan })
         }
       } catch {

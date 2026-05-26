@@ -1,6 +1,5 @@
 import { redirect } from "next/navigation"
-import { getUser, isSupabaseConfigured } from "@/app/actions/auth"
-import { createClient } from "@/lib/supabase/server"
+import { getUser, isDbConfigured } from "@/app/actions/auth"
 import { ConditionalTopbar } from "@/components/home/ConditionalTopbar"
 import { HomeShell } from "@/components/home/HomeShell"
 
@@ -9,33 +8,20 @@ export default async function HomeLayout({
 }: {
   children: React.ReactNode
 }) {
+  const dbReady = await isDbConfigured()
   const user = await getUser()
-  const supabaseReady = await isSupabaseConfigured()
 
-  if (supabaseReady && !user) {
+  if (dbReady && !user) {
     redirect("/login")
-  }
-
-  // Fetch profile from DB for avatar (not available in auth metadata for non-OAuth users)
-  let profile: { name: string | null; avatar: string | null; is_pro: boolean; level: number } | null = null
-  if (supabaseReady && user) {
-    const supabase = await createClient()
-    if (supabase) {
-      const { data } = await supabase
-        .from("profiles")
-        .select("name, avatar, is_pro, level")
-        .maybeSingle()
-      profile = data
-    }
   }
 
   const serverUser = user
     ? {
-        name: profile?.name || user.user_metadata?.name || user.email?.split("@")[0] || null,
-        avatar: profile?.avatar || user.user_metadata?.avatar_url || null,
+        name: user.name || null,
+        avatar: user.avatar || null,
         email: user.email || null,
-        is_pro: profile?.is_pro || false,
-        level: profile?.level || 1,
+        is_pro: !!user.isPro,
+        level: user.level,
       }
     : null
 

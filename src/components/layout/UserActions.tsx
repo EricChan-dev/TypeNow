@@ -7,7 +7,7 @@ import { useRouter } from "next/navigation"
 import { useTheme } from "next-themes"
 import { Moon, Sun, User, Settings, Crown, LogOut, ChevronRight } from "lucide-react"
 import { trackThemeToggle } from "@/lib/analytics"
-import { createClient } from "@/lib/supabase/client"
+import { signOutAction } from "@/app/actions/auth"
 import { cn } from "@/lib/utils"
 
 interface UserProfile {
@@ -34,17 +34,12 @@ export function UserActions({ serverUser, variant = "public" }: UserActionsProps
   const router = useRouter()
   const { theme, setTheme } = useTheme()
   const [mounted, setMounted] = useState(false)
-  const [user, setUser] = useState<UserProfile | null>(() => {
-    if (serverUser) {
-      return {
-        name: serverUser.name,
-        avatar: serverUser.avatar,
-        is_pro: serverUser.is_pro,
-        level: serverUser.level,
-      }
-    }
-    return null
-  })
+  const [user, setUser] = useState<UserProfile | null>(serverUser ? {
+    name: serverUser.name,
+    avatar: serverUser.avatar,
+    is_pro: serverUser.is_pro,
+    level: serverUser.level,
+  } : null)
   const [loading, setLoading] = useState(!serverUser)
   const [dropdownOpen, setDropdownOpen] = useState(false)
   const dropdownRef = useRef<HTMLDivElement>(null)
@@ -52,58 +47,12 @@ export function UserActions({ serverUser, variant = "public" }: UserActionsProps
   useEffect(() => { setMounted(true) }, [])
 
   useEffect(() => {
-    const supabase = createClient()
-    if (!supabase) {
-      setLoading(false)
-      return
-    }
+    if (serverUser) { setLoading(false); return }
 
-    let cancelled = false
-    async function refresh() {
-      if (!supabase) return
-      try {
-        const { data: { user: authUser }, error } = await supabase.auth.getUser()
-        if (cancelled) return
-        if (error || !authUser) {
-          if (!cancelled) {
-            if (serverUser) {
-              setUser({ name: serverUser.name, avatar: serverUser.avatar, is_pro: serverUser.is_pro, level: serverUser.level })
-            } else {
-              setUser(null)
-            }
-            setLoading(false)
-          }
-          return
-        }
-
-        const { data: profile } = await supabase
-          .from("profiles")
-          .select("name, avatar, is_pro, level")
-          .maybeSingle()
-
-        if (!cancelled) {
-          setUser({
-            name: profile?.name || serverUser?.name || null,
-            avatar: profile?.avatar || serverUser?.avatar || null,
-            is_pro: profile?.is_pro || serverUser?.is_pro || false,
-            level: profile?.level || serverUser?.level || 1,
-          })
-        }
-      } catch {
-        if (!cancelled) {
-          if (serverUser) {
-            setUser({ name: serverUser.name, avatar: serverUser.avatar, is_pro: serverUser.is_pro, level: serverUser.level })
-          } else {
-            setUser(null)
-          }
-        }
-      }
-      if (!cancelled) setLoading(false)
-    }
-
-    refresh()
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(() => refresh())
-    return () => { cancelled = true; subscription?.unsubscribe() }
+    fetch("/api/auth/me")
+      .then((r) => r.json())
+      .then(({ user: u }) => { setUser(u); setLoading(false) })
+      .catch(() => setLoading(false))
   }, [serverUser])
 
   useEffect(() => {
@@ -117,11 +66,11 @@ export function UserActions({ serverUser, variant = "public" }: UserActionsProps
   }, [])
 
   async function handleLogout() {
-    const supabase = createClient()
-    if (supabase) await supabase.auth.signOut()
-    setUser(null)
     setDropdownOpen(false)
+    await signOutAction()
+    setUser(null)
     router.push("/")
+    router.refresh()
   }
 
   const isLoggedIn = !!user
@@ -137,40 +86,22 @@ export function UserActions({ serverUser, variant = "public" }: UserActionsProps
             mounted && theme === "dark" && "left-[3px] bg-background shadow-sm",
             mounted && theme === "light" && "left-[59px] bg-card shadow-md"
           )}
-          style={{
-            transition: "left 0.5s cubic-bezier(0.34, 1.56, 0.64, 1), background-color 0.35s ease, box-shadow 0.35s ease",
-          }}
+          style={{ transition: "left 0.5s cubic-bezier(0.34, 1.56, 0.64, 1), background-color 0.35s ease, box-shadow 0.35s ease" }}
         />
         <button
           onClick={() => { setTheme("dark"); trackThemeToggle("dark") }}
-          className={cn(
-            "relative z-10 flex items-center justify-center gap-1.5 rounded-[20px] w-[56px] py-[5px] text-[13px] font-medium transition-all duration-300",
-            mounted && theme === "dark" ? "text-foreground" : "text-muted-foreground hover:text-foreground/70"
-          )}
+          className={cn("relative z-10 flex items-center justify-center gap-1.5 rounded-[20px] w-[56px] py-[5px] text-[13px] font-medium transition-all duration-300", mounted && theme === "dark" ? "text-foreground" : "text-muted-foreground hover:text-foreground/70")}
           aria-label="深色模式"
         >
-          <Moon
-            className="h-3.5 w-3.5 transition-all duration-500"
-            style={{
-              transform: mounted && theme === "dark" ? "scale(1.15)" : "scale(1)",
-            }}
-          />
+          <Moon className="h-3.5 w-3.5 transition-all duration-500" style={{ transform: mounted && theme === "dark" ? "scale(1.15)" : "scale(1)" }} />
           深色
         </button>
         <button
           onClick={() => { setTheme("light"); trackThemeToggle("light") }}
-          className={cn(
-            "relative z-10 flex items-center justify-center gap-1.5 rounded-[20px] w-[56px] py-[5px] text-[13px] font-medium transition-all duration-300",
-            mounted && theme === "light" ? "text-card-foreground" : "text-muted-foreground hover:text-foreground/70"
-          )}
+          className={cn("relative z-10 flex items-center justify-center gap-1.5 rounded-[20px] w-[56px] py-[5px] text-[13px] font-medium transition-all duration-300", mounted && theme === "light" ? "text-card-foreground" : "text-muted-foreground hover:text-foreground/70")}
           aria-label="浅色模式"
         >
-          <Sun
-            className="h-3.5 w-3.5 transition-all duration-500"
-            style={{
-              transform: mounted && theme === "light" ? "scale(1.15) rotate(0deg)" : "rotate(-30deg)",
-            }}
-          />
+          <Sun className="h-3.5 w-3.5 transition-all duration-500" style={{ transform: mounted && theme === "light" ? "scale(1.15) rotate(0deg)" : "rotate(-30deg)" }} />
           浅色
         </button>
       </div>
@@ -182,24 +113,15 @@ export function UserActions({ serverUser, variant = "public" }: UserActionsProps
         <>
           {variant === "home" && (
             <div className="flex items-center gap-2">
-              <span className="inline-flex items-center rounded-full bg-accent/10 px-2 py-0.5 text-[11px] font-semibold text-accent">
-                Lv.{user.level}
-              </span>
-              {user.is_pro && (
-                <span className="inline-flex items-center rounded-full bg-primary/10 px-2 py-0.5 text-[11px] font-semibold text-primary">
-                  PRO
-                </span>
-              )}
+              <span className="inline-flex items-center rounded-full bg-accent/10 px-2 py-0.5 text-[11px] font-semibold text-accent">Lv.{user.level}</span>
+              {user.is_pro && <span className="inline-flex items-center rounded-full bg-primary/10 px-2 py-0.5 text-[11px] font-semibold text-primary">PRO</span>}
             </div>
           )}
 
           <div className="relative" ref={dropdownRef}>
             <button
               onClick={() => setDropdownOpen(!dropdownOpen)}
-              className={cn(
-                "flex items-center justify-center h-9 w-9 rounded-full text-sm font-bold shrink-0 transition-opacity hover:opacity-80 overflow-hidden",
-                user.avatar ? "" : "bg-accent text-white"
-              )}
+              className={cn("flex items-center justify-center h-9 w-9 rounded-full text-sm font-bold shrink-0 transition-opacity hover:opacity-80 overflow-hidden", user.avatar ? "" : "bg-accent text-white")}
             >
               {user.avatar ? (
                 <Image src={user.avatar} alt={user.name || "用户"} width={36} height={36} className="object-cover" />
@@ -219,10 +141,7 @@ export function UserActions({ serverUser, variant = "public" }: UserActionsProps
                       <p className="text-sm font-semibold text-foreground truncate">{user.name || "用户"}</p>
                       <p className="text-xs text-muted-foreground">
                         Lv.{user.level}
-                        {user.is_pro
-                          ? <span className="ml-1.5 inline-flex items-center rounded-full bg-accent/10 px-1.5 py-0.5 text-[10px] font-semibold text-accent">PRO</span>
-                          : variant === "public" && <span className="ml-1.5 text-[11px]">普通会员</span>
-                        }
+                        {user.is_pro ? <span className="ml-1.5 inline-flex items-center rounded-full bg-accent/10 px-1.5 py-0.5 text-[10px] font-semibold text-accent">PRO</span> : variant === "public" && <span className="ml-1.5 text-[11px]">普通会员</span>}
                       </p>
                     </div>
                   </div>
@@ -254,9 +173,7 @@ export function UserActions({ serverUser, variant = "public" }: UserActionsProps
         </>
       ) : variant === "home" ? (
         <div className="flex items-center gap-2">
-          <span className="inline-flex items-center rounded-full bg-accent/10 px-2 py-0.5 text-[11px] font-semibold text-accent">
-            Lv.1
-          </span>
+          <span className="inline-flex items-center rounded-full bg-accent/10 px-2 py-0.5 text-[11px] font-semibold text-accent">Lv.1</span>
           <div className="flex items-center justify-center h-9 w-9 rounded-full bg-accent text-white text-sm font-bold">
             {serverUser?.name?.[0]?.toUpperCase() || "U"}
           </div>

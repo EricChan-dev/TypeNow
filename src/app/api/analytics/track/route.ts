@@ -1,43 +1,27 @@
 import { NextResponse } from "next/server"
-import { createServiceClient } from "@/lib/supabase/service"
+import { db } from "@/lib/db"
+import { analyticsEvents } from "@/lib/db/schema"
+import { getSession } from "@/lib/auth/session"
 
 export async function POST(request: Request) {
   try {
     const { event, properties, pageUrl, sessionId } = await request.json()
+    if (!event) return NextResponse.json({ error: "Missing event" }, { status: 400 })
 
-    if (!event) {
-      return NextResponse.json({ error: "Missing event" }, { status: 400 })
-    }
+    if (!db) return NextResponse.json({ ok: true })
 
-    const serviceClient = createServiceClient()
-    if (!serviceClient) {
-      // Silently succeed - analytics should never block
-      return NextResponse.json({ ok: true })
-    }
+    const session = await getSession().catch(() => null)
 
-    // Try to get user from session, but don't require it
-    const { createClient } = await import("@/lib/supabase/server")
-    const supabase = await createClient()
-    let userId: string | null = null
-
-    if (supabase) {
-      const {
-        data: { session },
-      } = await supabase.auth.getSession()
-      userId = session?.user?.id || null
-    }
-
-    await serviceClient.from("analytics_events").insert({
-      event_type: event,
-      user_id: userId,
+    await db.insert(analyticsEvents).values({
+      eventType: event,
+      userId: session?.userId || null,
       properties: properties || {},
-      page_url: pageUrl || "",
-      session_id: sessionId || "",
+      pageUrl: pageUrl || "",
+      sessionId: sessionId || "",
     })
 
     return NextResponse.json({ ok: true })
   } catch {
-    // Silently fail
     return NextResponse.json({ ok: true })
   }
 }

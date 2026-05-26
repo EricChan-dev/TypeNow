@@ -17,6 +17,12 @@ export interface Word {
   pos: string // 词性：动词/名词/代词/形容词/副词/介词/连词/助动词/冠词/标点/不定式...
 }
 
+export interface Chunk {
+  order: number
+  text: string
+  chinese: string
+}
+
 export interface Sentence {
   id: string
   chinese: string
@@ -27,6 +33,7 @@ export interface Sentence {
   tags: string[]
   lesson_id?: string | null
   words?: Word[] | null
+  chunks?: Chunk[] | null
 }
 
 export interface Scene {

@@ -2,7 +2,7 @@ import { getUser } from "@/app/actions/auth"
 
 export default async function HomePage() {
   const user = await getUser()
-  const userName = user?.user_metadata?.name || user?.email?.split("@")[0] || "用户"
+  const userName = user?.name || user?.email?.split("@")[0] || "用户"
 
   return (
     <div className="p-8">

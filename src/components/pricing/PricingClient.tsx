@@ -4,7 +4,6 @@ import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { PricingCard } from "@/components/pricing/PricingCard"
 import { CheckoutModal } from "@/components/payment/CheckoutModal"
-import { createClient } from "@/lib/supabase/client"
 import { trackSubscribeClick } from "@/lib/analytics"
 
 const freeFeatures = [
@@ -31,15 +30,11 @@ export function PricingClient() {
   const [checkingAuth, setCheckingAuth] = useState(true)
 
   useEffect(() => {
-    const supabase = createClient()
-    if (!supabase) {
-      setCheckingAuth(false)
-      return
-    }
-    supabase.auth.getSession().then(({ data }: { data: { session: { user: { id: string } } | null } }) => {
-      setIsLoggedIn(!!data.session)
-      setCheckingAuth(false)
-    })
+    fetch("/api/auth/me")
+      .then((r) => r.json())
+      .then((data) => setIsLoggedIn(!!data?.user))
+      .catch(() => setIsLoggedIn(false))
+      .finally(() => setCheckingAuth(false))
   }, [])
 
   function handleCheckout(plan: "monthly" | "yearly") {
