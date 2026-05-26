@@ -233,6 +233,7 @@ export default function LessonDetailPage() {
     if (valid.length === 0) return message.error("请至少输入一条英文句子")
     setAddingRows(true)
     try {
+      // Step 1: 创建所有句子
       const results: Sentence[] = []
       for (let i = 0; i < valid.length; i++) {
         const res = await fetch("/api/admin/sentences", {
@@ -251,8 +252,30 @@ export default function LessonDetailPage() {
       }
       setSentences((prev) => [...prev, ...results])
       setAddModalOpen(false)
-      message.success(`已添加 ${results.length} 条句子`)
       if (results.length > 0) selectSentence(results[results.length - 1])
+
+      // Step 2: 并行 AI 拆分所有句子
+      message.loading({ content: `正在 AI 拆分 ${results.length} 条句子…`, key: "batch-split" })
+      const splitResults = await Promise.allSettled(
+        results.map((s) =>
+          fetch(`/api/admin/sentences/${s.id}/split`, { method: "POST" })
+            .then((r) => r.json())
+            .then((j) => ({ id: s.id, chunks: (j.data?.chunks ?? null) as Chunk[] | null }))
+        )
+      )
+      // 更新本地句子列表中的 chunks
+      setSentences((prev) =>
+        prev.map((s) => {
+          const hit = splitResults.find((r) => r.status === "fulfilled" && r.value.id === s.id)
+          return hit?.status === "fulfilled" && hit.value.chunks ? { ...s, chunks: hit.value.chunks } : s
+        })
+      )
+      // 如果最后一条句子仍被选中，同步更新右侧 chunk 编辑器
+      const lastSplit = splitResults[splitResults.length - 1]
+      if (lastSplit?.status === "fulfilled" && lastSplit.value.chunks) {
+        setChunks(lastSplit.value.chunks)
+      }
+      message.success({ content: `已添加 ${results.length} 条句子并完成 AI 拆分`, key: "batch-split" })
     } catch (err) {
       message.error(err instanceof Error ? err.message : "添加失败")
     } finally {

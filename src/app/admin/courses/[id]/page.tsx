@@ -246,17 +246,28 @@ export default function CourseDetailPage() {
         const lessonJson = await lessonRes.json()
         if (!lessonRes.ok) throw new Error(lessonJson.error)
         const newLessonId: string = lessonJson.data.id
+
+        // 顺序创建句子，收集 ID
+        const sentenceIds: string[] = []
         for (let j = 0; j < pl.sentences.length; j++) {
           const s = pl.sentences[j]
-          await fetch("/api/admin/sentences", {
+          const sRes = await fetch("/api/admin/sentences", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ lessonId: newLessonId, english: s.english, chinese: s.chinese, sortOrder: j }),
           })
+          const sJson = await sRes.json()
+          if (sRes.ok) sentenceIds.push(sJson.data.id)
         }
+
+        // 并行 AI 拆分本章节所有句子
+        setCreateProgress(`第 ${i + 1}/${previewLessons.length} 章节 - AI 拆分中…`)
+        await Promise.allSettled(
+          sentenceIds.map((sid) => fetch(`/api/admin/sentences/${sid}/split`, { method: "POST" }))
+        )
       }
       const totalSentences = previewLessons.reduce((sum, l) => sum + l.sentences.length, 0)
-      message.success(`已创建 ${previewLessons.length} 个章节，${totalSentences} 条句子`)
+      message.success(`已创建 ${previewLessons.length} 个章节，${totalSentences} 条句子，并完成 AI 拆分`)
       setPreviewOpen(false)
       setAiText("")
       setAiFile(null)
@@ -277,7 +288,7 @@ export default function CourseDetailPage() {
       title: "操作",
       width: 160,
       render: (_: unknown, record: Lesson) => (
-        <Space>
+        <Space onClick={(e) => e.stopPropagation()}>
           <Button size="small" icon={<UnorderedListOutlined />}
             onClick={() => router.push(`/admin/courses/${id}/lessons/${record.id}`)}>
             详情
@@ -353,6 +364,10 @@ export default function CourseDetailPage() {
               rowKey="id"
               pagination={false}
               size="small"
+              onRow={(record) => ({
+                onClick: () => router.push(`/admin/courses/${id}/lessons/${record.id}`),
+                style: { cursor: "pointer" },
+              })}
             />
           </Card>
         </Col>

@@ -82,11 +82,11 @@ export default function CourseNew() {
             <Input placeholder="请输入课程标题" />
           </Form.Item>
 
-          <Form.Item name="description" label="课程简介">
+          <Form.Item name="description" label="课程简介" rules={[{ required: true, message: "请输入课程简介" }]}>
             <TextArea rows={3} placeholder="请输入课程简介" />
           </Form.Item>
 
-          <Form.Item label="封面图片（建议 16:9，最大 1MB）">
+          <Form.Item label="封面图片（建议 16:9，最大 1MB）" required>
             <Row gutter={16}>
               <Col flex="auto">
                 <Dragger
@@ -108,10 +108,14 @@ export default function CourseNew() {
               )}
             </Row>
           </Form.Item>
+          {/* 隐藏字段：用于触发封面必填校验 */}
+          <Form.Item name="cover_url" rules={[{ required: true, message: "请上传封面图片" }]} style={{ display: "none" }}>
+            <Input />
+          </Form.Item>
 
           <Row gutter={16}>
             <Col span={12}>
-              <Form.Item name="category_key" label="主分类">
+              <Form.Item name="category_key" label="主分类" rules={[{ required: true, message: "请选择主分类" }]}>
                 <Select
                   placeholder="选择主分类"
                   allowClear

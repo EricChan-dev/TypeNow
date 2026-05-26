@@ -2,8 +2,8 @@
 
 import { useRouter } from "next/navigation"
 import { List, CreateButton, useTable, DeleteButton } from "@refinedev/antd"
-import { Table, Space, Tag, Switch, Button, message } from "antd"
-import { EyeOutlined, EditOutlined } from "@ant-design/icons"
+import { Table, Space, Switch, Button, message, Avatar } from "antd"
+import { EyeOutlined, EditOutlined, PictureOutlined } from "@ant-design/icons"
 
 export default function CoursesList() {
   const router = useRouter()
@@ -26,7 +26,26 @@ export default function CoursesList() {
 
   return (
     <List headerButtons={<CreateButton>新增课程</CreateButton>}>
-      <Table {...tableProps} rowKey="id">
+      <Table
+        {...tableProps}
+        rowKey="id"
+        onRow={(record) => ({
+          onClick: () => router.push(`/admin/courses/${String(record.id)}`),
+          style: { cursor: "pointer" },
+        })}
+      >
+        <Table.Column
+          dataIndex="cover_url"
+          title="封面"
+          width={64}
+          render={(url: string | null) =>
+            url ? (
+              <img src={url} alt="封面" style={{ width: 48, height: 27, objectFit: "cover", borderRadius: 3, display: "block" }} />
+            ) : (
+              <Avatar shape="square" size={48} icon={<PictureOutlined />} style={{ background: "#6366f1" }} />
+            )
+          }
+        />
         <Table.Column dataIndex="title" title="标题" ellipsis />
         <Table.Column dataIndex="source_name" title="来源" width={80} />
         <Table.Column dataIndex="category_key" title="分类" width={100} />
@@ -35,11 +54,13 @@ export default function CoursesList() {
           title="启用"
           width={80}
           render={(v: number, record: { id: string }) => (
-            <Switch
-              checked={!!v}
-              size="small"
-              onChange={(checked) => togglePublish(record.id, checked)}
-            />
+            <span onClick={(e) => e.stopPropagation()}>
+              <Switch
+                checked={!!v}
+                size="small"
+                onChange={(checked) => togglePublish(record.id, checked)}
+              />
+            </span>
           )}
         />
         <Table.Column
@@ -51,7 +72,7 @@ export default function CoursesList() {
           title="操作"
           width={160}
           render={(_: unknown, record: { id: string; is_published: number }) => (
-            <Space>
+            <Space onClick={(e) => e.stopPropagation()}>
               <Button
                 size="small"
                 icon={<EyeOutlined />}

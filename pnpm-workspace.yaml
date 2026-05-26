@@ -1,7 +1,7 @@
 allowBuilds:
   '@alicloud/openapi-core': false
   '@sentry/cli': false
-  esbuild: set this to true or false
+  esbuild: false
   sharp: false
   unrs-resolver: false
 ignoredBuiltDependencies:
