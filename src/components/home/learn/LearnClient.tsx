@@ -5,9 +5,11 @@ import Link from "next/link"
 import { ChevronLeft, ChevronRight, ArrowLeft, BookOpen, ShoppingBag, Pause, Play, RotateCcw, Shuffle, Maximize, Minimize, Keyboard, List, Settings, Eye, EyeOff } from "lucide-react"
 import type { Sentence, Word } from "@/types"
 
-// Split chunk text into Word tokens so the existing word-mode typing logic works
+// Tokenize text the same way as textToWords — shared by both helpers
+const TOKEN_RE = /[a-zA-Z\d'-]+|[.,!?;:'"()…—]/g
+
 function textToWords(text: string): Word[] {
-  const tokens = text.match(/[a-zA-Z\d'-]+|[.,!?;:'"()…—]/g) ?? []
+  const tokens = text.match(TOKEN_RE) ?? []
   return tokens.map((t) => ({
     english: t,
     chinese: null,
@@ -16,10 +18,38 @@ function textToWords(text: string): Word[] {
   }))
 }
 
+// Look up each token in the parent sentence's words array to get real phonetics/POS
+function matchWordsFromParent(parentWords: Word[], chunkText: string): Word[] {
+  const tokens = chunkText.match(TOKEN_RE) ?? []
+  const result: Word[] = []
+  let startIdx = 0
+  for (const token of tokens) {
+    let matched = false
+    for (let i = startIdx; i < parentWords.length; i++) {
+      if (parentWords[i].english.toLowerCase() === token.toLowerCase()) {
+        result.push(parentWords[i])
+        startIdx = i + 1
+        matched = true
+        break
+      }
+    }
+    if (!matched) {
+      result.push({
+        english: token,
+        chinese: null,
+        phonetic: null,
+        pos: /^[.,!?;:]$/.test(token) ? "标点" : "词",
+      })
+    }
+  }
+  return result
+}
+
 // Flatten DB sentences: if a sentence has chunks, emit one Sentence per chunk
 function expandSentences(raw: Sentence[]): Sentence[] {
   return raw.flatMap((s) => {
     if (!s.chunks || s.chunks.length === 0) return [s]
+    const parentWords = s.words ?? []
     return [...s.chunks]
       .sort((a, b) => a.order - b.order)
       .map((chunk) => ({
@@ -31,10 +61,40 @@ function expandSentences(raw: Sentence[]): Sentence[] {
         difficulty: s.difficulty ?? 1,
         tags: s.tags ?? [],
         lesson_id: s.lesson_id,
-        words: textToWords(chunk.text),
+        words: parentWords.length > 0
+          ? matchWordsFromParent(parentWords, chunk.text)
+          : textToWords(chunk.text),
         chunks: null,
       }))
   })
+}
+
+// ─── POS grouping for completion screen ──────────────────────────────────────
+const POS_GROUPS: { label: string; match: string[] }[] = [
+  { label: "名词",   match: ["名词"] },
+  { label: "动词",   match: ["动词"] },
+  { label: "形容词", match: ["形容词"] },
+  { label: "副词",   match: ["副词"] },
+  { label: "代词",   match: ["代词"] },
+  { label: "介词",   match: ["介词"] },
+  { label: "并列连词", match: ["并列连词", "连词"] },
+  { label: "从属连词", match: ["从属连词"] },
+  { label: "感叹词", match: ["感叹词"] },
+  { label: "限定词", match: ["冠词", "限定词"] },
+  { label: "助动词", match: ["助动词", "情态动词"] },
+  { label: "专有名词", match: ["专有名词"] },
+  { label: "人名",   match: ["人名"] },
+  { label: "数词",   match: ["数词"] },
+  { label: "助词",   match: ["助词", "不定式"] },
+]
+
+function groupByPos(words: Word[]): Array<{ label: string; words: Word[] }> {
+  return POS_GROUPS
+    .map((g) => ({
+      label: g.label,
+      words: words.filter((w) => g.match.includes(w.pos) && w.pos !== "标点"),
+    }))
+    .filter((g) => g.words.length > 0)
 }
 
 import { TransitionOverlay } from "@/components/shared/TransitionOverlay"
@@ -763,15 +823,42 @@ export function LearnClient({
           </div>
         ) : status === "complete" ? (
           /* Completed Sentence Display */
-          <div className="w-full max-w-2xl space-y-12">
+          <div className="w-full max-w-2xl space-y-10">
             <CompletedSentence words={sentence.words || []} />
 
             {/* Full Chinese translation */}
-            <p className="text-center text-2xl font-bold text-white/80 mt-10">
+            <p className="text-center text-2xl font-bold text-white/80">
               {sentence.chinese}
             </p>
 
-            <p className="text-center text-2xl text-white/80 font-medium">
+            {/* POS groupings */}
+            {(() => {
+              const groups = groupByPos(sentence.words || [])
+              if (groups.length === 0) return null
+              return (
+                <div className="flex flex-col gap-2 px-2">
+                  {groups.map((g) => (
+                    <div key={g.label} className="flex items-center gap-2 flex-wrap">
+                      <span className="shrink-0 text-[11px] font-medium text-white/40 w-16 text-right">
+                        {g.label}
+                      </span>
+                      <div className="flex flex-wrap gap-1.5">
+                        {g.words.map((w, i) => (
+                          <span
+                            key={i}
+                            className="rounded-md bg-white/[0.06] border border-white/10 px-2 py-0.5 text-sm text-white/80"
+                          >
+                            {w.english}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )
+            })()}
+
+            <p className="text-center text-xl text-white/50 font-medium">
               按 Enter 继续下一句
             </p>
           </div>
