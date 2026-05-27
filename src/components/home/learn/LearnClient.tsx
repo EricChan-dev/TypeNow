@@ -3,7 +3,40 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from "react"
 import Link from "next/link"
 import { ChevronLeft, ChevronRight, ArrowLeft, BookOpen, ShoppingBag, Pause, Play, RotateCcw, Shuffle, Maximize, Minimize, Keyboard, List, Settings, Eye, EyeOff } from "lucide-react"
-import type { Sentence, Word, Chunk } from "@/types"
+import type { Sentence, Word } from "@/types"
+
+// Split chunk text into Word tokens so the existing word-mode typing logic works
+function textToWords(text: string): Word[] {
+  const tokens = text.match(/[a-zA-Z\d'-]+|[.,!?;:'"()…—]/g) ?? []
+  return tokens.map((t) => ({
+    english: t,
+    chinese: null,
+    phonetic: null,
+    pos: /^[a-zA-Z\d'-]+$/.test(t) ? "词" : "标点",
+  }))
+}
+
+// Flatten DB sentences: if a sentence has chunks, emit one Sentence per chunk
+function expandSentences(raw: Sentence[]): Sentence[] {
+  return raw.flatMap((s) => {
+    if (!s.chunks || s.chunks.length === 0) return [s]
+    return [...s.chunks]
+      .sort((a, b) => a.order - b.order)
+      .map((chunk) => ({
+        id: `${s.id}_c${chunk.order}`,
+        english: chunk.text,
+        chinese: chunk.chinese,
+        words_count: chunk.text.trim().split(/\s+/).length,
+        category: s.category ?? "daily",
+        difficulty: s.difficulty ?? 1,
+        tags: s.tags ?? [],
+        lesson_id: s.lesson_id,
+        words: textToWords(chunk.text),
+        chunks: null,
+      }))
+  })
+}
+
 import { TransitionOverlay } from "@/components/shared/TransitionOverlay"
 import { TooltipButton } from "@/components/shared/TooltipButton"
 import { OutlineModal } from "@/components/home/learn/OutlineModal"
@@ -204,7 +237,7 @@ export function LearnClient({
   useEffect(() => {
     fetch(`/api/courses/sentences?lessonId=${lessonId}`)
       .then((r) => r.json())
-      .then((json) => { if (json.sentences) setSentences(json.sentences as Sentence[]) })
+      .then((json) => { if (json.sentences) setSentences(expandSentences(json.sentences as Sentence[])) })
       .catch(() => {})
   }, [lessonId])
 

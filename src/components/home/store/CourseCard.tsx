@@ -31,12 +31,16 @@ export function CourseCard({ course }: CourseCardProps) {
     >
       {/* Cover */}
       <div
-        className="relative aspect-[16/10] flex items-center justify-center"
-        style={{ background: coverGradient }}
+        className="relative aspect-[16/10] flex items-center justify-center overflow-hidden"
+        style={course.coverUrl ? undefined : { background: coverGradient }}
       >
-        <span className="text-white/25 text-4xl font-extrabold tracking-wider select-none">
-          {course.title.slice(0, 4)}
-        </span>
+        {course.coverUrl ? (
+          <img src={course.coverUrl} alt={course.title} className="w-full h-full object-cover" />
+        ) : (
+          <span className="text-white/25 text-4xl font-extrabold tracking-wider select-none">
+            {course.title.slice(0, 4)}
+          </span>
+        )}
         {course.source === "official" && (
           <span className="absolute top-2.5 left-2.5 rounded-full bg-white/15 backdrop-blur-sm px-2 py-0.5 text-[10px] font-medium text-white/90">
             官方
