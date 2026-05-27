@@ -8,13 +8,13 @@ import { llmCall } from "@/lib/llm"
 function buildSplitPrompt(wordCount: number): string {
   let range: string
   if (wordCount <= 6) {
-    range = "2~3"
-  } else if (wordCount <= 12) {
     range = "3~5"
+  } else if (wordCount <= 12) {
+    range = "5~7"
   } else if (wordCount <= 20) {
-    range = "5~8"
+    range = "6~9"
   } else {
-    range = "7~12"
+    range = "8~13"
   }
 
   return `你是英语教学专家。请将下面的英文句子拆解为 ${range} 个短语，帮助学习者从部分到整体地理解和练习。
