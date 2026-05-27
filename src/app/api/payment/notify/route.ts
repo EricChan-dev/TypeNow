@@ -46,7 +46,7 @@ export async function POST(request: Request) {
       .set({ status: "paid", transactionId: transaction_id, paidAt: new Date() })
       .where(eq(paymentOrders.id, existing.id))
 
-    await activateSubscription(existing.userId, existing.plan, existing.id)
+    await activateSubscription(existing.userId, existing.plan, existing.id, existing.amount)
 
     return NextResponse.json({ code: "SUCCESS", message: "OK" })
   } catch (err) {

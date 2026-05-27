@@ -1,5 +1,5 @@
 import { randomUUID } from "crypto"
-import { NextResponse } from "next/server"
+import { NextRequest, NextResponse } from "next/server"
 import { db } from "@/lib/db"
 import { verificationCodes, users } from "@/lib/db/schema"
 import { eq, and, gt } from "drizzle-orm"
@@ -11,7 +11,18 @@ function isDevMode() {
   return process.env.NODE_ENV === "development" && !process.env.DATABASE_URL
 }
 
-export async function POST(request: Request) {
+async function resolveReferredBy(refCode: string | null | undefined): Promise<string | null> {
+  if (!refCode || !db) return null
+  const code = refCode.toUpperCase()
+  const [partner] = await db
+    .select({ id: users.id })
+    .from(users)
+    .where(eq(users.inviteCode, code))
+    .limit(1)
+  return partner?.id ?? null
+}
+
+export async function POST(request: NextRequest) {
   let body: { phone?: string; code?: string }
   try {
     body = await request.json()
@@ -70,8 +81,10 @@ export async function POST(request: Request) {
     .limit(1)
 
   if (!user) {
+    const refCode = request.cookies.get("ref_code")?.value
+    const referredBy = await resolveReferredBy(refCode)
     const id = randomUUID()
-    await db.insert(users).values({ id, phone })
+    await db.insert(users).values({ id, phone, referredBy })
     const [newUser] = await db.select().from(users).where(eq(users.id, id)).limit(1)
     user = newUser
   }

@@ -17,7 +17,7 @@ export async function POST(request: Request) {
     if (!session) return NextResponse.json({ error: "请先登录" }, { status: 401 })
 
     const { plan } = await request.json()
-    if (plan !== "monthly" && plan !== "yearly") {
+    if (plan !== "monthly" && plan !== "yearly" && plan !== "partner") {
       return NextResponse.json({ error: "无效的订阅方案" }, { status: 400 })
     }
 

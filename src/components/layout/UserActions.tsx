@@ -5,7 +5,7 @@ import Link from "next/link"
 import Image from "next/image"
 import { useRouter } from "next/navigation"
 import { useTheme } from "next-themes"
-import { Moon, Sun, User, Settings, Crown, LogOut, ChevronRight } from "lucide-react"
+import { Moon, Sun, User, Settings, Crown, LogOut, ChevronRight, Handshake } from "lucide-react"
 import { trackThemeToggle } from "@/lib/analytics"
 import { signOutAction } from "@/app/actions/auth"
 import { cn } from "@/lib/utils"
@@ -14,6 +14,7 @@ interface UserProfile {
   name: string | null
   avatar: string | null
   is_pro: boolean
+  is_partner: boolean
   level: number
 }
 
@@ -22,6 +23,7 @@ export interface ServerUser {
   avatar: string | null
   email: string | null
   is_pro: boolean
+  is_partner?: boolean
   level: number
 }
 
@@ -38,6 +40,7 @@ export function UserActions({ serverUser, variant = "public" }: UserActionsProps
     name: serverUser.name,
     avatar: serverUser.avatar,
     is_pro: serverUser.is_pro,
+    is_partner: !!serverUser.is_partner,
     level: serverUser.level,
   } : null)
   const [loading, setLoading] = useState(!serverUser)
@@ -51,7 +54,10 @@ export function UserActions({ serverUser, variant = "public" }: UserActionsProps
 
     fetch("/api/auth/me")
       .then((r) => r.json())
-      .then(({ user: u }) => { setUser(u); setLoading(false) })
+      .then(({ user: u }) => {
+        if (u) setUser({ ...u, is_partner: !!u.is_partner })
+        setLoading(false)
+      })
       .catch(() => setLoading(false))
   }, [serverUser])
 
@@ -115,6 +121,15 @@ export function UserActions({ serverUser, variant = "public" }: UserActionsProps
             <div className="flex items-center gap-2">
               <span className="inline-flex items-center rounded-full bg-accent/10 px-2 py-0.5 text-[11px] font-semibold text-accent">Lv.{user.level}</span>
               {user.is_pro && <span className="inline-flex items-center rounded-full bg-primary/10 px-2 py-0.5 text-[11px] font-semibold text-primary">PRO</span>}
+              {!user.is_partner && (
+                <Link
+                  href="/home/partner"
+                  className="hidden sm:inline-flex items-center gap-1.5 rounded-full bg-amber-500/10 border border-amber-500/30 px-3 py-1 text-[12px] font-semibold text-amber-500 hover:bg-amber-500/20 transition-colors whitespace-nowrap"
+                >
+                  <Handshake className="h-3.5 w-3.5 shrink-0" />
+                  推广赚佣金
+                </Link>
+              )}
             </div>
           )}
 
@@ -158,6 +173,12 @@ export function UserActions({ serverUser, variant = "public" }: UserActionsProps
                   {!user.is_pro && (
                     <Link href="/pricing" onClick={() => setDropdownOpen(false)} className="flex items-center justify-between px-4 py-2.5 text-sm text-foreground hover:bg-muted transition-colors">
                       <span className="flex items-center gap-3"><Crown className="h-4 w-4 text-amber-500" />升级会员</span>
+                      <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />
+                    </Link>
+                  )}
+                  {!user.is_partner && (
+                    <Link href="/home/partner" onClick={() => setDropdownOpen(false)} className="flex items-center justify-between px-4 py-2.5 text-sm text-foreground hover:bg-muted transition-colors">
+                      <span className="flex items-center gap-3"><Handshake className="h-4 w-4 text-amber-500" />加入合伙人，最高赚 50%</span>
                       <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />
                     </Link>
                   )}

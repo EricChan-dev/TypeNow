@@ -91,6 +91,16 @@ async function upsertWeChatUser(
       })
       .where(eq(users.id, user.id))
   } else {
+    const refCode = request.cookies.get("ref_code")?.value
+    let referredBy: string | null = null
+    if (refCode) {
+      const [partner] = await db
+        .select({ id: users.id })
+        .from(users)
+        .where(eq(users.inviteCode, refCode.toUpperCase()))
+        .limit(1)
+      referredBy = partner?.id ?? null
+    }
     const id = randomUUID()
     await db.insert(users).values({
       id,
@@ -98,6 +108,7 @@ async function upsertWeChatUser(
       wechatUnionid: wechatUser.unionid || null,
       name: wechatUser.nickname,
       avatar: wechatUser.headimgurl,
+      referredBy,
     })
     const [newUser] = await db.select().from(users).where(eq(users.id, id)).limit(1)
     user = newUser

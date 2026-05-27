@@ -18,7 +18,7 @@ export async function GET(request: Request) {
     if (!outTradeNo) return NextResponse.json({ error: "Missing out_trade_no" }, { status: 400 })
 
     const [order] = await db
-      .select({ id: paymentOrders.id, status: paymentOrders.status, plan: paymentOrders.plan })
+      .select({ id: paymentOrders.id, status: paymentOrders.status, plan: paymentOrders.plan, amount: paymentOrders.amount })
       .from(paymentOrders)
       .where(and(eq(paymentOrders.outTradeNo, outTradeNo), eq(paymentOrders.userId, session.userId)))
       .limit(1)
@@ -34,7 +34,7 @@ export async function GET(request: Request) {
             .set({ status: "paid", transactionId: wxOrder.transaction_id, paidAt: new Date() })
             .where(eq(paymentOrders.outTradeNo, outTradeNo))
 
-          await activateSubscription(session.userId, order.plan as "monthly" | "yearly", order.id)
+          await activateSubscription(session.userId, order.plan as "monthly" | "yearly" | "partner", order.id, order.amount)
           return NextResponse.json({ status: "paid", plan: order.plan })
         }
       } catch {

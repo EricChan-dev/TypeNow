@@ -18,14 +18,6 @@ import { ScrollToSection } from "@/components/layout/ScrollToSection"
 import { ScrollToTop } from "@/components/layout/ScrollToTop"
 import { AuthLink } from "@/components/layout/AuthLink"
 
-const freeFeatures = [
-  "每天 30 句打字练习",
-  "2 个开放场景",
-  "最近 50 个错误智能复习",
-  "每周 2 次 AI 强化",
-  "基础学习统计",
-]
-
 const proMemberFeatures = [
   "无限打字练习",
   "全部 6 个开放场景",
@@ -33,6 +25,15 @@ const proMemberFeatures = [
   "无限次 AI 强化训练",
   "深度统计 & 学习报告导出",
   "会员专属徽章",
+]
+
+const partnerFeatures = [
+  "永久免费解锁全部会员功能",
+  "生成专属邀请链接 / 二维码 / 海报",
+  "90天窗口内首次付款赚取 50% 佣金",
+  "90天窗口内每次续费赚取 30% 佣金",
+  "¥50 起随时提现至微信零钱",
+  "实时数据看板：邀请数、转化率、收益",
 ]
 
 export default function LandingPage() {
@@ -466,21 +467,11 @@ export default function LandingPage() {
               简单透明的定价
             </h2>
             <p className="text-base text-muted-foreground">
-              免费开始，按需升级月度或年度会员
+              按需选择适合你的方案，合伙人可边学边赚
             </p>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6 w-full">
-            <PricingCard
-              name="普通会员"
-              description="免费体验核心打字练习"
-              price="¥0"
-              period="永久免费"
-              features={freeFeatures}
-              ctaText="免费开始"
-              ctaHref="/login"
-              variant="neutral"
-            />
             <PricingCard
               name="月度会员"
               description="解锁全部功能，高效提升英语能力"
@@ -489,7 +480,7 @@ export default function LandingPage() {
               features={proMemberFeatures}
               ctaText="立即订阅"
               ctaHref="/login"
-              variant="emphasized"
+              variant="neutral"
             />
             <PricingCard
               name="年度会员"
@@ -501,9 +492,20 @@ export default function LandingPage() {
               features={proMemberFeatures}
               ctaText="立即订阅"
               ctaHref="/login"
-              variant="prominent"
+              variant="emphasized"
               badge="推荐"
               saveBadge="省 ¥149"
+            />
+            <PricingCard
+              name="合伙人会员"
+              description="一次加入，永久免费学习 + 无限赚佣金"
+              price="¥399"
+              period="终身"
+              features={partnerFeatures}
+              ctaText="立即开通合伙人"
+              ctaHref="/home/partner"
+              variant="prominent"
+              badge="高收益"
             />
           </div>
         </div>

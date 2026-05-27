@@ -21,6 +21,7 @@ export default async function HomeLayout({
         avatar: user.avatar || null,
         email: user.email || null,
         is_pro: !!user.isPro,
+        is_partner: !!user.isPartner,
         level: user.level,
       }
     : null

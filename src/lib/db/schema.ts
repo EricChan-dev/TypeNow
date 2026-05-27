@@ -9,6 +9,7 @@ import {
   bigint,
   json,
   mysqlEnum,
+  decimal,
   index,
   uniqueIndex,
 } from "drizzle-orm/mysql-core"
@@ -30,6 +31,11 @@ export const users = mysqlTable(
     isPro: tinyint("is_pro").notNull().default(0),
     proExpires: datetime("pro_expires"),
     role: mysqlEnum("role", ["user", "admin"]).notNull().default("user"),
+    inviteCode: varchar("invite_code", { length: 12 }).unique(),
+    referredBy: varchar("referred_by", { length: 36 }),
+    referralLockedUntil: datetime("referral_locked_until"),
+    isPartner: tinyint("is_partner").notNull().default(0),
+    partnerAgreedAt: datetime("partner_agreed_at"),
     createdAt: datetime("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
   },
   (t) => [
@@ -206,7 +212,7 @@ export const paymentOrders = mysqlTable(
   {
     id: varchar("id", { length: 36 }).primaryKey().default(sql`(UUID())`),
     userId: varchar("user_id", { length: 36 }).notNull(),
-    plan: mysqlEnum("plan", ["monthly", "yearly"]).notNull(),
+    plan: mysqlEnum("plan", ["monthly", "yearly", "partner"]).notNull(),
     amount: int("amount").notNull(),
     outTradeNo: varchar("out_trade_no", { length: 64 }).notNull().unique(),
     transactionId: varchar("transaction_id", { length: 64 }),
@@ -231,7 +237,7 @@ export const subscriptions = mysqlTable(
   {
     id: varchar("id", { length: 36 }).primaryKey().default(sql`(UUID())`),
     userId: varchar("user_id", { length: 36 }).notNull(),
-    plan: mysqlEnum("plan", ["monthly", "yearly"]).notNull(),
+    plan: mysqlEnum("plan", ["monthly", "yearly", "partner"]).notNull(),
     status: mysqlEnum("status", ["active", "cancelled", "expired"])
       .notNull()
       .default("active"),
@@ -299,6 +305,68 @@ export const ttsCache = mysqlTable(
   (t) => [uniqueIndex("idx_tts_cache_key").on(t.cacheKey)]
 )
 
+// ─── Partner Commissions ──────────────────────────────────────────────────────
+export const partnerCommissions = mysqlTable(
+  "partner_commissions",
+  {
+    id: varchar("id", { length: 36 }).primaryKey().default(sql`(UUID())`),
+    partnerId: varchar("partner_id", { length: 36 }).notNull(),
+    orderId: varchar("order_id", { length: 36 }).notNull(),
+    referredUserId: varchar("referred_user_id", { length: 36 }).notNull(),
+    grossAmount: int("gross_amount").notNull(),
+    commissionAmount: int("commission_amount").notNull(),
+    rate: decimal("rate", { precision: 4, scale: 2 }).notNull(),
+    commissionType: mysqlEnum("commission_type", ["first", "renewal"]).notNull(),
+    status: mysqlEnum("status", ["cooling", "available", "withdrawn", "clawed_back"])
+      .notNull()
+      .default("cooling"),
+    availableAt: datetime("available_at").notNull(),
+    createdAt: datetime("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  },
+  (t) => [
+    index("idx_pc_partner_id").on(t.partnerId),
+    index("idx_pc_referred_user").on(t.referredUserId),
+    index("idx_pc_status").on(t.status),
+    uniqueIndex("idx_pc_order_id").on(t.orderId),
+  ]
+)
+
+// ─── Withdrawal Requests ──────────────────────────────────────────────────────
+export const withdrawalRequests = mysqlTable(
+  "withdrawal_requests",
+  {
+    id: varchar("id", { length: 36 }).primaryKey().default(sql`(UUID())`),
+    partnerId: varchar("partner_id", { length: 36 }).notNull(),
+    amount: int("amount").notNull(),
+    wechatOpenid: varchar("wechat_openid", { length: 100 }),
+    partnerTradeNo: varchar("partner_trade_no", { length: 64 }).unique(),
+    wxTransferId: varchar("wx_transfer_id", { length: 64 }),
+    status: mysqlEnum("status", ["pending", "processing", "completed", "failed"])
+      .notNull()
+      .default("pending"),
+    failReason: text("fail_reason"),
+    createdAt: datetime("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+    completedAt: datetime("completed_at"),
+  },
+  (t) => [
+    index("idx_wr_partner_id").on(t.partnerId),
+    index("idx_wr_status").on(t.status),
+  ]
+)
+
+// ─── Partner Risk Flags ───────────────────────────────────────────────────────
+export const partnerRiskFlags = mysqlTable(
+  "partner_risk_flags",
+  {
+    id: varchar("id", { length: 36 }).primaryKey().default(sql`(UUID())`),
+    userId: varchar("user_id", { length: 36 }).notNull(),
+    flagType: mysqlEnum("flag_type", ["duplicate_ip", "abnormal_frequency", "manual"]).notNull(),
+    detail: text("detail"),
+    createdAt: datetime("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  },
+  (t) => [index("idx_prf_user_id").on(t.userId)]
+)
+
 // ─── Type Exports ─────────────────────────────────────────────────────────────
 export type User = typeof users.$inferSelect
 export type Session = typeof sessions.$inferSelect
@@ -308,3 +376,6 @@ export type Sentence = typeof sentences.$inferSelect
 export type PracticeRecord = typeof practiceRecords.$inferSelect
 export type PaymentOrder = typeof paymentOrders.$inferSelect
 export type Subscription = typeof subscriptions.$inferSelect
+export type PartnerCommission = typeof partnerCommissions.$inferSelect
+export type WithdrawalRequest = typeof withdrawalRequests.$inferSelect
+export type PartnerRiskFlag = typeof partnerRiskFlags.$inferSelect

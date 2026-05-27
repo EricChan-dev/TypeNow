@@ -6,14 +6,6 @@ import { PricingCard } from "@/components/pricing/PricingCard"
 import { CheckoutModal } from "@/components/payment/CheckoutModal"
 import { trackSubscribeClick } from "@/lib/analytics"
 
-const freeFeatures = [
-  "每天 30 句打字练习",
-  "2 个开放场景",
-  "最近 50 个错误智能复习",
-  "每周 2 次 AI 强化",
-  "基础学习统计",
-]
-
 const proFeatures = [
   "无限打字练习",
   "全部 6 个开放场景",
@@ -21,6 +13,15 @@ const proFeatures = [
   "无限次 AI 强化训练",
   "深度统计 & 学习报告导出",
   "会员专属徽章",
+]
+
+const partnerFeatures = [
+  "永久免费解锁全部会员功能",
+  "生成专属邀请链接 / 二维码 / 海报",
+  "90天窗口内首次付款赚取 50% 佣金",
+  "90天窗口内每次续费赚取 30% 佣金",
+  "¥50 起随时提现至微信零钱",
+  "实时数据看板：邀请数、转化率、收益",
 ]
 
 export function PricingClient() {
@@ -46,6 +47,14 @@ export function PricingClient() {
     setSelectedPlan(plan)
   }
 
+  function handlePartner() {
+    if (!isLoggedIn) {
+      router.push("/login?redirect=/home/partner")
+      return
+    }
+    router.push("/home/partner")
+  }
+
   function handleSuccess() {
     setSelectedPlan(null)
     router.push("/home")
@@ -55,16 +64,6 @@ export function PricingClient() {
     <>
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6 w-full">
         <PricingCard
-          name="普通会员"
-          description="快速上手，体验核心打字练习功能"
-          price="¥0"
-          period="永久免费"
-          features={freeFeatures}
-          ctaText="免费开始"
-          ctaHref={isLoggedIn ? "/home" : "/login"}
-          variant="neutral"
-        />
-        <PricingCard
           name="月度会员"
           description="解锁全部功能，高效提升英语能力"
           price="¥29"
@@ -72,12 +71,12 @@ export function PricingClient() {
           features={proFeatures}
           ctaText="立即订阅"
           ctaHref="/login"
-          variant="emphasized"
+          variant="neutral"
           onCheckout={() => handleCheckout("monthly")}
         />
         <PricingCard
           name="年度会员"
-          description="最划算的选择，解锁全部功能"
+          description="最划算的选择，每天不到 6 毛钱"
           price="¥199"
           period="/年"
           originalPrice="¥348"
@@ -85,10 +84,22 @@ export function PricingClient() {
           features={proFeatures}
           ctaText="立即订阅"
           ctaHref="/login"
-          variant="prominent"
+          variant="emphasized"
           badge="推荐"
           saveBadge="省 ¥149"
           onCheckout={() => handleCheckout("yearly")}
+        />
+        <PricingCard
+          name="合伙人会员"
+          description="一次加入，永久免费学习 + 无限赚佣金"
+          price="¥399"
+          period="终身"
+          features={partnerFeatures}
+          ctaText="立即开通合伙人"
+          ctaHref="/home/partner"
+          variant="prominent"
+          badge="高收益"
+          onCheckout={handlePartner}
         />
       </div>
 

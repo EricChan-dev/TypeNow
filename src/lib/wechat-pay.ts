@@ -179,10 +179,53 @@ export function generateOutTradeNo(): string {
   return `TYPENOW-${ts}-${rand}`
 }
 
-export function getPlanAmount(plan: "monthly" | "yearly"): number {
-  return plan === "monthly" ? 2900 : 19900 // in fen (分)
+export function getPlanAmount(plan: "monthly" | "yearly" | "partner"): number {
+  if (plan === "monthly") return 2900
+  if (plan === "yearly") return 19900
+  return 39900 // partner lifetime
 }
 
-export function getPlanDescription(plan: "monthly" | "yearly"): string {
-  return plan === "monthly" ? "TypeNow 月度会员" : "TypeNow 年度会员"
+export function getPlanDescription(plan: "monthly" | "yearly" | "partner"): string {
+  if (plan === "monthly") return "TypeNow 月度会员"
+  if (plan === "yearly") return "TypeNow 年度会员"
+  return "TypeNow 合伙人终身会员"
+}
+
+export interface TransferResult {
+  batchId: string
+  batchStatus: string
+}
+
+export async function wechatTransferBatch(params: {
+  appId: string
+  outBatchNo: string
+  openid: string
+  amount: number
+  remark: string
+}): Promise<TransferResult> {
+  const cfg = getConfig()
+  if (!isWeChatPayConfigured()) throw new Error("微信支付未配置")
+
+  const body = {
+    appid: params.appId,
+    out_batch_no: params.outBatchNo,
+    batch_name: "合伙人佣金提现",
+    batch_remark: params.remark,
+    total_amount: params.amount,
+    total_num: 1,
+    transfer_detail_list: [
+      {
+        out_detail_no: params.outBatchNo,
+        transfer_amount: params.amount,
+        transfer_remark: params.remark,
+        openid: params.openid,
+      },
+    ],
+  }
+
+  const result = await wechatPayRequest("POST", "/v3/transfer/batches", body)
+  return {
+    batchId: result.batch_id as string ?? params.outBatchNo,
+    batchStatus: result.batch_status as string ?? "ACCEPTED",
+  }
 }

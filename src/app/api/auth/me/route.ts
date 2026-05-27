@@ -15,6 +15,7 @@ export async function GET() {
       name: user.name,
       avatar: user.avatar,
       is_pro: !!user.isPro,
+      is_partner: !!user.isPartner,
       level: user.level,
       role: isAdmin ? "admin" : (user.role ?? "user"),
     },
