@@ -8,7 +8,9 @@
     "start": "next start",
     "lint": "eslint",
     "seed": "tsx scripts/seed-courses.ts",
-    "split-sentences": "tsx scripts/split-sentences.ts"
+    "split-sentences": "tsx scripts/split-sentences.ts",
+    "analyze-words": "tsx scripts/analyze-words.ts",
+    "expand-courses": "tsx scripts/expand-courses.ts"
   },
   "dependencies": {
     "@alicloud/dysmsapi20170525": "^4.5.1",
