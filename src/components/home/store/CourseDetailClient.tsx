@@ -1,12 +1,20 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { ChevronLeft, BookOpen, Users, Play, Check } from "lucide-react"
-import { mockCourses, mockLessons } from "@/lib/mock-data/courses"
+import type { Course } from "@/types/course"
 import { useAcquiredCourses } from "@/lib/hooks/useAcquiredCourses"
 import { cn } from "@/lib/utils"
+
+interface LessonRow {
+  id: string
+  courseId: string
+  title: string
+  summary: string | null
+  sortOrder: number
+}
 
 function getCoverGradient(categoryKey: string, subCategoryKey: string): string {
   const seed = (categoryKey + subCategoryKey).split("").reduce((acc, c) => acc + c.charCodeAt(0), 0)
@@ -26,12 +34,30 @@ interface CourseDetailClientProps {
 
 export function CourseDetailClient({ courseId }: CourseDetailClientProps) {
   const router = useRouter()
-  const course = mockCourses.find((c) => c.id === courseId)
-  const lessons = mockLessons.filter((l) => l.courseId === courseId).sort((a, b) => a.order - b.order)
-  const { isAcquired, acquire } = useAcquiredCourses()
-  const firstLessonId = lessons[0]?.id
-
+  const [course, setCourse] = useState<Course | null>(null)
+  const [lessons, setLessons] = useState<LessonRow[]>([])
+  const [loading, setLoading] = useState(true)
   const [activeTab, setActiveTab] = useState<"outline" | "reviews">("outline")
+  const { isAcquired, acquire } = useAcquiredCourses()
+
+  useEffect(() => {
+    setLoading(true)
+    Promise.all([
+      fetch(`/api/courses/${courseId}`).then((r) => r.json()),
+      fetch(`/api/courses/${courseId}/lessons`).then((r) => r.json()),
+    ]).then(([courseJson, lessonsJson]) => {
+      if (courseJson.data) setCourse(courseJson.data as Course)
+      if (lessonsJson.data) setLessons(lessonsJson.data as LessonRow[])
+    }).catch(() => {}).finally(() => setLoading(false))
+  }, [courseId])
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-32">
+        <div className="h-6 w-6 rounded-full border-2 border-accent border-t-transparent animate-spin" />
+      </div>
+    )
+  }
 
   if (!course) {
     return (
@@ -50,6 +76,7 @@ export function CourseDetailClient({ courseId }: CourseDetailClientProps) {
   }
 
   const acquired = isAcquired(courseId)
+  const firstLessonId = lessons[0]?.id
   const coverGradient = getCoverGradient(course.categoryKey ?? "", course.subCategoryKey ?? "")
 
   return (
@@ -65,14 +92,18 @@ export function CourseDetailClient({ courseId }: CourseDetailClientProps) {
 
       {/* Header Card */}
       <div className="rounded-2xl border border-border bg-card overflow-hidden mb-6 flex flex-col sm:flex-row">
-        {/* Cover - left side */}
+        {/* Cover */}
         <div
-          className="relative sm:w-[280px] lg:w-[320px] shrink-0 aspect-[16/10] sm:aspect-auto flex items-center justify-center"
-          style={{ background: coverGradient }}
+          className="relative sm:w-[280px] lg:w-[320px] shrink-0 aspect-[16/10] sm:aspect-auto flex items-center justify-center overflow-hidden"
+          style={course.coverUrl ? undefined : { background: coverGradient }}
         >
-          <span className="text-white/20 text-4xl font-extrabold tracking-wider select-none">
-            {course.title.slice(0, 4)}
-          </span>
+          {course.coverUrl ? (
+            <img src={course.coverUrl} alt={course.title} className="w-full h-full object-cover" />
+          ) : (
+            <span className="text-white/20 text-4xl font-extrabold tracking-wider select-none">
+              {course.title.slice(0, 4)}
+            </span>
+          )}
           {course.source === "official" && (
             <span className="absolute top-3 left-3 rounded-full bg-white/15 backdrop-blur-sm px-2.5 py-0.5 text-[10px] font-medium text-white/90">
               官方
@@ -80,12 +111,14 @@ export function CourseDetailClient({ courseId }: CourseDetailClientProps) {
           )}
         </div>
 
-        {/* Info - right side */}
+        {/* Info */}
         <div className="p-5 sm:p-6 flex-1 flex flex-col justify-center min-w-0">
           <h1 className="text-lg sm:text-xl font-bold text-foreground">{course.title}</h1>
-          <p className="mt-2 text-sm text-muted-foreground leading-relaxed line-clamp-3">
-            {course.description}
-          </p>
+          {course.description && (
+            <p className="mt-2 text-sm text-muted-foreground leading-relaxed line-clamp-3">
+              {course.description}
+            </p>
+          )}
 
           <div className="mt-3 flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
             <div className="flex items-center gap-1.5">
@@ -107,7 +140,6 @@ export function CourseDetailClient({ courseId }: CourseDetailClientProps) {
             </div>
           </div>
 
-          {/* Action buttons */}
           <div className="mt-4 flex items-center gap-3">
             {acquired ? (
               <>
@@ -117,7 +149,8 @@ export function CourseDetailClient({ courseId }: CourseDetailClientProps) {
                 </span>
                 <button
                   onClick={() => firstLessonId && router.push(`/home/learn/${courseId}?lesson=${firstLessonId}`)}
-                  className="inline-flex items-center gap-1.5 rounded-lg bg-accent px-5 py-2.5 text-sm font-semibold text-white hover:bg-accent/90 transition-colors"
+                  disabled={!firstLessonId}
+                  className="inline-flex items-center gap-1.5 rounded-lg bg-accent px-5 py-2.5 text-sm font-semibold text-white hover:bg-accent/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   <Play className="h-4 w-4" />
                   开始学习
@@ -166,27 +199,35 @@ export function CourseDetailClient({ courseId }: CourseDetailClientProps) {
 
       {/* Tab Content */}
       {activeTab === "outline" ? (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
-          {lessons.map((lesson) => (
-            <Link
-              key={lesson.id}
-              href={`/home/learn/${courseId}?lesson=${lesson.id}`}
-              className="flex items-start gap-3 rounded-xl border border-border bg-card p-4 hover:border-accent/30 transition-colors"
-            >
-              <div className="flex items-center justify-center h-7 w-7 rounded-full bg-accent/10 text-accent text-xs font-bold shrink-0">
-                {lesson.order}
-              </div>
-              <div className="min-w-0">
-                <h3 className="text-sm font-medium text-foreground truncate">
-                  {lesson.title}
-                </h3>
-                <p className="mt-1 text-xs text-muted-foreground leading-relaxed line-clamp-2">
-                  {lesson.summary}
-                </p>
-              </div>
-            </Link>
-          ))}
-        </div>
+        lessons.length > 0 ? (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
+            {lessons.map((lesson, i) => (
+              <Link
+                key={lesson.id}
+                href={`/home/learn/${courseId}?lesson=${lesson.id}`}
+                className="flex items-start gap-3 rounded-xl border border-border bg-card p-4 hover:border-accent/30 transition-colors"
+              >
+                <div className="flex items-center justify-center h-7 w-7 rounded-full bg-accent/10 text-accent text-xs font-bold shrink-0">
+                  {i + 1}
+                </div>
+                <div className="min-w-0">
+                  <h3 className="text-sm font-medium text-foreground truncate">
+                    {lesson.title}
+                  </h3>
+                  {lesson.summary && (
+                    <p className="mt-1 text-xs text-muted-foreground leading-relaxed line-clamp-2">
+                      {lesson.summary}
+                    </p>
+                  )}
+                </div>
+              </Link>
+            ))}
+          </div>
+        ) : (
+          <div className="flex flex-col items-center justify-center py-20 text-center">
+            <p className="text-sm font-medium text-muted-foreground">暂无章节</p>
+          </div>
+        )
       ) : (
         <div className="flex flex-col items-center justify-center py-20 text-center">
           <p className="text-sm font-medium text-muted-foreground">功能开发中…</p>

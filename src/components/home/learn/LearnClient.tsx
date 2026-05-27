@@ -4,8 +4,6 @@ import React, { useState, useEffect, useRef, useCallback, useMemo } from "react"
 import Link from "next/link"
 import { ChevronLeft, ChevronRight, ArrowLeft, BookOpen, ShoppingBag, Pause, Play, RotateCcw, Shuffle, Maximize, Minimize, Keyboard, List, Settings, Eye, EyeOff } from "lucide-react"
 import type { Sentence, Word, Chunk } from "@/types"
-import { getMockSentencesByLesson } from "@/lib/mock-data/sentences"
-import { mockCourses } from "@/lib/mock-data/courses"
 import { TransitionOverlay } from "@/components/shared/TransitionOverlay"
 import { TooltipButton } from "@/components/shared/TooltipButton"
 import { OutlineModal } from "@/components/home/learn/OutlineModal"
@@ -176,8 +174,14 @@ export function LearnClient({
   timerRef.current = timer
   const containerRef = useRef<HTMLDivElement>(null)
 
-  const course = mockCourses.find((c) => c.id === courseId)
-  const courseTitle = course?.title || "课程学习"
+  const [courseTitle, setCourseTitle] = useState("课程学习")
+
+  useEffect(() => {
+    fetch(`/api/courses/${courseId}`)
+      .then((r) => r.json())
+      .then((json) => { if (json.data?.title) setCourseTitle(json.data.title) })
+      .catch(() => {})
+  }, [courseId])
 
   // Refs for keyboard handler to avoid re-binding
   const statusRef = useRef(status)
@@ -197,9 +201,11 @@ export function LearnClient({
   const chunkStatusesRef = useRef(chunkStatuses)
   chunkStatusesRef.current = chunkStatuses
 
-  // Load sentences (sync mock for now, future: fetch from API)
   useEffect(() => {
-    setSentences(getMockSentencesByLesson(lessonId))
+    fetch(`/api/courses/sentences?lessonId=${lessonId}`)
+      .then((r) => r.json())
+      .then((json) => { if (json.sentences) setSentences(json.sentences as Sentence[]) })
+      .catch(() => {})
   }, [lessonId])
 
   const sentence = sentences[currentIndex]

@@ -1,14 +1,24 @@
 "use client"
 
+import { useState, useEffect } from "react"
 import Link from "next/link"
 import { ShoppingBag } from "lucide-react"
-import { mockCourses } from "@/lib/mock-data/courses"
+import type { Course } from "@/types/course"
 import { useAcquiredCourses } from "@/lib/hooks/useAcquiredCourses"
 import { CourseCard } from "./CourseCard"
 
 export function MyCoursesClient() {
   const { acquiredIds } = useAcquiredCourses()
-  const myCourses = mockCourses.filter((c) => acquiredIds.has(c.id))
+  const [allCourses, setAllCourses] = useState<Course[]>([])
+
+  useEffect(() => {
+    fetch("/api/courses/list?pageSize=500")
+      .then((r) => r.json())
+      .then((json) => { if (json.data) setAllCourses(json.data as Course[]) })
+      .catch(() => {})
+  }, [])
+
+  const myCourses = allCourses.filter((c) => acquiredIds.has(c.id))
 
   return (
     <div className="px-6 lg:px-10 xl:px-14 py-6">
