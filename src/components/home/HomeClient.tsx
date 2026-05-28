@@ -10,7 +10,7 @@ import {
   ChevronLeft, Trophy,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
-import { YearlyHeatmap } from "@/components/home/YearlyHeatmap"
+import { ArchivePanel } from "@/components/home/ArchiveClient"
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -45,10 +45,10 @@ function toLocalDateStr(d = new Date()): string {
 
 function getHeatColor(count: number): string {
   if (count === 0) return "var(--heat-empty)"
-  if (count <= 2) return "rgba(124,58,237,0.35)"
-  if (count <= 5) return "rgba(124,58,237,0.58)"
-  if (count <= 10) return "rgba(139,92,246,0.78)"
-  return "rgba(167,139,250,0.95)"
+  if (count <= 2) return "var(--heat-low)"
+  if (count <= 5) return "var(--heat-mid)"
+  if (count <= 10) return "var(--heat-high)"
+  return "var(--heat-max)"
 }
 
 function relativeTime(isoStr: string): string {
@@ -66,6 +66,9 @@ function getWeekDayShort(dateStr: string): string {
   const labels = ["日", "一", "二", "三", "四", "五", "六"]
   return labels[new Date(dateStr + "T12:00:00").getDay()]
 }
+
+// Rainbow bar colors — one per day of week
+const BAR_COLORS = ["#8b5cf6", "#ec4899", "#f59e0b", "#06b6d4", "#34d399", "#f97316", "#a78bfa"]
 
 // ─── Count-up hook ────────────────────────────────────────────────────────────
 
@@ -171,18 +174,18 @@ function MonthlyCheckInCalendar({
           ) : (
             <div
               key={cell.date}
-              className={cn(
-                "checkin-cell w-8 h-8 rounded-lg flex items-center justify-center text-[12px] font-semibold mx-auto transition-all",
+              className="checkin-cell w-8 h-8 rounded-lg flex items-center justify-center text-[12px] font-semibold mx-auto transition-all"
+              style={
                 cell.isCheckedIn
                   ? cell.isToday
-                    ? "bg-emerald-500/35 border border-emerald-400/50 text-emerald-200"
-                    : "bg-violet-500/40 border border-violet-400/50 text-violet-200"
+                    ? { background: "var(--cal-today-bg)", color: "var(--cal-today-text)", border: "1px solid #0e7490" }
+                    : { background: "var(--cal-checkin-bg)", color: "var(--cal-checkin-text)", border: "1px solid var(--cal-checkin-text)" }
                   : cell.isToday
-                  ? "border border-foreground/30 text-foreground/60"
+                  ? { border: "1px solid rgba(255,255,255,0.25)", color: "var(--foreground)" }
                   : cell.isFuture
-                  ? "text-foreground/10"
-                  : "text-foreground/20"
-              )}
+                  ? { color: "var(--heat-cell-text-empty)" }
+                  : { color: "var(--heat-cell-text-empty)" }
+              }
               title={cell.date}
             >
               {cell.day}
@@ -268,7 +271,7 @@ function MonthlyHeatmap({ heatmap }: { heatmap: Record<string, number> }) {
               key={cell.date}
               className={cn(
                 "heat-cell-m aspect-square rounded-md flex items-center justify-center text-[10px] font-medium",
-                cell.date === today ? "ring-1 ring-violet-400/70 ring-offset-1 ring-offset-background" : ""
+                cell.date === today ? "ring-1 ring-violet-400/70 ring-offset-1 ring-offset-[var(--background)]" : ""
               )}
               style={{
                 background: cell.count > 0 ? getHeatColor(cell.count) : "var(--heat-empty)",
@@ -315,6 +318,7 @@ function WeeklyChart({ weekly }: { weekly: { date: string; count: number }[] }) 
       {weekly.map((w, i) => {
         const pct = Math.max((w.count / max) * 100, w.count > 0 ? 8 : 2)
         const isToday = w.date === toLocalDateStr()
+        const color = BAR_COLORS[i % BAR_COLORS.length]
         return (
           <div key={i} className="flex flex-col items-center gap-1.5 flex-1">
             {w.count > 0 && (
@@ -326,13 +330,16 @@ function WeeklyChart({ weekly }: { weekly: { date: string; count: number }[] }) 
                 height: `${pct}%`,
                 minHeight: 3,
                 background: isToday
-                  ? "linear-gradient(to top, #7c3aed, #ec4899)"
+                  ? `linear-gradient(to top, ${color}, ${color}cc)`
                   : w.count > 0
-                  ? "linear-gradient(to top, rgba(124,58,237,0.5), rgba(124,58,237,0.3))"
+                  ? `linear-gradient(to top, ${color}80, ${color}50)`
                   : "var(--bar-empty)",
+                boxShadow: isToday ? `0 0 10px ${color}60` : undefined,
               }}
             />
-            <span className={cn("text-[10px]", isToday ? "text-violet-400 font-semibold" : "text-foreground/25")}>
+            <span className={cn("text-[10px]", isToday ? "font-semibold" : "text-foreground/25")}
+              style={isToday ? { color } : undefined}
+            >
               {getWeekDayShort(w.date)}
             </span>
           </div>
@@ -345,6 +352,7 @@ function WeeklyChart({ weekly }: { weekly: { date: string; count: number }[] }) 
 // ─── Main Component ───────────────────────────────────────────────────────────
 
 export function HomeClient({ name }: HomeClientProps) {
+  const [activeTab, setActiveTab] = useState<"today" | "archive">("today")
   const [stats, setStats] = useState<StatsData | null>(null)
   const [loading, setLoading] = useState(true)
   const [checkingIn, setCheckingIn] = useState(false)
@@ -438,43 +446,143 @@ export function HomeClient({ name }: HomeClientProps) {
 
   return (
     <div ref={pageRef} className="h-full overflow-y-auto scrollbar-none">
-      <div className="w-full px-4 sm:px-6 lg:px-8 py-6 pb-16 space-y-5 max-w-7xl mx-auto">
+      <div className="w-full px-4 sm:px-6 lg:px-8 py-6 pb-16 max-w-7xl mx-auto">
 
-        {/* ── Greeting Banner (always dark, intentional gradient) ── */}
+        {/* ── Tab switcher ── */}
+        <div className="flex items-center gap-1 mb-5 rounded-xl p-1 w-fit" style={{ background: "var(--surface)", border: "1px solid var(--surface-border)" }}>
+          {(["today", "archive"] as const).map((tab) => (
+            <button
+              key={tab}
+              onClick={() => setActiveTab(tab)}
+              className={cn(
+                "px-4 py-1.5 rounded-lg text-sm font-semibold transition-all duration-200",
+                activeTab === tab
+                  ? "bg-violet-600 text-white shadow-sm"
+                  : "text-white/50 hover:text-white/80"
+              )}
+            >
+              {tab === "today" ? "今日" : "档案"}
+            </button>
+          ))}
+        </div>
+
+        {activeTab === "archive" ? (
+          <ArchivePanel />
+        ) : (
+        <div className="space-y-5">
+
+        {/* ── Greeting Banner ── */}
         <div
           className="anim-card relative overflow-hidden rounded-2xl px-6 py-6"
           style={{
-            background: "linear-gradient(135deg, #1e1b4b 0%, #2d1b69 50%, #0f172a 100%)",
-            boxShadow: "0 0 60px rgba(124,58,237,0.2)",
+            background: "linear-gradient(135deg, #12071f 0%, #1c1040 50%, #0c0a1a 100%)",
+            border: "1px solid #2d2051",
           }}
         >
-          <div className="absolute -top-10 -left-10 w-56 h-56 rounded-full blur-3xl pointer-events-none opacity-30"
-            style={{ background: "radial-gradient(circle, #7c3aed, transparent 70%)" }} />
-          <div className="absolute -bottom-8 right-10 w-40 h-40 rounded-full blur-3xl pointer-events-none opacity-20"
-            style={{ background: "radial-gradient(circle, #a855f7, transparent 70%)" }} />
+          {/* Decorative accent blob — no rgba white */}
+          <div
+            className="absolute -top-12 -right-8 w-52 h-52 rounded-full pointer-events-none"
+            style={{ background: "radial-gradient(circle, #7c3aed40, transparent 70%)" }}
+          />
+          <div
+            className="absolute bottom-0 left-1/3 w-36 h-20 pointer-events-none"
+            style={{ background: "radial-gradient(ellipse, #ec489920, transparent 70%)" }}
+          />
 
           <div className="relative flex flex-wrap items-center justify-between gap-4">
             <div>
-              <p className="text-violet-300/70 text-sm font-medium mb-0.5">{greeting}，</p>
+              <p className="text-violet-300/60 text-sm font-medium mb-0.5">{greeting}，</p>
               <h1 className="text-2xl sm:text-3xl font-black text-white tracking-tight">{name || "同学"}</h1>
             </div>
             <div className="flex items-center gap-3 flex-wrap">
               {stats?.todayCount !== undefined && (
-                <div className="inline-flex items-center gap-1.5 rounded-full bg-white/[0.08] border border-white/[0.12] px-3 py-1.5 backdrop-blur-sm">
+                <div
+                  className="inline-flex items-center gap-1.5 rounded-full px-3 py-1.5"
+                  style={{ background: "#1a0f2e", border: "1px solid #3d2060" }}
+                >
                   <Zap className="h-3.5 w-3.5 text-amber-400" />
-                  <span className="text-[13px] font-semibold text-white/80">今日 {stats.todayCount} 句</span>
+                  <span className="text-[13px] font-semibold text-amber-200">今日 {stats.todayCount} 句</span>
                 </div>
               )}
-              <div className="inline-flex items-center gap-1.5 rounded-full bg-white/[0.08] border border-white/[0.12] px-3 py-1.5 backdrop-blur-sm">
+              <div
+                className="inline-flex items-center gap-1.5 rounded-full px-3 py-1.5"
+                style={{ background: "#1a1006", border: "1px solid #3d2c00" }}
+              >
                 <Flame className="h-3.5 w-3.5 text-amber-400" />
-                <span className="text-[13px] font-semibold text-white/80">连续 {streak} 天</span>
+                <span className="text-[13px] font-semibold text-amber-300">连续 {streak} 天</span>
               </div>
             </div>
           </div>
         </div>
 
+        {/* ── Stats row — full width above grid ── */}
+        <div className="grid grid-cols-3 gap-3">
+          {[
+            {
+              label: "累计练习",
+              value: totalCount,
+              unit: "句",
+              icon: BookOpen,
+              iconColor: "#ec4899",
+              gradient: "linear-gradient(135deg, #f472b6, #ec4899)",
+              bgVar: "var(--stat-1-bg)",
+              borderVar: "var(--stat-1-border)",
+              iconBgVar: "var(--stat-1-icon-bg)",
+            },
+            {
+              label: "学习天数",
+              value: totalDays,
+              unit: "天",
+              icon: BarChart2,
+              iconColor: "#f59e0b",
+              gradient: "linear-gradient(135deg, #fbbf24, #f59e0b)",
+              bgVar: "var(--stat-2-bg)",
+              borderVar: "var(--stat-2-border)",
+              iconBgVar: "var(--stat-2-icon-bg)",
+            },
+            {
+              label: "待复习",
+              value: pendingCount,
+              unit: "项",
+              icon: Clock,
+              iconColor: "#06b6d4",
+              gradient: "linear-gradient(135deg, #22d3ee, #06b6d4)",
+              bgVar: "var(--stat-3-bg)",
+              borderVar: "var(--stat-3-border)",
+              iconBgVar: "var(--stat-3-icon-bg)",
+              link: "/home/review",
+            },
+          ].map(({ label, value, unit, icon: Icon, iconColor, gradient, bgVar, borderVar, iconBgVar, link }) => {
+            const inner = (
+              <div
+                className="anim-card h-full rounded-2xl border p-4 flex flex-col gap-3 transition-colors"
+                style={{ background: bgVar, borderColor: borderVar }}
+              >
+                <div className="flex items-center justify-between">
+                  <p className="text-[11px] text-foreground/65 font-bold">{label}</p>
+                  <div className="p-1.5 rounded-lg" style={{ background: iconBgVar }}>
+                    <Icon className="h-3.5 w-3.5" style={{ color: iconColor }} />
+                  </div>
+                </div>
+                <div className="flex items-baseline gap-1">
+                  <span
+                    className="text-2xl font-black tabular-nums"
+                    style={{ background: gradient, WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}
+                  >
+                    {value}
+                  </span>
+                  <span className="text-foreground/55 text-xs">{unit}</span>
+                </div>
+              </div>
+            )
+            return link
+              ? <Link key={label} href={link} className="block">{inner}</Link>
+              : <div key={label}>{inner}</div>
+          })}
+        </div>
+
         {/* ── Two-column grid ── */}
-        <div className="grid grid-cols-1 lg:grid-cols-[1fr_320px] gap-5">
+        <div className="grid grid-cols-1 lg:grid-cols-[1fr_340px] gap-5">
 
           {/* ── Left column ── */}
           <div className="space-y-5">
@@ -489,11 +597,14 @@ export function HomeClient({ name }: HomeClientProps) {
             >
               <div className="relative flex items-center justify-between gap-4 mb-5">
                 <div className="flex items-center gap-3.5">
-                  <div className="flex items-center justify-center w-12 h-12 rounded-xl bg-amber-500/15 border border-amber-500/20 shrink-0">
+                  <div
+                    className="flex items-center justify-center w-12 h-12 rounded-xl shrink-0"
+                    style={{ background: "var(--stat-2-icon-bg)", border: "1px solid var(--stat-2-border)" }}
+                  >
                     <Flame className="h-6 w-6 text-amber-400" />
                   </div>
                   <div>
-                    <p className="text-foreground/40 text-[11px] font-medium tracking-wider uppercase">连续打卡</p>
+                    <p className="text-foreground/65 text-[11px] font-bold tracking-wider uppercase">连续打卡</p>
                     <div className="flex items-baseline gap-1.5 mt-0.5">
                       <span
                         ref={streakRef}
@@ -514,14 +625,13 @@ export function HomeClient({ name }: HomeClientProps) {
                   className={cn(
                     "flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold transition-all duration-300 shrink-0",
                     checkedIn
-                      ? "bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 cursor-default"
-                      : "border text-white hover:opacity-90 active:scale-95"
+                      ? "cursor-default"
+                      : "text-white hover:opacity-90 active:scale-95"
                   )}
-                  style={checkedIn ? {} : {
-                    background: "linear-gradient(135deg, #7c3aed, #a855f7)",
-                    borderColor: "rgba(167,139,250,0.4)",
-                    boxShadow: "0 0 20px rgba(124,58,237,0.35)",
-                  }}
+                  style={checkedIn
+                    ? { background: "var(--stat-3-bg)", border: "1px solid var(--stat-3-border)", color: "#06b6d4" }
+                    : { background: "linear-gradient(135deg, #7c3aed, #a855f7)", border: "1px solid #6d28d9", boxShadow: "0 0 18px #7c3aed50" }
+                  }
                 >
                   {checkingIn ? (
                     <Loader2 className="h-4 w-4 animate-spin" />
@@ -541,69 +651,6 @@ export function HomeClient({ name }: HomeClientProps) {
                   checkedInToday={checkedIn}
                 />
               </div>
-            </div>
-
-            {/* Stats row */}
-            <div className="grid grid-cols-3 gap-3">
-              {[
-                {
-                  label: "累计练习",
-                  value: totalCount,
-                  unit: "句",
-                  icon: BookOpen,
-                  iconColor: "text-violet-400",
-                  iconBg: "rgba(124,58,237,0.15)",
-                  gradient: "linear-gradient(135deg, #a78bfa, #7c3aed)",
-                },
-                {
-                  label: "学习天数",
-                  value: totalDays,
-                  unit: "天",
-                  icon: BarChart2,
-                  iconColor: "text-blue-400",
-                  iconBg: "rgba(59,130,246,0.15)",
-                  gradient: "linear-gradient(135deg, #60a5fa, #06b6d4)",
-                },
-                {
-                  label: "待复习",
-                  value: pendingCount,
-                  unit: "项",
-                  icon: Clock,
-                  iconColor: "text-amber-400",
-                  iconBg: "rgba(245,158,11,0.15)",
-                  gradient: "linear-gradient(135deg, #fbbf24, #f97316)",
-                  link: "/home/review",
-                },
-              ].map(({ label, value, unit, icon: Icon, iconColor, iconBg, gradient, link }) => {
-                const inner = (
-                  <div
-                    className="anim-card h-full rounded-2xl border p-4 flex flex-col gap-3 transition-colors"
-                    style={{
-                      background: "var(--surface)",
-                      borderColor: "var(--surface-border)",
-                    }}
-                  >
-                    <div className="flex items-center justify-between">
-                      <p className="text-[11px] text-foreground/35 font-medium">{label}</p>
-                      <div className="p-1.5 rounded-lg" style={{ background: iconBg }}>
-                        <Icon className={cn("h-3.5 w-3.5", iconColor)} />
-                      </div>
-                    </div>
-                    <div className="flex items-baseline gap-1">
-                      <span
-                        className="text-2xl font-black tabular-nums"
-                        style={{ background: gradient, WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}
-                      >
-                        {value}
-                      </span>
-                      <span className="text-foreground/30 text-xs">{unit}</span>
-                    </div>
-                  </div>
-                )
-                return link
-                  ? <Link key={label} href={link} className="block">{inner}</Link>
-                  : <div key={label}>{inner}</div>
-              })}
             </div>
 
             {/* Weekly trend */}
@@ -651,15 +698,21 @@ export function HomeClient({ name }: HomeClientProps) {
               >
                 <div className="px-5 py-4">
                   <div className="flex items-center gap-3 min-w-0">
-                    <div className="flex items-center justify-center w-10 h-10 rounded-xl bg-violet-500/15 border border-violet-500/20 shrink-0">
+                    <div
+                      className="flex items-center justify-center w-10 h-10 rounded-xl shrink-0"
+                      style={{ background: "var(--surface-violet)", border: "1px solid var(--surface-violet-border)" }}
+                    >
                       <BookOpen className="h-5 w-5 text-violet-400" />
                     </div>
                     <div className="min-w-0 flex-1">
-                      <p className="text-[11px] text-foreground/35 font-medium mb-0.5">继续上次学习</p>
+                      <p className="text-[11px] text-foreground/65 font-bold mb-0.5">继续上次学习</p>
                       <p className="text-sm font-semibold text-foreground truncate">{stats.lastStudied.courseTitle}</p>
                       <p className="text-[12px] text-foreground/40 truncate mt-0.5">{stats.lastStudied.lessonTitle}</p>
                     </div>
-                    <div className="flex items-center justify-center w-8 h-8 rounded-full bg-violet-500/15 group-hover:bg-violet-500/25 transition-colors shrink-0">
+                    <div
+                      className="flex items-center justify-center w-8 h-8 rounded-full shrink-0 transition-colors"
+                      style={{ background: "var(--surface-violet)" }}
+                    >
                       <ArrowRight className="h-4 w-4 text-violet-400" />
                     </div>
                   </div>
@@ -667,18 +720,6 @@ export function HomeClient({ name }: HomeClientProps) {
                 </div>
               </Link>
             )}
-
-            {/* Yearly heatmap */}
-            <div
-              className="anim-card rounded-2xl border p-5"
-              style={{ background: "var(--surface-alt)", borderColor: "var(--surface-border)" }}
-            >
-              <div className="flex items-center gap-2 mb-4">
-                <CalendarDays className="h-4 w-4 text-blue-400" />
-                <h3 className="text-sm font-semibold text-foreground/70">年度热力图</h3>
-              </div>
-              {stats && <YearlyHeatmap heatmap={stats.heatmap} />}
-            </div>
 
             {/* Store link */}
             <Link
@@ -692,6 +733,8 @@ export function HomeClient({ name }: HomeClientProps) {
 
           </div>
         </div>
+        </div>
+        )}
 
       </div>
     </div>

@@ -17,37 +17,47 @@ interface TierConfig {
   Icon: React.ComponentType<{ className?: string }> | null
   className: string
   style?: React.CSSProperties
+  avatarRing: string
+  avatarRingStyle?: React.CSSProperties
 }
 
 const TIER_CONFIG: Record<MemberTier, TierConfig> = {
   free: {
     label: "普通用户",
     Icon: null,
-    className: "bg-muted/60 text-muted-foreground border border-transparent",
+    className: "bg-muted text-muted-foreground border border-transparent",
+    avatarRing: "",
   },
   trial: {
-    label: "试用会员",
+    label: "体验期",
     Icon: Star,
-    className: "bg-amber-500/10 text-amber-400 border border-amber-500/20",
+    className: "bg-amber-500/20 text-amber-500 border border-amber-400/60",
+    avatarRing: "ring-2 ring-offset-2 ring-amber-400/80 ring-offset-background",
   },
   monthly: {
     label: "月度会员",
     Icon: Gem,
-    className: "bg-blue-500/10 text-blue-400 border border-blue-500/20",
+    className: "bg-blue-500/20 text-blue-500 border border-blue-400/60",
+    avatarRing: "ring-2 ring-offset-2 ring-blue-500 ring-offset-background",
   },
   yearly: {
     label: "年度会员",
     Icon: Crown,
-    className: "bg-violet-500/10 text-violet-400 border border-violet-500/20",
+    className: "bg-violet-500/20 text-violet-500 border border-violet-400/60",
+    avatarRing: "ring-2 ring-offset-2 ring-violet-500 ring-offset-background",
   },
   partner: {
-    label: "永久会员",
+    label: "合伙人",
     Icon: Diamond,
-    className: "border text-yellow-300",
+    className: "border text-yellow-500",
     style: {
-      background: "linear-gradient(135deg, rgba(251,191,36,0.18) 0%, rgba(234,179,8,0.08) 100%)",
-      borderColor: "rgba(251,191,36,0.45)",
-      boxShadow: "0 0 8px rgba(251,191,36,0.25)",
+      background: "linear-gradient(135deg, rgba(234,179,8,0.25) 0%, rgba(251,191,36,0.12) 100%)",
+      borderColor: "rgba(234,179,8,0.65)",
+      boxShadow: "0 0 6px rgba(234,179,8,0.35)",
+    },
+    avatarRing: "ring-2 ring-offset-2 ring-offset-background",
+    avatarRingStyle: {
+      boxShadow: "0 0 0 2px #0001, 0 0 0 4px rgba(234,179,8,0.9)",
     },
   },
 }
@@ -63,7 +73,7 @@ function TierBadge({ tier, size = "sm" }: { tier: MemberTier; size?: "sm" | "xs"
       )}
       style={style}
     >
-      {Icon && <Icon className={size === "sm" ? "h-3 w-3" : "h-2.5 w-2.5"} />}
+      {Icon && <Icon className={cn("shrink-0", size === "sm" ? "h-3.5 w-3.5" : "h-3 w-3")} />}
       {label}
     </span>
   )
@@ -197,7 +207,8 @@ export function UserActions({ serverUser, variant = "public" }: UserActionsProps
           <div className="relative" ref={dropdownRef}>
             <button
               onClick={() => setDropdownOpen(!dropdownOpen)}
-              className={cn("flex items-center justify-center h-9 w-9 rounded-full text-sm font-bold shrink-0 transition-opacity hover:opacity-80 overflow-hidden", user.avatar ? "" : "bg-accent text-white")}
+              className={cn("flex items-center justify-center h-9 w-9 rounded-full text-sm font-bold shrink-0 transition-opacity hover:opacity-80 overflow-hidden", user.avatar ? "" : "bg-accent text-white", TIER_CONFIG[user.member_tier].avatarRing)}
+              style={TIER_CONFIG[user.member_tier].avatarRingStyle}
             >
               {user.avatar ? (
                 <Image src={user.avatar} alt={user.name || "用户"} width={36} height={36} className="object-cover" />
@@ -210,7 +221,7 @@ export function UserActions({ serverUser, variant = "public" }: UserActionsProps
               <div className="absolute right-0 top-full mt-2 w-64 rounded-xl bg-card border border-border shadow-xl z-50 py-2">
                 <div className="px-4 py-3 border-b border-border">
                   <div className="flex items-center gap-3">
-                    <div className={cn("flex items-center justify-center h-10 w-10 rounded-full text-sm font-bold shrink-0 overflow-hidden", user.avatar ? "" : "bg-accent text-white")}>
+                    <div className={cn("flex items-center justify-center h-10 w-10 rounded-full text-sm font-bold shrink-0 overflow-hidden", user.avatar ? "" : "bg-accent text-white", TIER_CONFIG[user.member_tier].avatarRing)} style={TIER_CONFIG[user.member_tier].avatarRingStyle}>
                       {user.avatar ? <Image src={user.avatar} alt="" width={40} height={40} className="object-cover" /> : (user.name || "U")[0].toUpperCase()}
                     </div>
                     <div className="min-w-0">

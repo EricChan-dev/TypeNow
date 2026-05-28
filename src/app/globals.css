@@ -18,29 +18,41 @@
 }
 
 :root {
-  --background: #000000;
+  --background: #060608;
   --foreground: #f1f5f9;
   --primary: #f59e0b;
   --primary-foreground: #ffffff;
-  --muted: #111111;
+  --muted: #0a0a10;
   --muted-foreground: #94a3b8;
-  --border: #222222;
-  --card: #111111;
+  --border: #1e1e2a;
+  --card: #0f0f14;
   --card-foreground: #f1f5f9;
   --accent: #6366f1;
   --success: #22c55e;
   --warning: #f59e0b;
   /* Surface tokens for theme-aware cards */
-  --surface: rgba(255,255,255,0.08);
-  --surface-alt: rgba(255,255,255,0.07);
-  --surface-border: rgba(255,255,255,0.13);
-  --surface-violet: rgba(124,58,237,0.18);
-  --surface-violet-border: rgba(124,58,237,0.30);
-  --surface-divider: rgba(255,255,255,0.12);
-  --heat-empty: rgba(255,255,255,0.09);
-  --heat-cell-text: rgba(255,255,255,0.85);
-  --heat-cell-text-empty: rgba(255,255,255,0.22);
-  --bar-empty: rgba(255,255,255,0.06);
+  --surface: #0f0f14;
+  --surface-alt: #0c0c12;
+  --surface-border: #1e1e2a;
+  --surface-violet: #110d22;
+  --surface-violet-border: #2d2051;
+  --surface-divider: #1e1e2a;
+  /* Heatmap tokens */
+  --heat-empty: #0d0d16;
+  --heat-low: #2d1b69;
+  --heat-mid: #4c1d95;
+  --heat-high: #7c3aed;
+  --heat-max: #a78bfa;
+  --heat-cell-text: #e2e8f0;
+  --heat-cell-text-empty: #2d2d40;
+  --bar-empty: #111124;
+  /* Stat card accent tokens */
+  --stat-1-bg: #150719; --stat-1-border: #3b0f4a; --stat-1-icon-bg: #2d0f23;
+  --stat-2-bg: #140e03; --stat-2-border: #3d2c00; --stat-2-icon-bg: #2a1f04;
+  --stat-3-bg: #031415; --stat-3-border: #003a40; --stat-3-icon-bg: #052028;
+  /* Calendar tokens */
+  --cal-today-bg: #0e7490; --cal-today-text: #ffffff;
+  --cal-checkin-bg: #1e1535; --cal-checkin-text: #a78bfa;
 }
 
 .light {
@@ -60,13 +72,25 @@
   --surface: rgba(0,0,0,0.04);
   --surface-alt: rgba(0,0,0,0.035);
   --surface-border: rgba(0,0,0,0.10);
-  --surface-violet: rgba(124,58,237,0.07);
-  --surface-violet-border: rgba(124,58,237,0.20);
+  --surface-violet: #f5f3ff;
+  --surface-violet-border: #ede9fe;
   --surface-divider: rgba(0,0,0,0.10);
+  /* Heatmap tokens */
   --heat-empty: rgba(0,0,0,0.07);
+  --heat-low: #ddd6fe;
+  --heat-mid: #c4b5fd;
+  --heat-high: #a78bfa;
+  --heat-max: #7c3aed;
   --heat-cell-text: rgba(0,0,0,0.80);
   --heat-cell-text-empty: rgba(0,0,0,0.35);
   --bar-empty: rgba(0,0,0,0.08);
+  /* Stat card accent tokens */
+  --stat-1-bg: #fff0f7; --stat-1-border: #fce7f3; --stat-1-icon-bg: #fdf2f8;
+  --stat-2-bg: #fffbeb; --stat-2-border: #fef3c7; --stat-2-icon-bg: #fef9ec;
+  --stat-3-bg: #ecfeff; --stat-3-border: #cffafe; --stat-3-icon-bg: #f0feff;
+  /* Calendar tokens */
+  --cal-today-bg: #0e7490; --cal-today-text: #ffffff;
+  --cal-checkin-bg: #ede9fe; --cal-checkin-text: #7c3aed;
 }
 
 body {

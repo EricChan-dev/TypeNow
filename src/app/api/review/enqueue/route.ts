@@ -20,7 +20,7 @@ export async function POST(request: Request) {
   if (!sentenceId) return NextResponse.json({ error: "sentenceId required" }, { status: 400 })
 
   const userId = session.userId
-  const nextReviewAt = new Date(Date.now() + 24 * 60 * 60 * 1000) // +1 day
+  const nextReviewAt = new Date() // immediately available for review
 
   // Check if already in queue
   const [existing] = await db

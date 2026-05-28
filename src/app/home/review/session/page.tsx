@@ -1,10 +1,10 @@
 import { redirect } from "next/navigation"
 import { getCurrentUser } from "@/lib/auth/user"
-import { ReviewNotebook } from "@/components/home/ReviewNotebook"
+import { ReviewClient } from "@/components/home/ReviewClient"
 
-export default async function ReviewPage() {
+export default async function ReviewSessionPage() {
   const user = await getCurrentUser()
   if (!user) redirect("/login")
 
-  return <ReviewNotebook />
+  return <ReviewClient />
 }

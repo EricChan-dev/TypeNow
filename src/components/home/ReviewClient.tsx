@@ -117,13 +117,15 @@ export function ReviewClient() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentIdx, sentence?.sentenceId])
 
-  const submitGrade = useCallback(async (grade: number) => {
+  const submitGrade = useCallback(async (grade: number, mastered?: boolean) => {
     const item = itemsRef.current[currentIdxRef.current]
     if (!item) return
     await fetch("/api/review/complete", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ sentenceId: item.sentenceId, grade }),
+      body: JSON.stringify(mastered
+        ? { sentenceId: item.sentenceId, mastered: true }
+        : { sentenceId: item.sentenceId, grade }),
     }).catch(() => {})
 
     const next = currentIdxRef.current + 1
@@ -182,6 +184,14 @@ export function ReviewClient() {
       })
       const isLast = activeIdx >= words.length - 1
       if (isLast) {
+        // Auto-mastery: zero errors on this sentence
+        if (errorCount === 0) {
+          submitGrade(5, true)
+          const next = currentIdxRef.current + 1
+          if (next >= itemsRef.current.length) setDone(true)
+          else { setCurrentIdx(next); setStatus("input") }
+          return
+        }
         setStatus("grading")
       } else {
         const nextIdx = activeIdx + 1
@@ -242,7 +252,7 @@ export function ReviewClient() {
         <p className="text-foreground/60 text-lg font-medium">今日暂无待复习内容</p>
         <p className="text-foreground/30 text-sm">完成练习后，句子会自动加入复习队列</p>
         <button
-          onClick={() => router.push("/home")}
+          onClick={() => router.push("/home/review")}
           className="mt-2 px-5 py-2 rounded-xl bg-violet-600 text-white text-sm font-semibold hover:bg-violet-500 transition-colors"
         >
           返回主页
@@ -260,7 +270,7 @@ export function ReviewClient() {
           <p className="text-foreground/50 text-sm">本次复习 {items.length} 句</p>
         </div>
         <button
-          onClick={() => router.push("/home")}
+          onClick={() => router.push("/home/review")}
           className="mt-4 px-6 py-2.5 rounded-xl bg-violet-600 text-white text-sm font-semibold hover:bg-violet-500 transition-colors"
         >
           返回主页
@@ -284,7 +294,7 @@ export function ReviewClient() {
         <div className="flex items-center gap-4">
           <span className="text-xs text-foreground/40">{currentIdx + 1} / {items.length}</span>
           <button
-            onClick={() => router.push("/home")}
+            onClick={() => router.push("/home/review")}
             className="p-1.5 rounded-lg hover:bg-foreground/[0.06] transition-colors"
           >
             <X className="h-4 w-4 text-foreground/40" />
@@ -326,6 +336,13 @@ export function ReviewClient() {
                   <span className="block text-[11px] opacity-60 font-normal mt-0.5">{opt.desc}</span>
                 </button>
               ))}
+              <button
+                onClick={() => submitGrade(5, true)}
+                className="px-5 py-3 rounded-xl border border-emerald-500/50 bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 text-sm font-semibold transition-all"
+              >
+                <span className="block">已掌握 ✓</span>
+                <span className="block text-[11px] opacity-60 font-normal mt-0.5">移入已掌握</span>
+              </button>
             </div>
             {errorCount > 0 && (
               <p className="text-xs text-foreground/30">本句错误 {errorCount} 次</p>

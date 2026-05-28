@@ -185,15 +185,15 @@ function ShortcutBadge({ keys, label, onClick }: ShortcutBadgeProps) {
   return (
     <button
       onClick={onClick}
-      className="inline-flex items-center gap-1 rounded-lg border border-white/15 bg-white/[0.02] px-2.5 py-1.5 text-xs hover:bg-white/[0.06] hover:border-white/25 transition-colors"
+      className="inline-flex items-center gap-1 rounded-lg border border-foreground/15 bg-foreground/[0.02] px-2.5 py-1.5 text-xs hover:bg-foreground/[0.06] hover:border-foreground/25 transition-colors"
     >
       {keys.map((k, i) => (
         <span key={i}>
-          <kbd className="rounded border border-white/20 bg-white/[0.04] px-1 py-0.5 text-[11px] text-white/80 font-medium">{k}</kbd>
-          {i < keys.length - 1 && <span className="text-white/30 mx-0.5">+</span>}
+          <kbd className="rounded border border-foreground/20 bg-foreground/[0.04] px-1 py-0.5 text-[11px] text-foreground/80 font-medium">{k}</kbd>
+          {i < keys.length - 1 && <span className="text-foreground/30 mx-0.5">+</span>}
         </span>
       ))}
-      <span className="text-white/50 ml-0.5">{label}</span>
+      <span className="text-foreground/50 ml-0.5">{label}</span>
     </button>
   )
 }
@@ -842,34 +842,34 @@ export function LearnClient({
 
   if (!sentence) {
     return (
-      <div className="fixed inset-0 bg-black flex flex-col items-center justify-center">
+      <div className="fixed inset-0 bg-background flex flex-col items-center justify-center">
         {/* Center logo */}
         <div className="flex flex-col items-center gap-5 mb-40">
           <div className="relative">
             <div className="absolute inset-0 rounded-[28px] bg-violet-500/20 blur-3xl scale-125" />
-            <div className="relative w-28 h-28 rounded-[28px] bg-white/[0.04] border border-white/[0.08] flex items-center justify-center">
-              <Keyboard className="h-12 w-12 text-white/40" />
+            <div className="relative w-28 h-28 rounded-[28px] bg-foreground/[0.04] border border-foreground/[0.08] flex items-center justify-center">
+              <Keyboard className="h-12 w-12 text-foreground/40" />
             </div>
           </div>
           <div className="text-center">
-            <p className="text-white/50 text-base font-medium tracking-wider">码上英语</p>
-            <p className="text-white/20 text-xs mt-0.5 tracking-widest font-mono">TypeNow</p>
+            <p className="text-foreground/50 text-base font-medium tracking-wider">码上英语</p>
+            <p className="text-foreground/20 text-xs mt-0.5 tracking-widest font-mono">TypeNow</p>
           </div>
         </div>
 
         {/* Bottom loading area */}
         <div className="absolute bottom-14 left-0 right-0 px-10 max-w-md mx-auto">
           <div className="flex items-center justify-between mb-2.5">
-            <span className="text-[10px] font-mono tracking-[0.22em] text-white/20 uppercase">Loading</span>
+            <span className="text-[10px] font-mono tracking-[0.22em] text-foreground/20 uppercase">Loading</span>
           </div>
-          <div className="h-[1.5px] bg-white/[0.07] rounded-full overflow-hidden">
+          <div className="h-[1.5px] bg-foreground/[0.07] rounded-full overflow-hidden">
             <div
               ref={loadingBarRef}
               className="h-full rounded-full"
               style={{ width: "0%", background: "linear-gradient(90deg, #7c3aed 0%, #a78bfa 100%)" }}
             />
           </div>
-          <p className="mt-4 text-white/15 text-[11px] text-center leading-relaxed">
+          <p className="mt-4 text-foreground/15 text-[11px] text-center leading-relaxed">
             正在为你加载课程内容，请稍候…
           </p>
         </div>
@@ -925,13 +925,13 @@ export function LearnClient({
         <div className="flex items-center gap-4 min-w-0">
           <button
             onClick={() => setShowBackModal(true)}
-            className="inline-flex items-center gap-1.5 text-lg text-white hover:text-white/80 transition-colors shrink-0"
+            className="inline-flex items-center gap-1.5 text-lg text-foreground hover:text-foreground/80 transition-colors shrink-0"
           >
             <ArrowLeft className="h-6 w-6" />
             返回
           </button>
-          <span className="text-lg text-white truncate">{courseTitle}</span>
-          <span className="text-sm text-white/50 shrink-0">{currentIndex + 1}/{sentences.length}</span>
+          <span className="text-lg text-foreground truncate">{courseTitle}</span>
+          <span className="text-sm text-foreground/50 shrink-0">{currentIndex + 1}/{sentences.length}</span>
         </div>
 
         {/* Right: action icons */}
@@ -956,7 +956,7 @@ export function LearnClient({
 
       {/* === Layer 2: Progress Bar === */}
       <div className="shrink-0 px-5 pb-2">
-        <div className="h-2 rounded-full border border-white/20 bg-transparent overflow-hidden">
+        <div className="h-2 rounded-full border border-foreground/20 bg-transparent overflow-hidden">
           <div
             className="h-full rounded-full bg-green-500 transition-all duration-500 ease-out"
             style={{ width: `${progressPercent}%` }}
@@ -966,7 +966,7 @@ export function LearnClient({
 
       {/* === Layer 3: Timer === */}
       <div className="shrink-0 px-5 pb-2 flex items-center gap-3">
-        <span className="text-4xl font-bold text-white/70 font-mono">{timerStr}</span>
+        <span className="text-4xl font-bold text-foreground/70 font-mono">{timerStr}</span>
         {isPaused && <span className="text-base text-amber-400/60">已暂停</span>}
       </div>
 
@@ -991,13 +991,28 @@ export function LearnClient({
             <CompletedSentence words={sentence.words || []} />
 
             {/* Full Chinese translation */}
-            <p className="text-center text-2xl font-semibold text-white/65 tracking-wide">
+            <p className="text-center text-2xl font-semibold text-foreground/65 tracking-wide">
               {sentence.chinese}
             </p>
 
-            <p className="text-base text-white/30 font-medium">
-              按 Enter 继续下一句 · 鼠标悬停单词查看词性说明
-            </p>
+            <div className="flex flex-col items-center gap-3">
+              <p className="text-base text-foreground/30 font-medium">
+                按 Enter 继续下一句 · 鼠标悬停单词查看词性说明
+              </p>
+              <button
+                onClick={() => {
+                  const sid = sentence.id.includes("_c") ? sentence.id.split("_c")[0] : sentence.id
+                  fetch("/api/review/complete", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ sentenceId: sid, mastered: true }),
+                  }).catch(() => {})
+                }}
+                className="px-4 py-1.5 rounded-lg border border-emerald-500/40 bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 text-xs font-semibold transition-all"
+              >
+                已掌握 ✓
+              </button>
+            </div>
           </div>
         ) : sentence.chunks && sentence.chunks.length > 0 ? (
           /* Chunk Mode Input */
@@ -1047,7 +1062,7 @@ export function LearnClient({
                       }`}
                       style={{ width: chunk.text.length * 28 + 24 }}
                     />
-                    <span className="text-xs text-white/30">{chunk.chinese}</span>
+                    <span className="text-xs text-foreground/30">{chunk.chinese}</span>
                   </div>
                 )
               })}
@@ -1144,45 +1159,45 @@ export function LearnClient({
 
       {/* Chapter Completion Modal */}
       {showCompletionModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 backdrop-blur-md">
-          <div className="relative w-full max-w-[420px] mx-4 rounded-3xl overflow-hidden border border-white/10 bg-[#0a0a0a] shadow-2xl">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/90 backdrop-blur-md">
+          <div className="relative w-full max-w-[420px] mx-4 rounded-3xl overflow-hidden border border-border bg-card shadow-2xl">
             {/* Top accent bar */}
             <div className="h-1 w-full" style={{ background: "linear-gradient(90deg, #7c3aed, #ec4899, #f59e0b)" }} />
 
             <div className="px-8 pt-8 pb-9 flex flex-col items-center gap-7">
               {/* Heading */}
               <div className="text-center">
-                <p className="text-4xl font-black text-white tracking-tight">太棒了！</p>
-                <p className="text-white/35 text-sm mt-1.5">你已完成本课全部 {sentences.length} 个句子</p>
+                <p className="text-4xl font-black text-foreground tracking-tight">太棒了！</p>
+                <p className="text-foreground/35 text-sm mt-1.5">你已完成本课全部 {sentences.length} 个句子</p>
               </div>
 
               {/* Score */}
               <div className="flex flex-col items-center gap-1">
-                <span className="text-[11px] font-mono tracking-widest text-white/25 uppercase">Score</span>
+                <span className="text-[11px] font-mono tracking-widest text-foreground/25 uppercase">Score</span>
                 <span className="text-6xl font-extrabold" style={{ background: "linear-gradient(135deg, #a78bfa, #f472b6)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}>
                   {score.toLocaleString()}
                 </span>
               </div>
 
               {/* Stats row */}
-              <div className="w-full grid grid-cols-3 divide-x divide-white/[0.07]">
+              <div className="w-full grid grid-cols-3 divide-x divide-foreground/[0.07]">
                 <div className="flex flex-col items-center gap-1 px-4">
-                  <span className="text-3xl font-bold text-white">{sentences.length}</span>
-                  <span className="text-white/30 text-[11px] text-center leading-tight">完成<br />句数</span>
+                  <span className="text-3xl font-bold text-foreground">{sentences.length}</span>
+                  <span className="text-foreground/30 text-[11px] text-center leading-tight">完成<br />句数</span>
                 </div>
                 <div className="flex flex-col items-center gap-1 px-4">
-                  <span className="text-3xl font-bold text-white">{timerStr.slice(3)}</span>
-                  <span className="text-white/30 text-[11px] text-center leading-tight">用时<br />(分:秒)</span>
+                  <span className="text-3xl font-bold text-foreground">{timerStr.slice(3)}</span>
+                  <span className="text-foreground/30 text-[11px] text-center leading-tight">用时<br />(分:秒)</span>
                 </div>
                 <div className="flex flex-col items-center gap-1 px-4">
-                  <span className="text-3xl font-bold text-white">{errorCount}</span>
-                  <span className="text-white/30 text-[11px] text-center leading-tight">失误<br />次数</span>
+                  <span className="text-3xl font-bold text-foreground">{errorCount}</span>
+                  <span className="text-foreground/30 text-[11px] text-center leading-tight">失误<br />次数</span>
                 </div>
               </div>
 
               {/* Motivational message */}
-              <div className="w-full rounded-2xl bg-white/[0.03] border border-white/[0.06] px-5 py-3.5 text-center">
-                <p className="text-white/40 text-xs leading-relaxed">
+              <div className="w-full rounded-2xl bg-foreground/[0.03] border border-foreground/[0.06] px-5 py-3.5 text-center">
+                <p className="text-foreground/40 text-xs leading-relaxed">
                   坚持每天练习，记住学习英语最好的方式<br />
                   就是持续输入，让语感自然形成。
                 </p>
@@ -1192,7 +1207,7 @@ export function LearnClient({
               <div className="w-full flex gap-3">
                 <button
                   onClick={resetFromCompletion}
-                  className="flex-1 py-3 rounded-2xl border border-white/12 text-white/70 text-sm font-semibold hover:bg-white/[0.05] hover:text-white transition-colors"
+                  className="flex-1 py-3 rounded-2xl border border-foreground/12 text-foreground/70 text-sm font-semibold hover:bg-foreground/[0.05] hover:text-foreground transition-colors"
                 >
                   再来一次
                 </button>
@@ -1212,11 +1227,11 @@ export function LearnClient({
       {/* Shortcut Drawer */}
       {showShortcuts && (
         <div className="fixed inset-0 z-50 flex justify-end">
-          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setShowShortcuts(false)} />
-          <div className="relative w-[380px] h-full bg-[#0f0f0f] border-l border-white/10 shadow-2xl overflow-y-auto">
-            <div className="flex items-center justify-between px-5 py-4 border-b border-white/10">
-              <h2 className="text-base font-bold text-white">快捷键</h2>
-              <button onClick={() => setShowShortcuts(false)} className="p-1 rounded text-white/40 hover:text-white transition-colors">
+          <div className="absolute inset-0 bg-background/70 backdrop-blur-sm" onClick={() => setShowShortcuts(false)} />
+          <div className="relative w-[380px] h-full bg-card border-l border-border shadow-2xl overflow-y-auto">
+            <div className="flex items-center justify-between px-5 py-4 border-b border-border">
+              <h2 className="text-base font-bold text-foreground">快捷键</h2>
+              <button onClick={() => setShowShortcuts(false)} className="p-1 rounded text-foreground/40 hover:text-foreground transition-colors">
                 <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
               </button>
             </div>
@@ -1235,15 +1250,15 @@ export function LearnClient({
                 <div
                   key={i}
                   className={`flex items-center justify-between rounded-lg px-3 py-2.5 ${
-                    item.disabled ? "opacity-30" : "hover:bg-white/[0.04]"
+                    item.disabled ? "opacity-30" : "hover:bg-foreground/[0.04]"
                   }`}
                 >
-                  <span className="text-sm text-white/70">{item.label}</span>
+                  <span className="text-sm text-foreground/70">{item.label}</span>
                   <span className="inline-flex items-center gap-1">
                     {item.keys.map((k, j) => (
                       <span key={j}>
-                        <kbd className="rounded border border-white/15 bg-white/[0.04] px-1.5 py-0.5 text-[11px] text-white/60 font-medium">{k}</kbd>
-                        {j < item.keys.length - 1 && <span className="text-white/20 mx-0.5">+</span>}
+                        <kbd className="rounded border border-foreground/15 bg-foreground/[0.04] px-1.5 py-0.5 text-[11px] text-foreground/60 font-medium">{k}</kbd>
+                        {j < item.keys.length - 1 && <span className="text-foreground/20 mx-0.5">+</span>}
                       </span>
                     ))}
                   </span>
@@ -1276,12 +1291,12 @@ export function LearnClient({
 
       {/* Reset Confirm Modal */}
       {showResetConfirm && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm">
-          <div className="rounded-2xl bg-[#1a1a1a] border border-white/10 p-8 text-center max-w-sm mx-4 shadow-2xl">
-            <p className="text-lg font-bold text-white">确认重置</p>
-            <p className="mt-3 text-sm text-white/60">重置后当前进度和计时器将归零，确定要重置吗？</p>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm">
+          <div className="rounded-2xl bg-card border border-border p-8 text-center max-w-sm mx-4 shadow-2xl">
+            <p className="text-lg font-bold text-foreground">确认重置</p>
+            <p className="mt-3 text-sm text-foreground/60">重置后当前进度和计时器将归零，确定要重置吗？</p>
             <div className="mt-6 flex gap-3 justify-center">
-              <button onClick={() => setShowResetConfirm(false)} className="rounded-xl border border-white/10 px-6 py-2.5 text-sm text-white/60 hover:bg-white/5 transition-colors">取消</button>
+              <button onClick={() => setShowResetConfirm(false)} className="rounded-xl border border-foreground/10 px-6 py-2.5 text-sm text-foreground/60 hover:bg-foreground/5 transition-colors">取消</button>
               <button onClick={() => { setShowResetConfirm(false); doReset() }} className="rounded-xl bg-red-500/80 px-6 py-2.5 text-sm font-semibold text-white hover:bg-red-500 transition-colors">确认重置</button>
             </div>
           </div>
@@ -1290,12 +1305,12 @@ export function LearnClient({
 
       {/* Shuffle Confirm Modal */}
       {showShuffleConfirm && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm">
-          <div className="rounded-2xl bg-[#1a1a1a] border border-white/10 p-8 text-center max-w-sm mx-4 shadow-2xl">
-            <p className="text-lg font-bold text-white">确认打乱</p>
-            <p className="mt-3 text-sm text-white/60">打乱后句子顺序将随机排列，并从头开始，确定要打乱吗？</p>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm">
+          <div className="rounded-2xl bg-card border border-border p-8 text-center max-w-sm mx-4 shadow-2xl">
+            <p className="text-lg font-bold text-foreground">确认打乱</p>
+            <p className="mt-3 text-sm text-foreground/60">打乱后句子顺序将随机排列，并从头开始，确定要打乱吗？</p>
             <div className="mt-6 flex gap-3 justify-center">
-              <button onClick={() => setShowShuffleConfirm(false)} className="rounded-xl border border-white/10 px-6 py-2.5 text-sm text-white/60 hover:bg-white/5 transition-colors">取消</button>
+              <button onClick={() => setShowShuffleConfirm(false)} className="rounded-xl border border-foreground/10 px-6 py-2.5 text-sm text-foreground/60 hover:bg-foreground/5 transition-colors">取消</button>
               <button onClick={() => { setShowShuffleConfirm(false); doShuffle() }} className="rounded-xl bg-accent px-6 py-2.5 text-sm font-semibold text-white hover:bg-accent/90 transition-colors">确认打乱</button>
             </div>
           </div>
@@ -1304,10 +1319,10 @@ export function LearnClient({
 
       {/* Leave Modal */}
       {showLeaveModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm">
-          <div className="rounded-2xl bg-[#1a1a1a] border border-white/10 p-8 text-center max-w-sm mx-4 shadow-2xl">
-            <p className="text-lg font-bold text-white">暂停学习</p>
-            <p className="mt-3 text-sm text-white/60 leading-relaxed">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm">
+          <div className="rounded-2xl bg-card border border-border p-8 text-center max-w-sm mx-4 shadow-2xl">
+            <p className="text-lg font-bold text-foreground">暂停学习</p>
+            <p className="mt-3 text-sm text-foreground/60 leading-relaxed">
               快点回来吧，你的英语能力正在蓄势待发！
             </p>
             <button
@@ -1328,20 +1343,20 @@ export function LearnClient({
 
       {/* Back Modal */}
       {showBackModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm">
-          <div className="rounded-2xl bg-[#1a1a1a] border border-white/10 p-8 text-center max-w-sm mx-4 shadow-2xl">
-            <p className="text-lg font-bold text-white">确认返回</p>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm">
+          <div className="rounded-2xl bg-card border border-border p-8 text-center max-w-sm mx-4 shadow-2xl">
+            <p className="text-lg font-bold text-foreground">确认返回</p>
             <div className="mt-5 space-y-2.5">
               <Link
                 href="/home/store"
-                className="block w-full rounded-xl border border-white/10 px-5 py-2.5 text-sm text-white/70 hover:bg-white/5 transition-colors"
+                className="block w-full rounded-xl border border-foreground/10 px-5 py-2.5 text-sm text-foreground/70 hover:bg-foreground/5 transition-colors"
               >
                 <ShoppingBag className="h-4 w-4 inline mr-2" />
                 返回课程列表
               </Link>
               <Link
                 href={`/home/store/${courseId}`}
-                className="block w-full rounded-xl border border-white/10 px-5 py-2.5 text-sm text-white/70 hover:bg-white/5 transition-colors"
+                className="block w-full rounded-xl border border-foreground/10 px-5 py-2.5 text-sm text-foreground/70 hover:bg-foreground/5 transition-colors"
               >
                 <BookOpen className="h-4 w-4 inline mr-2" />
                 返回课程详情
@@ -1362,7 +1377,7 @@ export function LearnClient({
         <button
           onClick={debouncedGoPrev}
           disabled={currentIndex === 0}
-          className="flex items-center gap-1 text-sm text-white hover:text-white/70 disabled:opacity-20 disabled:cursor-not-allowed transition-colors"
+          className="flex items-center gap-1 text-sm text-foreground hover:text-foreground/70 disabled:opacity-20 disabled:cursor-not-allowed transition-colors"
         >
           <ChevronLeft className="h-8 w-8" />
           上一句
@@ -1379,7 +1394,7 @@ export function LearnClient({
 
         <button
           onClick={debouncedGoNext}
-          className="flex items-center gap-1 text-sm text-white hover:text-white/70 transition-colors"
+          className="flex items-center gap-1 text-sm text-foreground hover:text-foreground/70 transition-colors"
         >
           下一句
           <ChevronRight className="h-8 w-8" />

@@ -107,7 +107,7 @@ async function upsertWeChatUser(
       id,
       wechatOpenid: wechatUser.openid,
       wechatUnionid: wechatUser.unionid || null,
-      name: wechatUser.nickname,
+      name: wechatUser.nickname || `微信用户${Math.floor(1000 + Math.random() * 9000)}`,
       avatar: wechatUser.headimgurl,
       referredBy,
       isPro: 1,

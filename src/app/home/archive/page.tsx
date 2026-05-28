@@ -1,10 +1,5 @@
 import { redirect } from "next/navigation"
-import { getCurrentUser } from "@/lib/auth/user"
-import { ArchiveClient } from "@/components/home/ArchiveClient"
 
-export default async function ArchivePage() {
-  const user = await getCurrentUser()
-  if (!user) redirect("/login")
-
-  return <ArchiveClient />
+export default function ArchivePage() {
+  redirect("/home")
 }

@@ -10,7 +10,10 @@
     "seed": "tsx scripts/seed-courses.ts",
     "split-sentences": "tsx scripts/split-sentences.ts",
     "analyze-words": "tsx scripts/analyze-words.ts",
-    "expand-courses": "tsx scripts/expand-courses.ts"
+    "expand-courses": "tsx scripts/expand-courses.ts",
+    "switch-role": "tsx scripts/switch-role.ts",
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "dependencies": {
     "@alicloud/dysmsapi20170525": "^4.5.1",
@@ -54,6 +57,7 @@
     "pdf-parse": "^2.4.5",
     "tailwindcss": "^4",
     "tsx": "^4.22.3",
-    "typescript": "^5"
+    "typescript": "^5",
+    "vitest": "^1.6.1"
   }
 }

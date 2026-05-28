@@ -168,7 +168,7 @@ function StatCard({
       style={{ background: "var(--surface)", border: "1px solid var(--surface-border)" }}
     >
       <div className="flex items-center justify-between">
-        <p className="text-[11px] text-foreground/35 font-medium">{label}</p>
+        <p className="text-[11px] text-foreground/65 font-bold">{label}</p>
         <div className="p-1.5 rounded-lg" style={{ background: iconBg }}>
           <Icon className={cn("h-3.5 w-3.5", iconColor)} />
         </div>
@@ -180,7 +180,7 @@ function StatCard({
         >
           {value}
         </span>
-        <span className="text-foreground/30 text-xs">{unit}</span>
+        <span className="text-foreground/55 text-xs">{unit}</span>
       </div>
     </div>
   )
@@ -205,12 +205,12 @@ function HighlightCard({
       style={{ background: "var(--surface)", border: "1px solid var(--surface-border)" }}
     >
       <div className="flex items-center gap-2">
-        <Icon className="h-3.5 w-3.5 text-foreground/30" />
-        <p className="text-[11px] text-foreground/30 font-medium">{label}</p>
+        <Icon className="h-3.5 w-3.5 text-foreground/55" />
+        <p className="text-[11px] text-foreground/65 font-bold">{label}</p>
       </div>
       <div className="flex items-baseline gap-1">
         <span className="text-xl font-black text-foreground/80 tabular-nums">{value}</span>
-        {unit && <span className="text-foreground/25 text-xs">{unit}</span>}
+        {unit && <span className="text-foreground/55 text-xs">{unit}</span>}
       </div>
     </div>
   )
@@ -218,7 +218,7 @@ function HighlightCard({
 
 // ─── Main Component ───────────────────────────────────────────────────────────
 
-export function ArchiveClient() {
+export function ArchivePanel() {
   const [period, setPeriod] = useState<Period>("all")
   const [stats, setStats] = useState<ArchiveStats | null>(null)
   const [loading, setLoading] = useState(true)
@@ -271,15 +271,10 @@ export function ArchiveClient() {
   ]
 
   return (
-    <div ref={pageRef} className="h-full overflow-y-auto scrollbar-none">
-      <div className="w-full px-4 sm:px-6 lg:px-8 py-6 pb-16 max-w-5xl mx-auto space-y-5">
+    <div ref={pageRef} className="w-full max-w-5xl space-y-5">
 
-        {/* Header */}
-        <div className="archive-card flex items-center justify-between">
-          <div>
-            <h1 className="text-2xl font-black text-foreground">学习档案</h1>
-            <p className="text-foreground/35 text-sm mt-0.5">成长分析</p>
-          </div>
+        {/* Period selector */}
+        <div className="flex justify-end">
           <div className="flex items-center gap-1 rounded-xl p-1" style={{ background: "var(--surface)", border: "1px solid var(--surface-border)" }}>
             {PERIODS.map(({ value, label }) => (
               <button
@@ -289,7 +284,7 @@ export function ArchiveClient() {
                   "px-3 py-1.5 rounded-lg text-[12px] font-semibold transition-all duration-200",
                   period === value
                     ? "bg-violet-600 text-white shadow-sm"
-                    : "text-foreground/40 hover:text-foreground/70"
+                    : "text-white/50 hover:text-white/80"
                 )}
               >
                 {label}
@@ -309,7 +304,7 @@ export function ArchiveClient() {
           <>
             {/* Section 1 — 学习投入 */}
             <div>
-              <p className="text-[11px] text-foreground/25 font-semibold uppercase tracking-widest mb-3">学习投入</p>
+              <p className="text-[11px] text-foreground/55 font-semibold uppercase tracking-widest mb-3">学习投入</p>
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                 <StatCard
                   label="学习天数"
@@ -352,7 +347,7 @@ export function ArchiveClient() {
 
             {/* Section 2 — 高光时刻 */}
             <div>
-              <p className="text-[11px] text-foreground/25 font-semibold uppercase tracking-widest mb-3">高光时刻</p>
+              <p className="text-[11px] text-foreground/55 font-semibold uppercase tracking-widest mb-3">高光时刻</p>
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                 <HighlightCard label="最高分" value={stats.bestScore || "—"} unit={stats.bestScore ? "分" : undefined} icon={Zap} />
                 <HighlightCard label="平均分" value={stats.avgScore || "—"} unit={stats.avgScore ? "分" : undefined} icon={Target} />
@@ -387,7 +382,6 @@ export function ArchiveClient() {
           </>
         ) : null}
 
-      </div>
     </div>
   )
 }
