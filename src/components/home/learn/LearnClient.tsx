@@ -707,60 +707,71 @@ export function LearnClient({
   }, [])
 
   // Confetti burst with animejs
+  // Multi-point fireworks with animejs
   useEffect(() => {
     const container = confettiContainerRef.current
     if (!showConfetti || !container) return
     container.innerHTML = ""
-    const colors = ["#f59e0b","#ef4444","#22c55e","#6366f1","#ec4899","#06b6d4","#f97316","#a855f7","#10b981","#fbbf24","#f43f5e"]
-    const origins = [
-      { x: 15, spread: 120, upward: -1 },
-      { x: 50, spread: 180, upward: -1 },
-      { x: 85, spread: 120, upward: -1 },
-    ]
-    const particles: HTMLDivElement[] = []
 
-    for (let o = 0; o < origins.length; o++) {
-      const origin = origins[o]
-      const count = o === 1 ? 70 : 40 // center gets more
-      for (let i = 0; i < count; i++) {
-        const el = document.createElement("div")
+    const colors = ["#f59e0b","#ef4444","#22c55e","#6366f1","#ec4899","#06b6d4","#f97316","#a855f7","#10b981","#fbbf24","#f43f5e","#fb923c"]
+    // 3 explosion centers: left-high, center-mid, right-high
+    const centers = [
+      { x: 22, y: 35 },
+      { x: 50, y: 55 },
+      { x: 78, y: 28 },
+    ]
+    const COUNT = 45 // particles per explosion
+    let completedBursts = 0
+
+    const burst = (cx: number, cy: number, delay: number) => {
+      const els: HTMLDivElement[] = []
+      for (let i = 0; i < COUNT; i++) {
+        const angle = (i / COUNT) * Math.PI * 2 + (Math.random() - 0.5) * 0.4
+        const dist = 90 + Math.random() * 260
+        const isRibbon = Math.random() < 0.4
         const color = colors[Math.floor(Math.random() * colors.length)]
-        const isRibbon = Math.random() < 0.35
+        const el = document.createElement("div")
         el.style.cssText = `
           position:absolute;
-          left:${origin.x}%;
-          top:50%;
-          width:${isRibbon ? 3 + Math.random() * 3 : 7 + Math.random() * 9}px;
-          height:${isRibbon ? 22 + Math.random() * 18 : (7 + Math.random() * 9) * 0.55}px;
+          left:${cx}%;
+          top:${cy}%;
+          width:${isRibbon ? 2 + Math.random() * 3 : 6 + Math.random() * 8}px;
+          height:${isRibbon ? 18 + Math.random() * 16 : (6 + Math.random() * 8) * 0.5}px;
           background:${color};
           border-radius:${isRibbon ? 1 : 3}px;
           opacity:1;
           transform-origin:center;
         `
+        ;(el as HTMLDivElement & { _tx: number; _ty: number })._tx = Math.cos(angle) * dist
+        ;(el as HTMLDivElement & { _tx: number; _ty: number })._ty = Math.sin(angle) * dist
         container.appendChild(el)
-        particles.push(el)
+        els.push(el)
       }
+
+      setTimeout(() => {
+        animate(els, {
+          translateX: (_el: Element, i: number) => (els[i] as HTMLDivElement & { _tx: number })._tx,
+          translateY: (_el: Element, i: number) => {
+            const ty = (els[i] as HTMLDivElement & { _ty: number })._ty
+            return [ty * 0.4, ty]
+          },
+          rotate: () => Math.random() * 720 - 360,
+          scale: [1, () => 0.15 + Math.random() * 0.3],
+          opacity: [{ to: 1, duration: 80 }, { to: 0, duration: 900 + Math.random() * 400 }],
+          duration: 1000 + Math.random() * 500,
+          delay: (_el: Element, i: number) => i * 5,
+          ease: "out(2.5)",
+          onComplete: () => {
+            completedBursts++
+            if (completedBursts >= centers.length) container.innerHTML = ""
+          },
+        })
+      }, delay)
     }
 
-    animate(particles, {
-      translateX: (_el: Element, i: number) => {
-        const originIdx = i < 40 ? 0 : i < 110 ? 1 : 2
-        const { spread } = origins[originIdx]
-        return (Math.random() - 0.5) * spread * 2
-      },
-      translateY: (_el: Element, i: number) => {
-        const phase1 = -(300 + Math.random() * 350)
-        const phase2 = phase1 + 200 + Math.random() * 250
-        return [phase1, phase2]
-      },
-      rotate: () => Math.random() * 900 - 450,
-      scaleX: [1, () => 0.4 + Math.random() * 0.6],
-      opacity: [1, 0],
-      duration: () => 1400 + Math.random() * 600,
-      delay: (_el: Element, i: number) => i * 8 + Math.random() * 100,
-      ease: "out(2)",
-      onComplete: () => { container.innerHTML = "" },
-    })
+    burst(centers[0].x, centers[0].y, 0)
+    burst(centers[1].x, centers[1].y, 260)
+    burst(centers[2].x, centers[2].y, 500)
   }, [showConfetti])
 
   // Underline pop when active word changes
@@ -990,12 +1001,12 @@ export function LearnClient({
           </div>
         ) : (
           /* Word Mode Input */
-          <div className="w-full max-w-2xl space-y-8">
-            <p className="text-center text-2xl font-medium text-foreground">
+          <div className="w-[82%] max-w-4xl space-y-8">
+            <p className="text-center text-4xl font-semibold text-foreground">
               {sentence.chinese}
             </p>
 
-            <div className="flex flex-wrap justify-center items-end gap-x-3 gap-y-4">
+            <div className="flex flex-wrap justify-center items-end gap-x-4 gap-y-4">
               {(sentence.words || []).map((word, i) => {
                 const isInput = word.pos !== "标点"
                 const wsIdx = inputWords.indexOf(word)
@@ -1013,11 +1024,22 @@ export function LearnClient({
 
                 // Width based on expected word length: font-6xl ~60px, avg char ~38px + buffer
                 const underlineWidth = word.english.length * 38 + 20
+                const isPending = !ws || ws.status === "idle"
 
                 return (
                   <div
                     key={i}
                     className={`flex flex-col items-center gap-[5px] ${isShaking ? "animate-shake" : ""}`}
+                    onMouseEnter={(e) => {
+                      if (!isPending) return
+                      const ul = e.currentTarget.querySelector<HTMLElement>("[data-underline]")
+                      if (ul) animate(ul, { scaleX: 1.1, scaleY: 2.0, duration: 180, ease: "out(2)" })
+                    }}
+                    onMouseLeave={(e) => {
+                      if (!isPending) return
+                      const ul = e.currentTarget.querySelector<HTMLElement>("[data-underline]")
+                      if (ul) animate(ul, { scaleX: 1, scaleY: 1, duration: 180, ease: "out(2)" })
+                    }}
                   >
                     <div
                       className={`
