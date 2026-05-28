@@ -707,71 +707,88 @@ export function LearnClient({
   }, [])
 
   // Confetti burst with animejs
-  // Multi-point fireworks with animejs
+  // Fireworks: fast radial burst → slow gravity fall, 5 explosion points
   useEffect(() => {
     const container = confettiContainerRef.current
     if (!showConfetti || !container) return
     container.innerHTML = ""
 
     const colors = ["#f59e0b","#ef4444","#22c55e","#6366f1","#ec4899","#06b6d4","#f97316","#a855f7","#10b981","#fbbf24","#f43f5e","#fb923c"]
-    // 3 explosion centers: left-high, center-mid, right-high
     const centers = [
-      { x: 22, y: 35 },
-      { x: 50, y: 55 },
-      { x: 78, y: 28 },
+      { x: 18, y: 48, t: 0 },
+      { x: 40, y: 28, t: 160 },
+      { x: 62, y: 58, t: 60 },
+      { x: 78, y: 30, t: 280 },
+      { x: 88, y: 52, t: 190 },
     ]
-    const COUNT = 45 // particles per explosion
-    let completedBursts = 0
+    const COUNT = 40
+    let done = 0
 
-    const burst = (cx: number, cy: number, delay: number) => {
+    centers.forEach(({ x, y, t }) => {
+      // Pre-compute per-particle burst vectors
+      const txArr: number[] = []
+      const tyArr: number[] = []
+      const gravArr: number[] = []
       const els: HTMLDivElement[] = []
+
       for (let i = 0; i < COUNT; i++) {
-        const angle = (i / COUNT) * Math.PI * 2 + (Math.random() - 0.5) * 0.4
-        const dist = 90 + Math.random() * 260
-        const isRibbon = Math.random() < 0.4
+        // Evenly spaced angles with small jitter for true radial burst
+        const angle = (i / COUNT) * Math.PI * 2 + (Math.random() - 0.5) * 0.45
+        const dist = 90 + Math.random() * 230
+        txArr[i] = Math.cos(angle) * dist
+        tyArr[i] = Math.sin(angle) * dist
+        gravArr[i] = 220 + Math.random() * 180 // how far each falls after burst peak
+
+        const isRibbon = Math.random() < 0.38
+        const sz = isRibbon ? 0 : 5 + Math.random() * 8
         const color = colors[Math.floor(Math.random() * colors.length)]
         const el = document.createElement("div")
-        el.style.cssText = `
-          position:absolute;
-          left:${cx}%;
-          top:${cy}%;
-          width:${isRibbon ? 2 + Math.random() * 3 : 6 + Math.random() * 8}px;
-          height:${isRibbon ? 18 + Math.random() * 16 : (6 + Math.random() * 8) * 0.5}px;
-          background:${color};
-          border-radius:${isRibbon ? 1 : 3}px;
-          opacity:1;
-          transform-origin:center;
-        `
-        ;(el as HTMLDivElement & { _tx: number; _ty: number })._tx = Math.cos(angle) * dist
-        ;(el as HTMLDivElement & { _tx: number; _ty: number })._ty = Math.sin(angle) * dist
+        el.style.cssText = [
+          "position:absolute",
+          `left:${x}%`,
+          `top:${y}%`,
+          `width:${isRibbon ? 2 + Math.random() * 3 : sz}px`,
+          `height:${isRibbon ? 14 + Math.random() * 18 : sz * 0.5}px`,
+          `background:${color}`,
+          `border-radius:${isRibbon ? 1 : 3}px`,
+          "opacity:0",
+          "transform-origin:center",
+          "will-change:transform,opacity",
+        ].join(";")
         container.appendChild(el)
         els.push(el)
       }
 
       setTimeout(() => {
+        // Phase 1 — fast radial burst outward (350ms, out(5))
         animate(els, {
-          translateX: (_el: Element, i: number) => (els[i] as HTMLDivElement & { _tx: number })._tx,
-          translateY: (_el: Element, i: number) => {
-            const ty = (els[i] as HTMLDivElement & { _ty: number })._ty
-            return [ty * 0.4, ty]
-          },
-          rotate: () => Math.random() * 720 - 360,
-          scale: [1, () => 0.15 + Math.random() * 0.3],
-          opacity: [{ to: 1, duration: 80 }, { to: 0, duration: 900 + Math.random() * 400 }],
-          duration: 1000 + Math.random() * 500,
-          delay: (_el: Element, i: number) => i * 5,
-          ease: "out(2.5)",
-          onComplete: () => {
-            completedBursts++
-            if (completedBursts >= centers.length) container.innerHTML = ""
-          },
+          translateX: (_: Element, i: number) => txArr[i],
+          translateY: (_: Element, i: number) => tyArr[i],
+          rotate: () => Math.random() * 540 - 270,
+          scale: [0.2, 1],
+          opacity: [0, 1],
+          duration: 350,
+          ease: "out(5)",
+          delay: (_: Element, i: number) => i * 4,
         })
-      }, delay)
-    }
 
-    burst(centers[0].x, centers[0].y, 0)
-    burst(centers[1].x, centers[1].y, 260)
-    burst(centers[2].x, centers[2].y, 500)
+        // Phase 2 — gravity fall (starts 280ms in, in(2) acceleration)
+        setTimeout(() => {
+          animate(els, {
+            translateY: (_: Element, i: number) => tyArr[i] + gravArr[i],
+            opacity: 0,
+            scale: 0.08,
+            duration: () => 950 + Math.random() * 450,
+            ease: "in(2)",
+            delay: (_: Element, i: number) => i * 3,
+            onComplete: () => {
+              done++
+              if (done >= centers.length) container.innerHTML = ""
+            },
+          })
+        }, 280)
+      }, t)
+    })
   }, [showConfetti])
 
   // Underline pop when active word changes
