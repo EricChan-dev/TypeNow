@@ -1,6 +1,7 @@
 "use client"
 
-import React, { useState, useEffect, useRef, useCallback, useMemo } from "react"
+import { useState, useEffect, useRef, useCallback, useMemo } from "react"
+import { animate } from "animejs"
 import Link from "next/link"
 import { ChevronLeft, ChevronRight, ArrowLeft, BookOpen, ShoppingBag, Pause, Play, RotateCcw, Shuffle, Maximize, Minimize, Keyboard, List, Settings, Eye, EyeOff } from "lucide-react"
 import type { Sentence, Word } from "@/types"
@@ -248,6 +249,7 @@ export function LearnClient({
   const [showLeaveModal, setShowLeaveModal] = useState(false)
   const [showBackModal, setShowBackModal] = useState(false)
   const [showConfetti, setShowConfetti] = useState(false)
+  const confettiContainerRef = useRef<HTMLDivElement>(null)
   const [showSettings, setShowSettings] = useState(false)
   const [showOutline, setShowOutline] = useState(false)
   const [showAnswer, setShowAnswer] = useState(false)
@@ -704,6 +706,76 @@ export function LearnClient({
     containerRef.current?.focus()
   }, [])
 
+  // Confetti burst with animejs
+  useEffect(() => {
+    const container = confettiContainerRef.current
+    if (!showConfetti || !container) return
+    container.innerHTML = ""
+    const colors = ["#f59e0b","#ef4444","#22c55e","#6366f1","#ec4899","#06b6d4","#f97316","#a855f7","#10b981","#fbbf24","#f43f5e"]
+    const origins = [
+      { x: 15, spread: 120, upward: -1 },
+      { x: 50, spread: 180, upward: -1 },
+      { x: 85, spread: 120, upward: -1 },
+    ]
+    const particles: HTMLDivElement[] = []
+
+    for (let o = 0; o < origins.length; o++) {
+      const origin = origins[o]
+      const count = o === 1 ? 70 : 40 // center gets more
+      for (let i = 0; i < count; i++) {
+        const el = document.createElement("div")
+        const color = colors[Math.floor(Math.random() * colors.length)]
+        const isRibbon = Math.random() < 0.35
+        el.style.cssText = `
+          position:absolute;
+          left:${origin.x}%;
+          top:50%;
+          width:${isRibbon ? 3 + Math.random() * 3 : 7 + Math.random() * 9}px;
+          height:${isRibbon ? 22 + Math.random() * 18 : (7 + Math.random() * 9) * 0.55}px;
+          background:${color};
+          border-radius:${isRibbon ? 1 : 3}px;
+          opacity:1;
+          transform-origin:center;
+        `
+        container.appendChild(el)
+        particles.push(el)
+      }
+    }
+
+    animate(particles, {
+      translateX: (_el: Element, i: number) => {
+        const originIdx = i < 40 ? 0 : i < 110 ? 1 : 2
+        const { spread } = origins[originIdx]
+        return (Math.random() - 0.5) * spread * 2
+      },
+      translateY: (_el: Element, i: number) => {
+        const phase1 = -(300 + Math.random() * 350)
+        const phase2 = phase1 + 200 + Math.random() * 250
+        return [phase1, phase2]
+      },
+      rotate: () => Math.random() * 900 - 450,
+      scaleX: [1, () => 0.4 + Math.random() * 0.6],
+      opacity: [1, 0],
+      duration: () => 1400 + Math.random() * 600,
+      delay: (_el: Element, i: number) => i * 8 + Math.random() * 100,
+      ease: "out(2)",
+      onComplete: () => { container.innerHTML = "" },
+    })
+  }, [showConfetti])
+
+  // Underline pop when active word changes
+  useEffect(() => {
+    const el = document.querySelector<HTMLElement>(`[data-underline="${activeWordIndex}"]`)
+    if (!el) return
+    animate(el, {
+      scaleY: [1, 2.2, 1],
+      scaleX: [1, 1.06, 1],
+      opacity: [0.6, 1, 1],
+      duration: 280,
+      ease: "out(3)",
+    })
+  }, [activeWordIndex])
+
   if (!sentence) {
     return (
       <div className="flex flex-col items-center justify-center py-24 text-center">
@@ -964,13 +1036,14 @@ export function LearnClient({
                       {ws?.value || ""}
                     </div>
                     <div
-                      className={`h-[3px] transition-all duration-200 ${
+                      data-underline={wsIdx}
+                      className={`h-[3px] transition-colors duration-150 ${
                         ws?.status === "error"
                           ? "bg-red-500"
                           : ws?.status === "done"
                             ? "bg-foreground/40"
                             : isActive
-                              ? "bg-accent shadow-[0_0_6px_var(--accent)]"
+                              ? "bg-accent shadow-[0_0_8px_var(--accent)]"
                               : "bg-foreground/20"
                       }`}
                       style={{
@@ -987,40 +1060,11 @@ export function LearnClient({
         )}
       </div>
 
-      {/* Confetti */}
-      {showConfetti && (
-        <div className="fixed inset-0 z-40 pointer-events-none overflow-hidden">
-          {Array.from({ length: 40 }).map((_, i) => {
-            const colors = ["#f59e0b", "#ef4444", "#22c55e", "#6366f1", "#ec4899", "#06b6d4", "#f97316"]
-            const color = colors[i % colors.length]
-            const left = 35 + Math.random() * 30
-            const delay = Math.random() * 0.3
-            const size = 6 + Math.random() * 8
-            const angle = Math.random() * Math.PI * 2
-            const distance = 200 + Math.random() * 400
-            const tx = Math.cos(angle) * distance
-            const ty = Math.sin(angle) * distance - 200
-            const rot = Math.random() * 720 - 360
-            const name = `cf-${i}`
-            return (
-              <React.Fragment key={i}>
-                <style>{`@keyframes ${name} { 0% { transform: translate(0,0) rotate(0deg) scale(1); opacity:1 } 100% { transform: translate(${tx}px,${ty}px) rotate(${rot}deg) scale(0); opacity:0 } }`}</style>
-                <div
-                  className="absolute rounded-sm"
-                  style={{
-                    left: `${left}%`,
-                    top: "50%",
-                    width: size,
-                    height: size * 0.6,
-                    backgroundColor: color,
-                    animation: `${name} 1.2s ease-out ${delay}s forwards`,
-                  }}
-                />
-              </React.Fragment>
-            )
-          })}
-        </div>
-      )}
+      {/* Confetti — particles injected imperatively by animejs effect */}
+      <div
+        ref={confettiContainerRef}
+        className="fixed inset-0 z-40 pointer-events-none overflow-hidden"
+      />
 
       {/* Shortcut Drawer */}
       {showShortcuts && (

@@ -53,7 +53,7 @@ function buildAuthHeader(
 }
 
 export interface CreateOrderParams {
-  plan: "monthly" | "yearly"
+  plan: "monthly" | "yearly" | "partner"
   outTradeNo: string
   description: string
   amount: number

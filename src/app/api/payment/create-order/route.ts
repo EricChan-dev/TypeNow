@@ -22,7 +22,7 @@ export async function POST(request: Request) {
     }
 
     const outTradeNo = generateOutTradeNo()
-    const amount = getPlanAmount(plan)
+    const amount = process.env.NODE_ENV === "development" ? 1 : getPlanAmount(plan)
     const description = getPlanDescription(plan)
 
     const { code_url } = await createNativeOrder({ plan, outTradeNo, description, amount })

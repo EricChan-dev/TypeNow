@@ -60,7 +60,9 @@ export default function PartnerJoin() {
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || "创建订单失败")
-      router.push(`/home/store/checkout?out_trade_no=${data.out_trade_no}&plan=partner`)
+      router.push(
+        `/home/store/checkout?out_trade_no=${data.out_trade_no}&plan=partner&code_url=${encodeURIComponent(data.code_url)}`
+      )
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "操作失败")
     } finally {
