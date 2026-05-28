@@ -30,6 +30,17 @@
   --accent: #6366f1;
   --success: #22c55e;
   --warning: #f59e0b;
+  /* Surface tokens for theme-aware cards */
+  --surface: rgba(255,255,255,0.08);
+  --surface-alt: rgba(255,255,255,0.07);
+  --surface-border: rgba(255,255,255,0.13);
+  --surface-violet: rgba(124,58,237,0.18);
+  --surface-violet-border: rgba(124,58,237,0.30);
+  --surface-divider: rgba(255,255,255,0.12);
+  --heat-empty: rgba(255,255,255,0.09);
+  --heat-cell-text: rgba(255,255,255,0.85);
+  --heat-cell-text-empty: rgba(255,255,255,0.22);
+  --bar-empty: rgba(255,255,255,0.06);
 }
 
 .light {
@@ -45,6 +56,17 @@
   --accent: #1e40af;
   --success: #22c55e;
   --warning: #f59e0b;
+  /* Surface tokens for theme-aware cards */
+  --surface: rgba(0,0,0,0.04);
+  --surface-alt: rgba(0,0,0,0.035);
+  --surface-border: rgba(0,0,0,0.10);
+  --surface-violet: rgba(124,58,237,0.07);
+  --surface-violet-border: rgba(124,58,237,0.20);
+  --surface-divider: rgba(0,0,0,0.10);
+  --heat-empty: rgba(0,0,0,0.07);
+  --heat-cell-text: rgba(0,0,0,0.80);
+  --heat-cell-text-empty: rgba(0,0,0,0.35);
+  --bar-empty: rgba(0,0,0,0.08);
 }
 
 body {

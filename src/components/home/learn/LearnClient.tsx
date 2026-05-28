@@ -71,32 +71,6 @@ function expandSentences(raw: Sentence[]): Sentence[] {
 }
 
 // ─── POS grouping for completion screen ──────────────────────────────────────
-const POS_GROUPS: { label: string; match: string[] }[] = [
-  { label: "名词",   match: ["名词"] },
-  { label: "动词",   match: ["动词"] },
-  { label: "形容词", match: ["形容词"] },
-  { label: "副词",   match: ["副词"] },
-  { label: "代词",   match: ["代词"] },
-  { label: "介词",   match: ["介词"] },
-  { label: "并列连词", match: ["并列连词", "连词"] },
-  { label: "从属连词", match: ["从属连词"] },
-  { label: "感叹词", match: ["感叹词"] },
-  { label: "限定词", match: ["冠词", "限定词"] },
-  { label: "助动词", match: ["助动词", "情态动词"] },
-  { label: "专有名词", match: ["专有名词"] },
-  { label: "人名",   match: ["人名"] },
-  { label: "数词",   match: ["数词"] },
-  { label: "助词",   match: ["助词", "不定式"] },
-]
-
-function groupByPos(words: Word[]): Array<{ label: string; words: Word[] }> {
-  return POS_GROUPS
-    .map((g) => ({
-      label: g.label,
-      words: words.filter((w) => g.match.includes(w.pos) && w.pos !== "标点"),
-    }))
-    .filter((g) => g.words.length > 0)
-}
 
 import { TransitionOverlay } from "@/components/shared/TransitionOverlay"
 import { TooltipButton } from "@/components/shared/TooltipButton"
@@ -258,6 +232,9 @@ export function LearnClient({
   const [showShuffleConfirm, setShowShuffleConfirm] = useState(false)
   const [transition, setTransition] = useState<{ show: boolean; message: string; onComplete?: () => void }>({ show: false, message: "" })
   const [isFullscreen, setIsFullscreen] = useState(false)
+  const [showCompletionModal, setShowCompletionModal] = useState(false)
+  const [errorCount, setErrorCount] = useState(0)
+  const loadingBarRef = useRef<HTMLDivElement>(null)
   // Chunk mode state
   const [chunkInput, setChunkInput] = useState("")
   const [activeChunkIndex, setActiveChunkIndex] = useState(0)
@@ -276,6 +253,22 @@ export function LearnClient({
       .then((r) => r.json())
       .then((json) => { if (json.data?.title) setCourseTitle(json.data.title) })
       .catch(() => {})
+  }, [courseId])
+
+  // Record study time locally and persist to backend
+  useEffect(() => {
+    try {
+      const histKey = "typenow_study_history"
+      const history = JSON.parse(localStorage.getItem(histKey) || "{}")
+      history[courseId] = Date.now()
+      localStorage.setItem(histKey, JSON.stringify(history))
+    } catch {}
+    // Persist to backend (fire-and-forget)
+    fetch("/api/user/progress", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ courseId, sentenceCount: 0 }),
+    }).catch(() => {})
   }, [courseId])
 
   // Refs for keyboard handler to avoid re-binding
@@ -303,6 +296,13 @@ export function LearnClient({
       .catch(() => {})
   }, [lessonId])
 
+  // Animate loading bar while waiting for sentences
+  useEffect(() => {
+    const bar = loadingBarRef.current
+    if (!bar) return
+    animate(bar, { width: ["0%", "100%"], duration: 2200, ease: "out(2)" })
+  }, [])
+
   const sentence = sentences[currentIndex]
   const inputWords = useMemo(
     () => sentence ? getInputWords(sentence.words || []) : [],
@@ -317,6 +317,29 @@ export function LearnClient({
     () => currentIndex + (status === "complete" ? 1 : 0),
     [currentIndex, status],
   )
+
+  // Update backend progress whenever a sentence is completed
+  useEffect(() => {
+    if (completedCount === 0) return
+    fetch("/api/user/progress", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ courseId, sentenceCount: completedCount }),
+    }).catch(() => {})
+  }, [completedCount, courseId])
+
+  // Enqueue current sentence for spaced-repetition review when completed
+  useEffect(() => {
+    if (status !== "complete" || !sentence?.id) return
+    // Use parent sentence id (strip chunk suffix like _c1)
+    const parentId = sentence.id.includes("_c") ? sentence.id.split("_c")[0] : sentence.id
+    fetch("/api/review/enqueue", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ sentenceId: parentId }),
+    }).catch(() => {})
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [status, sentence?.id])
   const progressPercent = useMemo(
     () => sentences.length > 0 ? (completedCount / sentences.length) * 100 : 0,
     [completedCount, sentences.length],
@@ -325,6 +348,11 @@ export function LearnClient({
     () => `${String(Math.floor(timer / 3600)).padStart(2, "0")}:${String(Math.floor((timer % 3600) / 60)).padStart(2, "0")}:${String(timer % 60).padStart(2, "0")}`,
     [timer],
   )
+  const score = useMemo(() => {
+    const base = sentences.length * 500
+    const penalty = errorCount * 30 + Math.floor(timer / 5)
+    return Math.max(100, base - penalty)
+  }, [sentences.length, errorCount, timer])
 
   // Initialize word/chunk states for current sentence
   useEffect(() => {
@@ -401,6 +429,7 @@ export function LearnClient({
       }
     } else {
       playBuzz()
+      setErrorCount((c) => c + 1)
       setWordStates((prev) => {
         const next = [...prev]
         next[activeIdx] = { value: currentVal, status: "error" }
@@ -432,6 +461,7 @@ export function LearnClient({
     setWordStates(newStates)
     if (hasError) {
       playBuzz()
+      setErrorCount((c) => c + newStates.filter((s) => s.status === "error").length)
       const firstError = newStates.findIndex((s) => s.status === "error")
       const errorIndices = newStates.reduce<number[]>((acc, s, i) => {
         if (s.status === "error") acc.push(i)
@@ -490,6 +520,7 @@ export function LearnClient({
       }
     } else {
       playBuzz()
+      setErrorCount((c) => c + 1)
       const newStatuses = [...chunkStatusesRef.current]
       newStatuses[activeIdx] = "error"
       setChunkStatuses(newStatuses)
@@ -804,10 +835,44 @@ export function LearnClient({
     })
   }, [activeWordIndex])
 
+  // Show completion modal when all sentences done
+  useEffect(() => {
+    if (isFinished) setShowCompletionModal(true)
+  }, [isFinished])
+
   if (!sentence) {
     return (
-      <div className="flex flex-col items-center justify-center py-24 text-center">
-        <p className="text-sm text-muted-foreground">加载中...</p>
+      <div className="fixed inset-0 bg-black flex flex-col items-center justify-center">
+        {/* Center logo */}
+        <div className="flex flex-col items-center gap-5 mb-40">
+          <div className="relative">
+            <div className="absolute inset-0 rounded-[28px] bg-violet-500/20 blur-3xl scale-125" />
+            <div className="relative w-28 h-28 rounded-[28px] bg-white/[0.04] border border-white/[0.08] flex items-center justify-center">
+              <Keyboard className="h-12 w-12 text-white/40" />
+            </div>
+          </div>
+          <div className="text-center">
+            <p className="text-white/50 text-base font-medium tracking-wider">码上英语</p>
+            <p className="text-white/20 text-xs mt-0.5 tracking-widest font-mono">TypeNow</p>
+          </div>
+        </div>
+
+        {/* Bottom loading area */}
+        <div className="absolute bottom-14 left-0 right-0 px-10 max-w-md mx-auto">
+          <div className="flex items-center justify-between mb-2.5">
+            <span className="text-[10px] font-mono tracking-[0.22em] text-white/20 uppercase">Loading</span>
+          </div>
+          <div className="h-[1.5px] bg-white/[0.07] rounded-full overflow-hidden">
+            <div
+              ref={loadingBarRef}
+              className="h-full rounded-full"
+              style={{ width: "0%", background: "linear-gradient(90deg, #7c3aed 0%, #a78bfa 100%)" }}
+            />
+          </div>
+          <p className="mt-4 text-white/15 text-[11px] text-center leading-relaxed">
+            正在为你加载课程内容，请稍候…
+          </p>
+        </div>
       </div>
     )
   }
@@ -822,6 +887,18 @@ export function LearnClient({
       const s = sentencesRef.current[0]
       if (s) globalSpeak(s.english)
     }})
+  }
+
+  function resetFromCompletion() {
+    setShowCompletionModal(false)
+    setCurrentIndex(0)
+    setStatus("input")
+    setTimer(0)
+    setErrorCount(0)
+    setIsPaused(false)
+    setShowConfetti(false)
+    const s = sentencesRef.current[0]
+    if (s) globalSpeak(s.english)
   }
 
   function doShuffle() {
@@ -908,58 +985,18 @@ export function LearnClient({
 
       {/* Main Content */}
       <div className="flex-1 flex flex-col items-center justify-center px-8 py-12 overflow-y-auto">
-        {isFinished ? (
-          <div className="text-center space-y-4">
-            <p className="text-xl font-bold text-foreground">课程完成！</p>
-            <p className="text-sm text-muted-foreground">
-              你已完成本课所有 {sentences.length} 个句子
-            </p>
-            <Link
-              href={`/home/store/${courseId}`}
-              className="inline-flex items-center gap-1.5 rounded-lg bg-accent px-6 py-2.5 text-sm font-semibold text-white hover:bg-accent/90 transition-colors"
-            >
-              返回课程
-            </Link>
-          </div>
-        ) : status === "complete" ? (
+        {status === "complete" ? (
           /* Completed Sentence Display */
-          <div className="w-full max-w-2xl space-y-10">
+          <div className="w-[88%] max-w-5xl flex flex-col items-center gap-10">
             <CompletedSentence words={sentence.words || []} />
 
             {/* Full Chinese translation */}
-            <p className="text-center text-2xl font-bold text-white/80">
+            <p className="text-center text-2xl font-semibold text-white/65 tracking-wide">
               {sentence.chinese}
             </p>
 
-            {/* POS groupings */}
-            {(() => {
-              const groups = groupByPos(sentence.words || [])
-              if (groups.length === 0) return null
-              return (
-                <div className="flex flex-col gap-2 px-2">
-                  {groups.map((g) => (
-                    <div key={g.label} className="flex items-center gap-2 flex-wrap">
-                      <span className="shrink-0 text-[11px] font-medium text-white/40 w-16 text-right">
-                        {g.label}
-                      </span>
-                      <div className="flex flex-wrap gap-1.5">
-                        {g.words.map((w, i) => (
-                          <span
-                            key={i}
-                            className="rounded-md bg-white/[0.06] border border-white/10 px-2 py-0.5 text-sm text-white/80"
-                          >
-                            {w.english}
-                          </span>
-                        ))}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )
-            })()}
-
-            <p className="text-center text-xl text-white/50 font-medium">
-              按 Enter 继续下一句
+            <p className="text-base text-white/30 font-medium">
+              按 Enter 继续下一句 · 鼠标悬停单词查看词性说明
             </p>
           </div>
         ) : sentence.chunks && sentence.chunks.length > 0 ? (
@@ -1104,6 +1141,73 @@ export function LearnClient({
         ref={confettiContainerRef}
         className="fixed inset-0 z-40 pointer-events-none overflow-hidden"
       />
+
+      {/* Chapter Completion Modal */}
+      {showCompletionModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 backdrop-blur-md">
+          <div className="relative w-full max-w-[420px] mx-4 rounded-3xl overflow-hidden border border-white/10 bg-[#0a0a0a] shadow-2xl">
+            {/* Top accent bar */}
+            <div className="h-1 w-full" style={{ background: "linear-gradient(90deg, #7c3aed, #ec4899, #f59e0b)" }} />
+
+            <div className="px-8 pt-8 pb-9 flex flex-col items-center gap-7">
+              {/* Heading */}
+              <div className="text-center">
+                <p className="text-4xl font-black text-white tracking-tight">太棒了！</p>
+                <p className="text-white/35 text-sm mt-1.5">你已完成本课全部 {sentences.length} 个句子</p>
+              </div>
+
+              {/* Score */}
+              <div className="flex flex-col items-center gap-1">
+                <span className="text-[11px] font-mono tracking-widest text-white/25 uppercase">Score</span>
+                <span className="text-6xl font-extrabold" style={{ background: "linear-gradient(135deg, #a78bfa, #f472b6)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}>
+                  {score.toLocaleString()}
+                </span>
+              </div>
+
+              {/* Stats row */}
+              <div className="w-full grid grid-cols-3 divide-x divide-white/[0.07]">
+                <div className="flex flex-col items-center gap-1 px-4">
+                  <span className="text-3xl font-bold text-white">{sentences.length}</span>
+                  <span className="text-white/30 text-[11px] text-center leading-tight">完成<br />句数</span>
+                </div>
+                <div className="flex flex-col items-center gap-1 px-4">
+                  <span className="text-3xl font-bold text-white">{timerStr.slice(3)}</span>
+                  <span className="text-white/30 text-[11px] text-center leading-tight">用时<br />(分:秒)</span>
+                </div>
+                <div className="flex flex-col items-center gap-1 px-4">
+                  <span className="text-3xl font-bold text-white">{errorCount}</span>
+                  <span className="text-white/30 text-[11px] text-center leading-tight">失误<br />次数</span>
+                </div>
+              </div>
+
+              {/* Motivational message */}
+              <div className="w-full rounded-2xl bg-white/[0.03] border border-white/[0.06] px-5 py-3.5 text-center">
+                <p className="text-white/40 text-xs leading-relaxed">
+                  坚持每天练习，记住学习英语最好的方式<br />
+                  就是持续输入，让语感自然形成。
+                </p>
+              </div>
+
+              {/* Action buttons */}
+              <div className="w-full flex gap-3">
+                <button
+                  onClick={resetFromCompletion}
+                  className="flex-1 py-3 rounded-2xl border border-white/12 text-white/70 text-sm font-semibold hover:bg-white/[0.05] hover:text-white transition-colors"
+                >
+                  再来一次
+                </button>
+                <Link
+                  href={`/home/store/${courseId}`}
+                  className="flex-1 py-3 rounded-2xl text-center text-white text-sm font-semibold transition-colors"
+                  style={{ background: "linear-gradient(135deg, #7c3aed, #a855f7)" }}
+                >
+                  返回课程
+                </Link>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Shortcut Drawer */}
       {showShortcuts && (

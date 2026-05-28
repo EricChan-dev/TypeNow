@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation"
 import { getUser, isDbConfigured } from "@/app/actions/auth"
+import { getActiveSubscription } from "@/lib/subscription"
 import { ConditionalTopbar } from "@/components/home/ConditionalTopbar"
 import { HomeShell } from "@/components/home/HomeShell"
 
@@ -15,6 +16,16 @@ export default async function HomeLayout({
     redirect("/login")
   }
 
+  let memberTier: "trial" | "monthly" | "yearly" | "partner" | "free" = "free"
+  if (user) {
+    if (user.isPartner) {
+      memberTier = "partner"
+    } else if (user.isPro) {
+      const sub = await getActiveSubscription(user.id)
+      memberTier = (sub?.plan as "monthly" | "yearly") ?? "trial"
+    }
+  }
+
   const serverUser = user
     ? {
         name: user.name || null,
@@ -23,13 +34,14 @@ export default async function HomeLayout({
         is_pro: !!user.isPro,
         is_partner: !!user.isPartner,
         level: user.level,
+        member_tier: memberTier,
       }
     : null
 
   return (
     <div className="flex flex-col h-screen overflow-hidden bg-background">
       <ConditionalTopbar serverUser={serverUser} />
-      <HomeShell>{children}</HomeShell>
+      <HomeShell isPartner={!!(serverUser?.is_partner)}>{children}</HomeShell>
     </div>
   )
 }

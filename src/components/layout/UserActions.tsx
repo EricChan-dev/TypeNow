@@ -5,10 +5,69 @@ import Link from "next/link"
 import Image from "next/image"
 import { useRouter } from "next/navigation"
 import { useTheme } from "next-themes"
-import { Moon, Sun, User, Settings, Crown, LogOut, ChevronRight, Handshake } from "lucide-react"
+import { Moon, Sun, User, Settings, Crown, LogOut, ChevronRight, Handshake, Star, Gem, Diamond } from "lucide-react"
 import { trackThemeToggle } from "@/lib/analytics"
 import { signOutAction } from "@/app/actions/auth"
 import { cn } from "@/lib/utils"
+
+type MemberTier = "trial" | "monthly" | "yearly" | "partner" | "free"
+
+interface TierConfig {
+  label: string
+  Icon: React.ComponentType<{ className?: string }> | null
+  className: string
+  style?: React.CSSProperties
+}
+
+const TIER_CONFIG: Record<MemberTier, TierConfig> = {
+  free: {
+    label: "普通用户",
+    Icon: null,
+    className: "bg-muted/60 text-muted-foreground border border-transparent",
+  },
+  trial: {
+    label: "试用会员",
+    Icon: Star,
+    className: "bg-amber-500/10 text-amber-400 border border-amber-500/20",
+  },
+  monthly: {
+    label: "月度会员",
+    Icon: Gem,
+    className: "bg-blue-500/10 text-blue-400 border border-blue-500/20",
+  },
+  yearly: {
+    label: "年度会员",
+    Icon: Crown,
+    className: "bg-violet-500/10 text-violet-400 border border-violet-500/20",
+  },
+  partner: {
+    label: "永久会员",
+    Icon: Diamond,
+    className: "border text-yellow-300",
+    style: {
+      background: "linear-gradient(135deg, rgba(251,191,36,0.18) 0%, rgba(234,179,8,0.08) 100%)",
+      borderColor: "rgba(251,191,36,0.45)",
+      boxShadow: "0 0 8px rgba(251,191,36,0.25)",
+    },
+  },
+}
+
+function TierBadge({ tier, size = "sm" }: { tier: MemberTier; size?: "sm" | "xs" }) {
+  const { label, Icon, className, style } = TIER_CONFIG[tier]
+  return (
+    <span
+      className={cn(
+        "inline-flex items-center gap-1 rounded-full font-semibold",
+        size === "sm" ? "px-2 py-0.5 text-[11px]" : "px-1.5 py-0.5 text-[10px]",
+        className
+      )}
+      style={style}
+    >
+      {Icon && <Icon className={size === "sm" ? "h-3 w-3" : "h-2.5 w-2.5"} />}
+      {label}
+    </span>
+  )
+}
 
 interface UserProfile {
   name: string | null
@@ -16,6 +75,7 @@ interface UserProfile {
   is_pro: boolean
   is_partner: boolean
   level: number
+  member_tier: MemberTier
 }
 
 export interface ServerUser {
@@ -25,6 +85,7 @@ export interface ServerUser {
   is_pro: boolean
   is_partner?: boolean
   level: number
+  member_tier?: MemberTier
 }
 
 interface UserActionsProps {
@@ -42,6 +103,7 @@ export function UserActions({ serverUser, variant = "public" }: UserActionsProps
     is_pro: serverUser.is_pro,
     is_partner: !!serverUser.is_partner,
     level: serverUser.level,
+    member_tier: serverUser.member_tier ?? "free",
   } : null)
   const [loading, setLoading] = useState(!serverUser)
   const [dropdownOpen, setDropdownOpen] = useState(false)
@@ -55,7 +117,7 @@ export function UserActions({ serverUser, variant = "public" }: UserActionsProps
     fetch("/api/auth/me")
       .then((r) => r.json())
       .then(({ user: u }) => {
-        if (u) setUser({ ...u, is_partner: !!u.is_partner })
+        if (u) setUser({ ...u, is_partner: !!u.is_partner, member_tier: u.member_tier ?? "free" })
         setLoading(false)
       })
       .catch(() => setLoading(false))
@@ -119,8 +181,7 @@ export function UserActions({ serverUser, variant = "public" }: UserActionsProps
         <>
           {variant === "home" && (
             <div className="flex items-center gap-2">
-              <span className="inline-flex items-center rounded-full bg-accent/10 px-2 py-0.5 text-[11px] font-semibold text-accent">Lv.{user.level}</span>
-              {user.is_pro && <span className="inline-flex items-center rounded-full bg-primary/10 px-2 py-0.5 text-[11px] font-semibold text-primary">PRO</span>}
+              <TierBadge tier={user.member_tier} size="sm" />
               {!user.is_partner && (
                 <Link
                   href="/home/partner"
@@ -154,9 +215,8 @@ export function UserActions({ serverUser, variant = "public" }: UserActionsProps
                     </div>
                     <div className="min-w-0">
                       <p className="text-sm font-semibold text-foreground truncate">{user.name || "用户"}</p>
-                      <p className="text-xs text-muted-foreground">
-                        Lv.{user.level}
-                        {user.is_pro ? <span className="ml-1.5 inline-flex items-center rounded-full bg-accent/10 px-1.5 py-0.5 text-[10px] font-semibold text-accent">PRO</span> : variant === "public" && <span className="ml-1.5 text-[11px]">普通会员</span>}
+                      <p className="text-xs text-muted-foreground mt-0.5">
+                        <TierBadge tier={user.member_tier} size="xs" />
                       </p>
                     </div>
                   </div>
@@ -194,7 +254,6 @@ export function UserActions({ serverUser, variant = "public" }: UserActionsProps
         </>
       ) : variant === "home" ? (
         <div className="flex items-center gap-2">
-          <span className="inline-flex items-center rounded-full bg-accent/10 px-2 py-0.5 text-[11px] font-semibold text-accent">Lv.1</span>
           <div className="flex items-center justify-center h-9 w-9 rounded-full bg-accent text-white text-sm font-bold">
             {serverUser?.name?.[0]?.toUpperCase() || "U"}
           </div>

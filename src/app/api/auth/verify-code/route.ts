@@ -84,7 +84,8 @@ export async function POST(request: NextRequest) {
     const refCode = request.cookies.get("ref_code")?.value
     const referredBy = await resolveReferredBy(refCode)
     const id = randomUUID()
-    await db.insert(users).values({ id, phone, referredBy })
+    const trialExpiresAt = new Date(Date.now() + 3 * 24 * 60 * 60 * 1000)
+    await db.insert(users).values({ id, phone, referredBy, isPro: 1, proExpires: trialExpiresAt })
     const [newUser] = await db.select().from(users).where(eq(users.id, id)).limit(1)
     user = newUser
   }

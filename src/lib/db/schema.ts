@@ -65,6 +65,7 @@ export const verificationCodes = mysqlTable(
     id: varchar("id", { length: 36 }).primaryKey().default(sql`(UUID())`),
     phone: varchar("phone", { length: 20 }).notNull(),
     code: varchar("code", { length: 10 }).notNull(),
+    ip: varchar("ip", { length: 50 }).notNull().default(""),
     expiresAt: datetime("expires_at").notNull(),
     used: tinyint("used").notNull().default(0),
     createdAt: datetime("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
@@ -178,11 +179,16 @@ export const reviewQueue = mysqlTable(
     userWrong: text("user_wrong"),
     reviewCount: int("review_count").notNull().default(0),
     consecutiveOk: int("consecutive_ok").notNull().default(0),
+    intervalDays: int("interval_days").notNull().default(1),
+    easeFactor: decimal("ease_factor", { precision: 4, scale: 2 }).notNull().default("2.50"),
     nextReviewAt: datetime("next_review_at"),
     status: varchar("status", { length: 20 }).notNull().default("pending"),
     createdAt: datetime("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
   },
-  (t) => [index("idx_review_queue_user_id").on(t.userId)]
+  (t) => [
+    index("idx_review_queue_user_id").on(t.userId),
+    uniqueIndex("uk_review_user_sentence").on(t.userId, t.sentenceId),
+  ]
 )
 
 // ─── Strengthen Sessions ──────────────────────────────────────────────────────
@@ -367,7 +373,39 @@ export const partnerRiskFlags = mysqlTable(
   (t) => [index("idx_prf_user_id").on(t.userId)]
 )
 
+// ─── Check-ins (daily sign-in streaks) ───────────────────────────────────────
+export const checkIns = mysqlTable(
+  "check_ins",
+  {
+    id: varchar("id", { length: 36 }).primaryKey().default(sql`(UUID())`),
+    userId: varchar("user_id", { length: 36 }).notNull(),
+    date: varchar("date", { length: 10 }).notNull(), // "YYYY-MM-DD"
+    createdAt: datetime("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  },
+  (t) => [
+    index("idx_check_ins_user_id").on(t.userId),
+    uniqueIndex("idx_check_ins_user_date").on(t.userId, t.date),
+  ]
+)
+
+// ─── User Course Progress ─────────────────────────────────────────────────────
+export const userCourseProgress = mysqlTable(
+  "user_course_progress",
+  {
+    id: varchar("id", { length: 36 }).primaryKey().default(sql`(UUID())`),
+    userId: varchar("user_id", { length: 36 }).notNull(),
+    courseId: varchar("course_id", { length: 36 }).notNull(),
+    lastStudiedAt: datetime("last_studied_at").notNull(),
+    sentenceCount: int("sentence_count").notNull().default(0),
+  },
+  (t) => [
+    uniqueIndex("uk_user_course").on(t.userId, t.courseId),
+    index("idx_ucp_user").on(t.userId),
+  ]
+)
+
 // ─── Type Exports ─────────────────────────────────────────────────────────────
+export type CheckIn = typeof checkIns.$inferSelect
 export type User = typeof users.$inferSelect
 export type Session = typeof sessions.$inferSelect
 export type Course = typeof courses.$inferSelect
@@ -379,3 +417,4 @@ export type Subscription = typeof subscriptions.$inferSelect
 export type PartnerCommission = typeof partnerCommissions.$inferSelect
 export type WithdrawalRequest = typeof withdrawalRequests.$inferSelect
 export type PartnerRiskFlag = typeof partnerRiskFlags.$inferSelect
+export type UserCourseProgress = typeof userCourseProgress.$inferSelect

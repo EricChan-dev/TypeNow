@@ -1,25 +1,32 @@
 "use client"
 
 import { usePathname, useRouter } from "next/navigation"
-import { LayoutDashboard, BookOpen, ShoppingBag, FolderOpen, Trophy, Handshake } from "lucide-react"
+import { LayoutDashboard, BookOpen, ShoppingBag, FolderOpen, Trophy, Handshake, TrendingUp } from "lucide-react"
 import { cn } from "@/lib/utils"
-
-const menuItems = [
-  { key: "/home", label: "首页", icon: LayoutDashboard },
-  { key: "/home/courses", label: "我的课程", icon: BookOpen },
-  { key: "/home/store", label: "课程商城", icon: ShoppingBag },
-  { key: "/home/archive", label: "学习档案", icon: FolderOpen },
-  { key: "/home/leaderboard", label: "排行榜", icon: Trophy },
-  { key: "/home/partner", label: "合伙人中心", icon: Handshake },
-]
 
 interface HomeSidebarProps {
   collapsed: boolean
+  isPartner?: boolean
 }
 
-export function HomeSidebar({ collapsed }: HomeSidebarProps) {
+export function HomeSidebar({ collapsed, isPartner }: HomeSidebarProps) {
   const pathname = usePathname()
   const router = useRouter()
+
+  const baseItems = [
+    { key: "/home", label: "首页", icon: LayoutDashboard },
+    { key: "/home/courses", label: "我的课程", icon: BookOpen },
+    { key: "/home/store", label: "课程商城", icon: ShoppingBag },
+    { key: "/home/archive", label: "学习档案", icon: FolderOpen },
+    { key: "/home/leaderboard", label: "排行榜", icon: Trophy },
+  ]
+
+  // Partners see their dashboard; non-partners see the join page
+  const partnerItem = isPartner
+    ? { key: "/home/partner", label: "推广中心", icon: TrendingUp }
+    : { key: "/home/partner", label: "合伙人中心", icon: Handshake }
+
+  const menuItems = [...baseItems, partnerItem]
 
   return (
     <aside

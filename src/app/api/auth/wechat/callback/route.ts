@@ -102,6 +102,7 @@ async function upsertWeChatUser(
       referredBy = partner?.id ?? null
     }
     const id = randomUUID()
+    const trialExpiresAt = new Date(Date.now() + 3 * 24 * 60 * 60 * 1000)
     await db.insert(users).values({
       id,
       wechatOpenid: wechatUser.openid,
@@ -109,6 +110,8 @@ async function upsertWeChatUser(
       name: wechatUser.nickname,
       avatar: wechatUser.headimgurl,
       referredBy,
+      isPro: 1,
+      proExpires: trialExpiresAt,
     })
     const [newUser] = await db.select().from(users).where(eq(users.id, id)).limit(1)
     user = newUser
