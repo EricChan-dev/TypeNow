@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from "react"
 import { animate } from "animejs"
 import Link from "next/link"
+import Image from "next/image"
 import { ChevronLeft, ChevronRight, ArrowLeft, BookOpen, ShoppingBag, Pause, Play, RotateCcw, Shuffle, Maximize, Minimize, Keyboard, List, Settings, Eye, EyeOff } from "lucide-react"
 import type { Sentence, Word } from "@/types"
 
@@ -848,7 +849,7 @@ export function LearnClient({
           <div className="relative">
             <div className="absolute inset-0 rounded-[28px] bg-violet-500/20 blur-3xl scale-125" />
             <div className="relative w-28 h-28 rounded-[28px] bg-foreground/[0.04] border border-foreground/[0.08] flex items-center justify-center">
-              <Keyboard className="h-12 w-12 text-foreground/40" />
+              <Image src="/logo.png" alt="TypeNow" width={64} height={64} className="opacity-60" />
             </div>
           </div>
           <div className="text-center">

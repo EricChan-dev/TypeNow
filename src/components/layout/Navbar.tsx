@@ -2,8 +2,9 @@
 
 import { useState, useEffect, useCallback } from "react"
 import Link from "next/link"
+import Image from "next/image"
 import { usePathname, useRouter } from "next/navigation"
-import { BookOpen, GraduationCap, Menu, X, User, Settings, Crown, LogOut } from "lucide-react"
+import { GraduationCap, Menu, X, User, Settings, Crown, LogOut } from "lucide-react"
 import { signOutAction } from "@/app/actions/auth"
 import { cn } from "@/lib/utils"
 import { UserActions } from "@/components/layout/UserActions"
@@ -63,7 +64,7 @@ export function Navbar() {
       <div className="flex h-[72px] items-center justify-between px-5 xl:px-20">
         {/* Logo */}
         <Link href="/" className="flex items-center gap-2 shrink-0">
-          <BookOpen className="h-6 w-6 text-accent" />
+          <Image src="/logo.png" alt="TypeNow logo" width={32} height={32} className="shrink-0" />
           <span className="text-xl font-bold text-accent">TypeNow·码上英语</span>
         </Link>
 
