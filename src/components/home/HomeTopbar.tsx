@@ -1,7 +1,7 @@
 "use client"
 
 import Link from "next/link"
-import { BookOpen } from "lucide-react"
+import Image from "next/image"
 import { UserActions, type ServerUser } from "@/components/layout/UserActions"
 
 export function HomeTopbar({ serverUser }: { serverUser: ServerUser | null }) {
@@ -9,9 +9,8 @@ export function HomeTopbar({ serverUser }: { serverUser: ServerUser | null }) {
     <header className="h-[64px] shrink-0 border-b border-border bg-card flex items-center justify-between px-6">
       {/* Left: Logo + Brand */}
       <Link href="/home" className="flex items-center gap-2.5 shrink-0">
-        <div className="flex items-center justify-center h-9 w-9 rounded-lg bg-accent">
-          <BookOpen className="h-5 w-5 text-white" />
-        </div>
+        <Image src="/logo_w.svg" alt="TypeNow" width={30} height={30} className="block [.light_&]:hidden" />
+        <Image src="/logo.svg" alt="TypeNow" width={30} height={30} className="hidden [.light_&]:block" />
         <span className="text-base font-bold text-foreground">
           TypeNow·码上英语
         </span>
