@@ -1,6 +1,5 @@
 import Link from "next/link"
-import Image from "next/image"
-import { Globe, MessageCircle, Mail } from "lucide-react"
+import { Keyboard, Globe, MessageCircle, Mail } from "lucide-react"
 
 const productLinks = [
   { href: "/", label: "打字练习" },
@@ -32,7 +31,7 @@ export function Footer() {
           {/* Brand */}
           <div className="col-span-2 lg:col-span-1 flex flex-col gap-4">
             <Link href="/" className="flex items-center gap-2">
-              <Image src="/logo.png" alt="TypeNow logo" width={28} height={28} className="shrink-0" />
+              <Keyboard className="h-6 w-6 text-foreground" />
               <span className="text-lg font-bold text-foreground">
                 码上英语 · TypeNow
               </span>

@@ -19,10 +19,6 @@ export const metadata: Metadata = {
   title: "TypeNow · 码上英语",
   description:
     "AI 驱动的中译英打字练习平台。打一句、记一句、学会一句。",
-  icons: {
-    icon: "/logo.png",
-    apple: "/logo.png",
-  },
 }
 
 export default function RootLayout({

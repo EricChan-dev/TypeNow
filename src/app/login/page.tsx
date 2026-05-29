@@ -1,7 +1,7 @@
 import { Suspense } from "react"
 import Link from "next/link"
 import Image from "next/image"
-import { ArrowLeft } from "lucide-react"
+import { ArrowLeft, BookOpen } from "lucide-react"
 import { LoginForm } from "@/components/auth/LoginForm"
 
 const decoTexts = [
@@ -37,9 +37,12 @@ export default function LoginPage() {
           {/* Content */}
           <div className="relative z-10 flex flex-col items-center text-center">
             {/* Logo */}
-            <div className="flex items-center gap-3 mb-14">
-              <div className="flex items-center justify-center w-12 h-12 rounded-xl bg-white/15 p-1.5">
-                <Image src="/logo.png" alt="TypeNow logo" width={40} height={40} className="w-full h-full object-contain" />
+            <div className="flex items-center gap-2.5 mb-14">
+              <div className="relative w-[50px] h-10">
+                <BookOpen className="absolute left-0 top-2 w-[30px] h-[30px] text-white" />
+                <span className="absolute left-6 top-0 text-xl font-extrabold text-white">
+                  Aa
+                </span>
               </div>
               <span className="text-2xl font-bold text-white tracking-[1.5px]">
                 码上英语 · TypeNow
