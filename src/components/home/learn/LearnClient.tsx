@@ -234,6 +234,9 @@ export function LearnClient({
   const [isFullscreen, setIsFullscreen] = useState(false)
   const [showCompletionModal, setShowCompletionModal] = useState(false)
   const [errorCount, setErrorCount] = useState(0)
+  const consecutivePerfectRef = useRef(0)
+  const sentenceHasErrorRef = useRef(false)
+  const sentenceStartTimeRef = useRef(Date.now())
   const loadingBarRef = useRef<HTMLDivElement>(null)
   // Chunk mode state
   const [chunkInput, setChunkInput] = useState("")
@@ -340,6 +343,22 @@ export function LearnClient({
     }).catch(() => {})
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [status, sentence?.id])
+
+  // Earn diamonds when a sentence is completed
+  useEffect(() => {
+    if (status !== "complete" || !sentence?.id) return
+    const isPerfect = !sentenceHasErrorRef.current
+    const newStreak = isPerfect ? consecutivePerfectRef.current + 1 : 0
+    consecutivePerfectRef.current = newStreak
+    const durationSeconds = Math.max(1, Math.round((Date.now() - sentenceStartTimeRef.current) / 1000))
+    const parentId = sentence.id.includes("_c") ? sentence.id.split("_c")[0] : sentence.id
+    fetch("/api/diamonds/earn", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ type: "sentence", refId: parentId, streak: newStreak, perfect: isPerfect, durationSeconds }),
+    }).catch(() => {})
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [status, sentence?.id])
   const progressPercent = useMemo(
     () => sentences.length > 0 ? (completedCount / sentences.length) * 100 : 0,
     [completedCount, sentences.length],
@@ -357,6 +376,8 @@ export function LearnClient({
   // Initialize word/chunk states for current sentence
   useEffect(() => {
     if (!sentence) return
+    sentenceHasErrorRef.current = false
+    sentenceStartTimeRef.current = Date.now()
     setStatus("input")
     globalSpeak(sentence.english)
     if (sentence.chunks && sentence.chunks.length > 0) {
@@ -429,6 +450,7 @@ export function LearnClient({
       }
     } else {
       playBuzz()
+      sentenceHasErrorRef.current = true
       setErrorCount((c) => c + 1)
       setWordStates((prev) => {
         const next = [...prev]
@@ -461,6 +483,7 @@ export function LearnClient({
     setWordStates(newStates)
     if (hasError) {
       playBuzz()
+      sentenceHasErrorRef.current = true
       setErrorCount((c) => c + newStates.filter((s) => s.status === "error").length)
       const firstError = newStates.findIndex((s) => s.status === "error")
       const errorIndices = newStates.reduce<number[]>((acc, s, i) => {
@@ -520,6 +543,7 @@ export function LearnClient({
       }
     } else {
       playBuzz()
+      sentenceHasErrorRef.current = true
       setErrorCount((c) => c + 1)
       const newStatuses = [...chunkStatusesRef.current]
       newStatuses[activeIdx] = "error"
@@ -835,10 +859,16 @@ export function LearnClient({
     })
   }, [activeWordIndex])
 
-  // Show completion modal when all sentences done
+  // Show completion modal when all sentences done + earn lesson diamonds
   useEffect(() => {
-    if (isFinished) setShowCompletionModal(true)
-  }, [isFinished])
+    if (!isFinished) return
+    setShowCompletionModal(true)
+    fetch("/api/diamonds/earn", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ type: "lesson_complete", refId: lessonId }),
+    }).catch(() => {})
+  }, [isFinished, lessonId])
 
   if (!sentence) {
     return (

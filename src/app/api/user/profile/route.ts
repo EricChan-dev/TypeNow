@@ -10,9 +10,9 @@ export async function PUT(request: NextRequest) {
   if (!db) return NextResponse.json({ error: "DB not configured" }, { status: 500 })
 
   const body = await request.json()
-  const { name, avatar } = body
+  const { name, avatar, checkInGoal } = body
 
-  const updates: Record<string, string> = {}
+  const updates: Record<string, string | number> = {}
 
   if (typeof name === "string") {
     const trimmed = name.trim().slice(0, 100)
@@ -28,6 +28,14 @@ export async function PUT(request: NextRequest) {
       return NextResponse.json({ error: "图片过大，请压缩后上传" }, { status: 400 })
     }
     updates.avatar = avatar
+  }
+
+  if (typeof checkInGoal === "number") {
+    const goal = Math.round(checkInGoal)
+    if (goal < 10 || goal > 300) {
+      return NextResponse.json({ error: "签到目标须在 10~300 之间" }, { status: 400 })
+    }
+    updates.checkInGoal = goal
   }
 
   if (Object.keys(updates).length === 0) {

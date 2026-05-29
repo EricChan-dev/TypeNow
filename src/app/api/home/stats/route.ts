@@ -8,6 +8,8 @@ import {
   sentences,
   lessons,
   courses,
+  diamondLogs,
+  users,
 } from "@/lib/db/schema"
 import { eq, and, gte, desc, sql, count } from "drizzle-orm"
 
@@ -57,6 +59,8 @@ export async function GET() {
     checkInResult,
     lastStudiedResult,
     checkInsThisMonthResult,
+    todayDiamondResult,
+    userGoalResult,
   ] = await Promise.all([
     // Total sentences practiced (all time)
     db
@@ -92,20 +96,21 @@ export async function GET() {
         )
       ),
 
-    // Heatmap: practice counts by date for last 365 days
+    // Heatmap: diamonds by date for last 365 days
     db
       .select({
-        date: sql<string>`DATE(${practiceRecords.createdAt})`,
-        cnt: count(),
+        date: sql<string>`DATE(CONVERT_TZ(${diamondLogs.createdAt}, '+00:00', '+08:00'))`,
+        diamonds: sql<number>`COALESCE(SUM(${diamondLogs.amount}), 0)`,
+        duration: sql<number>`COALESCE(SUM(${diamondLogs.durationSeconds}), 0)`,
       })
-      .from(practiceRecords)
+      .from(diamondLogs)
       .where(
         and(
-          eq(practiceRecords.userId, userId),
-          gte(practiceRecords.createdAt, yearAgo)
+          eq(diamondLogs.userId, userId),
+          gte(diamondLogs.createdAt, yearAgo)
         )
       )
-      .groupBy(sql`DATE(${practiceRecords.createdAt})`),
+      .groupBy(sql`DATE(CONVERT_TZ(${diamondLogs.createdAt}, '+00:00', '+08:00'))`),
 
     // Check-in dates for last 400 days (for streak calc)
     db
@@ -142,6 +147,24 @@ export async function GET() {
           gte(checkIns.date, thisMonthStart)
         )
       ),
+
+    // Today's diamond total
+    db
+      .select({ total: sql<number>`COALESCE(SUM(${diamondLogs.amount}), 0)` })
+      .from(diamondLogs)
+      .where(
+        and(
+          eq(diamondLogs.userId, userId),
+          sql`DATE(CONVERT_TZ(${diamondLogs.createdAt}, '+00:00', '+08:00')) = ${today}`
+        )
+      ),
+
+    // User's check-in goal
+    db
+      .select({ checkInGoal: users.checkInGoal })
+      .from(users)
+      .where(eq(users.id, userId))
+      .limit(1),
   ])
 
   const checkInDates = checkInResult.map((r) => r.date)
@@ -149,11 +172,13 @@ export async function GET() {
   const streakDays = computeStreak(checkInDates)
 
   const heatmap: Record<string, number> = {}
+  const heatmapDuration: Record<string, number> = {}
   for (const row of heatmapResult) {
-    heatmap[row.date] = Number(row.cnt)
+    heatmap[row.date] = Number(row.diamonds)
+    heatmapDuration[row.date] = Number(row.duration)
   }
 
-  // Build weekly array (last 7 days)
+  // Build weekly array (last 7 days) — count from practice_records stays for weekly display
   const weekly = Array.from({ length: 7 }, (_, i) => {
     const d = new Date(Date.now() - (6 - i) * 86400000)
     const dateStr = toLocalDateStr(d)
@@ -171,6 +196,8 @@ export async function GET() {
     : null
 
   const checkInDatesThisMonth = checkInsThisMonthResult.map((r) => r.date)
+  const todayDiamonds = Number(todayDiamondResult[0]?.total ?? 0)
+  const checkInGoal = userGoalResult[0]?.checkInGoal ?? 50
 
   return NextResponse.json({
     totalSentences: Number(totalResult[0]?.cnt ?? 0),
@@ -180,8 +207,11 @@ export async function GET() {
     pendingReviews: Number(pendingResult[0]?.cnt ?? 0),
     checkedInToday,
     heatmap,
+    heatmapDuration,
     weekly,
     lastStudied,
     checkInDatesThisMonth,
+    todayDiamonds,
+    checkInGoal,
   })
 }

@@ -37,6 +37,8 @@ export default async function HomeLayout({
         level: user.level,
         member_tier: memberTier,
         pro_expires: user.proExpires?.toISOString() ?? null,
+        diamonds: user.diamonds ?? 0,
+        check_in_goal: user.checkInGoal ?? 50,
       }
     : null
 

@@ -9,6 +9,8 @@ import { Moon, Sun, User, Settings, Crown, LogOut, ChevronRight, Handshake } fro
 import { trackThemeToggle } from "@/lib/analytics"
 import { signOutAction } from "@/app/actions/auth"
 import { cn } from "@/lib/utils"
+import { DiamondRulesModal } from "@/components/home/DiamondRulesModal"
+import { GlobalSettingsModal } from "@/components/home/GlobalSettingsModal"
 
 type MemberTier = "trial" | "monthly" | "yearly" | "partner" | "free"
 
@@ -83,6 +85,7 @@ interface UserProfile {
   is_partner: boolean
   level: number
   member_tier: MemberTier
+  diamonds: number
 }
 
 export interface ServerUser {
@@ -93,6 +96,8 @@ export interface ServerUser {
   is_partner?: boolean
   level: number
   member_tier?: MemberTier
+  diamonds?: number
+  check_in_goal?: number
 }
 
 interface UserActionsProps {
@@ -111,7 +116,10 @@ export function UserActions({ serverUser, variant = "public" }: UserActionsProps
     is_partner: !!serverUser.is_partner,
     level: serverUser.level,
     member_tier: serverUser.member_tier ?? "free",
+    diamonds: serverUser.diamonds ?? 0,
   } : null)
+  const [diamondRulesOpen, setDiamondRulesOpen] = useState(false)
+  const [settingsOpen, setSettingsOpen] = useState(false)
   const [loading, setLoading] = useState(!serverUser)
   const [dropdownOpen, setDropdownOpen] = useState(false)
   const dropdownRef = useRef<HTMLDivElement>(null)
@@ -214,6 +222,13 @@ export function UserActions({ serverUser, variant = "public" }: UserActionsProps
                   推广赚佣金
                 </Link>
               )}
+              <button
+                onClick={() => setDiamondRulesOpen(true)}
+                className="hidden sm:flex items-center gap-1 px-2 py-1 rounded-lg hover:bg-accent/20 transition-colors text-sm font-semibold text-foreground/70 hover:text-foreground"
+              >
+                <span>💎</span>
+                <span>{user.diamonds}</span>
+              </button>
             </>
           )}
 
@@ -249,10 +264,13 @@ export function UserActions({ serverUser, variant = "public" }: UserActionsProps
                     <span className="flex items-center gap-3"><User className="h-4 w-4 text-muted-foreground" />个人主页</span>
                     <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />
                   </Link>
-                  <Link href="/home/settings" onClick={() => setDropdownOpen(false)} className="flex items-center justify-between px-4 py-2.5 text-sm text-foreground hover:bg-muted transition-colors">
+                  <button
+                    onClick={() => { setDropdownOpen(false); setSettingsOpen(true) }}
+                    className="flex items-center justify-between px-4 py-2.5 text-sm text-foreground hover:bg-muted transition-colors w-full"
+                  >
                     <span className="flex items-center gap-3"><Settings className="h-4 w-4 text-muted-foreground" />设置</span>
                     <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />
-                  </Link>
+                  </button>
                   {!user.is_pro && (
                     <Link href="/pricing" onClick={() => setDropdownOpen(false)} className="flex items-center justify-between px-4 py-2.5 text-sm text-foreground hover:bg-muted transition-colors">
                       <span className="flex items-center gap-3"><Crown className="h-4 w-4 text-amber-500" />升级会员</span>
@@ -287,6 +305,13 @@ export function UserActions({ serverUser, variant = "public" }: UserActionsProps
           登录
         </Link>
       )}
+
+      <DiamondRulesModal open={diamondRulesOpen} onClose={() => setDiamondRulesOpen(false)} />
+      <GlobalSettingsModal
+        open={settingsOpen}
+        onClose={() => setSettingsOpen(false)}
+        initialGoal={serverUser?.check_in_goal ?? 50}
+      />
     </div>
   )
 }

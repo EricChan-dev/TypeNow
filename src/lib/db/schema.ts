@@ -36,6 +36,8 @@ export const users = mysqlTable(
     referralLockedUntil: datetime("referral_locked_until"),
     isPartner: tinyint("is_partner").notNull().default(0),
     partnerAgreedAt: datetime("partner_agreed_at"),
+    diamonds: int("diamonds").notNull().default(0),
+    checkInGoal: int("check_in_goal").notNull().default(50),
     createdAt: datetime("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
   },
   (t) => [
@@ -373,6 +375,25 @@ export const partnerRiskFlags = mysqlTable(
   (t) => [index("idx_prf_user_id").on(t.userId)]
 )
 
+// ─── Diamond Logs ─────────────────────────────────────────────────────────────
+export const diamondLogs = mysqlTable(
+  "diamond_logs",
+  {
+    id: varchar("id", { length: 36 }).primaryKey().default(sql`(UUID())`),
+    userId: varchar("user_id", { length: 36 }).notNull(),
+    amount: int("amount").notNull(),
+    durationSeconds: int("duration_seconds"),
+    type: mysqlEnum("type", ["sentence", "lesson_complete", "course_complete"]).notNull(),
+    refId: varchar("ref_id", { length: 36 }),
+    streak: int("streak").notNull().default(0),
+    createdAt: datetime("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  },
+  (t) => [
+    index("idx_diamond_logs_user_id").on(t.userId),
+    index("idx_diamond_logs_user_created").on(t.userId, t.createdAt),
+  ]
+)
+
 // ─── Check-ins (daily sign-in streaks) ───────────────────────────────────────
 export const checkIns = mysqlTable(
   "check_ins",
@@ -418,3 +439,4 @@ export type PartnerCommission = typeof partnerCommissions.$inferSelect
 export type WithdrawalRequest = typeof withdrawalRequests.$inferSelect
 export type PartnerRiskFlag = typeof partnerRiskFlags.$inferSelect
 export type UserCourseProgress = typeof userCourseProgress.$inferSelect
+export type DiamondLog = typeof diamondLogs.$inferSelect

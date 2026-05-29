@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server"
 import { getSession } from "@/lib/auth/session"
 import { db } from "@/lib/db"
-import { checkIns } from "@/lib/db/schema"
-import { eq, desc } from "drizzle-orm"
+import { checkIns, diamondLogs, users } from "@/lib/db/schema"
+import { eq, desc, and, sql } from "drizzle-orm"
 
 function toLocalDateStr(d = new Date()): string {
   return d.toLocaleDateString("sv-SE", { timeZone: "Asia/Shanghai" })
@@ -35,10 +35,38 @@ export async function POST() {
   if (!db) return NextResponse.json({ error: "DB not configured" }, { status: 500 })
 
   const today = toLocalDateStr()
+  const userId = session.userId
+
+  // Verify diamond goal
+  const [userRow] = await db
+    .select({ checkInGoal: users.checkInGoal })
+    .from(users)
+    .where(eq(users.id, userId))
+    .limit(1)
+  const checkInGoal = userRow?.checkInGoal ?? 50
+
+  const [diamondRow] = await db
+    .select({ total: sql<number>`COALESCE(SUM(${diamondLogs.amount}), 0)` })
+    .from(diamondLogs)
+    .where(
+      and(
+        eq(diamondLogs.userId, userId),
+        sql`DATE(CONVERT_TZ(${diamondLogs.createdAt}, '+00:00', '+08:00')) = ${today}`
+      )
+    )
+  const todayDiamonds = Number(diamondRow?.total ?? 0)
+
+  if (todayDiamonds < checkInGoal) {
+    return NextResponse.json(
+      { error: "need_more_diamonds", todayDiamonds, checkInGoal },
+      { status: 403 }
+    )
+  }
+
   let alreadyCheckedIn = false
 
   try {
-    await db.insert(checkIns).values({ userId: session.userId, date: today })
+    await db.insert(checkIns).values({ userId, date: today })
   } catch {
     // Duplicate key = already checked in today
     alreadyCheckedIn = true
@@ -47,7 +75,7 @@ export async function POST() {
   const allDates = await db
     .select({ date: checkIns.date })
     .from(checkIns)
-    .where(eq(checkIns.userId, session.userId))
+    .where(eq(checkIns.userId, userId))
     .orderBy(desc(checkIns.date))
     .limit(400)
 
