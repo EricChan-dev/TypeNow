@@ -800,7 +800,7 @@ export function HomeClient({ name }: HomeClientProps) {
               className="anim-card flex items-center justify-between rounded-2xl border hover:border-violet-500/40 px-5 py-4 transition-all group"
               style={{ background: "var(--surface-alt)", borderColor: "var(--surface-border)" }}
             >
-              <span className="text-sm text-foreground/50 group-hover:text-foreground/70 transition-colors">浏览课程商城</span>
+              <span className="text-sm text-foreground/50 group-hover:text-foreground/70 transition-colors">浏览课程广场</span>
               <ChevronRight className="h-4 w-4 text-foreground/25 group-hover:text-violet-400 transition-colors" />
             </Link>
 
@@ -822,6 +822,7 @@ export function HomeClient({ name }: HomeClientProps) {
         open={settingsOpen}
         onClose={() => setSettingsOpen(false)}
         initialGoal={checkInGoal}
+        onSaved={(g) => setCheckInGoal(g)}
       />
     </div>
   )

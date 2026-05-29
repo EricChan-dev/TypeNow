@@ -12,8 +12,9 @@ function calcEarned(type: string, streak: number, perfect: boolean): number {
   if (type === "lesson_complete") return 30
   if (type === "course_complete") return 100
   // sentence
-  if (!perfect) return 5
-  return 5 + Math.min(streak, 20)
+  if (!perfect) return 5            // Great
+  if (streak <= 1) return 5         // Perfect ×1 — no combo bonus
+  return 5 + Math.min(streak, 20)   // Perfect combo (streak ≥ 2)
 }
 
 export async function POST(request: NextRequest) {

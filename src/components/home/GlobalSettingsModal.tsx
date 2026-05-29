@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { X, Target, Volume2 } from "lucide-react"
 import { toast } from "sonner"
 
@@ -8,6 +8,7 @@ interface Props {
   open: boolean
   onClose: () => void
   initialGoal?: number
+  onSaved?: (newGoal: number) => void
 }
 
 type Tab = "sound" | "checkin"
@@ -17,10 +18,14 @@ const TABS = [
   { id: "sound" as Tab, icon: Volume2, label: "声音" },
 ]
 
-export function GlobalSettingsModal({ open, onClose, initialGoal = 50 }: Props) {
+export function GlobalSettingsModal({ open, onClose, initialGoal = 50, onSaved }: Props) {
   const [activeTab, setActiveTab] = useState<Tab>("checkin")
   const [goal, setGoal] = useState(initialGoal)
   const [saving, setSaving] = useState(false)
+
+  useEffect(() => {
+    if (open) setGoal(initialGoal)
+  }, [open, initialGoal])
 
   if (!open) return null
 
@@ -42,6 +47,7 @@ export function GlobalSettingsModal({ open, onClose, initialGoal = 50 }: Props) 
         toast.error(d.error ?? "保存失败")
       } else {
         toast.success("签到目标已更新")
+        onSaved?.(val)
       }
     } catch {
       toast.error("网络错误，请重试")
@@ -122,8 +128,8 @@ export function GlobalSettingsModal({ open, onClose, initialGoal = 50 }: Props) 
 
                   <div className="flex justify-between text-[11px] text-muted-foreground/60">
                     <span>轻松 (10)</span>
-                    <span>均衡 (50)</span>
-                    <span>进阶 (150)</span>
+                    <span>均衡 (100)</span>
+                    <span>进阶 (200)</span>
                     <span>挑战 (300)</span>
                   </div>
                 </div>

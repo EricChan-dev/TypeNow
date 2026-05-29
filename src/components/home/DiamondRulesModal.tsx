@@ -8,10 +8,10 @@ interface Props {
 }
 
 const RULES = [
-  { action: "练习任意一句（有错误）", diamonds: "5" },
-  { action: "完美完成（连击 ×1）", diamonds: "5 + 1 = 6" },
-  { action: "完美连击 ×2", diamonds: "5 + 2 = 7" },
-  { action: "完美连击 ×N", diamonds: "5 + N（最多 +20）" },
+  { action: "Great（有错误，输入正确）", diamonds: "5" },
+  { action: "Perfect ×1（首次完美，无连击）", diamonds: "5" },
+  { action: "Perfect 连击 ×2", diamonds: "5 + 2 = 7" },
+  { action: "Perfect 连击 ×N（N ≥ 2）", diamonds: "5 + N（最多 +20）" },
   { action: "完成章节", diamonds: "+30" },
   { action: "完成课程", diamonds: "+100" },
 ]

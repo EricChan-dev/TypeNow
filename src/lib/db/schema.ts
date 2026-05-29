@@ -425,6 +425,55 @@ export const userCourseProgress = mysqlTable(
   ]
 )
 
+// ─── Word Dictionary Cache (shared across all users) ─────────────────────────
+export const wordDictionaryCache = mysqlTable(
+  "word_dictionary_cache",
+  {
+    id: varchar("id", { length: 36 }).primaryKey().default(sql`(UUID())`),
+    word: varchar("word", { length: 128 }).notNull(),
+    phonetic: varchar("phonetic", { length: 64 }),
+    phoneticUk: varchar("phonetic_uk", { length: 64 }),
+    translations: json("translations").$type<string[]>().notNull(),
+    pos: json("pos").$type<{ pos: string; meaning: string }[]>(),
+    synonyms: json("synonyms").$type<string[]>(),
+    examples: json("examples").$type<{ en: string; zh: string }[]>(),
+    webTranslations: json("web_translations").$type<{ key: string; value: string[] }[]>(),
+    raw: json("raw"),
+    createdAt: datetime("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  },
+  (t) => [uniqueIndex("uniq_word").on(t.word)]
+)
+
+// ─── Wordbook Items (per-user collection) ────────────────────────────────────
+export const wordbookItems = mysqlTable(
+  "wordbook_items",
+  {
+    id: varchar("id", { length: 36 }).primaryKey().default(sql`(UUID())`),
+    userId: varchar("user_id", { length: 36 }).notNull(),
+    word: varchar("word", { length: 128 }).notNull(),
+    sourceSentenceId: varchar("source_sentence_id", { length: 36 }),
+    createdAt: datetime("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  },
+  (t) => [
+    uniqueIndex("uniq_user_word").on(t.userId, t.word),
+    index("idx_wordbook_user").on(t.userId),
+  ]
+)
+
+// ─── User Notes (independent of sentences) ───────────────────────────────────
+export const userNotes = mysqlTable(
+  "user_notes",
+  {
+    id: varchar("id", { length: 36 }).primaryKey().default(sql`(UUID())`),
+    userId: varchar("user_id", { length: 36 }).notNull(),
+    title: varchar("title", { length: 200 }).notNull().default(""),
+    content: text("content").notNull(),
+    createdAt: datetime("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+    updatedAt: datetime("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  },
+  (t) => [index("idx_user_notes_user").on(t.userId, t.updatedAt)]
+)
+
 // ─── Type Exports ─────────────────────────────────────────────────────────────
 export type CheckIn = typeof checkIns.$inferSelect
 export type User = typeof users.$inferSelect
@@ -440,3 +489,6 @@ export type WithdrawalRequest = typeof withdrawalRequests.$inferSelect
 export type PartnerRiskFlag = typeof partnerRiskFlags.$inferSelect
 export type UserCourseProgress = typeof userCourseProgress.$inferSelect
 export type DiamondLog = typeof diamondLogs.$inferSelect
+export type WordDictionaryCache = typeof wordDictionaryCache.$inferSelect
+export type WordbookItem = typeof wordbookItems.$inferSelect
+export type UserNote = typeof userNotes.$inferSelect

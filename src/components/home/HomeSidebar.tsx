@@ -2,7 +2,7 @@
 
 import { usePathname, useRouter } from "next/navigation"
 import { useEffect, useState } from "react"
-import { LayoutDashboard, BookOpen, ShoppingBag, Trophy, Sparkles, TrendingUp, BookMarked } from "lucide-react"
+import { LayoutDashboard, BookOpen, ShoppingBag, Trophy, Sparkles, TrendingUp, BookMarked, BookText, FileText } from "lucide-react"
 import { cn } from "@/lib/utils"
 
 interface HomeSidebarProps {
@@ -25,8 +25,10 @@ export function HomeSidebar({ collapsed, isPartner }: HomeSidebarProps) {
   const baseItems = [
     { key: "/home", label: "首页", icon: LayoutDashboard },
     { key: "/home/courses", label: "我的课程", icon: BookOpen },
+    { key: "/home/wordbook", label: "单词本", icon: BookText },
+    { key: "/home/notes", label: "笔记本", icon: FileText },
     { key: "/home/review", label: "复习本", icon: BookMarked, badge: dueCount > 0 ? dueCount : null },
-    { key: "/home/store", label: "课程商城", icon: ShoppingBag },
+    { key: "/home/store", label: "课程广场", icon: ShoppingBag },
     { key: "/home/leaderboard", label: "排行榜", icon: Trophy },
   ]
 

@@ -311,6 +311,7 @@ export function UserActions({ serverUser, variant = "public" }: UserActionsProps
         open={settingsOpen}
         onClose={() => setSettingsOpen(false)}
         initialGoal={serverUser?.check_in_goal ?? 50}
+        onSaved={() => router.refresh()}
       />
     </div>
   )

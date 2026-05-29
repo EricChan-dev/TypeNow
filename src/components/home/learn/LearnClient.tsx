@@ -77,6 +77,7 @@ import { TooltipButton } from "@/components/shared/TooltipButton"
 import { OutlineModal } from "@/components/home/learn/OutlineModal"
 import { SettingsModal } from "@/components/home/learn/SettingsModal"
 import { CompletedSentence } from "@/components/home/learn/CompletedSentence"
+import { SentenceFeedback, type FeedbackVariant } from "@/components/home/learn/SentenceFeedback"
 import { globalSpeak } from "@/lib/hooks/useTTSSettings"
 
 function useDebounce<T extends (...args: never[]) => void>(fn: T, delay: number): T {
@@ -237,6 +238,7 @@ export function LearnClient({
   const consecutivePerfectRef = useRef(0)
   const sentenceHasErrorRef = useRef(false)
   const sentenceStartTimeRef = useRef(Date.now())
+  const [feedback, setFeedback] = useState<{ trigger: number; variant: FeedbackVariant; streak: number; earned: number }>({ trigger: 0, variant: "great", streak: 0, earned: 0 })
   const loadingBarRef = useRef<HTMLDivElement>(null)
   // Chunk mode state
   const [chunkInput, setChunkInput] = useState("")
@@ -352,6 +354,15 @@ export function LearnClient({
     consecutivePerfectRef.current = newStreak
     const durationSeconds = Math.max(1, Math.round((Date.now() - sentenceStartTimeRef.current) / 1000))
     const parentId = sentence.id.includes("_c") ? sentence.id.split("_c")[0] : sentence.id
+
+    let earned = 5
+    let variant: FeedbackVariant = "great"
+    if (isPerfect) {
+      if (newStreak >= 2) { earned = 5 + Math.min(newStreak, 20); variant = "combo" }
+      else { variant = "perfect" }
+    }
+    setFeedback((p) => ({ trigger: p.trigger + 1, variant, streak: newStreak, earned }))
+
     fetch("/api/diamonds/earn", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -1317,6 +1328,14 @@ export function LearnClient({
         show={transition.show}
         message={transition.message}
         onComplete={transition.onComplete}
+      />
+
+      {/* Sentence Feedback (Great / Perfect / Combo) */}
+      <SentenceFeedback
+        trigger={feedback.trigger}
+        variant={feedback.variant}
+        streak={feedback.streak}
+        earned={feedback.earned}
       />
 
       {/* Reset Confirm Modal */}

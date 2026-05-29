@@ -99,7 +99,7 @@ export function MyCoursesClient() {
             href="/home/store"
             className="mt-3 inline-flex items-center gap-1.5 text-sm text-accent hover:text-accent/80 transition-colors"
           >
-            去课程商城浏览
+            去课程广场浏览
           </Link>
         </div>
       )}
