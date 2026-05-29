@@ -174,21 +174,29 @@ function MonthlyCheckInCalendar({
           ) : (
             <div
               key={cell.date}
-              className="checkin-cell w-8 h-8 rounded-lg flex items-center justify-center text-[12px] font-semibold mx-auto transition-all"
+              className={cn(
+                "checkin-cell rounded-lg flex items-center justify-center font-semibold mx-auto transition-all",
+                cell.isToday
+                  ? "w-8 flex-col gap-px py-1.5"
+                  : "w-8 h-8 text-[12px]"
+              )}
               style={
                 cell.isCheckedIn
                   ? cell.isToday
-                    ? { background: "var(--cal-today-bg)", color: "var(--cal-today-text)", border: "1px solid #0e7490" }
+                    ? { background: "var(--cal-today-bg)", color: "var(--cal-today-text)", border: "2px solid #0e7490" }
                     : { background: "var(--cal-checkin-bg)", color: "var(--cal-checkin-text)", border: "1px solid var(--cal-checkin-text)" }
                   : cell.isToday
-                  ? { border: "1px solid rgba(255,255,255,0.25)", color: "var(--foreground)" }
+                  ? { border: "2px solid var(--accent)", color: "var(--accent)" }
                   : cell.isFuture
                   ? { color: "var(--heat-cell-text-empty)" }
                   : { color: "var(--heat-cell-text-empty)" }
               }
               title={cell.date}
             >
-              {cell.day}
+              <span className="text-[12px] leading-none">{cell.day}</span>
+              {cell.isToday && (
+                <span className="text-[6px] font-bold leading-none tracking-wide">今日</span>
+              )}
             </div>
           )
         )}
@@ -458,7 +466,7 @@ export function HomeClient({ name }: HomeClientProps) {
                 "px-4 py-1.5 rounded-lg text-sm font-semibold transition-all duration-200",
                 activeTab === tab
                   ? "bg-violet-600 text-white shadow-sm"
-                  : "text-white/50 hover:text-white/80"
+                  : "text-muted-foreground hover:text-foreground"
               )}
             >
               {tab === "today" ? "今日" : "档案"}
@@ -475,11 +483,10 @@ export function HomeClient({ name }: HomeClientProps) {
         <div
           className="anim-card relative overflow-hidden rounded-2xl px-6 py-6"
           style={{
-            background: "linear-gradient(135deg, #12071f 0%, #1c1040 50%, #0c0a1a 100%)",
-            border: "1px solid #2d2051",
+            background: "var(--banner-bg)",
+            border: "1px solid var(--banner-border)",
           }}
         >
-          {/* Decorative accent blob — no rgba white */}
           <div
             className="absolute -top-12 -right-8 w-52 h-52 rounded-full pointer-events-none"
             style={{ background: "radial-gradient(circle, #7c3aed40, transparent 70%)" }}
@@ -491,25 +498,25 @@ export function HomeClient({ name }: HomeClientProps) {
 
           <div className="relative flex flex-wrap items-center justify-between gap-4">
             <div>
-              <p className="text-violet-300/60 text-sm font-medium mb-0.5">{greeting}，</p>
-              <h1 className="text-2xl sm:text-3xl font-black text-white tracking-tight">{name || "同学"}</h1>
+              <p className="text-sm font-medium mb-0.5" style={{ color: "var(--banner-subtitle)" }}>{greeting}，</p>
+              <h1 className="text-2xl sm:text-3xl font-black tracking-tight" style={{ color: "var(--banner-title)" }}>{name || "同学"}</h1>
             </div>
             <div className="flex items-center gap-3 flex-wrap">
               {stats?.todayCount !== undefined && (
                 <div
                   className="inline-flex items-center gap-1.5 rounded-full px-3 py-1.5"
-                  style={{ background: "#1a0f2e", border: "1px solid #3d2060" }}
+                  style={{ background: "var(--banner-pill-today-bg)", border: "1px solid var(--banner-pill-today-border)" }}
                 >
                   <Zap className="h-3.5 w-3.5 text-amber-400" />
-                  <span className="text-[13px] font-semibold text-amber-200">今日 {stats.todayCount} 句</span>
+                  <span className="text-[13px] font-semibold" style={{ color: "var(--banner-pill-today-text)" }}>今日 {stats.todayCount} 句</span>
                 </div>
               )}
               <div
                 className="inline-flex items-center gap-1.5 rounded-full px-3 py-1.5"
-                style={{ background: "#1a1006", border: "1px solid #3d2c00" }}
+                style={{ background: "var(--banner-pill-streak-bg)", border: "1px solid var(--banner-pill-streak-border)" }}
               >
                 <Flame className="h-3.5 w-3.5 text-amber-400" />
-                <span className="text-[13px] font-semibold text-amber-300">连续 {streak} 天</span>
+                <span className="text-[13px] font-semibold" style={{ color: "var(--banner-pill-streak-text)" }}>连续 {streak} 天</span>
               </div>
             </div>
           </div>
@@ -555,23 +562,23 @@ export function HomeClient({ name }: HomeClientProps) {
           ].map(({ label, value, unit, icon: Icon, iconColor, gradient, bgVar, borderVar, iconBgVar, link }) => {
             const inner = (
               <div
-                className="anim-card h-full rounded-2xl border p-4 flex flex-col gap-3 transition-colors"
+                className="anim-card h-full rounded-2xl border p-5 flex flex-col gap-4 transition-colors"
                 style={{ background: bgVar, borderColor: borderVar }}
               >
                 <div className="flex items-center justify-between">
-                  <p className="text-[11px] text-foreground/65 font-bold">{label}</p>
-                  <div className="p-1.5 rounded-lg" style={{ background: iconBgVar }}>
-                    <Icon className="h-3.5 w-3.5" style={{ color: iconColor }} />
+                  <p className="text-[13px] text-foreground/70 font-bold">{label}</p>
+                  <div className="p-2 rounded-lg" style={{ background: iconBgVar }}>
+                    <Icon className="h-[18px] w-[18px]" style={{ color: iconColor }} />
                   </div>
                 </div>
-                <div className="flex items-baseline gap-1">
+                <div className="flex items-baseline gap-1.5">
                   <span
-                    className="text-2xl font-black tabular-nums"
+                    className="text-3xl font-black tabular-nums"
                     style={{ background: gradient, WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}
                   >
                     {value}
                   </span>
-                  <span className="text-foreground/55 text-xs">{unit}</span>
+                  <span className="text-foreground/55 text-sm">{unit}</span>
                 </div>
               </div>
             )

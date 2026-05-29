@@ -3,6 +3,7 @@ import { getUser, isDbConfigured } from "@/app/actions/auth"
 import { getActiveSubscription } from "@/lib/subscription"
 import { ConditionalTopbar } from "@/components/home/ConditionalTopbar"
 import { HomeShell } from "@/components/home/HomeShell"
+import { ExpiryWarningModal } from "@/components/home/ExpiryWarningModal"
 
 export default async function HomeLayout({
   children,
@@ -35,6 +36,7 @@ export default async function HomeLayout({
         is_partner: !!user.isPartner,
         level: user.level,
         member_tier: memberTier,
+        pro_expires: user.proExpires?.toISOString() ?? null,
       }
     : null
 
@@ -42,6 +44,12 @@ export default async function HomeLayout({
     <div className="flex flex-col h-screen overflow-hidden bg-background">
       <ConditionalTopbar serverUser={serverUser} />
       <HomeShell isPartner={!!(serverUser?.is_partner)}>{children}</HomeShell>
+      {serverUser && (
+        <ExpiryWarningModal
+          memberTier={serverUser.member_tier}
+          proExpires={serverUser.pro_expires}
+        />
+      )}
     </div>
   )
 }

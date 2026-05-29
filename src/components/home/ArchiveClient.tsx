@@ -284,7 +284,7 @@ export function ArchivePanel() {
                   "px-3 py-1.5 rounded-lg text-[12px] font-semibold transition-all duration-200",
                   period === value
                     ? "bg-violet-600 text-white shadow-sm"
-                    : "text-white/50 hover:text-white/80"
+                    : "text-muted-foreground hover:text-foreground"
                 )}
               >
                 {label}

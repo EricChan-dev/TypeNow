@@ -109,7 +109,7 @@ export function ReviewNotebook() {
             onClick={() => setTab(key)}
             className={cn(
               "px-3 py-1.5 rounded-lg text-[12px] font-semibold transition-all duration-200",
-              tab === key ? "bg-violet-600 text-white shadow-sm" : "text-white/50 hover:text-white/80"
+              tab === key ? "bg-violet-600 text-white shadow-sm" : "text-muted-foreground hover:text-foreground"
             )}
           >
             {label}

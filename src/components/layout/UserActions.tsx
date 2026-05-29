@@ -5,7 +5,7 @@ import Link from "next/link"
 import Image from "next/image"
 import { useRouter } from "next/navigation"
 import { useTheme } from "next-themes"
-import { Moon, Sun, User, Settings, Crown, LogOut, ChevronRight, Handshake, Star, Gem, Diamond } from "lucide-react"
+import { Moon, Sun, User, Settings, Crown, LogOut, ChevronRight, Handshake } from "lucide-react"
 import { trackThemeToggle } from "@/lib/analytics"
 import { signOutAction } from "@/app/actions/auth"
 import { cn } from "@/lib/utils"
@@ -14,7 +14,6 @@ type MemberTier = "trial" | "monthly" | "yearly" | "partner" | "free"
 
 interface TierConfig {
   label: string
-  Icon: React.ComponentType<{ className?: string }> | null
   className: string
   style?: React.CSSProperties
   avatarRing: string
@@ -24,36 +23,31 @@ interface TierConfig {
 const TIER_CONFIG: Record<MemberTier, TierConfig> = {
   free: {
     label: "普通用户",
-    Icon: null,
     className: "bg-muted text-muted-foreground border border-transparent",
     avatarRing: "",
   },
   trial: {
-    label: "体验期",
-    Icon: Star,
+    label: "体验会员",
     className: "bg-amber-500/20 text-amber-500 border border-amber-400/60",
     avatarRing: "ring-2 ring-offset-2 ring-amber-400/80 ring-offset-background",
   },
   monthly: {
     label: "月度会员",
-    Icon: Gem,
     className: "bg-blue-500/20 text-blue-500 border border-blue-400/60",
     avatarRing: "ring-2 ring-offset-2 ring-blue-500 ring-offset-background",
   },
   yearly: {
     label: "年度会员",
-    Icon: Crown,
     className: "bg-violet-500/20 text-violet-500 border border-violet-400/60",
     avatarRing: "ring-2 ring-offset-2 ring-violet-500 ring-offset-background",
   },
   partner: {
-    label: "合伙人",
-    Icon: Diamond,
-    className: "border text-yellow-500",
+    label: "永久会员·合伙人",
+    className: "border text-white",
     style: {
-      background: "linear-gradient(135deg, rgba(234,179,8,0.25) 0%, rgba(251,191,36,0.12) 100%)",
-      borderColor: "rgba(234,179,8,0.65)",
-      boxShadow: "0 0 6px rgba(234,179,8,0.35)",
+      background: "linear-gradient(135deg, #b45309 0%, #d97706 60%, #f59e0b 100%)",
+      borderColor: "rgba(251,191,36,0.6)",
+      boxShadow: "0 0 8px rgba(234,179,8,0.4)",
     },
     avatarRing: "ring-2 ring-offset-2 ring-offset-background",
     avatarRingStyle: {
@@ -63,7 +57,8 @@ const TIER_CONFIG: Record<MemberTier, TierConfig> = {
 }
 
 function TierBadge({ tier, size = "sm" }: { tier: MemberTier; size?: "sm" | "xs" }) {
-  const { label, Icon, className, style } = TIER_CONFIG[tier]
+  const { label, className, style } = TIER_CONFIG[tier]
+  const iconSize = size === "sm" ? 14 : 12
   return (
     <span
       className={cn(
@@ -73,7 +68,9 @@ function TierBadge({ tier, size = "sm" }: { tier: MemberTier; size?: "sm" | "xs"
       )}
       style={style}
     >
-      {Icon && <Icon className={cn("shrink-0", size === "sm" ? "h-3.5 w-3.5" : "h-3 w-3")} />}
+      {tier !== "free" && (
+        <Image src="/VIP.png" alt="VIP" width={iconSize} height={iconSize} className="shrink-0" />
+      )}
       {label}
     </span>
   )
@@ -118,6 +115,16 @@ export function UserActions({ serverUser, variant = "public" }: UserActionsProps
   const [loading, setLoading] = useState(!serverUser)
   const [dropdownOpen, setDropdownOpen] = useState(false)
   const dropdownRef = useRef<HTMLDivElement>(null)
+  const hoverTimeout = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  function handleMouseEnter() {
+    if (hoverTimeout.current) clearTimeout(hoverTimeout.current)
+    setDropdownOpen(true)
+  }
+
+  function handleMouseLeave() {
+    hoverTimeout.current = setTimeout(() => setDropdownOpen(false), 150)
+  }
 
   useEffect(() => { setMounted(true) }, [])
 
@@ -189,8 +196,14 @@ export function UserActions({ serverUser, variant = "public" }: UserActionsProps
         <div className="h-9 w-9 rounded-full bg-muted animate-pulse" />
       ) : isLoggedIn ? (
         <>
+          <div
+            className="flex items-center gap-2 relative"
+            ref={dropdownRef}
+            onMouseEnter={handleMouseEnter}
+            onMouseLeave={handleMouseLeave}
+          >
           {variant === "home" && (
-            <div className="flex items-center gap-2">
+            <>
               <TierBadge tier={user.member_tier} size="sm" />
               {!user.is_partner && (
                 <Link
@@ -201,12 +214,11 @@ export function UserActions({ serverUser, variant = "public" }: UserActionsProps
                   推广赚佣金
                 </Link>
               )}
-            </div>
+            </>
           )}
 
-          <div className="relative" ref={dropdownRef}>
+            <div className="relative">
             <button
-              onClick={() => setDropdownOpen(!dropdownOpen)}
               className={cn("flex items-center justify-center h-9 w-9 rounded-full text-sm font-bold shrink-0 transition-opacity hover:opacity-80 overflow-hidden", user.avatar ? "" : "bg-accent text-white", TIER_CONFIG[user.member_tier].avatarRing)}
               style={TIER_CONFIG[user.member_tier].avatarRingStyle}
             >
@@ -261,6 +273,7 @@ export function UserActions({ serverUser, variant = "public" }: UserActionsProps
                 </div>
               </div>
             )}
+            </div>
           </div>
         </>
       ) : variant === "home" ? (

@@ -183,8 +183,8 @@ export default function PartnerDashboard() {
 
   if (!data) {
     return (
-      <div className="min-h-screen bg-black flex items-center justify-center">
-        <div className="text-white/30 text-sm">加载中...</div>
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="text-muted-foreground text-sm">加载中...</div>
       </div>
     )
   }
@@ -194,7 +194,7 @@ export default function PartnerDashboard() {
     : "0.0"
 
   return (
-    <div className="min-h-screen bg-black text-white pb-20">
+    <div className="min-h-screen bg-background text-foreground pb-20">
       <canvas ref={canvasRef} className="hidden" />
 
       <div className="max-w-lg mx-auto px-4 pt-8 flex flex-col gap-6">
@@ -209,13 +209,13 @@ export default function PartnerDashboard() {
         </div>
 
         {/* Material tabs */}
-        <div className="bg-white/[0.04] border border-white/10 rounded-2xl overflow-hidden">
-          <div className="flex border-b border-white/10">
+        <div className="bg-muted/40 border border-border rounded-2xl overflow-hidden">
+          <div className="flex border-b border-border">
             {([["link", "邀请链接"], ["poster", "分享海报"], ["scripts", "推广话术"]] as const).map(([key, label]) => (
               <button
                 key={key}
                 onClick={() => setTab(key)}
-                className={`flex-1 py-3 text-sm font-medium transition-colors ${tab === key ? "text-white border-b-2 border-white" : "text-white/40"}`}
+                className={`flex-1 py-3 text-sm font-medium transition-colors ${tab === key ? "text-foreground border-b-2 border-foreground" : "text-muted-foreground"}`}
               >
                 {label}
               </button>
@@ -225,11 +225,11 @@ export default function PartnerDashboard() {
           <div className="p-4">
             {tab === "link" && (
               <div className="flex flex-col gap-3">
-                <div className="bg-white/[0.06] rounded-xl p-3 text-sm text-white/70 font-mono break-all">{inviteLink}</div>
-                <button onClick={copyLink} className="w-full py-3 rounded-xl bg-white text-black font-medium text-sm hover:bg-white/90 transition-colors">
+                <div className="bg-muted/60 rounded-xl p-3 text-sm text-foreground/70 font-mono break-all">{inviteLink}</div>
+                <button onClick={copyLink} className="w-full py-3 rounded-xl bg-foreground text-background font-medium text-sm hover:bg-foreground/90 transition-colors">
                   复制邀请链接
                 </button>
-                <div className="text-xs text-white/30 text-center">邀请码：{data.inviteCode}</div>
+                <div className="text-xs text-muted-foreground/70 text-center">邀请码：{data.inviteCode}</div>
               </div>
             )}
 
@@ -238,14 +238,14 @@ export default function PartnerDashboard() {
                 {posterUrl ? (
                   <>
                     <img src={posterUrl} alt="分享海报" className="w-full rounded-xl" />
-                    <p className="text-xs text-white/40 text-center">长按图片保存到相册</p>
-                    <button onClick={() => setPosterUrl(null)} className="text-xs text-white/30 text-center">重新生成</button>
+                    <p className="text-xs text-muted-foreground text-center">长按图片保存到相册</p>
+                    <button onClick={() => setPosterUrl(null)} className="text-xs text-muted-foreground/70 text-center">重新生成</button>
                   </>
                 ) : (
                   <button
                     onClick={generatePoster}
                     disabled={generatingPoster}
-                    className="w-full py-3 rounded-xl bg-white text-black font-medium text-sm hover:bg-white/90 disabled:opacity-50 transition-colors"
+                    className="w-full py-3 rounded-xl bg-foreground text-background font-medium text-sm hover:bg-foreground/90 disabled:opacity-50 transition-colors"
                   >
                     {generatingPoster ? "生成中..." : "生成分享海报"}
                   </button>
@@ -256,9 +256,9 @@ export default function PartnerDashboard() {
             {tab === "scripts" && (
               <div className="flex flex-col gap-3">
                 {COPY_SCRIPTS.map((s) => (
-                  <div key={s.scene} className="bg-white/[0.06] rounded-xl p-4 flex flex-col gap-2">
+                  <div key={s.scene} className="bg-muted/60 rounded-xl p-4 flex flex-col gap-2">
                     <div className="flex items-center justify-between">
-                      <span className="text-xs text-white/40 font-medium">{s.scene}</span>
+                      <span className="text-xs text-muted-foreground font-medium">{s.scene}</span>
                       <button
                         onClick={() => copyScript(s.scene, s.text + " " + inviteLink)}
                         className="text-xs text-sky-400 hover:text-sky-300"
@@ -266,7 +266,7 @@ export default function PartnerDashboard() {
                         复制
                       </button>
                     </div>
-                    <p className="text-sm text-white/70 leading-relaxed">{s.text}</p>
+                    <p className="text-sm text-foreground/70 leading-relaxed">{s.text}</p>
                   </div>
                 ))}
               </div>
@@ -275,7 +275,7 @@ export default function PartnerDashboard() {
         </div>
 
         {/* Withdraw */}
-        <div className="bg-white/[0.04] border border-white/10 rounded-2xl p-4 flex flex-col gap-4">
+        <div className="bg-muted/40 border border-border rounded-2xl p-4 flex flex-col gap-4">
           <div className="font-medium">申请提现</div>
           {!data.hasWechat && (
             <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl p-3 text-xs text-amber-400">
@@ -284,37 +284,37 @@ export default function PartnerDashboard() {
           )}
           <div className="flex gap-2">
             <div className="relative flex-1">
-              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-white/40 text-sm">¥</span>
+              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground text-sm">¥</span>
               <input
                 type="number"
                 value={withdrawAmount}
                 onChange={(e) => setWithdrawAmount(e.target.value)}
                 placeholder={`最低 ¥50，余额 ${fmt(data.available)}`}
-                className="w-full bg-white/[0.06] border border-white/10 rounded-xl py-3 pl-8 pr-3 text-sm text-white placeholder-white/30 outline-none focus:border-white/30"
+                className="w-full bg-muted/60 border border-border rounded-xl py-3 pl-8 pr-3 text-sm text-foreground placeholder:text-muted-foreground outline-none focus:border-foreground/30"
               />
             </div>
             <button
               onClick={handleWithdraw}
               disabled={withdrawing || !data.hasWechat || data.available < 5000}
-              className="px-5 py-3 rounded-xl bg-white text-black font-medium text-sm hover:bg-white/90 disabled:opacity-40 transition-colors whitespace-nowrap"
+              className="px-5 py-3 rounded-xl bg-foreground text-background font-medium text-sm hover:bg-foreground/90 disabled:opacity-40 transition-colors whitespace-nowrap"
             >
               {withdrawing ? "处理中" : "提现"}
             </button>
           </div>
-          <p className="text-xs text-white/30">提现后将实时转入微信零钱，可在微信中提现至银行卡</p>
+          <p className="text-xs text-muted-foreground/70">提现后将实时转入微信零钱，可在微信中提现至银行卡</p>
         </div>
 
         {/* Commission list */}
         {commissions.length > 0 && (
           <div className="flex flex-col gap-2">
-            <div className="text-sm font-medium text-white/70">佣金明细</div>
+            <div className="text-sm font-medium text-foreground/70">佣金明细</div>
             {commissions.map((c) => (
-              <div key={c.id} className="bg-white/[0.04] border border-white/10 rounded-xl p-3 flex items-center justify-between">
+              <div key={c.id} className="bg-muted/40 border border-border rounded-xl p-3 flex items-center justify-between">
                 <div className="flex flex-col gap-0.5">
-                  <span className="text-sm text-white/80">
+                  <span className="text-sm text-foreground/80">
                     {c.referredUserPhone ?? "用户"} · {c.commissionType === "first" ? "首次" : "续费"}
                   </span>
-                  <span className="text-xs text-white/30">{new Date(c.createdAt).toLocaleDateString()}</span>
+                  <span className="text-xs text-muted-foreground/70">{new Date(c.createdAt).toLocaleDateString()}</span>
                 </div>
                 <div className="flex flex-col items-end gap-0.5">
                   <span className="text-sm font-medium text-emerald-400">{fmt(c.commissionAmount)}</span>
@@ -331,10 +331,10 @@ export default function PartnerDashboard() {
 
 function StatCard({ label, value, sub, accent }: { label: string; value: string; sub?: string; accent?: boolean }) {
   return (
-    <div className="bg-white/[0.04] border border-white/10 rounded-2xl p-4">
-      <div className="text-xs text-white/40 mb-1">{label}</div>
-      <div className={`text-xl font-bold ${accent ? "text-emerald-400" : "text-white"}`}>{value}</div>
-      {sub && <div className="text-xs text-white/30 mt-0.5">{sub}</div>}
+    <div className="bg-muted/40 border border-border rounded-2xl p-4">
+      <div className="text-xs text-muted-foreground mb-1">{label}</div>
+      <div className={`text-xl font-bold ${accent ? "text-emerald-400" : "text-foreground"}`}>{value}</div>
+      {sub && <div className="text-xs text-muted-foreground/70 mt-0.5">{sub}</div>}
     </div>
   )
 }
@@ -347,6 +347,6 @@ function StatusBadge({ status, availableAt }: { status: string; availableAt: str
     withdrawn: { label: "已提现", color: "text-white/30" },
     clawed_back: { label: "已回扣", color: "text-red-400" },
   }
-  const s = map[status] ?? { label: status, color: "text-white/30" }
+  const s = map[status] ?? { label: status, color: "text-muted-foreground/70" }
   return <span className={`text-[11px] ${s.color}`}>{s.label}</span>
 }

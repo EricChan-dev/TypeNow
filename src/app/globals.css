@@ -53,6 +53,17 @@
   /* Calendar tokens */
   --cal-today-bg: #0e7490; --cal-today-text: #ffffff;
   --cal-checkin-bg: #1e1535; --cal-checkin-text: #a78bfa;
+  /* Greeting banner tokens */
+  --banner-bg: linear-gradient(135deg, #12071f 0%, #1c1040 50%, #0c0a1a 100%);
+  --banner-border: #2d2051;
+  --banner-title: #ffffff;
+  --banner-subtitle: rgba(196,181,253,0.6);
+  --banner-pill-today-bg: #1a0f2e;
+  --banner-pill-today-border: #3d2060;
+  --banner-pill-today-text: #fde68a;
+  --banner-pill-streak-bg: #1a1006;
+  --banner-pill-streak-border: #3d2c00;
+  --banner-pill-streak-text: #fcd34d;
 }
 
 .light {
@@ -69,12 +80,12 @@
   --success: #22c55e;
   --warning: #f59e0b;
   /* Surface tokens for theme-aware cards */
-  --surface: rgba(0,0,0,0.04);
-  --surface-alt: rgba(0,0,0,0.035);
-  --surface-border: rgba(0,0,0,0.10);
+  --surface: rgba(0,0,0,0.03);
+  --surface-alt: rgba(0,0,0,0.025);
+  --surface-border: #d1d5db;
   --surface-violet: #f5f3ff;
-  --surface-violet-border: #ede9fe;
-  --surface-divider: rgba(0,0,0,0.10);
+  --surface-violet-border: #c4b5fd;
+  --surface-divider: #e5e7eb;
   /* Heatmap tokens */
   --heat-empty: rgba(0,0,0,0.07);
   --heat-low: #ddd6fe;
@@ -91,6 +102,17 @@
   /* Calendar tokens */
   --cal-today-bg: #0e7490; --cal-today-text: #ffffff;
   --cal-checkin-bg: #ede9fe; --cal-checkin-text: #7c3aed;
+  /* Greeting banner tokens */
+  --banner-bg: linear-gradient(135deg, #f0eeff 0%, #e9e3ff 50%, #eef2ff 100%);
+  --banner-border: #c4b5fd;
+  --banner-title: #1e1b4b;
+  --banner-subtitle: rgba(109,40,217,0.55);
+  --banner-pill-today-bg: rgba(124,58,237,0.08);
+  --banner-pill-today-border: #ddd6fe;
+  --banner-pill-today-text: #5b21b6;
+  --banner-pill-streak-bg: rgba(245,158,11,0.08);
+  --banner-pill-streak-border: #fde68a;
+  --banner-pill-streak-text: #92400e;
 }
 
 body {

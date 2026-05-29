@@ -5,10 +5,7 @@ import { checkIns } from "@/lib/db/schema"
 import { eq, desc } from "drizzle-orm"
 
 function toLocalDateStr(d = new Date()): string {
-  const y = d.getFullYear()
-  const m = String(d.getMonth() + 1).padStart(2, "0")
-  const day = String(d.getDate()).padStart(2, "0")
-  return `${y}-${m}-${day}`
+  return d.toLocaleDateString("sv-SE", { timeZone: "Asia/Shanghai" })
 }
 
 function computeStreak(sortedDates: string[]): number {
