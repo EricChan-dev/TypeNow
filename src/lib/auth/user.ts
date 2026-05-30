@@ -43,3 +43,13 @@ export async function getUserByWechatOpenid(openid: string): Promise<User | null
     .limit(1)
   return user ?? null
 }
+
+export async function getUserByWechatUnionid(unionid: string): Promise<User | null> {
+  if (!db) return null
+  const [user] = await db
+    .select()
+    .from(users)
+    .where(eq(users.wechatUnionid, unionid))
+    .limit(1)
+  return user ?? null
+}

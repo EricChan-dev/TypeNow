@@ -4,6 +4,7 @@ const WECHAT_PAY_HOST = "https://api.mch.weixin.qq.com"
 
 function getConfig() {
   return {
+    appId: process.env.WECHAT_APP_ID || "",
     mchId: process.env.WECHAT_PAY_MCH_ID || "",
     apiV3Key: process.env.WECHAT_PAY_API_V3_KEY || "",
     serialNo: process.env.WECHAT_PAY_SERIAL_NO || "",
@@ -112,6 +113,7 @@ export async function createNativeOrder(
   const expiresAt = new Date(Date.now() + 2 * 60 * 60 * 1000) // 2 hours
 
   const result = await wechatPayRequest("POST", urlPath, {
+    appid: cfg.appId,
     mchid: cfg.mchId,
     out_trade_no: params.outTradeNo,
     description: params.description,

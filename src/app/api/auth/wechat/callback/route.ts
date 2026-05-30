@@ -4,11 +4,12 @@ import { db } from "@/lib/db"
 import { users } from "@/lib/db/schema"
 import { eq } from "drizzle-orm"
 import { createSession } from "@/lib/auth/session"
+import { getUserById, getUserByWechatUnionid } from "@/lib/auth/user"
 import {
   exchangeCodeForAccessToken,
   getUserInfo,
-  isWeChatConfigured,
   type WechatUserInfo,
+  type WechatTokenResponse,
 } from "@/lib/wechat"
 
 export async function GET(request: NextRequest) {
@@ -29,28 +30,57 @@ export async function GET(request: NextRequest) {
     return NextResponse.redirect(loginUrl)
   }
 
-  // Dev mode: mock WeChat login
-  if (code === "dev_mock" && !isWeChatConfigured()) {
+  // Dev mode: mock WeChat login or bind
+  if (code === "dev_mock") {
+    const isBind = state.startsWith("bind_") ||
+      !!request.cookies.get("wechat_bind_intent")?.value
+    if (isBind) return handleDevBind(request)
     return handleDevLogin(request)
   }
 
-  // Verify CSRF state
-  const cookieState = request.cookies.get("wechat_oauth_state")?.value
+  // Determine flow: login vs bind
+  const isBindFlow = state.startsWith("bind_") &&
+    request.cookies.get("wechat_bind_intent")?.value
+
+  // Verify CSRF state (login uses wechat_oauth_state, bind uses wechat_bind_state)
+  const cookieName = isBindFlow ? "wechat_bind_state" : "wechat_oauth_state"
+  const cookieState = request.cookies.get(cookieName)?.value
   if (!cookieState || cookieState !== state) {
-    loginUrl.searchParams.set("error", "csrf_mismatch")
-    const res = NextResponse.redirect(loginUrl)
+    const errorKey = isBindFlow ? "bind_error" : "error"
+    const errorVal = isBindFlow ? "csrf_mismatch" : "csrf_mismatch"
+    const redirectUrl = isBindFlow
+      ? new URL("/home/settings", request.url)
+      : loginUrl
+    redirectUrl.searchParams.set(errorKey, errorVal)
+    const res = NextResponse.redirect(redirectUrl)
     res.cookies.set("wechat_oauth_state", "", { maxAge: 0, path: "/" })
+    res.cookies.set("wechat_bind_state", "", { maxAge: 0, path: "/" })
+    res.cookies.set("wechat_bind_intent", "", { maxAge: 0, path: "/" })
     return res
   }
 
   try {
     const tokenData = await exchangeCodeForAccessToken(code)
     const userInfo = await getUserInfo(tokenData.access_token, tokenData.openid)
-    const redirectRes = await upsertWeChatUser(userInfo, request)
+
+    if (isBindFlow) {
+      return handleWechatBind(tokenData, userInfo, request)
+    }
+
+    const redirectRes = await upsertWeChatUser(tokenData, userInfo, request)
     redirectRes.cookies.set("wechat_oauth_state", "", { maxAge: 0, path: "/" })
     return redirectRes
   } catch (err) {
     const message = err instanceof Error ? err.message : "登录失败"
+    if (isBindFlow) {
+      const settingsUrl = new URL("/home/settings", request.url)
+      settingsUrl.searchParams.set("bind_error", message)
+      const res = NextResponse.redirect(settingsUrl)
+      res.cookies.set("wechat_bind_state", "", { maxAge: 0, path: "/" })
+      res.cookies.set("wechat_bind_intent", "", { maxAge: 0, path: "/" })
+      return res
+    }
+
     const errorMap: Record<string, string> = {
       "微信授权码无效": "wechat_invalid_code",
       "微信授权码已被使用": "code_used",
@@ -65,6 +95,7 @@ export async function GET(request: NextRequest) {
 }
 
 async function upsertWeChatUser(
+  tokenData: WechatTokenResponse,
   wechatUser: WechatUserInfo,
   request: NextRequest
 ): Promise<NextResponse> {
@@ -75,22 +106,41 @@ async function upsertWeChatUser(
     return NextResponse.redirect(loginUrl)
   }
 
+  const tokenExpiresAt = new Date(Date.now() + tokenData.expires_in * 1000)
+
+  // 1. Look up by wechatOpenid
   let [user] = await db
     .select()
     .from(users)
     .where(eq(users.wechatOpenid, wechatUser.openid))
     .limit(1)
 
+  // 2. If not found by openid, try unionid for cross-platform association
+  if (!user && wechatUser.unionid) {
+    const [unionidUser] = await db
+      .select()
+      .from(users)
+      .where(eq(users.wechatUnionid, wechatUser.unionid))
+      .limit(1)
+    user = unionidUser
+  }
+
   if (user) {
+    // Update existing user
     await db
       .update(users)
       .set({
-        name: wechatUser.nickname,
-        avatar: wechatUser.headimgurl,
+        name: user.name ?? wechatUser.nickname,
+        avatar: user.avatar ?? wechatUser.headimgurl,
+        wechatOpenid: wechatUser.openid,
         wechatUnionid: wechatUser.unionid || null,
+        wechatAccessToken: tokenData.access_token,
+        wechatRefreshToken: tokenData.refresh_token,
+        wechatTokenExpiresAt: tokenExpiresAt,
       })
       .where(eq(users.id, user.id))
   } else {
+    // Create new user
     const refCode = request.cookies.get("ref_code")?.value
     let referredBy: string | null = null
     if (refCode) {
@@ -112,6 +162,9 @@ async function upsertWeChatUser(
       referredBy,
       isPro: 1,
       proExpires: trialExpiresAt,
+      wechatAccessToken: tokenData.access_token,
+      wechatRefreshToken: tokenData.refresh_token,
+      wechatTokenExpiresAt: tokenExpiresAt,
     })
     const [newUser] = await db.select().from(users).where(eq(users.id, id)).limit(1)
     user = newUser
@@ -119,6 +172,80 @@ async function upsertWeChatUser(
 
   await createSession(user.id)
   return NextResponse.redirect(new URL("/home", request.url))
+}
+
+async function handleWechatBind(
+  tokenData: WechatTokenResponse,
+  wechatUser: WechatUserInfo,
+  request: NextRequest
+): Promise<NextResponse> {
+  const settingsUrl = new URL("/home/settings", request.url)
+  const clearCookies = (res: NextResponse) => {
+    res.cookies.set("wechat_bind_state", "", { maxAge: 0, path: "/" })
+    res.cookies.set("wechat_bind_intent", "", { maxAge: 0, path: "/" })
+    return res
+  }
+
+  if (!db) {
+    settingsUrl.searchParams.set("bind_error", "server_error")
+    return clearCookies(NextResponse.redirect(settingsUrl))
+  }
+
+  const sessionCookie = request.cookies.get("typenow_session")?.value
+  if (!sessionCookie) {
+    settingsUrl.searchParams.set("bind_error", "not_logged_in")
+    return clearCookies(NextResponse.redirect(settingsUrl))
+  }
+
+  // Get current user from session
+  const { getSession } = await import("@/lib/auth/session")
+  const session = await getSession()
+  if (!session) {
+    settingsUrl.searchParams.set("bind_error", "not_logged_in")
+    return clearCookies(NextResponse.redirect(settingsUrl))
+  }
+
+  const currentUser = await getUserById(session.userId)
+  if (!currentUser) {
+    settingsUrl.searchParams.set("bind_error", "not_logged_in")
+    return clearCookies(NextResponse.redirect(settingsUrl))
+  }
+
+  // Check if this openid is already bound to another user
+  const [existingByOpenid] = await db
+    .select()
+    .from(users)
+    .where(eq(users.wechatOpenid, wechatUser.openid))
+    .limit(1)
+
+  if (existingByOpenid && existingByOpenid.id !== session.userId) {
+    settingsUrl.searchParams.set("bind_error", "wechat_already_bound")
+    return clearCookies(NextResponse.redirect(settingsUrl))
+  }
+
+  // Check if current user already has a different WeChat bound
+  if (currentUser.wechatOpenid && currentUser.wechatOpenid !== wechatUser.openid) {
+    settingsUrl.searchParams.set("bind_error", "already_has_wechat")
+    return clearCookies(NextResponse.redirect(settingsUrl))
+  }
+
+  // Bind WeChat to current user
+  const tokenExpiresAt = new Date(Date.now() + tokenData.expires_in * 1000)
+  await db
+    .update(users)
+    .set({
+      wechatOpenid: wechatUser.openid,
+      wechatUnionid: wechatUser.unionid || null,
+      name: currentUser.name ?? wechatUser.nickname,
+      avatar: currentUser.avatar ?? wechatUser.headimgurl,
+      wechatAccessToken: tokenData.access_token,
+      wechatRefreshToken: tokenData.refresh_token,
+      wechatTokenExpiresAt: tokenExpiresAt,
+    })
+    .where(eq(users.id, session.userId))
+
+  settingsUrl.searchParams.set("bind_success", "wechat")
+  return clearCookies(NextResponse.redirect(settingsUrl))
 }
 
 async function handleDevLogin(request: NextRequest): Promise<NextResponse> {
@@ -140,4 +267,34 @@ async function handleDevLogin(request: NextRequest): Promise<NextResponse> {
 
   await createSession(user.id)
   return NextResponse.redirect(new URL("/home", request.url))
+}
+
+async function handleDevBind(request: NextRequest): Promise<NextResponse> {
+  const settingsUrl = new URL("/home/settings", request.url)
+
+  if (!db) {
+    settingsUrl.searchParams.set("bind_error", "server_error")
+    return clearBindCookies(NextResponse.redirect(settingsUrl))
+  }
+
+  const { getSession } = await import("@/lib/auth/session")
+  const session = await getSession()
+  if (!session) {
+    settingsUrl.searchParams.set("bind_error", "not_logged_in")
+    return clearBindCookies(NextResponse.redirect(settingsUrl))
+  }
+
+  await db
+    .update(users)
+    .set({ wechatOpenid: "dev_wechat_user", wechatUnionid: "dev_wechat_unionid" })
+    .where(eq(users.id, session.userId))
+
+  settingsUrl.searchParams.set("bind_success", "wechat")
+  return clearBindCookies(NextResponse.redirect(settingsUrl))
+}
+
+function clearBindCookies(res: NextResponse): NextResponse {
+  res.cookies.set("wechat_bind_state", "", { maxAge: 0, path: "/" })
+  res.cookies.set("wechat_bind_intent", "", { maxAge: 0, path: "/" })
+  return res
 }

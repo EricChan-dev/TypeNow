@@ -26,6 +26,9 @@ export const users = mysqlTable(
     avatar: text("avatar"),
     wechatOpenid: varchar("wechat_openid", { length: 100 }).unique(),
     wechatUnionid: varchar("wechat_unionid", { length: 100 }),
+    wechatAccessToken: text("wechat_access_token"),
+    wechatRefreshToken: text("wechat_refresh_token"),
+    wechatTokenExpiresAt: datetime("wechat_token_expires_at"),
     level: int("level").notNull().default(1),
     totalScore: int("total_score").notNull().default(0),
     isPro: tinyint("is_pro").notNull().default(0),
@@ -42,6 +45,7 @@ export const users = mysqlTable(
   },
   (t) => [
     uniqueIndex("idx_users_wechat_openid").on(t.wechatOpenid),
+    uniqueIndex("idx_users_wechat_unionid").on(t.wechatUnionid),
   ]
 )
 

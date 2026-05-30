@@ -2,14 +2,16 @@
 
 import { useState, useRef, useEffect, useCallback } from "react"
 import Link from "next/link"
+import { useSearchParams } from "next/navigation"
 import { animate, stagger } from "animejs"
 import {
   Camera, Check, Loader2, Phone, Crown,
   ChevronRight, Smartphone, MessageCircle,
-  ShieldCheck, ReceiptText, Sparkles,
+  ShieldCheck, ReceiptText, Sparkles, X, Plus,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { toast } from "sonner"
+import { BindWeChatQRCode } from "@/components/auth/BindWeChatQRCode"
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -160,9 +162,52 @@ export function SettingsClient({ initialUser }: { initialUser: InitialUser }) {
   const [subs, setSubs] = useState<Sub[]>([])
   const [subsLoading, setSubsLoading] = useState(true)
 
+  // Bind flow state
+  const searchParams = useSearchParams()
+  const [showPhoneBind, setShowPhoneBind] = useState(false)
+  const [showWechatBind, setShowWechatBind] = useState(false)
+  const [phoneValue, setPhoneValue] = useState("")
+  const [codeValue, setCodeValue] = useState("")
+  const [sendingCode, setSendingCode] = useState(false)
+  const [codeCountdown, setCodeCountdown] = useState(0)
+  const [binding, setBinding] = useState(false)
+
   const fileInputRef = useRef<HTMLInputElement>(null)
   const pageRef = useRef<HTMLDivElement>(null)
   const saveRef = useRef<HTMLButtonElement>(null)
+
+  // Handle bind result query params
+  useEffect(() => {
+    const bindSuccess = searchParams.get("bind_success")
+    const bindError = searchParams.get("bind_error")
+
+    if (bindSuccess === "wechat") {
+      toast.success("微信绑定成功")
+      // Delay reload so user sees the toast
+      setTimeout(() => window.location.reload(), 800)
+    }
+    if (bindError) {
+      const messages: Record<string, string> = {
+        wechat_already_bound: "该微信已被其他账号绑定",
+        already_has_wechat: "当前账号已绑定微信",
+        not_logged_in: "绑定超时，请重新登录后再试",
+        csrf_mismatch: "绑定验证失败，请重试",
+      }
+      toast.error(messages[bindError] ?? "绑定失败，请重试")
+      // Clean URL param
+      const url = new URL(window.location.href)
+      url.searchParams.delete("bind_success")
+      url.searchParams.delete("bind_error")
+      window.history.replaceState({}, "", url.toString())
+    }
+  }, [searchParams])
+
+  // Code countdown
+  useEffect(() => {
+    if (codeCountdown <= 0) return
+    const timer = setInterval(() => setCodeCountdown((c) => c - 1), 1000)
+    return () => clearInterval(timer)
+  }, [codeCountdown])
 
   // Load subscriptions
   useEffect(() => {
@@ -239,6 +284,59 @@ export function SettingsClient({ initialUser }: { initialUser: InitialUser }) {
       setSaving(false)
     }
   }, [hasChanges, saving, name, nameChanged, avatarPreview])
+
+  // ─── Bind handlers ──────────────────────────────────────────────────────────
+
+  const handleSendCode = useCallback(async () => {
+    if (!/^1[3-9]\d{9}$/.test(phoneValue)) {
+      toast.error("请输入有效的手机号")
+      return
+    }
+    if (codeCountdown > 0) return
+    setSendingCode(true)
+    try {
+      const res = await fetch("/api/auth/send-sms", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ phone: phoneValue }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error ?? "发送失败")
+      toast.success("验证码已发送")
+      setCodeCountdown(60)
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "发送失败，请重试")
+    } finally {
+      setSendingCode(false)
+    }
+  }, [phoneValue, codeCountdown])
+
+  const handleBindPhone = useCallback(async () => {
+    if (!/^1[3-9]\d{9}$/.test(phoneValue)) {
+      toast.error("请输入有效的手机号")
+      return
+    }
+    if (codeValue.length !== 6) {
+      toast.error("请输入6位验证码")
+      return
+    }
+    setBinding(true)
+    try {
+      const res = await fetch("/api/auth/bind/phone", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ phone: phoneValue, code: codeValue }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error ?? "绑定失败")
+      toast.success("手机号绑定成功")
+      setTimeout(() => window.location.reload(), 800)
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "绑定失败，请重试")
+    } finally {
+      setBinding(false)
+    }
+  }, [phoneValue, codeValue])
 
   const tier = initialUser.memberTier
   const tierStyle = TIER_STYLE[tier]
@@ -355,22 +453,132 @@ export function SettingsClient({ initialUser }: { initialUser: InitialUser }) {
 
         {/* Account security */}
         <SectionCard title="账号安全">
-          <InfoRow
-            icon={<Phone className="h-3.5 w-3.5 text-blue-400" />}
-            label="手机号"
-            value={maskPhone(initialUser.phone)}
-            badge={initialUser.phone ? "已绑定" : "未绑定"}
-            badgeOk={!!initialUser.phone}
-          />
+          {/* Phone row */}
+          <div className="flex items-center justify-between py-0.5">
+            <div className="flex items-center gap-3">
+              <div className="w-8 h-8 rounded-xl bg-white/[0.06] flex items-center justify-center shrink-0">
+                <Phone className="h-3.5 w-3.5 text-blue-400" />
+              </div>
+              <div>
+                <p className="text-[11px] text-white/30">手机号</p>
+                <p className="text-sm text-white/70 font-medium mt-0.5">{maskPhone(initialUser.phone)}</p>
+              </div>
+            </div>
+            {initialUser.phone ? (
+              <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full border bg-emerald-500/10 border-emerald-500/20 text-emerald-400">
+                已绑定
+              </span>
+            ) : (
+              <button
+                onClick={() => setShowPhoneBind(!showPhoneBind)}
+                className="flex items-center gap-1 text-[11px] font-medium text-violet-400 hover:text-violet-300 transition-colors"
+              >
+                <Plus className="h-3 w-3" />
+                绑定手机号
+              </button>
+            )}
+          </div>
+
+          {/* Phone bind form (expandable) */}
+          {showPhoneBind && (
+            <div className="space-y-3 pt-1 pb-2">
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-white/30 shrink-0">+86</span>
+                <input
+                  value={phoneValue}
+                  onChange={(e) => setPhoneValue(e.target.value.replace(/\D/g, ""))}
+                  maxLength={11}
+                  placeholder="输入手机号"
+                  className="flex-1 bg-white/[0.05] border border-white/[0.1] rounded-lg px-3 py-2 text-sm text-white placeholder:text-white/20 focus:outline-none focus:border-violet-500/50 transition-all"
+                />
+              </div>
+              <div className="flex items-center gap-2">
+                <input
+                  value={codeValue}
+                  onChange={(e) => setCodeValue(e.target.value.replace(/\D/g, ""))}
+                  maxLength={6}
+                  placeholder="验证码"
+                  className="flex-1 bg-white/[0.05] border border-white/[0.1] rounded-lg px-3 py-2 text-sm text-white placeholder:text-white/20 focus:outline-none focus:border-violet-500/50 transition-all"
+                />
+                <button
+                  onClick={handleSendCode}
+                  disabled={sendingCode || codeCountdown > 0}
+                  className={cn(
+                    "shrink-0 px-3 py-2 rounded-lg text-[11px] font-medium transition-all",
+                    codeCountdown > 0
+                      ? "text-white/20 bg-white/[0.05]"
+                      : "text-violet-400 bg-violet-500/10 hover:bg-violet-500/20"
+                  )}
+                >
+                  {sendingCode ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> :
+                   codeCountdown > 0 ? `${codeCountdown}s` : "发送验证码"}
+                </button>
+              </div>
+              <button
+                onClick={handleBindPhone}
+                disabled={binding}
+                className="w-full py-2.5 rounded-xl text-sm font-semibold text-white flex items-center justify-center gap-2 transition-all"
+                style={{
+                  background: "linear-gradient(135deg, #7c3aed, #a855f7)",
+                  boxShadow: "0 0 16px rgba(124,58,237,0.25)",
+                }}
+              >
+                {binding ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
+                确认绑定
+              </button>
+            </div>
+          )}
+
           <div className="h-px bg-white/[0.05]" />
-          <InfoRow
-            icon={<MessageCircle className="h-3.5 w-3.5 text-green-400" />}
-            label="微信账号"
-            value={initialUser.hasWechat ? "已绑定" : "未绑定"}
-            badge={initialUser.hasWechat ? "已绑定" : undefined}
-            badgeOk
-          />
+
+          {/* WeChat row */}
+          <div className="flex items-center justify-between py-0.5">
+            <div className="flex items-center gap-3">
+              <div className="w-8 h-8 rounded-xl bg-white/[0.06] flex items-center justify-center shrink-0">
+                <MessageCircle className="h-3.5 w-3.5 text-green-400" />
+              </div>
+              <div>
+                <p className="text-[11px] text-white/30">微信账号</p>
+                <p className="text-sm text-white/70 font-medium mt-0.5">{initialUser.hasWechat ? "已绑定" : "未绑定"}</p>
+              </div>
+            </div>
+            {initialUser.hasWechat ? (
+              <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full border bg-emerald-500/10 border-emerald-500/20 text-emerald-400">
+                已绑定
+              </span>
+            ) : (
+              <button
+                onClick={() => setShowWechatBind(true)}
+                className="flex items-center gap-1 text-[11px] font-medium text-green-400 hover:text-green-300 transition-colors"
+              >
+                <Plus className="h-3 w-3" />
+                绑定微信
+              </button>
+            )}
+          </div>
         </SectionCard>
+
+        {/* WeChat bind modal */}
+        {showWechatBind && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            <div className="absolute inset-0 bg-black/60" onClick={() => setShowWechatBind(false)} />
+            <div
+              className="relative rounded-2xl border border-white/[0.1] p-6 w-full max-w-sm"
+              style={{ background: "#1a1a1a" }}
+            >
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-sm font-semibold text-white">绑定微信账号</h3>
+                <button
+                  onClick={() => setShowWechatBind(false)}
+                  className="w-7 h-7 rounded-lg bg-white/[0.06] flex items-center justify-center hover:bg-white/[0.1] transition-colors"
+                >
+                  <X className="h-3.5 w-3.5 text-white/50" />
+                </button>
+              </div>
+              <BindWeChatQRCode />
+            </div>
+          </div>
+        )}
 
         {/* Membership */}
         <SectionCard title="会员信息">

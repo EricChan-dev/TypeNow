@@ -30,10 +30,12 @@ export function isWeChatConfigured(): boolean {
 }
 
 export function generateOAuthUrl(
-  redirectUri: string
+  redirectUri: string,
+  options?: { forBind?: boolean }
 ): { url: string; state: string } {
   const appId = process.env.WECHAT_APP_ID!
-  const state = crypto.randomBytes(32).toString("hex")
+  const raw = crypto.randomBytes(32).toString("hex")
+  const state = options?.forBind ? `bind_${raw}` : raw
 
   const params = new URLSearchParams({
     appid: appId,
@@ -132,4 +134,37 @@ export async function getUserInfo(
   }
 
   return userInfo
+}
+
+export async function refreshWeChatToken(
+  refreshToken: string
+): Promise<WechatTokenResponse> {
+  const appId = process.env.WECHAT_APP_ID!
+
+  const params = new URLSearchParams({
+    appid: appId,
+    grant_type: "refresh_token",
+    refresh_token: refreshToken,
+  })
+
+  const res = await fetch(
+    `https://api.weixin.qq.com/sns/oauth2/refresh_token?${params.toString()}`
+  )
+
+  if (!res.ok) {
+    throw new Error("微信服务连接失败")
+  }
+
+  const data = await res.json()
+
+  if (isWechatError(data)) {
+    const messages: Record<number, string> = {
+      40030: "refresh_token无效",
+      42003: "refresh_token已过期",
+    }
+    const message = messages[data.errcode] || `微信刷新 token 失败 (${data.errcode})`
+    throw new Error(message)
+  }
+
+  return data as WechatTokenResponse
 }

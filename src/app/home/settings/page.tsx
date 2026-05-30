@@ -1,3 +1,4 @@
+import { Suspense } from "react"
 import { redirect } from "next/navigation"
 import { getCurrentUser } from "@/lib/auth/user"
 import { getActiveSubscription } from "@/lib/subscription"
@@ -16,17 +17,19 @@ export default async function SettingsPage() {
   }
 
   return (
-    <SettingsClient
-      initialUser={{
-        name: user.name ?? null,
-        avatar: user.avatar ?? null,
-        phone: user.phone ?? null,
-        hasWechat: !!user.wechatOpenid,
-        isPro: !!user.isPro,
-        isPartner: !!user.isPartner,
-        proExpires: user.proExpires?.toISOString() ?? null,
-        memberTier,
-      }}
-    />
+    <Suspense>
+      <SettingsClient
+        initialUser={{
+          name: user.name ?? null,
+          avatar: user.avatar ?? null,
+          phone: user.phone ?? null,
+          hasWechat: !!user.wechatOpenid,
+          isPro: !!user.isPro,
+          isPartner: !!user.isPartner,
+          proExpires: user.proExpires?.toISOString() ?? null,
+          memberTier,
+        }}
+      />
+    </Suspense>
   )
 }
