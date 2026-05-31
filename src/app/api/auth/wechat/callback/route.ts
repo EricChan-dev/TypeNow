@@ -8,8 +8,10 @@ import { getUserById, getUserByWechatUnionid } from "@/lib/auth/user"
 import {
   exchangeCodeForAccessToken,
   getUserInfo,
+  checkUserSubscribe,
   type WechatUserInfo,
   type WechatTokenResponse,
+  type WechatFlowType,
 } from "@/lib/wechat"
 
 export async function GET(request: NextRequest) {
@@ -42,6 +44,10 @@ export async function GET(request: NextRequest) {
   const isBindFlow = state.startsWith("bind_") &&
     request.cookies.get("wechat_bind_intent")?.value
 
+  // Determine OAuth platform from state prefix
+  const effectiveState = state.replace(/^bind_/, "")
+  const flowType: WechatFlowType = effectiveState.startsWith("oa_") ? "oa" : "open"
+
   // Verify CSRF state (login uses wechat_oauth_state, bind uses wechat_bind_state)
   const cookieName = isBindFlow ? "wechat_bind_state" : "wechat_oauth_state"
   const cookieState = request.cookies.get(cookieName)?.value
@@ -60,14 +66,20 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    const tokenData = await exchangeCodeForAccessToken(code)
+    const tokenData = await exchangeCodeForAccessToken(code, flowType)
     const userInfo = await getUserInfo(tokenData.access_token, tokenData.openid)
 
     if (isBindFlow) {
       return handleWechatBind(tokenData, userInfo, request)
     }
 
-    const redirectRes = await upsertWeChatUser(tokenData, userInfo, request)
+    // Check if user follows the Official Account (OA flow only, non-blocking)
+    let isOAUserSubscribed = true
+    if (flowType === "oa") {
+      isOAUserSubscribed = await checkUserSubscribe(userInfo.openid)
+    }
+
+    const redirectRes = await upsertWeChatUser(tokenData, userInfo, request, isOAUserSubscribed)
     redirectRes.cookies.set("wechat_oauth_state", "", { maxAge: 0, path: "/" })
     return redirectRes
   } catch (err) {
@@ -97,7 +109,8 @@ export async function GET(request: NextRequest) {
 async function upsertWeChatUser(
   tokenData: WechatTokenResponse,
   wechatUser: WechatUserInfo,
-  request: NextRequest
+  request: NextRequest,
+  isSubscribed = true
 ): Promise<NextResponse> {
   const loginUrl = new URL("/login", request.url)
 
@@ -125,6 +138,8 @@ async function upsertWeChatUser(
     user = unionidUser
   }
 
+  let isNewUser = false
+
   if (user) {
     // Update existing user
     await db
@@ -141,6 +156,7 @@ async function upsertWeChatUser(
       .where(eq(users.id, user.id))
   } else {
     // Create new user
+    isNewUser = true
     const refCode = request.cookies.get("ref_code")?.value
     let referredBy: string | null = null
     if (refCode) {
@@ -171,7 +187,16 @@ async function upsertWeChatUser(
   }
 
   await createSession(user.id)
-  return NextResponse.redirect(new URL("/home", request.url))
+
+  const homeUrl = new URL("/home", request.url)
+  homeUrl.searchParams.set("login_success", "wechat")
+  if (isNewUser) {
+    homeUrl.searchParams.set("new_user", "1")
+  }
+  if (!isSubscribed) {
+    homeUrl.searchParams.set("follow_oa", "0")
+  }
+  return NextResponse.redirect(homeUrl)
 }
 
 async function handleWechatBind(

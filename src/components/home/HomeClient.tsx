@@ -1,13 +1,15 @@
 "use client"
 
-import { useState, useEffect, useRef, useMemo, useCallback } from "react"
+import { useState, useEffect, useRef, useMemo, useCallback, Suspense } from "react"
 import Link from "next/link"
+import { useSearchParams } from "next/navigation"
 import { animate, stagger } from "animejs"
 import {
   Flame, BookOpen, ChevronRight, Zap,
   BarChart2, Clock, Check,
   CalendarDays, ArrowRight, Loader2,
   ChevronLeft, Trophy, HelpCircle,
+  Smartphone, X, MessageCircle,
 } from "lucide-react"
 import { toast } from "sonner"
 import { cn } from "@/lib/utils"
@@ -372,6 +374,139 @@ function WeeklyChart({ weekly }: { weekly: { date: string; count: number }[] }) 
   )
 }
 
+// ─── WeChat Login Banner (uses useSearchParams, needs Suspense) ─────────────
+
+function WeChatLoginBanner() {
+  const searchParams = useSearchParams()
+  const cleanedRef = useRef(false)
+
+  useEffect(() => {
+    const loginSuccess = searchParams.get("login_success")
+    if (loginSuccess === "wechat") {
+      toast.success("微信登录成功")
+    }
+    // Clean URL params once
+    if (!cleanedRef.current && loginSuccess) {
+      cleanedRef.current = true
+      const url = new URL(window.location.href)
+      url.searchParams.delete("login_success")
+      url.searchParams.delete("new_user")
+      url.searchParams.delete("follow_oa")
+      window.history.replaceState({}, "", url.toString())
+    }
+  }, [searchParams])
+
+  const followOA = searchParams.get("follow_oa")
+  const newUser = searchParams.get("new_user")
+  const loginSuccess = searchParams.get("login_success")
+
+  // follow_oa=0 takes priority: show follow guidance regardless of new_user
+  if (followOA === "0" && loginSuccess === "wechat") {
+    return <FollowOABanner />
+  }
+
+  // new_user=1 (already following or not OA flow): show phone bind
+  if (newUser === "1" && loginSuccess === "wechat") {
+    return <PhoneBindBanner />
+  }
+
+  return null
+}
+
+function FollowOABanner() {
+  const [dismissed, setDismissed] = useState(false)
+
+  if (dismissed) return null
+
+  return (
+    <div
+      className="anim-card relative overflow-hidden rounded-2xl border p-5"
+      style={{
+        background: "linear-gradient(135deg, #7c3aed08, #a855f708)",
+        borderColor: "#7c3aed30",
+      }}
+    >
+      <div className="flex items-center gap-4">
+        <div
+          className="flex items-center justify-center w-10 h-10 rounded-xl shrink-0"
+          style={{ background: "#7c3aed18", border: "1px solid #7c3aed30" }}
+        >
+          <MessageCircle className="h-5 w-5 text-violet-400" />
+        </div>
+        <div className="flex-1 min-w-0">
+          <p className="text-sm font-semibold text-foreground/80">
+            关注服务号，接收学习提醒
+          </p>
+          <p className="text-[12px] text-foreground/45 mt-0.5">
+            打卡通知、复习提醒不再错过
+          </p>
+        </div>
+        <div className="shrink-0 w-16 h-16 rounded-lg overflow-hidden border border-[#E2E8F0] bg-white">
+          <img
+            src="/qrcode-oa.jpg"
+            alt="关注服务号"
+            className="w-full h-full object-cover"
+          />
+        </div>
+        <button
+          type="button"
+          onClick={() => setDismissed(true)}
+          className="shrink-0 p-1.5 rounded-lg text-foreground/25 hover:text-foreground/50 hover:bg-foreground/[0.06] transition-colors"
+        >
+          <X className="h-4 w-4" />
+        </button>
+      </div>
+    </div>
+  )
+}
+
+function PhoneBindBanner() {
+  const [dismissed, setDismissed] = useState(false)
+
+  if (dismissed) return null
+
+  return (
+    <div
+      className="anim-card relative overflow-hidden rounded-2xl border p-5"
+      style={{
+        background: "linear-gradient(135deg, #7c3aed08, #a855f708)",
+        borderColor: "#7c3aed30",
+      }}
+    >
+      <div className="flex items-center gap-4">
+        <div
+          className="flex items-center justify-center w-10 h-10 rounded-xl shrink-0"
+          style={{ background: "#7c3aed18", border: "1px solid #7c3aed30" }}
+        >
+          <Smartphone className="h-5 w-5 text-violet-400" />
+        </div>
+        <div className="flex-1 min-w-0">
+          <p className="text-sm font-semibold text-foreground/80">
+            建议绑定手机号
+          </p>
+          <p className="text-[12px] text-foreground/45 mt-0.5">
+            方便后续登录与找回账号
+          </p>
+        </div>
+        <Link
+          href="/home/settings"
+          className="shrink-0 rounded-lg px-4 py-2 text-[13px] font-medium text-white transition-colors hover:opacity-90"
+          style={{ background: "linear-gradient(135deg, #7c3aed, #a855f7)" }}
+        >
+          去绑定
+        </Link>
+        <button
+          type="button"
+          onClick={() => setDismissed(true)}
+          className="shrink-0 p-1.5 rounded-lg text-foreground/25 hover:text-foreground/50 hover:bg-foreground/[0.06] transition-colors"
+        >
+          <X className="h-4 w-4" />
+        </button>
+      </div>
+    </div>
+  )
+}
+
 // ─── Main Component ───────────────────────────────────────────────────────────
 
 export function HomeClient({ name }: HomeClientProps) {
@@ -551,6 +686,11 @@ export function HomeClient({ name }: HomeClientProps) {
             </div>
           </div>
         </div>
+
+        {/* ── WeChat login feedback ── */}
+        <Suspense fallback={null}>
+          <WeChatLoginBanner />
+        </Suspense>
 
         {/* ── Stats row — full width above grid ── */}
         <div className="grid grid-cols-3 gap-3">

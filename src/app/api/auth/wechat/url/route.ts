@@ -1,7 +1,7 @@
-import { NextResponse } from "next/server"
-import { generateOAuthUrl, isWeChatConfigured } from "@/lib/wechat"
+import { NextRequest, NextResponse } from "next/server"
+import { generateOAuthUrl, isWeChatConfigured, isWeChatOAConfigured, type WechatFlowType } from "@/lib/wechat"
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   if (!isWeChatConfigured()) {
     return NextResponse.json({ devMode: true })
   }
@@ -14,7 +14,17 @@ export async function GET() {
     )
   }
 
-  const { url, state } = generateOAuthUrl(redirectUri)
+  const flowParam = request.nextUrl.searchParams.get("flow")
+  const flow: WechatFlowType = flowParam === "oa" ? "oa" : "open"
+
+  if (flow === "oa" && !isWeChatOAConfigured()) {
+    return NextResponse.json(
+      { error: "服务号未配置" },
+      { status: 400 }
+    )
+  }
+
+  const { url, state } = generateOAuthUrl(redirectUri, { flow })
 
   const response = NextResponse.json({ url })
 

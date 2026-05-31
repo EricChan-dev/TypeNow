@@ -4,7 +4,7 @@ const WECHAT_PAY_HOST = "https://api.mch.weixin.qq.com"
 
 function getConfig() {
   return {
-    appId: process.env.WECHAT_APP_ID || "",
+    appId: process.env.WECHAT_PAY_APP_ID || process.env.WECHAT_APP_ID || "",
     mchId: process.env.WECHAT_PAY_MCH_ID || "",
     apiV3Key: process.env.WECHAT_PAY_API_V3_KEY || "",
     serialNo: process.env.WECHAT_PAY_SERIAL_NO || "",

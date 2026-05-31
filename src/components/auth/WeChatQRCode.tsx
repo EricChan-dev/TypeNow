@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback } from "react"
 import QRCode from "qrcode"
 import { RefreshCw, Loader2, Smartphone } from "lucide-react"
+import { isWechatBrowser, isMobile } from "@/lib/device"
 
 const REFRESH_INTERVAL_MS = 4 * 60 * 1000 // 4 minutes (WeChat codes expire in 5)
 
@@ -11,6 +12,8 @@ export function WeChatQRCode() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [devMode, setDevMode] = useState(false)
+  const [redirecting, setRedirecting] = useState(false)
+  const [showMobileHint, setShowMobileHint] = useState(false)
 
   const fetchQrCode = useCallback(async () => {
     setLoading(true)
@@ -43,6 +46,29 @@ export function WeChatQRCode() {
     }
   }, [])
 
+  // Auto-redirect for WeChat browser on mobile (uses OA OAuth flow)
+  useEffect(() => {
+    if (!isWechatBrowser() || !isMobile()) {
+      if (isMobile()) setShowMobileHint(true)
+      return
+    }
+    setRedirecting(true)
+    fetch("/api/auth/wechat/url?flow=oa")
+      .then((r) => r.json())
+      .then((data) => {
+        if (data.url) {
+          window.location.href = data.url
+        } else {
+          setError(data.error || "微信授权跳转失败")
+          setRedirecting(false)
+        }
+      })
+      .catch(() => {
+        setError("微信授权跳转失败，请重试")
+        setRedirecting(false)
+      })
+  }, [])
+
   useEffect(() => {
     fetchQrCode()
   }, [fetchQrCode])
@@ -53,6 +79,18 @@ export function WeChatQRCode() {
     const timer = setInterval(fetchQrCode, REFRESH_INTERVAL_MS)
     return () => clearInterval(timer)
   }, [devMode, qrDataUrl, fetchQrCode])
+
+  // WeChat browser redirecting state
+  if (redirecting) {
+    return (
+      <div className="flex flex-col items-center gap-4">
+        <div className="flex h-[200px] w-[200px] flex-col items-center justify-center gap-3 rounded-xl bg-[#F8FAFC] border border-[#E2E8F0]">
+          <Loader2 className="h-10 w-10 text-[#1E40AF] animate-spin" />
+          <span className="text-[13px] text-[#64748B]">正在跳转微信授权...</span>
+        </div>
+      </div>
+    )
+  }
 
   // Dev mode: show mock button
   if (devMode) {
@@ -131,6 +169,11 @@ export function WeChatQRCode() {
           <RefreshCw className="h-3 w-3" />
         </button>
       </div>
+      {showMobileHint && (
+        <p className="text-[12px] text-[#94A3B8]">
+          推荐在微信中打开此页面，可直接授权登录
+        </p>
+      )}
     </div>
   )
 }

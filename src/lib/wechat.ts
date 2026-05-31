@@ -1,5 +1,7 @@
 import crypto from "crypto"
 
+export type WechatFlowType = "open" | "oa"
+
 export interface WechatTokenResponse {
   access_token: string
   expires_in: number
@@ -29,23 +31,42 @@ export function isWeChatConfigured(): boolean {
   )
 }
 
+export function isWeChatOAConfigured(): boolean {
+  return !!(
+    process.env.WECHAT_OA_APP_ID?.startsWith("wx") &&
+    process.env.WECHAT_OA_APP_SECRET
+  )
+}
+
 export function generateOAuthUrl(
   redirectUri: string,
-  options?: { forBind?: boolean }
+  options?: { forBind?: boolean; flow?: WechatFlowType }
 ): { url: string; state: string } {
-  const appId = process.env.WECHAT_APP_ID!
+  const flow = options?.flow ?? "open"
+  const isOA = flow === "oa"
+
+  const appId = isOA ? process.env.WECHAT_OA_APP_ID! : process.env.WECHAT_APP_ID!
   const raw = crypto.randomBytes(32).toString("hex")
-  const state = options?.forBind ? `bind_${raw}` : raw
+
+  let state: string
+  if (options?.forBind && isOA) state = `bind_oa_${raw}`
+  else if (options?.forBind) state = `bind_${raw}`
+  else if (isOA) state = `oa_${raw}`
+  else state = raw
 
   const params = new URLSearchParams({
     appid: appId,
     redirect_uri: redirectUri,
     response_type: "code",
-    scope: "snsapi_login",
+    scope: isOA ? "snsapi_userinfo" : "snsapi_login",
     state,
   })
 
-  const url = `https://open.weixin.qq.com/connect/qrconnect?${params.toString()}#wechat_redirect`
+  const baseUrl = isOA
+    ? "https://open.weixin.qq.com/connect/oauth2/authorize"
+    : "https://open.weixin.qq.com/connect/qrconnect"
+
+  const url = `${baseUrl}?${params.toString()}#wechat_redirect`
 
   return { url, state }
 }
@@ -67,10 +88,12 @@ function isWechatError(
 }
 
 export async function exchangeCodeForAccessToken(
-  code: string
+  code: string,
+  flowType?: WechatFlowType
 ): Promise<WechatTokenResponse> {
-  const appId = process.env.WECHAT_APP_ID!
-  const appSecret = process.env.WECHAT_APP_SECRET!
+  const isOA = flowType === "oa"
+  const appId = isOA ? process.env.WECHAT_OA_APP_ID! : process.env.WECHAT_APP_ID!
+  const appSecret = isOA ? process.env.WECHAT_OA_APP_SECRET! : process.env.WECHAT_APP_SECRET!
 
   const params = new URLSearchParams({
     appid: appId,
@@ -167,4 +190,57 @@ export async function refreshWeChatToken(
   }
 
   return data as WechatTokenResponse
+}
+
+// ─── Official Account global access_token (cached) ────────────────────────────
+
+let cachedOAToken: { token: string; expiresAt: number } | null = null
+
+export async function getOAGlobalAccessToken(): Promise<string> {
+  if (cachedOAToken && Date.now() < cachedOAToken.expiresAt - 300_000) {
+    return cachedOAToken.token
+  }
+
+  const appId = process.env.WECHAT_OA_APP_ID!
+  const appSecret = process.env.WECHAT_OA_APP_SECRET!
+
+  const res = await fetch(
+    `https://api.weixin.qq.com/cgi-bin/token?grant_type=client_credential&appid=${appId}&secret=${appSecret}`
+  )
+
+  if (!res.ok) {
+    throw new Error("微信服务连接失败")
+  }
+
+  const data = await res.json()
+
+  if (isWechatError(data)) {
+    throw new Error(`获取 access_token 失败: ${data.errmsg}`)
+  }
+
+  cachedOAToken = {
+    token: data.access_token,
+    expiresAt: Date.now() + (data.expires_in as number) * 1000,
+  }
+
+  return cachedOAToken.token
+}
+
+export async function checkUserSubscribe(openid: string): Promise<boolean> {
+  try {
+    const token = await getOAGlobalAccessToken()
+    const res = await fetch(
+      `https://api.weixin.qq.com/cgi-bin/user/info?access_token=${token}&openid=${openid}&lang=zh_CN`
+    )
+
+    if (!res.ok) return false
+
+    const data = await res.json()
+
+    if (isWechatError(data)) return false
+
+    return (data as Record<string, unknown>).subscribe === 1
+  } catch {
+    return false
+  }
 }
