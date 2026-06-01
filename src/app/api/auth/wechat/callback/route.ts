@@ -150,7 +150,7 @@ async function upsertWeChatUser(
       .update(users)
       .set({
         name: user.name ?? wechatUser.nickname,
-        avatar: user.avatar ?? wechatUser.headimgurl,
+        avatar: wechatUser.headimgurl || user.avatar,
         wechatOpenid: wechatUser.openid,
         wechatUnionid: wechatUser.unionid || null,
         wechatAccessToken: tokenData.access_token,
@@ -266,7 +266,7 @@ async function handleWechatBind(
       wechatOpenid: wechatUser.openid,
       wechatUnionid: wechatUser.unionid || null,
       name: currentUser.name ?? wechatUser.nickname,
-      avatar: currentUser.avatar ?? wechatUser.headimgurl,
+      avatar: wechatUser.headimgurl || currentUser.avatar,
       wechatAccessToken: tokenData.access_token,
       wechatRefreshToken: tokenData.refresh_token,
       wechatTokenExpiresAt: tokenExpiresAt,
