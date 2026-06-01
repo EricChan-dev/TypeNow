@@ -74,7 +74,7 @@ export function ExpiryBanner({ memberTier, proExpires }: ExpiryBannerProps) {
       <span className="font-mono font-bold text-amber-600 dark:text-amber-400">{countdown}</span>
       <Link
         href="/pricing"
-        className="rounded-lg bg-violet-600 text-white hover:bg-violet-700 text-xs px-3 py-1 font-semibold transition-colors shrink-0"
+        className="rounded-lg bg-accent text-primary-foreground hover:bg-accent/90 text-xs px-3 py-1 font-semibold transition-colors shrink-0"
       >
         {isTrial ? "立即升级" : "立即续费"}
       </Link>

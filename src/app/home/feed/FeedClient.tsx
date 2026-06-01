@@ -145,7 +145,7 @@ export function FeedClient() {
           {posts.map((post) => (
             <div key={post.id} className="rounded-2xl border border-border bg-card p-4">
               <div className="flex items-center gap-3 mb-3">
-                <div className="w-8 h-8 rounded-full overflow-hidden bg-accent flex items-center justify-center text-white text-sm font-bold shrink-0">
+                <div className="w-8 h-8 rounded-full overflow-hidden bg-accent flex items-center justify-center text-primary-foreground text-sm font-bold shrink-0">
                   {post.userAvatar ? (
                     <Image src={post.userAvatar} alt="" width={32} height={32} className="object-cover" />
                   ) : (

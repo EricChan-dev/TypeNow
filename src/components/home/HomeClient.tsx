@@ -448,7 +448,7 @@ function FollowOABanner() {
             打卡通知、复习提醒不再错过
           </p>
         </div>
-        <div className="shrink-0 w-16 h-16 rounded-lg overflow-hidden border border-[#E2E8F0] bg-white">
+        <div className="shrink-0 w-16 h-16 rounded-lg overflow-hidden border border-border bg-card">
           <img
             src="/qrcode-oa.jpg"
             alt="关注服务号"
@@ -637,7 +637,7 @@ export function HomeClient({ name }: HomeClientProps) {
               className={cn(
                 "px-4 py-1.5 rounded-lg text-sm font-semibold transition-all duration-200",
                 activeTab === tab
-                  ? "bg-violet-600 text-white shadow-sm"
+                  ? "bg-accent text-primary-foreground shadow-sm"
                   : "text-muted-foreground hover:text-foreground"
               )}
             >

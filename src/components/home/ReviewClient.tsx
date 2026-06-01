@@ -253,7 +253,7 @@ export function ReviewClient() {
         <p className="text-foreground/30 text-sm">完成练习后，句子会自动加入复习队列</p>
         <button
           onClick={() => router.push("/home/review")}
-          className="mt-2 px-5 py-2 rounded-xl bg-violet-600 text-white text-sm font-semibold hover:bg-violet-500 transition-colors"
+          className="mt-2 px-5 py-2 rounded-xl bg-accent text-primary-foreground text-sm font-semibold hover:bg-accent/90 transition-colors"
         >
           返回主页
         </button>
@@ -271,7 +271,7 @@ export function ReviewClient() {
         </div>
         <button
           onClick={() => router.push("/home/review")}
-          className="mt-4 px-6 py-2.5 rounded-xl bg-violet-600 text-white text-sm font-semibold hover:bg-violet-500 transition-colors"
+          className="mt-4 px-6 py-2.5 rounded-xl bg-accent text-primary-foreground text-sm font-semibold hover:bg-accent/90 transition-colors"
         >
           返回主页
         </button>

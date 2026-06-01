@@ -21,7 +21,7 @@ const TIER_COLORS: Record<MemberTier, string> = {
   trial: "bg-amber-500/20 text-amber-500 border border-amber-400/60",
   monthly: "bg-blue-500/20 text-blue-500 border border-blue-400/60",
   yearly: "bg-violet-500/20 text-violet-500 border border-violet-400/60",
-  partner: "text-white border",
+  partner: "text-primary-foreground border",
 }
 
 function formatDate(d: Date | null): string {
@@ -116,7 +116,7 @@ export default async function MembershipPage() {
             >
               <div className="flex items-center gap-2">
                 <p className="text-sm font-semibold text-foreground">年度会员</p>
-                <span className="text-[10px] font-bold bg-violet-500 text-white px-1.5 py-0.5 rounded-full">推荐</span>
+                <span className="text-[10px] font-bold bg-accent text-primary-foreground px-1.5 py-0.5 rounded-full">推荐</span>
               </div>
               <p className="text-2xl font-bold text-foreground mt-1">
                 ¥199<span className="text-sm font-normal text-muted-foreground"> / 年</span>

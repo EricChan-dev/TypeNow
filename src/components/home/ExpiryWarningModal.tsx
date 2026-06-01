@@ -90,7 +90,7 @@ export function ExpiryWarningModal({ memberTier, proExpires }: Props) {
         {/* Close */}
         <button
           onClick={dismiss}
-          className="absolute top-4 right-4 text-white/35 hover:text-white/65 transition-colors"
+          className="absolute top-4 right-4 text-muted-foreground hover:text-foreground transition-colors"
         >
           <X className="h-4 w-4" />
         </button>
@@ -101,8 +101,8 @@ export function ExpiryWarningModal({ memberTier, proExpires }: Props) {
             style={{ background: "rgba(120,60,10,0.55)" }}>
             ⏰
           </div>
-          <h2 className="text-[18px] font-bold text-white">{tierName}即将过期</h2>
-          <p className="text-sm text-white/45">
+          <h2 className="text-[18px] font-bold text-foreground">{tierName}即将过期</h2>
+          <p className="text-sm text-muted-foreground">
             {timeLabel}
             <span className="text-amber-400 font-bold">{formatTimeLeft(msLeft, memberTier)}</span>
           </p>
@@ -110,10 +110,10 @@ export function ExpiryWarningModal({ memberTier, proExpires }: Props) {
 
         {/* Loss list */}
         <div className="px-6 pb-4">
-          <p className="text-[13px] text-white/40 mb-2.5">到期后将失去以下权益：</p>
+          <p className="text-[13px] text-muted-foreground mb-2.5">到期后将失去以下权益：</p>
           <div className="flex flex-col gap-2">
             {LOSS_ITEMS.map((item) => (
-              <div key={item} className="flex items-center gap-2.5 text-[13px] text-white/70">
+              <div key={item} className="flex items-center gap-2.5 text-[13px] text-foreground/70">
                 <span className="text-red-500 font-bold text-xs shrink-0">✕</span>
                 {item}
               </div>
@@ -125,14 +125,14 @@ export function ExpiryWarningModal({ memberTier, proExpires }: Props) {
         <div className="mx-5 mb-5 rounded-xl px-4 py-3"
           style={{ background: "rgba(245,158,11,0.08)", border: "1px solid rgba(245,158,11,0.25)" }}>
           <p className="text-amber-400 font-bold text-[13px]">🎁 限时特惠</p>
-          <p className="text-white/40 text-xs mt-0.5">{tierName}专属优惠价，立即续费享折扣</p>
+          <p className="text-muted-foreground text-xs mt-0.5">{tierName}专属优惠价，立即续费享折扣</p>
         </div>
 
         {/* Actions */}
-        <div className="grid grid-cols-2" style={{ borderTop: "1px solid rgba(255,255,255,0.08)" }}>
+        <div className="grid grid-cols-2 border-t border-border">
           <button
             onClick={dismiss}
-            className="py-4 text-sm font-medium text-white/50 hover:bg-white/[0.04] transition-colors"
+            className="py-4 text-sm font-medium text-muted-foreground hover:bg-muted/50 transition-colors"
           >
             稍后再说
           </button>
