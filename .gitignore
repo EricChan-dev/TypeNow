@@ -42,3 +42,6 @@ next-env.d.ts
 
 # prisma generated
 src/generated/
+
+# CodeGraph local index (per-machine, rebuilt via `codegraph init`)
+/.codegraph/
