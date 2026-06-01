@@ -14,13 +14,17 @@ import {
   type WechatFlowType,
 } from "@/lib/wechat"
 
+function siteOrigin(request: NextRequest): string {
+  return process.env.NEXT_PUBLIC_SITE_URL?.replace(/\/$/, "") ?? new URL(request.url).origin
+}
+
 export async function GET(request: NextRequest) {
   const searchParams = request.nextUrl.searchParams
   const code = searchParams.get("code")
   const state = searchParams.get("state")
   const errorParam = searchParams.get("error")
 
-  const loginUrl = new URL("/login", request.url)
+  const loginUrl = new URL("/login", siteOrigin(request))
 
   if (errorParam) {
     loginUrl.searchParams.set("error", "wechat_denied")
@@ -55,7 +59,7 @@ export async function GET(request: NextRequest) {
     const errorKey = isBindFlow ? "bind_error" : "error"
     const errorVal = isBindFlow ? "csrf_mismatch" : "csrf_mismatch"
     const redirectUrl = isBindFlow
-      ? new URL("/home/settings", request.url)
+      ? new URL("/home/settings", siteOrigin(request))
       : loginUrl
     redirectUrl.searchParams.set(errorKey, errorVal)
     const res = NextResponse.redirect(redirectUrl)
@@ -85,7 +89,7 @@ export async function GET(request: NextRequest) {
   } catch (err) {
     const message = err instanceof Error ? err.message : "登录失败"
     if (isBindFlow) {
-      const settingsUrl = new URL("/home/settings", request.url)
+      const settingsUrl = new URL("/home/settings", siteOrigin(request))
       settingsUrl.searchParams.set("bind_error", message)
       const res = NextResponse.redirect(settingsUrl)
       res.cookies.set("wechat_bind_state", "", { maxAge: 0, path: "/" })
@@ -112,7 +116,7 @@ async function upsertWeChatUser(
   request: NextRequest,
   isSubscribed = true
 ): Promise<NextResponse> {
-  const loginUrl = new URL("/login", request.url)
+  const loginUrl = new URL("/login", siteOrigin(request))
 
   if (!db) {
     loginUrl.searchParams.set("error", "server_error")
@@ -188,7 +192,7 @@ async function upsertWeChatUser(
 
   await createSession(user.id)
 
-  const homeUrl = new URL("/home", request.url)
+  const homeUrl = new URL("/home", siteOrigin(request))
   homeUrl.searchParams.set("login_success", "wechat")
   if (isNewUser) {
     homeUrl.searchParams.set("new_user", "1")
@@ -204,7 +208,7 @@ async function handleWechatBind(
   wechatUser: WechatUserInfo,
   request: NextRequest
 ): Promise<NextResponse> {
-  const settingsUrl = new URL("/home/settings", request.url)
+  const settingsUrl = new URL("/home/settings", siteOrigin(request))
   const clearCookies = (res: NextResponse) => {
     res.cookies.set("wechat_bind_state", "", { maxAge: 0, path: "/" })
     res.cookies.set("wechat_bind_intent", "", { maxAge: 0, path: "/" })
@@ -274,7 +278,7 @@ async function handleWechatBind(
 }
 
 async function handleDevLogin(request: NextRequest): Promise<NextResponse> {
-  if (!db) return NextResponse.redirect(new URL("/home", request.url))
+  if (!db) return NextResponse.redirect(new URL("/home", siteOrigin(request)))
 
   const devOpenid = "dev_wechat_user"
   let [user] = await db
@@ -291,11 +295,11 @@ async function handleDevLogin(request: NextRequest): Promise<NextResponse> {
   }
 
   await createSession(user.id)
-  return NextResponse.redirect(new URL("/home", request.url))
+  return NextResponse.redirect(new URL("/home", siteOrigin(request)))
 }
 
 async function handleDevBind(request: NextRequest): Promise<NextResponse> {
-  const settingsUrl = new URL("/home/settings", request.url)
+  const settingsUrl = new URL("/home/settings", siteOrigin(request))
 
   if (!db) {
     settingsUrl.searchParams.set("bind_error", "server_error")
