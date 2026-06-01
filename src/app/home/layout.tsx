@@ -4,6 +4,7 @@ import { getActiveSubscription } from "@/lib/subscription"
 import { ConditionalTopbar } from "@/components/home/ConditionalTopbar"
 import { HomeShell } from "@/components/home/HomeShell"
 import { ExpiryWarningModal } from "@/components/home/ExpiryWarningModal"
+import { ExpiryBanner } from "@/components/home/ExpiryBanner"
 
 export default async function HomeLayout({
   children,
@@ -45,6 +46,9 @@ export default async function HomeLayout({
   return (
     <div className="flex flex-col h-screen overflow-hidden bg-background">
       <ConditionalTopbar serverUser={serverUser} />
+      {serverUser && (
+        <ExpiryBanner memberTier={serverUser.member_tier} proExpires={serverUser.pro_expires} />
+      )}
       <HomeShell isPartner={!!(serverUser?.is_partner)}>{children}</HomeShell>
       {serverUser && (
         <ExpiryWarningModal

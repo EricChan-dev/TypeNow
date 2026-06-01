@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server"
 import { db } from "@/lib/db"
 import { courses } from "@/lib/db/schema"
-import { eq, sql } from "drizzle-orm"
+import { eq, sql, desc } from "drizzle-orm"
 
 export async function GET(request: Request) {
   if (!db) return NextResponse.json({ data: [], total: 0 })
@@ -16,7 +16,7 @@ export async function GET(request: Request) {
       .where(eq(courses.isPublished, 1))
       .limit(pageSize)
       .offset(offset)
-      .orderBy(courses.createdAt),
+      .orderBy(desc(courses.learnerCount), courses.createdAt),
     db.select({ total: sql<number>`count(*)` }).from(courses).where(eq(courses.isPublished, 1)),
   ])
 

@@ -78,6 +78,7 @@ import { OutlineModal } from "@/components/home/learn/OutlineModal"
 import { SettingsModal } from "@/components/home/learn/SettingsModal"
 import { CompletedSentence } from "@/components/home/learn/CompletedSentence"
 import { SentenceFeedback, type FeedbackVariant } from "@/components/home/learn/SentenceFeedback"
+import { VoicePanel } from "@/components/home/learn/VoicePanel"
 import { globalSpeak } from "@/lib/hooks/useTTSSettings"
 
 function useDebounce<T extends (...args: never[]) => void>(fn: T, delay: number): T {
@@ -1035,6 +1036,8 @@ export function LearnClient({
             <p className="text-center text-2xl font-semibold text-foreground/65 tracking-wide">
               {sentence.chinese}
             </p>
+
+            <VoicePanel english={sentence.english} />
 
             <div className="flex flex-col items-center gap-3">
               <p className="text-base text-foreground/30 font-medium">

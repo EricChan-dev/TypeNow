@@ -89,6 +89,11 @@ export async function POST(request: NextRequest) {
     await db.insert(users).values({ id, phone, name: defaultName, referredBy, isPro: 1, proExpires: trialExpiresAt })
     const [newUser] = await db.select().from(users).where(eq(users.id, id)).limit(1)
     user = newUser
+
+    if (referredBy) {
+      const { awardInviteRegister } = await import("@/lib/auth/invite")
+      await awardInviteRegister(referredBy, id).catch(() => null)
+    }
   }
 
   await createSession(user.id)

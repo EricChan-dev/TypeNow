@@ -2,6 +2,7 @@ import type { Metadata } from "next"
 import { Inter, Geist_Mono } from "next/font/google"
 import { ThemeProvider } from "next-themes"
 import { Toaster } from "sonner"
+import { AiChatWidget } from "@/components/layout/AiChatWidget"
 import "./globals.css"
 
 const inter = Inter({
@@ -39,6 +40,7 @@ export default function RootLayout({
           disableTransitionOnChange
         >
           {children}
+          <AiChatWidget />
           <Toaster
             position="top-center"
             richColors

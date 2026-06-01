@@ -387,7 +387,7 @@ export const diamondLogs = mysqlTable(
     userId: varchar("user_id", { length: 36 }).notNull(),
     amount: int("amount").notNull(),
     durationSeconds: int("duration_seconds"),
-    type: mysqlEnum("type", ["sentence", "lesson_complete", "course_complete"]).notNull(),
+    type: mysqlEnum("type", ["sentence", "lesson_complete", "course_complete", "share_invite", "chat"]).notNull(),
     refId: varchar("ref_id", { length: 36 }),
     streak: int("streak").notNull().default(0),
     createdAt: datetime("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
@@ -478,6 +478,68 @@ export const userNotes = mysqlTable(
   (t) => [index("idx_user_notes_user").on(t.userId, t.updatedAt)]
 )
 
+// ─── Task Logs (daily share dedup + invite register reward) ──────────────────
+export const taskLogs = mysqlTable(
+  "task_logs",
+  {
+    id: varchar("id", { length: 36 }).primaryKey().default(sql`(UUID())`),
+    userId: varchar("user_id", { length: 36 }).notNull(),
+    taskType: mysqlEnum("task_type", ["share_invite", "invite_register"]).notNull(),
+    rewardType: mysqlEnum("reward_type", ["diamond", "trial_days"]).notNull(),
+    rewardAmount: int("reward_amount").notNull(),
+    date: varchar("date", { length: 10 }).notNull(),
+    refId: varchar("ref_id", { length: 36 }),
+    createdAt: datetime("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  },
+  (t) => [
+    uniqueIndex("uk_task_user_type_date").on(t.userId, t.taskType, t.date),
+    uniqueIndex("uk_invite_ref").on(t.refId),
+  ]
+)
+
+// ─── Posts (dynamic feed) ──────────────────────────────────────────────────────
+export const posts = mysqlTable(
+  "posts",
+  {
+    id: varchar("id", { length: 36 }).primaryKey().default(sql`(UUID())`),
+    userId: varchar("user_id", { length: 36 }).notNull(),
+    content: text("content").notNull(),
+    likeCount: int("like_count").notNull().default(0),
+    commentCount: int("comment_count").notNull().default(0),
+    status: mysqlEnum("status", ["published", "deleted"]).notNull().default("published"),
+    createdAt: datetime("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  },
+  (t) => [
+    index("idx_posts_user").on(t.userId),
+    index("idx_posts_created").on(t.createdAt),
+  ]
+)
+
+// ─── Post Likes ────────────────────────────────────────────────────────────────
+export const postLikes = mysqlTable(
+  "post_likes",
+  {
+    id: varchar("id", { length: 36 }).primaryKey().default(sql`(UUID())`),
+    postId: varchar("post_id", { length: 36 }).notNull(),
+    userId: varchar("user_id", { length: 36 }).notNull(),
+    createdAt: datetime("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  },
+  (t) => [uniqueIndex("uk_post_like").on(t.postId, t.userId)]
+)
+
+// ─── User Feedback ────────────────────────────────────────────────────────────
+export const userFeedback = mysqlTable(
+  "user_feedback",
+  {
+    id: varchar("id", { length: 36 }).primaryKey().default(sql`(UUID())`),
+    userId: varchar("user_id", { length: 36 }).notNull(),
+    category: mysqlEnum("category", ["bug", "feature", "suggestion", "other"]).notNull().default("other"),
+    content: text("content").notNull(),
+    createdAt: datetime("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  },
+  (t) => [index("idx_feedback_created").on(t.createdAt)]
+)
+
 // ─── Type Exports ─────────────────────────────────────────────────────────────
 export type CheckIn = typeof checkIns.$inferSelect
 export type User = typeof users.$inferSelect
@@ -496,3 +558,7 @@ export type DiamondLog = typeof diamondLogs.$inferSelect
 export type WordDictionaryCache = typeof wordDictionaryCache.$inferSelect
 export type WordbookItem = typeof wordbookItems.$inferSelect
 export type UserNote = typeof userNotes.$inferSelect
+export type TaskLog = typeof taskLogs.$inferSelect
+export type Post = typeof posts.$inferSelect
+export type PostLike = typeof postLikes.$inferSelect
+export type UserFeedbackRow = typeof userFeedback.$inferSelect

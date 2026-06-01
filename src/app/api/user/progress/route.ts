@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server"
 import { db } from "@/lib/db"
-import { userCourseProgress } from "@/lib/db/schema"
-import { eq, sql } from "drizzle-orm"
+import { userCourseProgress, courses } from "@/lib/db/schema"
+import { eq, sql, and } from "drizzle-orm"
 import { getSession } from "@/app/actions/auth"
 
 export async function GET() {
@@ -39,6 +39,14 @@ export async function POST(request: Request) {
 
   const now = new Date()
 
+  const [existing] = await db
+    .select({ id: userCourseProgress.id })
+    .from(userCourseProgress)
+    .where(and(eq(userCourseProgress.userId, session.userId), eq(userCourseProgress.courseId, courseId)))
+    .limit(1)
+
+  const isFirstTime = !existing
+
   await db
     .insert(userCourseProgress)
     .values({
@@ -53,6 +61,13 @@ export async function POST(request: Request) {
         sentenceCount: sql`GREATEST(${userCourseProgress.sentenceCount}, ${sentenceCount})`,
       },
     })
+
+  if (isFirstTime) {
+    await db
+      .update(courses)
+      .set({ learnerCount: sql`${courses.learnerCount} + 1` })
+      .where(eq(courses.id, courseId))
+  }
 
   return NextResponse.json({ success: true })
 }

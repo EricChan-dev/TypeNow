@@ -9,6 +9,7 @@ const pageTitles: Record<string, string> = {
   "/home": "首页",
   "/home/courses": "我的课程",
   "/home/store": "课程广场",
+  "/home/feed": "动态广场",
   "/home/archive": "学习档案",
   "/home/leaderboard": "排行榜",
 }

@@ -5,12 +5,13 @@ import Link from "next/link"
 import Image from "next/image"
 import { useRouter } from "next/navigation"
 import { useTheme } from "next-themes"
-import { Moon, Sun, User, Settings, Crown, LogOut, ChevronRight, Handshake } from "lucide-react"
+import { Moon, Sun, User, Settings, Crown, LogOut, ChevronRight, Handshake, MessageSquarePlus } from "lucide-react"
 import { trackThemeToggle } from "@/lib/analytics"
 import { signOutAction } from "@/app/actions/auth"
 import { cn } from "@/lib/utils"
 import { DiamondRulesModal } from "@/components/home/DiamondRulesModal"
 import { GlobalSettingsModal } from "@/components/home/GlobalSettingsModal"
+import { FeedbackModal } from "@/components/home/FeedbackModal"
 
 type MemberTier = "trial" | "monthly" | "yearly" | "partner" | "free"
 
@@ -120,6 +121,7 @@ export function UserActions({ serverUser, variant = "public" }: UserActionsProps
   } : null)
   const [diamondRulesOpen, setDiamondRulesOpen] = useState(false)
   const [settingsOpen, setSettingsOpen] = useState(false)
+  const [feedbackOpen, setFeedbackOpen] = useState(false)
   const [loading, setLoading] = useState(!serverUser)
   const [dropdownOpen, setDropdownOpen] = useState(false)
   const dropdownRef = useRef<HTMLDivElement>(null)
@@ -215,7 +217,9 @@ export function UserActions({ serverUser, variant = "public" }: UserActionsProps
           >
           {variant === "home" && (
             <>
-              <TierBadge tier={user.member_tier} size="sm" />
+              <Link href="/home/membership" className="shrink-0">
+                <TierBadge tier={user.member_tier} size="sm" />
+              </Link>
               {!user.is_partner && (
                 <Link
                   href="/home/partner"
@@ -274,6 +278,13 @@ export function UserActions({ serverUser, variant = "public" }: UserActionsProps
                     <span className="flex items-center gap-3"><Settings className="h-4 w-4 text-muted-foreground" />设置</span>
                     <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />
                   </button>
+                  <button
+                    onClick={() => { setDropdownOpen(false); setFeedbackOpen(true) }}
+                    className="flex items-center justify-between px-4 py-2.5 text-sm text-foreground hover:bg-muted transition-colors w-full"
+                  >
+                    <span className="flex items-center gap-3"><MessageSquarePlus className="h-4 w-4 text-muted-foreground" />用户反馈</span>
+                    <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />
+                  </button>
                   {!user.is_pro && (
                     <Link href="/pricing" onClick={() => setDropdownOpen(false)} className="flex items-center justify-between px-4 py-2.5 text-sm text-foreground hover:bg-muted transition-colors">
                       <span className="flex items-center gap-3"><Crown className="h-4 w-4 text-amber-500" />升级会员</span>
@@ -310,6 +321,7 @@ export function UserActions({ serverUser, variant = "public" }: UserActionsProps
       )}
 
       <DiamondRulesModal open={diamondRulesOpen} onClose={() => setDiamondRulesOpen(false)} />
+      <FeedbackModal open={feedbackOpen} onClose={() => setFeedbackOpen(false)} />
       <GlobalSettingsModal
         open={settingsOpen}
         onClose={() => setSettingsOpen(false)}

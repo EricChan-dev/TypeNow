@@ -16,6 +16,8 @@ import { cn } from "@/lib/utils"
 import { ArchivePanel } from "@/components/home/ArchiveClient"
 import { CheckInRulesModal } from "@/components/home/CheckInRulesModal"
 import { GlobalSettingsModal } from "@/components/home/GlobalSettingsModal"
+import { WelcomeTrialModal } from "@/components/home/WelcomeTrialModal"
+import { DailyTasks } from "@/components/home/DailyTasks"
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -405,9 +407,14 @@ function WeChatLoginBanner() {
     return <FollowOABanner />
   }
 
-  // new_user=1 (already following or not OA flow): show phone bind
+  // new_user=1 (already following or not OA flow): show welcome trial modal + phone bind
   if (newUser === "1" && loginSuccess === "wechat") {
-    return <PhoneBindBanner />
+    return (
+      <>
+        <WelcomeTrialModal />
+        <PhoneBindBanner />
+      </>
+    )
   }
 
   return null
@@ -802,15 +809,15 @@ export function HomeClient({ name }: HomeClientProps) {
                   className={cn(
                     "flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold transition-all duration-300 shrink-0",
                     checkedIn
-                      ? "cursor-default"
+                      ? "cursor-default bg-cyan-100 text-cyan-800 border border-cyan-300 dark:bg-cyan-900/40 dark:text-cyan-200 dark:border-cyan-700"
                       : !checkedIn && todayDiamonds < checkInGoal
-                      ? "cursor-pointer opacity-70"
+                      ? "cursor-pointer opacity-70 border"
                       : "text-white hover:opacity-90 active:scale-95"
                   )}
                   style={checkedIn
-                    ? { background: "var(--stat-3-bg)", border: "1px solid var(--stat-3-border)", color: "#06b6d4" }
+                    ? undefined
                     : !checkedIn && todayDiamonds < checkInGoal
-                    ? { background: "var(--muted)", border: "1px solid var(--border)", color: "var(--muted-foreground)" }
+                    ? { background: "var(--muted)", borderColor: "var(--border)", color: "var(--muted-foreground)" }
                     : { background: "linear-gradient(135deg, #7c3aed, #a855f7)", border: "1px solid #6d28d9", boxShadow: "0 0 18px #7c3aed50" }
                   }
                 >
@@ -844,7 +851,7 @@ export function HomeClient({ name }: HomeClientProps) {
                     </span>
                   )}
                 </div>
-                <div className="h-1.5 rounded-full overflow-hidden" style={{ background: "var(--muted)" }}>
+                <div className="h-1.5 rounded-full overflow-hidden" style={{ background: "var(--border)" }}>
                   <div
                     className="h-full rounded-full transition-all duration-500"
                     style={{
@@ -933,6 +940,9 @@ export function HomeClient({ name }: HomeClientProps) {
                 </div>
               </Link>
             )}
+
+            {/* Daily tasks */}
+            <DailyTasks />
 
             {/* Store link */}
             <Link
