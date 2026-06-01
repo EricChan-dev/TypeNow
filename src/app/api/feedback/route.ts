@@ -48,7 +48,7 @@ export async function POST(request: Request) {
       const label = CATEGORY_LABELS[validCategory] ?? validCategory
       const msgContent = `${label}\n用户: ${userRow?.name ?? "未知"}\n\n${content.trim()}`
 
-      await fetch(
+      const wxRes = await fetch(
         `https://api.weixin.qq.com/cgi-bin/message/custom/send?access_token=${token}`,
         {
           method: "POST",
@@ -60,6 +60,10 @@ export async function POST(request: Request) {
           }),
         }
       )
+      const wxData = await wxRes.json()
+      if (wxData.errcode !== 0) {
+        console.error("[feedback] WeChat push errcode:", wxData.errcode, wxData.errmsg)
+      }
     } catch (e) {
       console.error("[feedback] WeChat push failed:", e)
     }
