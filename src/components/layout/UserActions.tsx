@@ -160,10 +160,13 @@ export function UserActions({ serverUser, variant = "public" }: UserActionsProps
 
   async function handleLogout() {
     setDropdownOpen(false)
-    await signOutAction()
+    try {
+      await signOutAction()
+    } catch {
+      // ignore — proceed to redirect anyway
+    }
     setUser(null)
-    router.push("/")
-    router.refresh()
+    window.location.href = "/"
   }
 
   const isLoggedIn = !!user

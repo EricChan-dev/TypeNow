@@ -62,9 +62,13 @@ export async function deleteSession(): Promise<void> {
   const cookieStore = await cookies()
   const sessionId = cookieStore.get(COOKIE_NAME)?.value
   if (sessionId && db) {
-    await db.delete(sessions).where(eq(sessions.id, sessionId))
+    try {
+      await db.delete(sessions).where(eq(sessions.id, sessionId))
+    } catch {
+      // ignore DB failure — cookie clearing below is the critical step
+    }
   }
-  cookieStore.delete(COOKIE_NAME)
+  cookieStore.set(COOKIE_NAME, "", { maxAge: 0, path: "/" })
 }
 
 export async function isDbConfigured(): Promise<boolean> {

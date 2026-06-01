@@ -39,9 +39,12 @@ export function Navbar() {
 
   async function handleLogout() {
     setUser(null)
-    await signOutAction()
-    router.push("/")
-    router.refresh()
+    try {
+      await signOutAction()
+    } catch {
+      // ignore — proceed to redirect anyway
+    }
+    window.location.href = "/"
   }
 
   const scrollToSection = useCallback((sectionId: string) => {

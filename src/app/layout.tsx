@@ -1,6 +1,5 @@
 import type { Metadata } from "next"
 import { Inter, Geist_Mono } from "next/font/google"
-import { SpeedInsights } from "@vercel/speed-insights/next"
 import { ThemeProvider } from "next-themes"
 import { Toaster } from "sonner"
 import "./globals.css"
@@ -40,7 +39,6 @@ export default function RootLayout({
           disableTransitionOnChange
         >
           {children}
-          <SpeedInsights />
           <Toaster
             position="top-center"
             richColors
