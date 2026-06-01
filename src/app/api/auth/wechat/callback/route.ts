@@ -15,7 +15,8 @@ import {
 } from "@/lib/wechat"
 
 function siteOrigin(request: NextRequest): string {
-  return process.env.NEXT_PUBLIC_SITE_URL?.replace(/\/$/, "") ?? new URL(request.url).origin
+  const fromEnv = process.env.SITE_URL ?? process.env.NEXT_PUBLIC_SITE_URL
+  return fromEnv?.replace(/\/$/, "") ?? new URL(request.url).origin
 }
 
 export async function GET(request: NextRequest) {
