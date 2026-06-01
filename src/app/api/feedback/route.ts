@@ -60,8 +60,8 @@ export async function POST(request: Request) {
           }),
         }
       )
-    } catch {
-      // WeChat push is best-effort, don't fail the request
+    } catch (e) {
+      console.error("[feedback] WeChat push failed:", e)
     }
   }
 
