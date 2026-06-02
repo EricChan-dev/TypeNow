@@ -67,8 +67,8 @@ export function Navbar() {
       <div className="flex h-[72px] items-center justify-between px-5 xl:px-20">
         {/* Logo */}
         <Link href="/" className="flex items-center gap-2 shrink-0">
-          <Image src="/logo_w.svg" alt="TypeNow" width={26} height={26} className="block [.light_&]:hidden" />
-          <Image src="/logo.svg" alt="TypeNow" width={26} height={26} className="hidden [.light_&]:block" />
+          <Image src="/logo_w.svg" alt="TypeNow" width={26} height={26} className="hidden [.dark_&]:block" />
+          <Image src="/logo.svg" alt="TypeNow" width={26} height={26} className="block [.dark_&]:hidden" />
           <span className="text-xl font-bold text-accent">TypeNow·码上英语</span>
         </Link>
 

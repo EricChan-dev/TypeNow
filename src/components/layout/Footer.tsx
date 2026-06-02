@@ -32,8 +32,8 @@ export function Footer() {
           {/* Brand */}
           <div className="col-span-2 lg:col-span-1 flex flex-col gap-4">
             <Link href="/" className="flex items-center gap-2">
-              <Image src="/logo_w.svg" alt="TypeNow" width={24} height={24} className="block [.light_&]:hidden" />
-              <Image src="/logo.svg" alt="TypeNow" width={24} height={24} className="hidden [.light_&]:block" />
+              <Image src="/logo_w.svg" alt="TypeNow" width={24} height={24} className="hidden [.dark_&]:block" />
+              <Image src="/logo.svg" alt="TypeNow" width={24} height={24} className="block [.dark_&]:hidden" />
               <span className="text-lg font-bold text-foreground">
                 码上英语 · TypeNow
               </span>

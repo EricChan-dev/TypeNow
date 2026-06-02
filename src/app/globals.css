@@ -17,56 +17,8 @@
   --font-mono: var(--font-geist-mono), monospace;
 }
 
+/* Light theme (default) */
 :root {
-  --background: #060608;
-  --foreground: #f1f5f9;
-  --primary: #f59e0b;
-  --primary-foreground: #ffffff;
-  --muted: #0a0a10;
-  --muted-foreground: #94a3b8;
-  --border: #1e1e2a;
-  --card: #0f0f14;
-  --card-foreground: #f1f5f9;
-  --accent: #6366f1;
-  --success: #22c55e;
-  --warning: #f59e0b;
-  /* Surface tokens for theme-aware cards */
-  --surface: #0f0f14;
-  --surface-alt: #0c0c12;
-  --surface-border: #1e1e2a;
-  --surface-violet: #110d22;
-  --surface-violet-border: #2d2051;
-  --surface-divider: #1e1e2a;
-  /* Heatmap tokens */
-  --heat-empty: #0d0d16;
-  --heat-low: #2d1b69;
-  --heat-mid: #4c1d95;
-  --heat-high: #7c3aed;
-  --heat-max: #a78bfa;
-  --heat-cell-text: #e2e8f0;
-  --heat-cell-text-empty: #2d2d40;
-  --bar-empty: #111124;
-  /* Stat card accent tokens */
-  --stat-1-bg: #150719; --stat-1-border: #3b0f4a; --stat-1-icon-bg: #2d0f23;
-  --stat-2-bg: #140e03; --stat-2-border: #3d2c00; --stat-2-icon-bg: #2a1f04;
-  --stat-3-bg: #031415; --stat-3-border: #003a40; --stat-3-icon-bg: #052028;
-  /* Calendar tokens */
-  --cal-today-bg: #0e7490; --cal-today-text: #ffffff;
-  --cal-checkin-bg: #1e1535; --cal-checkin-text: #a78bfa;
-  /* Greeting banner tokens */
-  --banner-bg: linear-gradient(135deg, #12071f 0%, #1c1040 50%, #0c0a1a 100%);
-  --banner-border: #2d2051;
-  --banner-title: #ffffff;
-  --banner-subtitle: rgba(196,181,253,0.6);
-  --banner-pill-today-bg: #1a0f2e;
-  --banner-pill-today-border: #3d2060;
-  --banner-pill-today-text: #fde68a;
-  --banner-pill-streak-bg: #1a1006;
-  --banner-pill-streak-border: #3d2c00;
-  --banner-pill-streak-text: #fcd34d;
-}
-
-.light {
   --background: #ffffff;
   --foreground: #0f172a;
   --primary: #f59e0b;
@@ -113,6 +65,56 @@
   --banner-pill-streak-bg: rgba(245,158,11,0.08);
   --banner-pill-streak-border: #fde68a;
   --banner-pill-streak-text: #92400e;
+}
+
+/* Dark theme */
+.dark {
+  --background: #060608;
+  --foreground: #f1f5f9;
+  --primary: #f59e0b;
+  --primary-foreground: #ffffff;
+  --muted: #0a0a10;
+  --muted-foreground: #94a3b8;
+  --border: #1e1e2a;
+  --card: #0f0f14;
+  --card-foreground: #f1f5f9;
+  --accent: #6366f1;
+  --success: #22c55e;
+  --warning: #f59e0b;
+  /* Surface tokens for theme-aware cards */
+  --surface: #0f0f14;
+  --surface-alt: #0c0c12;
+  --surface-border: #1e1e2a;
+  --surface-violet: #110d22;
+  --surface-violet-border: #2d2051;
+  --surface-divider: #1e1e2a;
+  /* Heatmap tokens */
+  --heat-empty: #0d0d16;
+  --heat-low: #2d1b69;
+  --heat-mid: #4c1d95;
+  --heat-high: #7c3aed;
+  --heat-max: #a78bfa;
+  --heat-cell-text: #e2e8f0;
+  --heat-cell-text-empty: #2d2d40;
+  --bar-empty: #111124;
+  /* Stat card accent tokens */
+  --stat-1-bg: #150719; --stat-1-border: #3b0f4a; --stat-1-icon-bg: #2d0f23;
+  --stat-2-bg: #140e03; --stat-2-border: #3d2c00; --stat-2-icon-bg: #2a1f04;
+  --stat-3-bg: #031415; --stat-3-border: #003a40; --stat-3-icon-bg: #052028;
+  /* Calendar tokens */
+  --cal-today-bg: #0e7490; --cal-today-text: #ffffff;
+  --cal-checkin-bg: #1e1535; --cal-checkin-text: #a78bfa;
+  /* Greeting banner tokens */
+  --banner-bg: linear-gradient(135deg, #12071f 0%, #1c1040 50%, #0c0a1a 100%);
+  --banner-border: #2d2051;
+  --banner-title: #ffffff;
+  --banner-subtitle: rgba(196,181,253,0.6);
+  --banner-pill-today-bg: #1a0f2e;
+  --banner-pill-today-border: #3d2060;
+  --banner-pill-today-text: #fde68a;
+  --banner-pill-streak-bg: #1a1006;
+  --banner-pill-streak-border: #3d2c00;
+  --banner-pill-streak-text: #fcd34d;
 }
 
 body {
