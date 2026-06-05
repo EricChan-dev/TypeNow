@@ -284,24 +284,50 @@ async function handleWechatBind(
 }
 
 async function handleDevLogin(request: NextRequest): Promise<NextResponse> {
-  if (!db) return NextResponse.redirect(new URL("/home", siteOrigin(request)))
+  const homeUrl = new URL("/home", siteOrigin(request))
 
-  const devOpenid = "dev_wechat_user"
-  let [user] = await db
-    .select()
-    .from(users)
-    .where(eq(users.wechatOpenid, devOpenid))
-    .limit(1)
-
-  if (!user) {
-    const id = randomUUID()
-    await db.insert(users).values({ id, wechatOpenid: devOpenid, name: "微信开发用户" })
-    const [newUser] = await db.select().from(users).where(eq(users.id, id)).limit(1)
-    user = newUser
+  if (!db) {
+    // No DB at all — use cookie-only session
+    const res = NextResponse.redirect(homeUrl)
+    res.cookies.set("typenow_session", "dev:dev_wechat_user", {
+      httpOnly: true,
+      secure: false,
+      sameSite: "lax",
+      expires: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+      path: "/",
+    })
+    return res
   }
 
-  await createSession(user.id)
-  return NextResponse.redirect(new URL("/home", siteOrigin(request)))
+  try {
+    const devOpenid = "dev_wechat_user"
+    let [user] = await db
+      .select()
+      .from(users)
+      .where(eq(users.wechatOpenid, devOpenid))
+      .limit(1)
+
+    if (!user) {
+      const id = randomUUID()
+      await db.insert(users).values({ id, wechatOpenid: devOpenid, name: "微信开发用户" })
+      const [newUser] = await db.select().from(users).where(eq(users.id, id)).limit(1)
+      user = newUser
+    }
+
+    await createSession(user.id)
+    return NextResponse.redirect(homeUrl)
+  } catch {
+    // DB connection failed — use cookie-only session
+    const res = NextResponse.redirect(homeUrl)
+    res.cookies.set("typenow_session", "dev:dev_wechat_user", {
+      httpOnly: true,
+      secure: false,
+      sameSite: "lax",
+      expires: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+      path: "/",
+    })
+    return res
+  }
 }
 
 async function handleDevBind(request: NextRequest): Promise<NextResponse> {

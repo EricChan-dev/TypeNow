@@ -16,6 +16,7 @@ export function AiChatWidget() {
   const [input, setInput] = useState("")
   const [sending, setSending] = useState(false)
   const [diamonds, setDiamonds] = useState<number | null>(null)
+  const [showToast, setShowToast] = useState(false)
   const bottomRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLTextAreaElement>(null)
 
@@ -34,6 +35,11 @@ export function AiChatWidget() {
   useEffect(() => {
     if (open) bottomRef.current?.scrollIntoView({ behavior: "smooth" })
   }, [messages, open])
+
+  // Show toast when chat is closed
+  useEffect(() => {
+    setShowToast(!open)
+  }, [open])
 
   if (!loggedIn) return null
 
@@ -86,14 +92,34 @@ export function AiChatWidget() {
     <>
       {/* Floating button */}
       {!open && (
-        <button
-          onClick={() => setOpen(true)}
-          className="fixed bottom-6 right-6 z-40 flex items-center gap-2 rounded-full px-4 py-3 text-sm font-semibold text-white shadow-2xl transition-all hover:scale-105 active:scale-95"
-          style={{ background: "linear-gradient(135deg, #7c3aed, #a855f7)", boxShadow: "0 4px 24px rgba(124,58,237,0.5)" }}
-        >
-          <Bot className="h-5 w-5" />
-          <span className="hidden sm:inline">小码 AI</span>
-        </button>
+        <div className="fixed bottom-6 right-6 z-40 flex flex-col items-end gap-2">
+          {/* Toast bubble — above the button */}
+          {showToast && (
+            <div
+              className="relative rounded-2xl px-4 py-2.5 shadow-lg"
+              style={{
+                background: "var(--foreground)",
+                color: "var(--background)",
+                animation: "toast-float 2.5s ease-in-out infinite",
+              }}
+            >
+              <p className="text-sm whitespace-nowrap">有问题就找我吧 💬</p>
+              {/* Triangle pointer — pointing down */}
+              <div
+                className="absolute -bottom-1.5 right-6 w-3 h-3 rotate-45"
+                style={{ background: "var(--foreground)" }}
+              />
+            </div>
+          )}
+          <button
+            onClick={() => setOpen(true)}
+            className="flex items-center gap-2 rounded-full px-4 py-3 text-sm font-semibold text-white shadow-2xl transition-all hover:scale-105 active:scale-95"
+            style={{ background: "linear-gradient(135deg, #7c3aed, #a855f7)", boxShadow: "0 4px 24px rgba(124,58,237,0.5)" }}
+          >
+            <Bot className="h-5 w-5" />
+            <span className="hidden sm:inline">小码 AI</span>
+          </button>
+        </div>
       )}
 
       {/* Chat panel */}

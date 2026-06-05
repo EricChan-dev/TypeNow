@@ -172,3 +172,9 @@ body {
 .animate-shake {
   animation: shake 0.4s ease-in-out;
 }
+
+/* Toast floating animation */
+@keyframes toast-float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-6px); }
+}

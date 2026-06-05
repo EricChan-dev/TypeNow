@@ -282,7 +282,7 @@ export function UserActions({ serverUser, variant = "public" }: UserActionsProps
                     onClick={() => { setDropdownOpen(false); setFeedbackOpen(true) }}
                     className="flex items-center justify-between px-4 py-2.5 text-sm text-foreground hover:bg-muted transition-colors w-full"
                   >
-                    <span className="flex items-center gap-3"><MessageSquarePlus className="h-4 w-4 text-muted-foreground" />用户反馈</span>
+                    <span className="flex items-center gap-3"><MessageSquarePlus className="h-4 w-4 text-muted-foreground" />问题反馈</span>
                     <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />
                   </button>
                   {!user.is_pro && (

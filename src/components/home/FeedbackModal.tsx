@@ -62,7 +62,7 @@ export function FeedbackModal({ open, onClose }: FeedbackModalProps) {
           <div className="flex items-center justify-center w-9 h-9 rounded-xl bg-violet-500/15">
             <MessageSquarePlus className="h-5 w-5 text-violet-500" />
           </div>
-          <h2 className="text-base font-semibold text-foreground">用户反馈</h2>
+          <h2 className="text-base font-semibold text-foreground">问题反馈</h2>
         </div>
 
         {/* Category */}

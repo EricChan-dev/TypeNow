@@ -14,11 +14,18 @@ export interface SessionInfo {
 }
 
 export async function getSession(): Promise<SessionInfo | null> {
-  if (!db) return null
   try {
     const cookieStore = await cookies()
     const sessionId = cookieStore.get(COOKIE_NAME)?.value
     if (!sessionId) return null
+
+    // Dev mode bypass: cookie value is "dev:<userId>" — no DB needed
+    if (sessionId.startsWith("dev:")) {
+      const userId = sessionId.slice(4)
+      return { sessionId, userId, expiresAt: new Date(Date.now() + 30 * 24 * 3600 * 1000) }
+    }
+
+    if (!db) return null
 
     const [row] = await db
       .select()
