@@ -99,7 +99,10 @@ export function PricingCard({
         {features.map((item) => (
           <li
             key={item}
-            className="flex items-center gap-2 text-sm text-card-foreground"
+            className={cn(
+              "flex items-center gap-2 text-sm text-card-foreground",
+              isProminent && "font-semibold"
+            )}
           >
             <Check
               className={cn(

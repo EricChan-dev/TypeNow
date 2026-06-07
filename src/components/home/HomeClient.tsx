@@ -18,6 +18,7 @@ import { CheckInRulesModal } from "@/components/home/CheckInRulesModal"
 import { GlobalSettingsModal } from "@/components/home/GlobalSettingsModal"
 import { WelcomeTrialModal } from "@/components/home/WelcomeTrialModal"
 import { DailyTasks } from "@/components/home/DailyTasks"
+import { PaymentSuccessModal } from "@/components/payment/PaymentSuccessModal"
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -697,6 +698,11 @@ export function HomeClient({ name }: HomeClientProps) {
         {/* ── WeChat login feedback ── */}
         <Suspense fallback={null}>
           <WeChatLoginBanner />
+        </Suspense>
+
+        {/* ── Payment success modal ── */}
+        <Suspense fallback={null}>
+          <PaymentSuccessModal />
         </Suspense>
 
         {/* ── Stats row — full width above grid ── */}

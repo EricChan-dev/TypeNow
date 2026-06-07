@@ -91,7 +91,14 @@ export function SentenceFeedback({ trigger, variant, streak }: Props) {
     if (trigger === 0) return
     setVisible(true)
     playSound(variant, streak)
+
+    let cancelled = false
+    const safetyTimer = setTimeout(() => {
+      if (!cancelled) setVisible(false)
+    }, 2000)
+
     requestAnimationFrame(() => {
+      if (cancelled) return
       if (cardRef.current) {
         animate(cardRef.current, {
           opacity: [0, 1, 1, 0],
@@ -99,7 +106,7 @@ export function SentenceFeedback({ trigger, variant, streak }: Props) {
           translateY: [0, -8, -8, -56],
           duration: 1500,
           ease: "out(2)",
-          onComplete: () => setVisible(false),
+          onComplete: () => { if (!cancelled) { setVisible(false); clearTimeout(safetyTimer) } },
         })
       }
       if (ringRef.current) {
@@ -111,6 +118,11 @@ export function SentenceFeedback({ trigger, variant, streak }: Props) {
         })
       }
     })
+
+    return () => {
+      cancelled = true
+      clearTimeout(safetyTimer)
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [trigger])
 

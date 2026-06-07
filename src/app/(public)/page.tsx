@@ -19,10 +19,11 @@ import { ScrollToTop } from "@/components/layout/ScrollToTop"
 import { AuthLink } from "@/components/layout/AuthLink"
 
 const proMemberFeatures = [
-  "无限打字练习",
-  "全部 6 个开放场景",
-  "全部历史错误智能复习",
-  "无限次 AI 强化训练",
+  "多种练习模式，听说读写全覆盖",
+  "AI 口语评测，音素级纠音，越练越准",
+  "AI 私教助手，不懂随时问",
+  "FSRS 智能复习，学了就忘不掉",
+  "自定义上传内容，考题歌词都能练",
   "深度统计 & 学习报告导出",
   "会员专属徽章",
 ]
@@ -81,7 +82,21 @@ export default function LandingPage() {
         </div>
 
         {/* Trust line */}
-        <p className="mt-6 text-[13px] text-muted-foreground">
+        <p className="mt-6 text-[13px] text-muted-foreground flex items-center gap-2">
+          <span className="flex -space-x-1.5">
+            <span className="inline-flex items-center justify-center h-5 w-5 rounded-full ring-1 ring-background overflow-hidden">
+              <img src="/images/avatar1.jpeg" alt="" className="h-full w-full object-cover" />
+            </span>
+            <span className="inline-flex items-center justify-center h-5 w-5 rounded-full ring-1 ring-background overflow-hidden">
+              <img src="/images/avatar2.jpeg" alt="" className="h-full w-full object-cover" />
+            </span>
+            <span className="inline-flex items-center justify-center h-5 w-5 rounded-full ring-1 ring-background overflow-hidden">
+              <img src="/images/avatar3.jpeg" alt="" className="h-full w-full object-cover" />
+            </span>
+            <span className="inline-flex items-center justify-center h-5 w-5 rounded-full ring-1 ring-background overflow-hidden">
+              <img src="/images/avatar4.jpeg" alt="" className="h-full w-full object-cover" />
+            </span>
+          </span>
           已服务 10,000+ 中国学习者
         </p>
       </section>
@@ -103,13 +118,13 @@ export default function LandingPage() {
             </h2>
 
             <p className="text-base text-muted-foreground leading-[1.7]">
-              中译英逐词打字，即时判分反馈。不需要死记硬背，真实使用才是最好的记忆。500+ 精选场景句，让每次练习都有收获。
+              中译英逐词打字，即时判分反馈。不需要死记硬背，真实使用才是最好的记忆。上千套学习课程资源，让每次练习都有收获。
             </p>
 
             <ul className="flex flex-col gap-3">
               {[
                 "即时判分，打完即知对错",
-                "500+ 精选高频场景句",
+                "上千套学习课程资源",
                 "错题自动收录进入复习队列",
               ].map((item) => (
                 <li
@@ -135,9 +150,9 @@ export default function LandingPage() {
               <div className="flex items-center justify-center h-11 w-11 rounded-[10px] bg-primary/10">
                 <Zap className="h-5 w-5 text-primary" />
               </div>
-              <p className="text-[36px] font-bold text-card-foreground">500+</p>
+              <p className="text-[36px] font-bold text-card-foreground">1000+</p>
               <p className="text-sm text-muted-foreground leading-relaxed">
-                精选高频场景句，覆盖生活、职场、旅行
+                学习课程资源，覆盖生活、职场、旅行
               </p>
             </div>
           </div>
@@ -185,7 +200,7 @@ export default function LandingPage() {
                   iconBg: "bg-success/10",
                   iconColor: "text-success",
                   title: "自动出队机制",
-                  desc: "连续 3 次 Perfect 即移除复习队列",
+                  desc: "掌握后自动移除复习队列",
                 },
               ].map((feature) => (
                 <div key={feature.title} className="flex gap-3">
@@ -283,7 +298,7 @@ export default function LandingPage() {
                   基于艾宾浩斯遗忘曲线 &middot; 1 / 3 / 7 / 15 / 30 天
                 </span>
                 <span className="text-xs font-medium text-accent">
-                  连续 3 次 Perfect 自动移除
+                  真正已掌握自动出队
                 </span>
               </div>
             </div>
@@ -378,7 +393,7 @@ export default function LandingPage() {
       {/* ════════════════════════════════════════
           Section 5: Testimonials
           ════════════════════════════════════════ */}
-      <section className="bg-muted px-5 xl:px-20 py-20 xl:py-24">
+      <section id="testimonials" className="bg-muted px-5 xl:px-20 py-20 xl:py-24">
         <div className="mx-auto max-w-[1280px] flex flex-col items-center gap-12">
           <div className="flex flex-col items-center gap-4 text-center">
             <span className="inline-flex items-center rounded-full bg-accent/10 px-3.5 py-1.5 text-[13px] font-semibold text-accent">

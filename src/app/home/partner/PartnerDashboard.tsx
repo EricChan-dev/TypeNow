@@ -1,8 +1,9 @@
 "use client"
 
-import { useState, useEffect, useRef, useCallback } from "react"
+import { useState, useEffect, useRef, useCallback, Suspense } from "react"
 import { toast } from "sonner"
 import QRCode from "qrcode"
+import { PaymentSuccessModal } from "@/components/payment/PaymentSuccessModal"
 
 interface DashboardData {
   inviteCode: string
@@ -325,6 +326,10 @@ export default function PartnerDashboard() {
           </div>
         )}
       </div>
+
+      <Suspense fallback={null}>
+        <PaymentSuccessModal />
+      </Suspense>
     </div>
   )
 }

@@ -1,10 +1,11 @@
 "use client"
 
-import { useState, useCallback, useEffect } from "react"
+import { useState, useCallback, useEffect, useRef } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 import Link from "next/link"
 import { MessageCircle, Smartphone, QrCode, Loader2 } from "lucide-react"
 import { toast } from "sonner"
+import QRCode from "qrcode"
 import { WeChatQRCode } from "@/components/auth/WeChatQRCode"
 
 type LoginTab = "wechat" | "phone"
@@ -44,12 +45,23 @@ export function LoginForm() {
   const [code, setCode] = useState("")
   const [cooldown, setCooldown] = useState(0)
   const [loading, setLoading] = useState(false)
+  const [devQrDataUrl, setDevQrDataUrl] = useState<string | null>(null)
+  const canvasRef = useRef<HTMLCanvasElement>(null)
 
   const redirectTo = searchParams.get("redirect") || "/home"
 
   const isSupabaseConfigured =
     !!process.env.NEXT_PUBLIC_SUPABASE_URL?.startsWith("http")
   const isDevMode = !isSupabaseConfigured
+
+  const isDevEnv = process.env.NODE_ENV === "development"
+
+  // Generate dev login QR code
+  useEffect(() => {
+    if (!isDevEnv) return
+    const devLoginUrl = `${window.location.origin}/api/auth/dev-login`
+    QRCode.toDataURL(devLoginUrl, { width: 160, margin: 1 }).then(setDevQrDataUrl)
+  }, [isDevEnv])
 
   // Handle error query param from WeChat callback redirects
   useEffect(() => {
@@ -273,6 +285,28 @@ export function LoginForm() {
           </button>
           <TermsText />
         </>
+      )}
+
+      {/* ── Dev Mode QR Login ── */}
+      {isDevEnv && (
+        <div className="flex flex-col items-center gap-3 pt-4 border-t border-[#E2E8F0]">
+          <span className="text-xs text-[#94A3B8]">开发模式扫码登录</span>
+          {devQrDataUrl ? (
+            <img
+              src={devQrDataUrl}
+              alt="开发模式登录二维码"
+              className="w-40 h-40 rounded-lg border border-[#E2E8F0]"
+            />
+          ) : (
+            <div className="w-40 h-40 rounded-lg border border-[#E2E8F0] bg-[#F8FAFC] animate-pulse" />
+          )}
+          <a
+            href="/api/auth/dev-login"
+            className="text-sm text-[#1E40AF] font-medium hover:underline"
+          >
+            桌面端一键登录 →
+          </a>
+        </div>
       )}
     </div>
   )

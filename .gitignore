@@ -45,3 +45,4 @@ src/generated/
 
 # CodeGraph local index (per-machine, rebuilt via `codegraph init`)
 /.codegraph/
+.gstack/

@@ -84,7 +84,8 @@ export default function CheckoutPage() {
           stopPolling()
           setStep("paid")
           setTimeout(() => {
-            router.push(plan === "partner" ? "/home/partner" : "/home")
+            const dest = plan === "partner" ? "/home/partner" : "/home"
+            router.push(`${dest}?payment_success=${plan}`)
           }, 2000)
         }
       } catch {

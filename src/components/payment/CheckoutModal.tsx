@@ -9,7 +9,7 @@ import { trackSubscribeSuccess } from "@/lib/analytics"
 interface CheckoutModalProps {
   plan: "monthly" | "yearly"
   onClose: () => void
-  onSuccess: () => void
+  onSuccess: (plan: string) => void
 }
 
 export function CheckoutModal({ plan, onClose, onSuccess }: CheckoutModalProps) {
@@ -83,7 +83,7 @@ export function CheckoutModal({ plan, onClose, onSuccess }: CheckoutModalProps) 
           stopPolling()
           setStep("paid")
           trackSubscribeSuccess(plan, orderInfo.amount)
-          setTimeout(() => onSuccess(), 1500)
+          setTimeout(() => onSuccess(plan), 1500)
         }
       } catch {
         // Silently retry on next poll

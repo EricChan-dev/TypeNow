@@ -7,10 +7,11 @@ import { CheckoutModal } from "@/components/payment/CheckoutModal"
 import { trackSubscribeClick } from "@/lib/analytics"
 
 const proFeatures = [
-  "无限打字练习",
-  "全部 6 个开放场景",
-  "全部历史错误智能复习",
-  "无限次 AI 强化训练",
+  "多种练习模式，听说读写全覆盖",
+  "AI 口语评测，音素级纠音，越练越准",
+  "AI 私教助手，不懂随时问",
+  "FSRS 智能复习，学了就忘不掉",
+  "自定义上传内容，考题歌词都能练",
   "深度统计 & 学习报告导出",
   "会员专属徽章",
 ]
@@ -55,9 +56,9 @@ export function PricingClient() {
     router.push("/home/partner")
   }
 
-  function handleSuccess() {
+  function handleSuccess(plan: string) {
     setSelectedPlan(null)
-    router.push("/home")
+    router.push(`/home?payment_success=${plan}`)
   }
 
   return (
