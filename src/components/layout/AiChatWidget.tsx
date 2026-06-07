@@ -1,6 +1,7 @@
 "use client"
 
 import { useEffect, useRef, useState } from "react"
+import { usePathname } from "next/navigation"
 import { X, Send, Bot, Loader2, Gem } from "lucide-react"
 import { cn } from "@/lib/utils"
 
@@ -10,6 +11,7 @@ interface Message {
 }
 
 export function AiChatWidget() {
+  const pathname = usePathname()
   const [open, setOpen] = useState(false)
   const [loggedIn, setLoggedIn] = useState(false)
   const [messages, setMessages] = useState<Message[]>([])
@@ -17,6 +19,9 @@ export function AiChatWidget() {
   const [sending, setSending] = useState(false)
   const [diamonds, setDiamonds] = useState<number | null>(null)
   const [showToast, setShowToast] = useState(false)
+
+  // Hide on landing page and learn/practice pages
+  if (pathname === "/" || pathname.startsWith("/home/learn/")) return null
   const bottomRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLTextAreaElement>(null)
 
