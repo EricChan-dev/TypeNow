@@ -23,9 +23,6 @@ export function AiChatWidget() {
   const bottomRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLTextAreaElement>(null)
 
-  // Hide on landing page and learn/practice pages
-  if (pathname === "/" || pathname.startsWith("/home/learn/")) return null
-
   useEffect(() => {
     fetch("/api/auth/me")
       .then((r) => r.json())
@@ -42,12 +39,13 @@ export function AiChatWidget() {
     if (open) bottomRef.current?.scrollIntoView({ behavior: "smooth" })
   }, [messages, open])
 
-  // Show toast when chat is closed
   useEffect(() => {
     setShowToast(!open)
   }, [open])
 
-  if (!loggedIn) return null
+  // Hide on landing page and learn/practice pages（必须在所有 hooks 之后）
+  const hidden = pathname === "/" || pathname.startsWith("/home/learn/")
+  if (hidden || !loggedIn) return null
 
   async function handleSend() {
     if (!input.trim() || sending) return
