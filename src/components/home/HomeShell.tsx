@@ -22,7 +22,7 @@ export function HomeShell({ children, isPartner }: { children: React.ReactNode; 
   const title = pageTitles[pathname] || ""
 
   if (isFullPage) {
-    return <div className="flex-1 min-h-0 bg-black">{children}</div>
+    return <div className="flex-1 min-h-0 bg-background">{children}</div>
   }
 
   return (
