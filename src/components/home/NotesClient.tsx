@@ -208,7 +208,7 @@ export function NotesClient() {
                         <div
                           onClick={() => setActiveId(n.id)}
                           className={`group flex items-start gap-2 px-3 py-2.5 cursor-pointer transition-colors ${
-                            isActive ? "bg-white/5" : "hover:bg-white/[0.03]"
+                            isActive ? "bg-foreground/5" : "hover:bg-white/[0.03]"
                           }`}
                         >
                           <div className="flex-1 min-w-0">

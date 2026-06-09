@@ -135,7 +135,7 @@ export function WordbookClient() {
                   <div className="flex items-center gap-3 flex-wrap">
                     <button
                       onClick={() => toggleExpand(row.id)}
-                      className="shrink-0 w-6 h-6 rounded hover:bg-white/5 flex items-center justify-center text-foreground/50"
+                      className="shrink-0 w-6 h-6 rounded hover:bg-foreground/5 flex items-center justify-center text-foreground/50"
                       aria-label="展开"
                     >
                       {open ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
@@ -156,7 +156,7 @@ export function WordbookClient() {
                     <button
                       onClick={() => speak(row.word)}
                       disabled={speaking === row.word}
-                      className="w-7 h-7 rounded-full bg-white/5 hover:bg-white/10 flex items-center justify-center disabled:opacity-50"
+                      className="w-7 h-7 rounded-full bg-foreground/5 hover:bg-white/10 flex items-center justify-center disabled:opacity-50"
                       title="朗读"
                     >
                       {speaking === row.word
@@ -218,7 +218,7 @@ export function WordbookClient() {
                           <span className="text-[11px] uppercase tracking-wider text-foreground/40 font-semibold">同义词</span>
                           <div className="flex flex-wrap gap-1.5">
                             {row.synonyms.slice(0, 12).map((s) => (
-                              <span key={s} className="text-[11px] px-2 py-0.5 rounded-full bg-white/5 text-foreground/65">{s}</span>
+                              <span key={s} className="text-[11px] px-2 py-0.5 rounded-full bg-foreground/5 text-foreground/65">{s}</span>
                             ))}
                           </div>
                         </div>

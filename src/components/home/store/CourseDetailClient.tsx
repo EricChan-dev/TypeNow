@@ -100,12 +100,12 @@ export function CourseDetailClient({ courseId }: CourseDetailClientProps) {
           {course.coverUrl ? (
             <img src={course.coverUrl} alt={course.title} className="w-full h-full object-cover" />
           ) : (
-            <span className="text-white/20 text-4xl font-extrabold tracking-wider select-none">
+            <span className="text-foreground/20 text-4xl font-extrabold tracking-wider select-none">
               {course.title.slice(0, 4)}
             </span>
           )}
           {course.source === "official" && (
-            <span className="absolute top-3 left-3 rounded-full bg-white/15 backdrop-blur-sm px-2.5 py-0.5 text-[10px] font-medium text-white/90">
+            <span className="absolute top-3 left-3 rounded-full bg-foreground/15 backdrop-blur-sm px-2.5 py-0.5 text-[10px] font-medium text-foreground/90">
               官方
             </span>
           )}

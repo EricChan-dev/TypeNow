@@ -66,7 +66,7 @@ export default function LoginPage() {
         </aside>
 
         {/* ── Right: Login Panel ── */}
-        <section className="flex flex-1 flex-col bg-white min-w-0">
+        <section className="flex flex-1 flex-col bg-background min-w-0">
           {/* Top Bar */}
           <div className="flex items-center justify-between px-8 py-5 shrink-0">
             <Link
@@ -96,7 +96,7 @@ export default function LoginPage() {
       </div>
 
       {/* ── Footer ── */}
-      <footer className="flex items-center justify-center py-4 border-t border-[#E2E8F0] bg-white shrink-0">
+      <footer className="flex items-center justify-center py-4 border-t border-border bg-background shrink-0">
         <span className="text-xs text-[#64748B]">
           &copy; 2026 TypeNow &middot; typenow.cn
         </span>

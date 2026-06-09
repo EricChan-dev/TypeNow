@@ -132,7 +132,7 @@ export function CheckoutModal({ plan, onClose, onSuccess }: CheckoutModalProps) 
           )}
 
           {step === "ready" && qrDataUrl && (
-            <div className="rounded-xl border-2 border-border p-2 bg-white">
+            <div className="rounded-xl border-2 border-border p-2 bg-card">
               <img
                 src={qrDataUrl}
                 alt="微信支付二维码"

@@ -102,38 +102,38 @@ export default function CheckoutPage() {
   const amountYuan = PLAN_AMOUNTS[plan] ?? "—"
 
   return (
-    <div className="min-h-full bg-black flex flex-col items-center justify-center px-4 py-10">
+    <div className="min-h-full bg-background flex flex-col items-center justify-center px-4 py-10">
       {/* Back link */}
       <div className="w-full max-w-[420px] mb-4">
         <Link
           href={plan === "partner" ? "/home/partner" : "/home/store"}
-          className="inline-flex items-center gap-1.5 text-white/40 text-sm hover:text-white/70 transition-colors"
+          className="inline-flex items-center gap-1.5 text-foreground/40 text-sm hover:text-foreground/70 transition-colors"
         >
           <ArrowLeft className="h-4 w-4" />
           返回
         </Link>
       </div>
 
-      <div className="w-full max-w-[420px] rounded-3xl border border-white/10 bg-white/[0.03] backdrop-blur-sm p-8 flex flex-col items-center gap-6">
+      <div className="w-full max-w-[420px] rounded-3xl border border-foreground/10 bg-foreground/[0.03] backdrop-blur-sm p-8 flex flex-col items-center gap-6">
         {/* Header */}
         <div className="text-center">
           <div className="inline-flex items-center gap-2 rounded-full bg-amber-500/10 border border-amber-500/20 px-3 py-1 text-xs font-medium text-amber-400 mb-3">
             {planLabel}
           </div>
-          <h1 className="text-xl font-bold text-white">微信扫码完成支付</h1>
-          <p className="text-white/40 text-sm mt-1">支付成功后自动开通，无需刷新</p>
+          <h1 className="text-xl font-bold text-foreground">微信扫码完成支付</h1>
+          <p className="text-foreground/40 text-sm mt-1">支付成功后自动开通，无需刷新</p>
         </div>
 
         {/* QR Area */}
         <div className="relative flex items-center justify-center">
           {step === "loading" && (
-            <div className="h-[240px] w-[240px] rounded-2xl bg-white/5 border border-white/10 animate-pulse flex items-center justify-center">
-              <Sparkles className="h-8 w-8 text-white/20 animate-spin" />
+            <div className="h-[240px] w-[240px] rounded-2xl bg-foreground/5 border border-foreground/10 animate-pulse flex items-center justify-center">
+              <Sparkles className="h-8 w-8 text-foreground/20 animate-spin" />
             </div>
           )}
 
           {step === "ready" && qrDataUrl && (
-            <div className="rounded-2xl border border-white/20 p-3 bg-white shadow-xl shadow-black/30">
+            <div className="rounded-2xl border border-border p-3 bg-card shadow-xl shadow-black/30">
               <img src={qrDataUrl} alt="微信支付二维码" className="h-[216px] w-[216px] block" />
             </div>
           )}
@@ -142,19 +142,19 @@ export default function CheckoutPage() {
             <div className="h-[240px] w-[240px] rounded-2xl bg-emerald-500/10 border border-emerald-500/30 flex flex-col items-center justify-center gap-4">
               <CheckCircle2 className="h-16 w-16 text-emerald-400" />
               <div className="text-center">
-                <p className="text-white font-bold">支付成功！</p>
-                <p className="text-white/50 text-xs mt-1">正在跳转…</p>
+                <p className="text-foreground font-bold">支付成功！</p>
+                <p className="text-foreground/50 text-xs mt-1">正在跳转…</p>
               </div>
             </div>
           )}
 
           {step === "expired" && (
-            <div className="h-[240px] w-[240px] rounded-2xl bg-white/5 border border-white/10 flex flex-col items-center justify-center gap-4">
-              <Clock className="h-10 w-10 text-white/30" />
-              <span className="text-white/40 text-sm">二维码已过期</span>
+            <div className="h-[240px] w-[240px] rounded-2xl bg-foreground/5 border border-foreground/10 flex flex-col items-center justify-center gap-4">
+              <Clock className="h-10 w-10 text-foreground/30" />
+              <span className="text-foreground/40 text-sm">二维码已过期</span>
               <Link
                 href={plan === "partner" ? "/home/partner" : "/home/store"}
-                className="px-4 py-2 rounded-xl bg-white/10 text-white text-sm font-medium hover:bg-white/15 transition-colors"
+                className="px-4 py-2 rounded-xl bg-foreground/10 text-foreground text-sm font-medium hover:bg-foreground/15 transition-colors"
               >
                 重新获取
               </Link>
@@ -162,11 +162,11 @@ export default function CheckoutPage() {
           )}
 
           {step === "error" && (
-            <div className="h-[240px] w-[240px] rounded-2xl bg-white/5 border border-white/10 flex flex-col items-center justify-center gap-4 px-6">
-              <p className="text-white/40 text-sm text-center">{errorMsg}</p>
+            <div className="h-[240px] w-[240px] rounded-2xl bg-foreground/5 border border-foreground/10 flex flex-col items-center justify-center gap-4 px-6">
+              <p className="text-foreground/40 text-sm text-center">{errorMsg}</p>
               <Link
                 href={plan === "partner" ? "/home/partner" : "/home/store"}
-                className="px-4 py-2 rounded-xl bg-white/10 text-white text-sm font-medium hover:bg-white/15 transition-colors"
+                className="px-4 py-2 rounded-xl bg-foreground/10 text-foreground text-sm font-medium hover:bg-foreground/15 transition-colors"
               >
                 返回重试
               </Link>
@@ -177,8 +177,8 @@ export default function CheckoutPage() {
         {/* Price + timer */}
         {step === "ready" && (
           <div className="text-center space-y-1.5 w-full">
-            <p className="text-3xl font-extrabold text-white">¥{amountYuan}</p>
-            <p className="flex items-center justify-center gap-1.5 text-xs text-white/35">
+            <p className="text-3xl font-extrabold text-foreground">¥{amountYuan}</p>
+            <p className="flex items-center justify-center gap-1.5 text-xs text-foreground/35">
               <Clock className="h-3 w-3" />
               二维码有效期 {minutes}:{String(seconds).padStart(2, "0")}
             </p>
@@ -187,11 +187,11 @@ export default function CheckoutPage() {
 
         {/* Tips */}
         {(step === "ready" || step === "loading") && (
-          <div className="w-full rounded-2xl bg-white/[0.04] border border-white/8 px-4 py-3 space-y-1.5">
-            <p className="text-white/30 text-[11px] text-center leading-relaxed">
+          <div className="w-full rounded-2xl bg-foreground/[0.04] border border-foreground/8 px-4 py-3 space-y-1.5">
+            <p className="text-foreground/30 text-[11px] text-center leading-relaxed">
               打开微信 → 扫一扫 → 完成支付
             </p>
-            <p className="text-white/20 text-[11px] text-center">
+            <p className="text-foreground/20 text-[11px] text-center">
               付款成功后页面自动跳转，请勿关闭此页面
             </p>
           </div>

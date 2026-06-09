@@ -21,9 +21,9 @@ interface BlockShellProps {
 function BlockShell({ icon, title, accentClass, children }: BlockShellProps) {
   return (
     <div className={`rounded-xl border ${accentClass} overflow-hidden`}>
-      <div className="flex items-center gap-2 px-4 py-3 border-b border-inherit bg-white/[0.02]">
+      <div className="flex items-center gap-2 px-4 py-3 border-b border-inherit bg-foreground/[0.02]">
         <span className="shrink-0">{icon}</span>
-        <h4 className="text-[14px] font-bold text-white/85">{title}</h4>
+        <h4 className="text-[14px] font-bold text-foreground/85">{title}</h4>
       </div>
       <div className="px-4 py-3.5">{children}</div>
     </div>
@@ -81,7 +81,7 @@ export function SentenceKnowledge({ sentence }: SentenceKnowledgeProps) {
           <div className="absolute inset-0 rounded-full bg-accent/20 blur-xl" />
           <Loader2 className="h-10 w-10 text-accent animate-spin relative" />
         </div>
-        <p className="text-sm text-white/40">AI 正在分析句子…</p>
+        <p className="text-sm text-foreground/40">AI 正在分析句子…</p>
       </div>
     )
   }
@@ -93,10 +93,10 @@ export function SentenceKnowledge({ sentence }: SentenceKnowledgeProps) {
       {/* Header: original sentence + offline badge */}
       <div className="flex items-center gap-3 px-1">
         <Sparkles className="h-4 w-4 text-accent shrink-0" />
-        <p className="text-xl font-bold text-white leading-relaxed">{sentence.english}</p>
+        <p className="text-xl font-bold text-foreground leading-relaxed">{sentence.english}</p>
         <button
           onClick={() => globalSpeak(sentence.english)}
-          className="p-2 rounded-full bg-white/10 hover:bg-accent/30 hover:text-accent transition-all shrink-0"
+          className="p-2 rounded-full bg-foreground/10 hover:bg-accent/30 hover:text-accent transition-all shrink-0"
         >
           <Volume2 className="h-4 w-4" />
         </button>
@@ -181,9 +181,9 @@ export function SentenceKnowledge({ sentence }: SentenceKnowledgeProps) {
           {knowledge.relatedExamples.split("\n").filter(Boolean).map((example, i) => (
             <div
               key={i}
-              className="flex items-start gap-3 rounded-lg bg-white/[0.03] border border-white/[0.04] px-3.5 py-2.5"
+              className="flex items-start gap-3 rounded-lg bg-foreground/[0.03] border border-foreground/[0.04] px-3.5 py-2.5"
             >
-              <span className="text-[11px] font-bold text-white/15 shrink-0 mt-0.5 tabular-nums">
+              <span className="text-[11px] font-bold text-foreground/15 shrink-0 mt-0.5 tabular-nums">
                 {i + 1}
               </span>
               <p className="text-[14px] text-cyan-100/70 leading-relaxed">{example}</p>

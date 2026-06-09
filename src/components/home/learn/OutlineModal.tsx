@@ -18,13 +18,13 @@ export function OutlineModal({ sentences, currentIndex, onClose, onJumpTo }: Out
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm">
-      <div className="w-[95vw] max-w-5xl h-[85vh] rounded-2xl bg-[#111] border border-white/10 shadow-2xl flex flex-col overflow-hidden">
+      <div className="w-[95vw] max-w-5xl h-[85vh] rounded-2xl bg-card border border-border shadow-2xl flex flex-col overflow-hidden">
         {/* Header */}
-        <div className="flex items-center justify-between shrink-0 px-6 py-4 border-b border-white/10">
-          <h2 className="text-lg font-bold text-white">内容大纲</h2>
+        <div className="flex items-center justify-between shrink-0 px-6 py-4 border-b border-border">
+          <h2 className="text-lg font-bold text-foreground">内容大纲</h2>
           <button
             onClick={onClose}
-            className="p-1.5 rounded text-white/40 hover:text-white hover:bg-white/10 transition-colors"
+            className="p-1.5 rounded text-foreground/40 hover:text-foreground hover:bg-foreground/10 transition-colors"
           >
             <X className="h-5 w-5" />
           </button>
@@ -33,22 +33,22 @@ export function OutlineModal({ sentences, currentIndex, onClose, onJumpTo }: Out
         {/* Body: left list + right detail */}
         <div className="flex-1 flex min-h-0">
           {/* Left: sentence list */}
-          <div className="w-[38%] border-r border-white/10 overflow-y-auto">
+          <div className="w-[38%] border-r border-border overflow-y-auto">
             {sentences.map((s, i) => (
               <div
                 key={s.id}
-                className={`flex items-center group border-b border-white/5 transition-colors ${
+                className={`flex items-center group border-b border-foreground/5 transition-colors ${
                   i === selectedIndex
                     ? "bg-accent/10 border-l-2 border-l-accent"
-                    : "hover:bg-white/5 border-l-2 border-l-transparent"
+                    : "hover:bg-foreground/5 border-l-2 border-l-transparent"
                 } ${i === currentIndex ? "ring-1 ring-inset ring-accent/20" : ""}`}
               >
                 <button
                   onClick={() => setSelectedIndex(i)}
                   className="flex-1 text-left px-5 py-3.5 min-w-0"
                 >
-                  <span className="text-xs text-white/30 mr-2">{i + 1}.</span>
-                  <span className={`text-sm ${i === selectedIndex ? "text-white font-medium" : "text-white/60"}`}>
+                  <span className="text-xs text-foreground/30 mr-2">{i + 1}.</span>
+                  <span className={`text-sm ${i === selectedIndex ? "text-foreground font-medium" : "text-foreground/60"}`}>
                     {s.english}
                   </span>
                   {i === currentIndex && (
@@ -60,7 +60,7 @@ export function OutlineModal({ sentences, currentIndex, onClose, onJumpTo }: Out
                   className={`shrink-0 px-3 py-3.5 transition-all ${
                     i === currentIndex
                       ? "text-accent"
-                      : "text-white/15 opacity-0 group-hover:opacity-100 group-hover:text-white/50 hover:!text-accent"
+                      : "text-foreground/15 opacity-0 group-hover:opacity-100 group-hover:text-foreground/50 hover:!text-accent"
                   }`}
                   title="从这句开始"
                 >
@@ -76,16 +76,16 @@ export function OutlineModal({ sentences, currentIndex, onClose, onJumpTo }: Out
             {selected ? (
               <SentenceKnowledge key={selected.id} sentence={selected} />
             ) : (
-              <p className="text-sm text-white/40">请选择一个句子查看知识点</p>
+              <p className="text-sm text-foreground/40">请选择一个句子查看知识点</p>
             )}
           </div>
         </div>
 
         {/* Footer */}
-        <div className="flex items-center justify-end shrink-0 px-6 py-3 border-t border-white/10">
+        <div className="flex items-center justify-end shrink-0 px-6 py-3 border-t border-border">
           <button
             onClick={onClose}
-            className="rounded-xl bg-accent px-6 py-2 text-sm font-semibold text-white hover:bg-accent/90 transition-colors"
+            className="rounded-xl bg-accent px-6 py-2 text-sm font-semibold text-foreground hover:bg-accent/90 transition-colors"
           >
             关闭
           </button>

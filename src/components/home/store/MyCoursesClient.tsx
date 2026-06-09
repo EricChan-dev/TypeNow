@@ -83,7 +83,7 @@ export function MyCoursesClient() {
               <CourseCard course={course} />
               {studyHistory[course.id] && (
                 <div className="absolute top-2 right-2 z-10 pointer-events-none">
-                  <span className="inline-block rounded-full bg-black/65 backdrop-blur-sm border border-white/10 px-2 py-0.5 text-[10px] text-white/60 leading-relaxed">
+                  <span className="inline-block rounded-full bg-background/80 backdrop-blur-sm border border-border px-2 py-0.5 text-[10px] text-foreground/60 leading-relaxed">
                     {relativeTime(studyHistory[course.id])}学过
                   </span>
                 </div>
