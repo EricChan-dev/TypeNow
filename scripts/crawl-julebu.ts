@@ -81,7 +81,7 @@ async function main() {
   console.log("\n🖥 启动浏览器...")
   const browser = await puppeteer.launch({
     executablePath: process.env.CHROME_PATH || "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
-    headless: "new" as const,
+    headless: false, // 可见模式——避免 headless 导致页面渲染异常
     args: ["--no-sandbox", "--window-size=1920,1080"],
   })
 
