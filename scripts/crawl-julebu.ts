@@ -23,7 +23,7 @@ const DATA_DIR = join(import.meta.dirname ?? ".", "..", ".data", "julebu")
 if (!existsSync(DATA_DIR)) mkdirSync(DATA_DIR, { recursive: true })
 
 const JULEBU_COOKIE = process.env.JULEBU_COOKIE
-const TARGET_PACKS = (process.env.JULEBU_TARGET_PACKS || "rwtocajplud9ld732ep5u8ec").split(",").map(s => s.trim())
+const TARGET_PACKS = process.env.JULEBU_TARGET_PACKS?.split(",").map(s => s.trim()) || null // null = 全部
 
 if (!JULEBU_COOKIE) { console.error("❌ 请设置 JULEBU_COOKIE"); process.exit(1) }
 
@@ -50,10 +50,25 @@ const sleep = (ms: number) => new Promise(r => setTimeout(r, ms))
 async function main() {
   console.log("🕷 句乐部自动爬虫\n")
 
-  // 获取课程列表
+  // 获取课程列表（默认全部用户课程包，可通过 JULEBU_TARGET_PACKS 筛选）
   console.log("📡 获取课程列表...")
+  let targetIds: string[] | null = TARGET_PACKS
+
+  // 如果未指定，自动获取全部用户课程包
+  if (!targetIds) {
+    const userPacks = await jf<Array<{ coursePackId: string; title: string }>>("userCoursePacks.list", {})
+    if (userPacks?.length) {
+      targetIds = userPacks.map(p => p.coursePackId)
+      console.log(`  找到 ${targetIds.length} 个课程包:`)
+      userPacks.forEach(p => console.log(`    - ${p.title} (${p.coursePackId})`))
+    } else {
+      console.error("❌ 未找到任何课程包，请检查 cookie 是否有效")
+      process.exit(1)
+    }
+  }
+
   const packs = []
-  for (const pid of TARGET_PACKS) {
+  for (const pid of targetIds) {
     const d = await jf<{ title: string; courses: Array<{ id: string; title: string; order: number }> }>("mall.getCoursePackDetail", { coursePackId: pid })
     if (!d?.courses) { console.log(`  ⚠ ${pid} 未找到`); continue }
     console.log(`  📦 ${d.title}: ${d.courses.length} 课`)
