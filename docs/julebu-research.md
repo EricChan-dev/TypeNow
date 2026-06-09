@@ -229,3 +229,40 @@ window.fetch = async function(...args) {
 - 句乐部会员：已开通（月付）
 - 已提取的数据：星荣零基础第1课 218 句完整数据（含音标、词性、释义、语法树）
 - 完整 61 课数据可通过 `courses.findOne` API 逐课批量获取
+
+## 实施记录（2026-06-08）
+
+### 已完成的改动
+
+#### 数据库
+- `00010_julebu_sentence_enrichment.sql` — sentences 表新增 `dependency_analysis JSON`、`sentence_structure JSON`
+- 第1课 218 句已成功导入验证
+
+#### 后端
+- Drizzle schema 更新 — `src/lib/db/schema.ts`
+- API 无需改动（`/api/courses/sentences` 使用 `db.select()` 自动返回新字段）
+
+#### 前端
+- `CompletedSentence.tsx` — `phonetic` 兼容 `string | {uk,us}` 双音标格式
+- `CompletedSentence.tsx` — POS_COLOR 新增英文词性映射（VERB→绿, NOUN→蓝, 13色体系）
+- TypeScript 类型更新 — `src/types/index.ts` 新增 `Phonetic`、`DependencyAnalysis`、`SentenceComponent` 接口
+
+#### 脚本
+- `scripts/import-julebu.ts` — 完整 3-Phase 导入脚本
+- `/tmp/julebu-crawl-all.mjs` — 批量爬虫（Puppeteer）
+- `pnpm import-julebu` — package.json 脚本入口
+
+### 使用方法
+```bash
+# 1. 设置 Cookie
+export JULEBU_COOKIE='...'
+
+# 2. 爬取课程（Puppeteer）
+JULEBU_TARGET_PACKS=rwtocajplud9ld732ep5u8ec node /tmp/julebu-crawl-all.mjs
+
+# 3. 运行迁移
+npx tsx scripts/import-julebu.ts  # 首次会提示 migration 脚本
+
+# 4. 用缓存数据导入
+SKIP_PUPPETEER=1 pnpm import-julebu
+```

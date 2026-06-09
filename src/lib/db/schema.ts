@@ -154,6 +154,35 @@ export const sentences = mysqlTable(
       chinese: string
     }>>(),
     sortOrder: int("sort_order").notNull().default(0),
+    dependencyAnalysis: json("dependency_analysis").$type<{
+      root: number
+      sentence: string
+      edges: Array<{ label: string; source: number; target: number }>
+      nodes: Array<{
+        id: number
+        dep: string
+        pos: string
+        tag: string
+        head: string
+        word: string
+        lemma: string
+        phrase: string
+        children: number[]
+        left_edge: number
+        right_edge: number
+        start_idx: number
+        end_idx: number
+        head_id: number
+      }>
+    }>(),
+    sentenceStructure: json("sentence_structure").$type<Array<{
+      start: number
+      end: number
+      role: string
+      text: string
+      type: string
+      explanation: string
+    }>>(),
     createdAt: datetime("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
   },
   (t) => [index("idx_sentences_lesson_id").on(t.lessonId)]

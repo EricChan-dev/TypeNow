@@ -13,8 +13,14 @@ export interface User {
 export interface Word {
   english: string
   chinese: string | null
-  phonetic: string | null
-  pos: string // 词性：动词/名词/代词/形容词/副词/介词/连词/助动词/冠词/标点/不定式...
+  phonetic: string | Phonetic | null // 兼容旧格式(string)和新格式({uk,us})
+  definition?: string | null         // 详细中文释义（来自句乐部导入）
+  pos: string                         // 词性：VERB/NOUN/PRON... 或中文：动词/名词/代词...
+}
+
+export interface Phonetic {
+  uk: string
+  us: string
 }
 
 export interface Chunk {
@@ -34,6 +40,43 @@ export interface Sentence {
   lesson_id?: string | null
   words?: Word[] | null
   chunks?: Chunk[] | null
+  dependencyAnalysis?: DependencyAnalysis | null
+  sentenceStructure?: SentenceComponent[] | null
+}
+
+export interface DependencyAnalysis {
+  root: number
+  sentence: string
+  edges: Array<{
+    label: string
+    source: number
+    target: number
+  }>
+  nodes: Array<{
+    id: number
+    dep: string
+    pos: string
+    tag: string
+    head: string
+    word: string
+    lemma: string
+    phrase: string
+    children: number[]
+    left_edge: number
+    right_edge: number
+    start_idx: number
+    end_idx: number
+    head_id: number
+  }>
+}
+
+export interface SentenceComponent {
+  start: number
+  end: number
+  role: string         // 主语/谓语/宾语/定语/状语/补语...
+  text: string
+  type: string         // subject/predicate/object/adverbial...
+  explanation: string
 }
 
 export interface Scene {

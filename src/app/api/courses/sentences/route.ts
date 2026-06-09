@@ -3,6 +3,19 @@ import { db } from "@/lib/db"
 import { sentences } from "@/lib/db/schema"
 import { eq, asc } from "drizzle-orm"
 
+const TOKEN_RE = /[a-zA-Z\d'-]+|[.,!?;:'"()…—]/g
+
+/** 从英文文本生成基础 Word 数组（当 words 为 null 时的 fallback） */
+function textToWords(text: string) {
+  const tokens = text.match(TOKEN_RE) ?? []
+  return tokens.map((t) => ({
+    english: t,
+    chinese: null as string | null,
+    phonetic: null as string | null,
+    pos: /^[a-zA-Z\d'-]+$/.test(t) ? "词" : "标点",
+  }))
+}
+
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url)
   const lessonId = searchParams.get("lessonId")
@@ -19,5 +32,13 @@ export async function GET(request: Request) {
     .where(eq(sentences.lessonId, lessonId))
     .orderBy(asc(sentences.sortOrder))
 
-  return NextResponse.json({ sentences: data })
+  // Fallback: 如果 words 为 null，从 english 文本自动生成
+  const normalized = data.map((s) => ({
+    ...s,
+    words: (s.words as Array<Record<string, unknown>> | null)?.length
+      ? s.words
+      : textToWords(s.english ?? ""),
+  }))
+
+  return NextResponse.json({ sentences: normalized })
 }

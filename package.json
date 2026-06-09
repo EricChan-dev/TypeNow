@@ -12,6 +12,7 @@
     "analyze-words": "tsx scripts/analyze-words.ts",
     "expand-courses": "tsx scripts/expand-courses.ts",
     "switch-role": "tsx scripts/switch-role.ts",
+    "import-julebu": "tsx scripts/import-julebu.ts",
     "test": "vitest run",
     "test:watch": "vitest"
   },

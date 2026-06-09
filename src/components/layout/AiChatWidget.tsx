@@ -20,10 +20,11 @@ export function AiChatWidget() {
   const [diamonds, setDiamonds] = useState<number | null>(null)
   const [showToast, setShowToast] = useState(false)
 
-  // Hide on landing page and learn/practice pages
-  if (pathname === "/" || pathname.startsWith("/home/learn/")) return null
   const bottomRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLTextAreaElement>(null)
+
+  // Hide on landing page and learn/practice pages
+  if (pathname === "/" || pathname.startsWith("/home/learn/")) return null
 
   useEffect(() => {
     fetch("/api/auth/me")
