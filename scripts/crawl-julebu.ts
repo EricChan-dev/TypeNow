@@ -118,17 +118,20 @@ async function main() {
             await page.setCookie({ name: n, value: pair.slice(eq + 1).trim(), domain: ".julebu.co", path: "/", secure: true, sameSite: "Lax" as const })
           }
 
-          // 🎯 响应拦截器（必须在导航之前设置）
-          page.on("response", (r) => {
-            if (!r.url().includes("courses.findOne")) return
-            r.text().then(text => {
-              try {
-                for (const item of JSON.parse(text)) {
-                  const j = item?.result?.data?.json
-                  if (j?.sentences?.length > 0) captured = j.sentences
-                }
-              } catch { /* skip */ }
-            }).catch(() => {})
+          // 🎯 JS 层 fetch 拦截（clone 响应，避免被页面消费后无法读取）
+          await page.evaluateOnNewDocument(() => {
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const win = window as any
+            const origFetch = win.fetch.bind(window)
+            win.__captured = null
+            win.fetch = async (...args: any[]) => {
+              const resp = await origFetch(...args)
+              const url: string = typeof args[0] === "string" ? args[0] : args[0]?.url ?? ""
+              if (url.includes("courses.findOne")) {
+                resp.clone().text().then((t: string) => { win.__captured = t }).catch(() => {})
+              }
+              return resp
+            }
           })
 
           // 导航到课程包页
@@ -166,8 +169,21 @@ async function main() {
 
           if (!clicked) { process.stdout.write(" ✗ 无开始\n"); failed++; continue }
 
-          // 轮询等待拦截结果
-          for (let w = 0; w < 60 && !captured; w++) await sleep(500)
+          // 轮询读取 JS 拦截结果
+          for (let w = 0; w < 60 && !captured; w++) {
+            await sleep(500)
+            captured = await page.evaluate(() => {
+              const raw = (window as unknown as Record<string, unknown>).__captured as string | null
+              if (!raw) return null
+              try {
+                for (const item of JSON.parse(raw)) {
+                  const j = (item as { result?: { data?: { json?: { sentences?: unknown[] } } } })?.result?.data?.json
+                  if (j?.sentences?.length) return j.sentences
+                }
+              } catch { /* not ready yet */ }
+              return null
+            })
+          }
 
           if (captured) {
             writeFileSync(cacheFile, JSON.stringify(captured, null, 2))
