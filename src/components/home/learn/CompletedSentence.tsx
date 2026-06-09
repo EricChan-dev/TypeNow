@@ -102,7 +102,7 @@ export function CompletedSentence({ words, small, sentenceId }: CompletedSentenc
           >
             {/* Phonetic — 兼容 string 和 {uk,us} */}
             <span
-              className={`${phoneticClass} text-white/45 font-mono leading-none`}
+              className={`${phoneticClass} text-foreground/45 font-mono leading-none`}
               title={phoneticAlt(word.phonetic) ? `美式: ${phoneticAlt(word.phonetic)}` : undefined}
             >
               {phoneticDisplay(word.phonetic)}
@@ -119,12 +119,12 @@ export function CompletedSentence({ words, small, sentenceId }: CompletedSentenc
             </span>
 
             {/* POS label */}
-            <span className={`${labelClass} font-semibold text-white/60 mt-0.5 bg-white/10 border border-white/10 rounded-full px-2.5 py-0.5`}>
+            <span className={`${labelClass} font-semibold text-foreground/60 mt-0.5 bg-foreground/10 border border-foreground/10 rounded-full px-2.5 py-0.5`}>
               {POS_LABEL[word.pos] ?? word.pos}
             </span>
 
             {/* Chinese */}
-            <span className={`${labelClass} font-medium text-white/75`}>
+            <span className={`${labelClass} font-medium text-foreground/75`}>
               {word.chinese || ""}
             </span>
           </div>

@@ -179,7 +179,7 @@ export function WordDetailPopover({ word, sentenceId, children }: Props) {
           ref={popoverRef}
           onMouseEnter={handlePopoverEnter}
           onMouseLeave={handleLeave}
-          className="fixed z-[70] w-[340px] -translate-y-full rounded-2xl border border-white/10 bg-[#181826]/97 backdrop-blur-md shadow-2xl text-white"
+          className="fixed z-[70] w-[340px] -translate-y-full rounded-2xl border border-border bg-card/97 backdrop-blur-md shadow-2xl text-foreground"
           style={{ top: pos.top, left: pos.left }}
         >
           <div className="p-4 flex flex-col gap-3">
@@ -187,7 +187,7 @@ export function WordDetailPopover({ word, sentenceId, children }: Props) {
               <div className="flex flex-col gap-1">
                 <span className="text-2xl font-bold">{data?.word ?? normalized}</span>
                 {(data?.phonetic || data?.phoneticUk) && (
-                  <div className="flex flex-wrap items-center gap-2 text-[12px] text-white/55 font-mono">
+                  <div className="flex flex-wrap items-center gap-2 text-[12px] text-muted-foreground font-mono">
                     {data.phonetic && <span>美 {data.phonetic}</span>}
                     {data.phoneticUk && <span>英 {data.phoneticUk}</span>}
                   </div>
@@ -197,28 +197,28 @@ export function WordDetailPopover({ word, sentenceId, children }: Props) {
                 onClick={speak}
                 disabled={busySpeak}
                 title="朗读"
-                className="shrink-0 w-9 h-9 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center transition-colors disabled:opacity-50"
+                className="shrink-0 w-9 h-9 rounded-full bg-foreground/10 hover:bg-foreground/20 flex items-center justify-center transition-colors disabled:opacity-50"
               >
                 {busySpeak ? <Loader2 className="h-4 w-4 animate-spin" /> : <Volume2 className="h-4 w-4" />}
               </button>
             </div>
 
             {loading && (
-              <div className="flex items-center justify-center py-6 text-white/40 text-sm gap-2">
+              <div className="flex items-center justify-center py-6 text-muted-foreground/70 text-sm gap-2">
                 <Loader2 className="h-4 w-4 animate-spin" /> 查询中…
               </div>
             )}
 
             {!loading && error && (
-              <div className="text-center text-white/50 text-sm py-4">{error}</div>
+              <div className="text-center text-muted-foreground text-sm py-4">{error}</div>
             )}
 
             {!loading && !error && data && (
               <>
                 {data.translations && data.translations.length > 0 && (
                   <div className="flex flex-col gap-1">
-                    <span className="text-[11px] uppercase tracking-wider text-white/40 font-semibold">中文释义</span>
-                    <div className="text-[13px] text-white/85 leading-relaxed">
+                    <span className="text-[11px] uppercase tracking-wider text-muted-foreground/70 font-semibold">中文释义</span>
+                    <div className="text-[13px] text-foreground/85 leading-relaxed">
                       {data.translations.slice(0, 5).join("；")}
                     </div>
                   </div>
@@ -226,7 +226,7 @@ export function WordDetailPopover({ word, sentenceId, children }: Props) {
 
                 {data.pos && data.pos.length > 0 && (
                   <div className="flex flex-col gap-1.5">
-                    <span className="text-[11px] uppercase tracking-wider text-white/40 font-semibold">词性 · 释义</span>
+                    <span className="text-[11px] uppercase tracking-wider text-muted-foreground/70 font-semibold">词性 · 释义</span>
                     <div className="flex flex-col gap-1.5 max-h-44 overflow-y-auto pr-1">
                       {data.pos.slice(0, 5).map((p, i) => (
                         <div key={i} className="flex gap-2 text-[12px]">
@@ -235,7 +235,7 @@ export function WordDetailPopover({ word, sentenceId, children }: Props) {
                               {p.pos}
                             </span>
                           )}
-                          <span className="text-white/75 leading-snug">{p.meaning}</span>
+                          <span className="text-foreground/75 leading-snug">{p.meaning}</span>
                         </div>
                       ))}
                     </div>
@@ -244,10 +244,10 @@ export function WordDetailPopover({ word, sentenceId, children }: Props) {
 
                 {data.synonyms && data.synonyms.length > 0 && (
                   <div className="flex flex-col gap-1">
-                    <span className="text-[11px] uppercase tracking-wider text-white/40 font-semibold">同义词</span>
+                    <span className="text-[11px] uppercase tracking-wider text-muted-foreground/70 font-semibold">同义词</span>
                     <div className="flex flex-wrap gap-1.5">
                       {data.synonyms.slice(0, 8).map((s) => (
-                        <span key={s} className="text-[11px] px-2 py-0.5 rounded-full bg-white/8 text-white/70">{s}</span>
+                        <span key={s} className="text-[11px] px-2 py-0.5 rounded-full bg-foreground/8 text-foreground/70">{s}</span>
                       ))}
                     </div>
                   </div>
