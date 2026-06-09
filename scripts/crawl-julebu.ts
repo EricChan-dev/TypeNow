@@ -1,119 +1,76 @@
 #!/usr/bin/env tsx
 /**
- * 句乐部课程数据爬取脚本
+ * 句乐部自动爬虫 — 无需手动操作
  *
- * 用法：pnpm tsx scripts/crawl-julebu.ts
+ * 用法：
+ *   export JULEBU_COOKIE='...'
+ *   JULEBU_TARGET_PACKS=id1,id2 pnpm tsx scripts/crawl-julebu.ts
  *
- * 环境变量：
- *   JULEBU_COOKIE — 句乐部登录 cookie（必需）
- *   JULEBU_TARGET_PACKS — 目标课程包 ID，逗号分隔（默认：rwtocajplud9ld732ep5u8ec 星荣零基础）
+ * 原理：
+ *   每课独立 page → 设 cookie → 导航到课程包页 → 点继续学习 → 点继续练习
+ *   → page.on("response") 拦截 courses.findOne → 保存到 .data/julebu/
  *
- * 输出：.data/julebu/sentences-{courseId}.json
+ * 每课约 15-20 秒，61 课约 15 分钟，支持断点续传。
  */
 
-import { readFileSync, writeFileSync, existsSync, mkdirSync } from "fs"
+import { existsSync, mkdirSync, writeFileSync, readFileSync } from "fs"
 import { join } from "path"
 import { config } from "dotenv"
 
 config({ path: join(import.meta.dirname ?? ".", "..", ".env.local") })
 
 const DATA_DIR = join(import.meta.dirname ?? ".", "..", ".data", "julebu")
+if (!existsSync(DATA_DIR)) mkdirSync(DATA_DIR, { recursive: true })
+
 const JULEBU_COOKIE = process.env.JULEBU_COOKIE
 const TARGET_PACKS = (process.env.JULEBU_TARGET_PACKS || "rwtocajplud9ld732ep5u8ec").split(",").map(s => s.trim())
 
-if (!JULEBU_COOKIE) {
-  console.error("❌ 请设置 JULEBU_COOKIE 环境变量")
-  console.error("   export JULEBU_COOKIE='...'")
-  process.exit(1)
+if (!JULEBU_COOKIE) { console.error("❌ 请设置 JULEBU_COOKIE"); process.exit(1) }
+
+// 动态加载 puppeteer
+let puppeteer: typeof import("puppeteer")
+for (const p of ["puppeteer", "/tmp/puppeteer-tmp/node_modules/puppeteer"]) {
+  try { puppeteer = require(p); break } catch { /* next */ }
 }
+if (!puppeteer!) { console.error("❌ puppeteer 未找到"); process.exit(1) }
 
-// ── TypeScript 声明（动态导入 puppeteer） ──
-declare function require(name: string): unknown
-type PuppeteerModule = typeof import("puppeteer")
+const H = { "accept": "*/*", "content-type": "application/json", "cookie": JULEBU_COOKIE, "Referer": "https://julebu.co/" }
 
-// ── tRPC API 辅助函数 ──
-const H = {
-  "accept": "*/*",
-  "content-type": "application/json",
-  "cookie": JULEBU_COOKIE,
-  "Referer": "https://julebu.co/",
-}
-
-async function julebuApi<T = unknown>(endpoint: string, input: unknown = null): Promise<T | null> {
+async function jf<T = unknown>(endpoint: string, input: unknown = null): Promise<T | null> {
   const bi = { "0": { json: input } }
   const url = `https://api.julebu.co/trpc/${endpoint}?batch=1&input=${encodeURIComponent(JSON.stringify(bi))}`
   const r = await fetch(url, { headers: H })
   const d = await r.json() as Array<{ error?: unknown; result?: { data?: { json?: T } } }>
-  if (d[0]?.error) {
-    const err = d[0].error as { json?: { message?: string } }
-    console.error(`  ERR [${endpoint}]: ${err?.json?.message || JSON.stringify(err).slice(0, 200)}`)
-    return null
-  }
+  if (d[0]?.error) return null
   return d[0]?.result?.data?.json ?? null
 }
 
-async function sleep(ms: number) {
-  return new Promise(r => setTimeout(r, ms))
-}
+const sleep = (ms: number) => new Promise(r => setTimeout(r, ms))
 
-// ── 主流程 ──
 async function main() {
-  console.log("🕷  句乐部课程爬虫\n")
+  console.log("🕷 句乐部自动爬虫\n")
 
-  // 确保数据目录存在
-  if (!existsSync(DATA_DIR)) mkdirSync(DATA_DIR, { recursive: true })
-
-  // 动态加载 puppeteer（尝试多个路径）
-  let puppeteer: PuppeteerModule
-  const PUPPETEER_PATHS = [
-    "puppeteer",
-    "/tmp/puppeteer-tmp/node_modules/puppeteer",
-  ]
-  let loaded = false
-  for (const p of PUPPETEER_PATHS) {
-    try {
-      puppeteer = require(p) as PuppeteerModule
-      loaded = true
-      break
-    } catch { /* try next */ }
-  }
-  if (!loaded) {
-    console.error("❌ puppeteer 未安装")
-    console.error("   尝试：cd /tmp && npm install puppeteer --ignore-scripts")
-    process.exit(1)
-  }
-
-  // ── Phase 1: 获取课程列表 ──
+  // 获取课程列表
   console.log("📡 获取课程列表...")
   const packs = []
-  for (const packId of TARGET_PACKS) {
-    const detail = await julebuApi<{
-      id: string; title: string; description: string;
-      courses: Array<{ id: string; title: string; description: string | null; order: number }>
-    }>("mall.getCoursePackDetail", { coursePackId: packId })
-    if (!detail?.courses) {
-      console.error(`  ⚠ 未找到课程包: ${packId}`)
-      continue
-    }
-    console.log(`  📦 ${detail.title}: ${detail.courses.length} 课`)
-    packs.push({ id: packId, title: detail.title, courses: detail.courses })
+  for (const pid of TARGET_PACKS) {
+    const d = await jf<{ title: string; courses: Array<{ id: string; title: string; order: number }> }>("mall.getCoursePackDetail", { coursePackId: pid })
+    if (!d?.courses) { console.log(`  ⚠ ${pid} 未找到`); continue }
+    console.log(`  📦 ${d.title}: ${d.courses.length} 课`)
+    packs.push({ id: pid, title: d.title, courses: d.courses })
   }
-
-  if (packs.length === 0) {
-    console.error("❌ 没有可导入的课程包")
-    process.exit(1)
-  }
-
-  // 保存元数据
+  if (!packs.length) { console.error("❌ 无课程包"); process.exit(1) }
   writeFileSync(join(DATA_DIR, "packs-metadata.json"), JSON.stringify(packs, null, 2))
 
-  // ── Phase 2: 启动浏览器 ──
-  console.log("\n🖥  启动浏览器...")
+  // 启动浏览器
+  console.log("\n🖥 启动浏览器...")
   const browser = await puppeteer.launch({
     executablePath: process.env.CHROME_PATH || "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
     headless: "new" as const,
     args: ["--no-sandbox", "--window-size=1920,1080"],
   })
+
+  let success = 0, skipped = 0, failed = 0
 
   try {
     for (const pack of packs) {
@@ -123,152 +80,102 @@ async function main() {
         const course = pack.courses[i]
         const cacheFile = join(DATA_DIR, `sentences-${course.id}.json`)
 
-        // 跳过已缓存
         if (existsSync(cacheFile)) {
-          const cached = JSON.parse(readFileSync(cacheFile, "utf-8"))
-          console.log(`  [${i + 1}/${pack.courses.length}] ${course.title} — ✅ 已缓存 (${cached.length} 句)`)
-          continue
+          console.log(`  [${i + 1}/${pack.courses.length}] ${course.title} — 已缓存`)
+          skipped++; continue
         }
 
         process.stdout.write(`  [${i + 1}/${pack.courses.length}] ${course.title} ...`)
 
-        // ── 为每课创建独立 page ──
+        // ── 每课独立 page ──
         const page = await browser.newPage()
+        let captured: unknown[] | null = null
+
         try {
           await page.setViewport({ width: 1920, height: 1080 })
 
-          // 设置 cookie（不要 decodeURIComponent！保持原始值）
-          const pairs = JULEBU_COOKIE!.split(";").map(c => c.trim())
-          for (const pair of pairs) {
+          // 设 cookie
+          for (const pair of JULEBU_COOKIE!.split(";").map(c => c.trim())) {
             const eq = pair.indexOf("=")
             if (eq === -1) continue
-            const name = pair.slice(0, eq).trim()
-            if (!name.startsWith("__Secure-julebu")) continue
-            await page.setCookie({
-              name,
-              value: pair.slice(eq + 1).trim(),  // ⚠️ 保持原始 URL-encoded 值
-              domain: ".julebu.co",
-              path: "/",
-              secure: true,
-              sameSite: "Lax" as const,
-            })
+            const n = pair.slice(0, eq).trim()
+            if (!n.startsWith("__Secure-julebu")) continue
+            await page.setCookie({ name: n, value: pair.slice(eq + 1).trim(), domain: ".julebu.co", path: "/", secure: true, sameSite: "Lax" as const })
           }
 
-          // 导航到课程包详情页
-          await page.goto(`https://julebu.co/my-course-packs/${pack.id}`, {
-            waitUntil: "networkidle2",
-            timeout: 30000,
+          // 🎯 响应拦截器（必须在导航之前设置）
+          page.on("response", (r) => {
+            if (!r.url().includes("courses.findOne")) return
+            r.text().then(text => {
+              try {
+                for (const item of JSON.parse(text)) {
+                  const j = item?.result?.data?.json
+                  if (j?.sentences?.length > 0) captured = j.sentences
+                }
+              } catch { /* skip */ }
+            }).catch(() => {})
           })
 
-          // 等待课程按钮渲染（最多 15 秒）
+          // 导航到课程包页
+          await page.goto(`https://julebu.co/my-course-packs/${pack.id}`, { waitUntil: "networkidle2", timeout: 30000 })
+
+          // 等待"继续学习"按钮出现
           try {
             await page.waitForFunction(
-              () => {
-                const btns = document.querySelectorAll("button")
-                return Array.from(btns).some(
-                  b => (b.textContent || "").includes("继续学习") && b.getBoundingClientRect().width > 0
-                )
-              },
+              () => Array.from(document.querySelectorAll("button")).some(b => (b.textContent || "").includes("继续学习") && b.getBoundingClientRect().width > 0),
               { timeout: 15000 }
             )
-          } catch {
-            console.log(" ✗ 页面加载超时")
-            continue
-          }
+          } catch { process.stdout.write(" ⚠ 页面加载慢\n"); }
 
-          await sleep(3000)
+          await sleep(4000)
 
-          // ── 🎯 提前设置响应拦截器（在所有点击之前） ──
-          let capturedSentences: unknown[] | null = null
-          const responseHandler = (response: { url(): string; text(): Promise<string> }) => {
-            const url = response.url()
-            // 拦截所有 tRPC 响应用于调试
-            if (url.includes("courses.findOne") || url.includes("practice.")) {
-              response.text().then(text => {
-                try {
-                  const d = JSON.parse(text)
-                  if (url.includes("courses.findOne")) {
-                    for (const item of d) {
-                      const j = item?.result?.data?.json
-                      if (j?.sentences?.length > 0) {
-                        capturedSentences = j.sentences
-                      }
-                    }
-                  }
-                } catch { /* ignore */ }
-              }).catch(() => {})
-            }
-          }
-          page.on("response", responseHandler)
-
-          // ── 点击"继续学习「第X课」" ──
+          // 点"继续学习「第X课」"
           const found = await page.evaluate((title: string) => {
-            const btns = document.querySelectorAll("button")
-            for (const b of btns) {
-              if ((b.textContent || "").includes("继续学习") && (b.textContent || "").includes(title)) {
-                ;(b as HTMLButtonElement).click()
-                return true
-              }
+            for (const b of document.querySelectorAll("button")) {
+              if ((b.textContent || "").includes("继续学习") && (b.textContent || "").includes(title)) { (b as HTMLButtonElement).click(); return true }
             }
             return false
           }, course.title)
 
-          if (!found) {
-            page.off("response", responseHandler)
-            console.log(" ✗ 找不到按钮")
-            continue
-          }
+          if (!found) { process.stdout.write(" ✗ 按钮\n"); failed++; continue }
+          await sleep(5000)
 
-          await sleep(6000)
-
-          // ── 点击"继续练习" / "重新开始" ──
+          // 点"继续练习"/"重新开始"
           const clicked = await page.evaluate(() => {
-            const btns = document.querySelectorAll("button")
-            for (const b of btns) {
+            for (const b of document.querySelectorAll("button")) {
               const t = b.textContent?.trim() || ""
-              if (t.includes("继续练习") || t.includes("重新开始")) {
-                ;(b as HTMLButtonElement).click()
-                return t
-              }
+              if (t.includes("继续练习") || t.includes("重新开始")) { (b as HTMLButtonElement).click(); return t }
             }
             return null
           })
 
-          if (!clicked) {
-            page.off("response", responseHandler)
-            console.log(" ✗ 找不到开始按钮")
-            continue
-          }
+          if (!clicked) { process.stdout.write(" ✗ 无开始\n"); failed++; continue }
 
-          // ── 等待 courses.findOne 响应（轮询，最多 30 秒） ──
-          for (let w = 0; w < 60; w++) {
-            if (capturedSentences) break
-            await sleep(500)
-          }
-          page.off("response", responseHandler)
+          // 轮询等待拦截结果
+          for (let w = 0; w < 60 && !captured; w++) await sleep(500)
 
-          if (capturedSentences && capturedSentences.length > 0) {
-            writeFileSync(cacheFile, JSON.stringify(capturedSentences, null, 2))
-            console.log(` ✅ ${capturedSentences.length} 句`)
+          if (captured) {
+            writeFileSync(cacheFile, JSON.stringify(captured, null, 2))
+            console.log(` ✅ ${captured.length} 句`)
+            success++
           } else {
-            console.log(" ✗ 无数据")
+            process.stdout.write(" ✗ 超时\n")
+            failed++
           }
         } finally {
           await page.close()
         }
 
-        await sleep(2000) // 请求间隔
+        await sleep(1500)
+        if (failed > 5 && success === 0) { console.log("\n⚠ 连续失败，cookie 可能过期"); break }
       }
     }
   } finally {
     await browser.close()
   }
 
-  console.log("\n✅ 爬取完成！数据缓存于 .data/julebu/")
-  console.log("   下一步：SKIP_PUPPETEER=1 pnpm import-julebu")
+  console.log(`\n✅ 完成！成功: ${success}, 跳过: ${skipped}, 失败: ${failed}`)
+  if (success > 0) console.log("下一步: SKIP_PUPPETEER=1 pnpm import-julebu")
 }
 
-main().catch((err) => {
-  console.error("Fatal:", err)
-  process.exit(1)
-})
+main().catch(e => { console.error(e); process.exit(1) })
