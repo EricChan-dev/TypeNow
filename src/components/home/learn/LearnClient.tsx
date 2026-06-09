@@ -187,15 +187,15 @@ function ShortcutBadge({ keys, label, onClick }: ShortcutBadgeProps) {
   return (
     <button
       onClick={onClick}
-      className="inline-flex items-center gap-1 rounded-lg border border-foreground/15 bg-foreground/[0.02] px-2.5 py-1.5 text-xs hover:bg-foreground/[0.06] hover:border-foreground/25 transition-colors"
+      className="inline-flex items-center gap-1 rounded-lg border border-foreground/30 bg-foreground/[0.06] px-2.5 py-1.5 text-xs hover:bg-foreground/[0.12] hover:border-foreground/50 transition-colors"
     >
       {keys.map((k, i) => (
         <span key={i}>
-          <kbd className="rounded border border-foreground/20 bg-foreground/[0.04] px-1 py-0.5 text-[11px] text-foreground/80 font-medium">{k}</kbd>
-          {i < keys.length - 1 && <span className="text-foreground/30 mx-0.5">+</span>}
+          <kbd className="rounded border border-foreground/30 bg-foreground/[0.08] px-1 py-0.5 text-[11px] text-foreground font-medium">{k}</kbd>
+          {i < keys.length - 1 && <span className="text-foreground/60 mx-0.5">+</span>}
         </span>
       ))}
-      <span className="text-foreground/50 ml-0.5">{label}</span>
+      <span className="text-foreground/70 ml-0.5">{label}</span>
     </button>
   )
 }
@@ -973,7 +973,7 @@ export function LearnClient({
             返回
           </button>
           <span className="text-lg text-foreground truncate">{courseTitle}</span>
-          <span className="text-sm text-foreground/50 shrink-0">{currentIndex + 1}/{sentences.length}</span>
+          <span className="text-sm text-foreground/70 shrink-0">{currentIndex + 1}/{sentences.length}</span>
         </div>
 
         {/* Right: action icons */}
@@ -998,7 +998,7 @@ export function LearnClient({
 
       {/* === Layer 2: Progress Bar === */}
       <div className="shrink-0 px-5 pb-2">
-        <div className="h-2 rounded-full border border-foreground/20 bg-transparent overflow-hidden">
+        <div className="h-2 rounded-full border border-foreground/40 bg-transparent overflow-hidden">
           <div
             className="h-full rounded-full bg-green-500 transition-all duration-500 ease-out"
             style={{ width: `${progressPercent}%` }}
@@ -1008,7 +1008,7 @@ export function LearnClient({
 
       {/* === Layer 3: Timer === */}
       <div className="shrink-0 px-5 pb-2 flex items-center gap-3">
-        <span className="text-4xl font-bold text-foreground/70 font-mono">{timerStr}</span>
+        <span className="text-4xl font-bold text-foreground/85 font-mono">{timerStr}</span>
         {isPaused && <span className="text-base text-amber-400/60">已暂停</span>}
       </div>
 
