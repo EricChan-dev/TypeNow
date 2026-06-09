@@ -118,72 +118,27 @@ async function main() {
             await page.setCookie({ name: n, value: pair.slice(eq + 1).trim(), domain: ".julebu.co", path: "/", secure: true, sameSite: "Lax" as const })
           }
 
-          // 🎯 JS 层 fetch 拦截（clone 响应，避免被页面消费后无法读取）
-          await page.evaluateOnNewDocument(() => {
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            const win = window as any
-            const origFetch = win.fetch.bind(window)
-            win.__captured = null
-            win.fetch = async (...args: any[]) => {
-              const resp = await origFetch(...args)
-              const url: string = typeof args[0] === "string" ? args[0] : args[0]?.url ?? ""
-              if (url.includes("courses.findOne")) {
-                resp.clone().text().then((t: string) => { win.__captured = t }).catch(() => {})
-              }
-              return resp
-            }
-          })
+          // 直接导航到游戏页面，页面自动触发 courses.findOne
+          const gameUrl = `https://julebu.co/game/course/${pack.id}/${course.id}?mode=chinese_to_english&presetKey=advanced`
 
-          // 导航到课程包页
-          await page.goto(`https://julebu.co/my-course-packs/${pack.id}`, { waitUntil: "networkidle2", timeout: 30000 })
-
-          // 等待"继续学习"按钮出现
-          try {
-            await page.waitForFunction(
-              () => Array.from(document.querySelectorAll("button")).some(b => (b.textContent || "").includes("继续学习") && b.getBoundingClientRect().width > 0),
-              { timeout: 15000 }
-            )
-          } catch { process.stdout.write(" ⚠ 页面加载慢\n"); }
-
-          await sleep(4000)
-
-          // 点"继续学习「第X课」"
-          const found = await page.evaluate((title: string) => {
-            for (const b of document.querySelectorAll("button")) {
-              if ((b.textContent || "").includes("继续学习") && (b.textContent || "").includes(title)) { (b as HTMLButtonElement).click(); return true }
-            }
-            return false
-          }, course.title)
-
-          if (!found) { process.stdout.write(" ✗ 按钮\n"); failed++; continue }
-          await sleep(5000)
-
-          // 点"继续练习"/"重新开始"
-          const clicked = await page.evaluate(() => {
-            for (const b of document.querySelectorAll("button")) {
-              const t = b.textContent?.trim() || ""
-              if (t.includes("继续练习") || t.includes("重新开始")) { (b as HTMLButtonElement).click(); return t }
-            }
-            return null
-          })
-
-          if (!clicked) { process.stdout.write(" ✗ 无开始\n"); failed++; continue }
-
-          // 轮询读取 JS 拦截结果
-          for (let w = 0; w < 60 && !captured; w++) {
-            await sleep(500)
-            captured = await page.evaluate(() => {
-              const raw = (window as unknown as Record<string, unknown>).__captured as string | null
-              if (!raw) return null
+          // 🎯 响应拦截器
+          page.on("response", (r) => {
+            if (!r.url().includes("courses.findOne")) return
+            r.text().then(text => {
               try {
-                for (const item of JSON.parse(raw)) {
-                  const j = (item as { result?: { data?: { json?: { sentences?: unknown[] } } } })?.result?.data?.json
-                  if (j?.sentences?.length) return j.sentences
+                for (const item of JSON.parse(text)) {
+                  const j = item?.result?.data?.json
+                  if (j?.sentences?.length > 0) captured = j.sentences
                 }
-              } catch { /* not ready yet */ }
-              return null
-            })
-          }
+              } catch { /* skip */ }
+            }).catch(() => {})
+          })
+
+          await page.goto(gameUrl, { waitUntil: "networkidle2", timeout: 30000 })
+          await sleep(3000)
+
+          // 轮询等待
+          for (let w = 0; w < 30 && !captured; w++) await sleep(500)
 
           if (captured) {
             writeFileSync(cacheFile, JSON.stringify(captured, null, 2))
