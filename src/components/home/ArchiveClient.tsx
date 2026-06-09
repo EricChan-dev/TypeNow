@@ -260,8 +260,8 @@ export function ArchivePanel() {
     })
   }, [stats])
 
-  const maxDailySentences = stats
-    ? Math.max(...(stats.trend.map((t) => t.count)), 0)
+  const maxDailySentences = stats?.trend?.length
+    ? Math.max(...stats.trend.map((t: { count: number }) => t.count), 0)
     : 0
 
   const PERIODS: { value: Period; label: string }[] = [
