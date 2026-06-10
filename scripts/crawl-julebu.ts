@@ -62,8 +62,8 @@ async function main() {
       const d = await jf<{ title: string; courses: Array<{ id: string; title: string; order: number }> }>("mall.getCoursePackDetail", { coursePackId: pid })
       if (d?.courses) packs.push({ id: pid, title: d.title, courses: d.courses.map(c => ({ id: c.id, title: c.title, order: c.order })) })
     }
-  } else {
-    // 默认：mall.search 拉全部课程包
+  } else if (process.env.JULEBU_ALL_PACKS) {
+    // JULEBU_ALL_PACKS=1：mall.search 拉全部（约 10 分钟获取元数据）
     let page = 1
     while (true) {
       const result = await jf<{ coursePacks: Array<{ id: string; title: string }>; hasNext: boolean }>("mall.search", { sortBy: "created_at", page, pageSize: 100 })
@@ -76,6 +76,14 @@ async function main() {
       console.log(`  📄 第 ${page} 页，已获取 ${packs.length} 个包`)
       if (!result.hasNext) break
       page++
+    }
+  } else {
+    // 默认：爬用户已加入的课程包（快速）
+    const userPacks = await jf<Array<{ coursePackId: string; title: string }>>("userCoursePacks.list", {})
+    if (!userPacks?.length) { console.error("❌ 未找到课程包"); process.exit(1) }
+    for (const up of userPacks) {
+      const d = await jf<{ title: string; courses: Array<{ id: string; title: string; order: number }> }>("mall.getCoursePackDetail", { coursePackId: up.coursePackId })
+      if (d?.courses) packs.push({ id: up.coursePackId, title: d.title, courses: d.courses.map(c => ({ id: c.id, title: c.title, order: c.order })) })
     }
   }
 
