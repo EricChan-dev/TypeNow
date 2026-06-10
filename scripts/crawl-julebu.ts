@@ -52,28 +52,39 @@ interface PackInfo { id: string; title: string; courses: CourseInfo[] }
 async function main() {
   console.log("🕷 句乐部自动爬虫\n")
 
-  console.log("📡 获取课程列表...")
-  let targetIds: string[] | null = TARGET_PACKS
+  console.log("📡 获取全部课程包列表（mall.search）...")
+  const packs: PackInfo[] = []
 
-  if (!targetIds) {
-    const userPacks = await jf<Array<{ coursePackId: string; title: string }>>("userCoursePacks.list", {})
-    if (userPacks?.length) {
-      targetIds = userPacks.map(p => p.coursePackId)
-      console.log(`  找到 ${targetIds.length} 个课程包:`)
-      userPacks.forEach(p => console.log(`    - ${p.title}`))
-    } else {
-      console.error("❌ 未找到任何课程包"); process.exit(1)
+  if (TARGET_PACKS) {
+    // 指定了课程包 → 直接获取
+    for (const pid of TARGET_PACKS) {
+      const d = await jf<{ title: string; courses: Array<{ id: string; title: string; order: number }> }>("mall.getCoursePackDetail", { coursePackId: pid })
+      if (d?.courses) packs.push({ id: pid, title: d.title, courses: d.courses.map(c => ({ id: c.id, title: c.title, order: c.order })) })
+    }
+  } else {
+    // 拉取全部课程包（分页）
+    let page = 1
+    while (true) {
+      const result = await jf<{ coursePacks: Array<{ id: string; title: string; courseCount: number }>; total: number; hasNext: boolean }>("mall.search", { sortBy: "created_at", page, pageSize: 100 })
+      if (!result?.coursePacks?.length) break
+      for (const cp of result.coursePacks) {
+        const d = await jf<{ title: string; courses: Array<{ id: string; title: string; order: number }> }>("mall.getCoursePackDetail", { coursePackId: cp.id })
+        if (d?.courses?.length) {
+          packs.push({ id: cp.id, title: d.title, courses: d.courses.map(c => ({ id: c.id, title: c.title, order: c.order })) })
+          console.log(`  📦 ${d.title}: ${d.courses.length} 课`)
+        }
+        await sleep(300) // API 限流
+      }
+      if (!result.hasNext) break
+      page++
     }
   }
 
-  const packs: PackInfo[] = []
-  for (const pid of targetIds) {
-    const d = await jf<{ title: string; courses: Array<{ id: string; title: string; order: number }> }>("mall.getCoursePackDetail", { coursePackId: pid })
-    if (!d?.courses) { console.log(`  ⚠ ${pid} 未找到`); continue }
-    console.log(`  📦 ${d.title}: ${d.courses.length} 课`)
-    packs.push({ id: pid, title: d.title, courses: d.courses.map(c => ({ id: c.id, title: c.title, order: c.order })) })
-  }
   if (!packs.length) { console.error("❌ 无课程包"); process.exit(1) }
+  console.log(`\n📊 共 ${packs.length} 个课程包，${packs.reduce((s,p) => s + p.courses.length, 0)} 课`)
+
+  // 保存元数据
+  writeFileSync(join(DATA_DIR, "all-packs.json"), JSON.stringify(packs, null, 2))
 
   // 启动浏览器
   console.log("\n🖥 启动浏览器...")
