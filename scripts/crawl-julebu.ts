@@ -35,10 +35,12 @@ if (!puppeteer!) { console.error("❌ puppeteer 未找到"); process.exit(1) }
 
 const H = { "accept": "*/*", "content-type": "application/json", "cookie": JULEBU_COOKIE, "Referer": "https://julebu.co/" }
 
-async function jf<T = unknown>(endpoint: string, input: unknown = null): Promise<T | null> {
+async function jf<T = unknown>(endpoint: string, input: unknown = null, method: "GET" | "POST" = "GET"): Promise<T | null> {
   const bi = { "0": { json: input } }
-  const url = `https://api.julebu.co/trpc/${endpoint}?batch=1&input=${encodeURIComponent(JSON.stringify(bi))}`
-  const r = await fetch(url, { headers: H })
+  const url = `https://api.julebu.co/trpc/${endpoint}?batch=1${method === "POST" ? "" : "&input=" + encodeURIComponent(JSON.stringify(bi))}`
+  const opts: RequestInit = { method, headers: H }
+  if (method === "POST") opts.body = JSON.stringify(bi)
+  const r = await fetch(url, opts)
   const d = await r.json() as Array<{ error?: unknown; result?: { data?: { json?: T } } }>
   if (d[0]?.error) return null
   return d[0]?.result?.data?.json ?? null
@@ -82,6 +84,25 @@ async function main() {
 
   // 保存元数据
   writeFileSync(join(DATA_DIR, "all-packs.json"), JSON.stringify(packs, null, 2))
+
+  // 自动将未加入的包添加到"我的课程包"
+  console.log("\n📡 自动加入课程包...")
+  const myPacks = await jf<Array<{ coursePackId: string }>>("userCoursePacks.list", {})
+  const myIds = new Set(myPacks?.map(p => p.coursePackId) ?? [])
+  let addedCount = 0
+  for (const pack of packs) {
+    if (!myIds.has(pack.id)) {
+      const r = await jf("userCoursePacks.create", { coursePackId: pack.id, source: "official" }, "POST")
+      if (r) {
+        myIds.add(pack.id)
+        addedCount++
+        if (addedCount <= 5) console.log(`  ✅ ${pack.title}`)
+        await sleep(200)
+      }
+    }
+  }
+  if (addedCount > 5) console.log(`  ... 共加入 ${addedCount} 个包`)
+  if (addedCount) console.log("")
 
   // 启动浏览器
   console.log("\n🖥 启动浏览器...")
