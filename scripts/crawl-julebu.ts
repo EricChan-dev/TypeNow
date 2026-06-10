@@ -15,7 +15,9 @@ import { config } from "dotenv"
 
 config({ path: join(import.meta.dirname ?? ".", "..", ".env.local") })
 
-const DATA_DIR = join(import.meta.dirname ?? ".", "..", ".data", "julebu")
+// eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+const PROJECT_DIR = join(import.meta.dirname!, "..")
+const DATA_DIR = join(PROJECT_DIR, ".data", "julebu")
 if (!existsSync(DATA_DIR)) mkdirSync(DATA_DIR, { recursive: true })
 
 const JULEBU_COOKIE = process.env.JULEBU_COOKIE
