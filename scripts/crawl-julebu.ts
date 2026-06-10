@@ -56,13 +56,12 @@ async function main() {
   const packs: PackInfo[] = []
 
   if (TARGET_PACKS) {
-    // 指定了课程包 → 直接获取
     for (const pid of TARGET_PACKS) {
       const d = await jf<{ title: string; courses: Array<{ id: string; title: string; order: number }> }>("mall.getCoursePackDetail", { coursePackId: pid })
       if (d?.courses) packs.push({ id: pid, title: d.title, courses: d.courses.map(c => ({ id: c.id, title: c.title, order: c.order })) })
     }
-  } else if (process.env.JULEBU_ALL_PACKS) {
-    // JULEBU_ALL_PACKS=1 → mall.search 拉全部
+  } else {
+    // 默认：mall.search 拉全部课程包
     let page = 1
     while (true) {
       const result = await jf<{ coursePacks: Array<{ id: string; title: string }>; hasNext: boolean }>("mall.search", { sortBy: "created_at", page, pageSize: 100 })
@@ -75,14 +74,6 @@ async function main() {
       console.log(`  📄 第 ${page} 页，已获取 ${packs.length} 个包`)
       if (!result.hasNext) break
       page++
-    }
-  } else {
-    // 默认：用户已加入的课程包（可爬取）
-    const userPacks = await jf<Array<{ coursePackId: string; title: string }>>("userCoursePacks.list", {})
-    if (!userPacks?.length) { console.error("❌ 未找到课程包"); process.exit(1) }
-    for (const up of userPacks) {
-      const d = await jf<{ title: string; courses: Array<{ id: string; title: string; order: number }> }>("mall.getCoursePackDetail", { coursePackId: up.coursePackId })
-      if (d?.courses) packs.push({ id: up.coursePackId, title: d.title, courses: d.courses.map(c => ({ id: c.id, title: c.title, order: c.order })) })
     }
   }
 
@@ -118,20 +109,12 @@ async function main() {
       }
 
       let changed = false
-      let consecutiveFails = 0
 
       for (let i = 0; i < pack.courses.length; i++) {
         const course = pack.courses[i]
         if (doneIds.has(course.id)) {
           console.log(`  [${i + 1}/${pack.courses.length}] ${course.title} — 已缓存`)
-          consecutiveFails = 0
           continue
-        }
-
-        // 连续3课失败 → 跳过该包（可能未购买/无权限）
-        if (consecutiveFails >= 3) {
-          console.log(`  ⏭ 连续 ${consecutiveFails} 课失败，跳过该包其余课程`)
-          break
         }
 
         process.stdout.write(`  [${i + 1}/${pack.courses.length}] ${course.title} ...`)
@@ -175,11 +158,9 @@ async function main() {
             doneIds.add(course.id)
             changed = true
             totalSuccess++
-            consecutiveFails = 0
             console.log(` ✅ ${captured.length} 句`)
           } else {
-            consecutiveFails++
-            process.stdout.write(` ✗ 超时 (${consecutiveFails}/3)\n`)
+            process.stdout.write(" ✗ 超时\n")
           }
         } finally {
           await page.close()
