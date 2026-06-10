@@ -52,7 +52,7 @@ interface PackInfo { id: string; title: string; courses: CourseInfo[] }
 async function main() {
   console.log("🕷 句乐部自动爬虫\n")
 
-  console.log("📡 获取全部课程包列表（mall.search）...")
+  console.log("📡 获取课程包列表...")
   const packs: PackInfo[] = []
 
   if (TARGET_PACKS) {
@@ -61,27 +61,33 @@ async function main() {
       const d = await jf<{ title: string; courses: Array<{ id: string; title: string; order: number }> }>("mall.getCoursePackDetail", { coursePackId: pid })
       if (d?.courses) packs.push({ id: pid, title: d.title, courses: d.courses.map(c => ({ id: c.id, title: c.title, order: c.order })) })
     }
-  } else {
-    // 拉取全部课程包（分页）
+  } else if (process.env.JULEBU_ALL_PACKS) {
+    // JULEBU_ALL_PACKS=1 → mall.search 拉全部
     let page = 1
     while (true) {
-      const result = await jf<{ coursePacks: Array<{ id: string; title: string; courseCount: number }>; total: number; hasNext: boolean }>("mall.search", { sortBy: "created_at", page, pageSize: 100 })
+      const result = await jf<{ coursePacks: Array<{ id: string; title: string }>; hasNext: boolean }>("mall.search", { sortBy: "created_at", page, pageSize: 100 })
       if (!result?.coursePacks?.length) break
       for (const cp of result.coursePacks) {
         const d = await jf<{ title: string; courses: Array<{ id: string; title: string; order: number }> }>("mall.getCoursePackDetail", { coursePackId: cp.id })
-        if (d?.courses?.length) {
-          packs.push({ id: cp.id, title: d.title, courses: d.courses.map(c => ({ id: c.id, title: c.title, order: c.order })) })
-          console.log(`  📦 ${d.title}: ${d.courses.length} 课`)
-        }
-        await sleep(300) // API 限流
+        if (d?.courses?.length) packs.push({ id: cp.id, title: d.title, courses: d.courses.map(c => ({ id: c.id, title: c.title, order: c.order })) })
+        await sleep(300)
       }
+      console.log(`  📄 第 ${page} 页，已获取 ${packs.length} 个包`)
       if (!result.hasNext) break
       page++
+    }
+  } else {
+    // 默认：用户已加入的课程包（可爬取）
+    const userPacks = await jf<Array<{ coursePackId: string; title: string }>>("userCoursePacks.list", {})
+    if (!userPacks?.length) { console.error("❌ 未找到课程包"); process.exit(1) }
+    for (const up of userPacks) {
+      const d = await jf<{ title: string; courses: Array<{ id: string; title: string; order: number }> }>("mall.getCoursePackDetail", { coursePackId: up.coursePackId })
+      if (d?.courses) packs.push({ id: up.coursePackId, title: d.title, courses: d.courses.map(c => ({ id: c.id, title: c.title, order: c.order })) })
     }
   }
 
   if (!packs.length) { console.error("❌ 无课程包"); process.exit(1) }
-  console.log(`\n📊 共 ${packs.length} 个课程包，${packs.reduce((s,p) => s + p.courses.length, 0)} 课`)
+  console.log(`📊 共 ${packs.length} 个课程包，${packs.reduce((s,p) => s + p.courses.length, 0)} 课\n`)
 
   // 保存元数据
   writeFileSync(join(DATA_DIR, "all-packs.json"), JSON.stringify(packs, null, 2))
@@ -112,12 +118,20 @@ async function main() {
       }
 
       let changed = false
+      let consecutiveFails = 0
 
       for (let i = 0; i < pack.courses.length; i++) {
         const course = pack.courses[i]
         if (doneIds.has(course.id)) {
           console.log(`  [${i + 1}/${pack.courses.length}] ${course.title} — 已缓存`)
+          consecutiveFails = 0
           continue
+        }
+
+        // 连续3课失败 → 跳过该包（可能未购买/无权限）
+        if (consecutiveFails >= 3) {
+          console.log(`  ⏭ 连续 ${consecutiveFails} 课失败，跳过该包其余课程`)
+          break
         }
 
         process.stdout.write(`  [${i + 1}/${pack.courses.length}] ${course.title} ...`)
@@ -157,14 +171,15 @@ async function main() {
 
           if (captured) {
             course.sentences = captured
-            // 立即写入包文件
             writeFileSync(packFile, JSON.stringify({ packId: pack.id, title: pack.title, courses: pack.courses }, null, 2))
             doneIds.add(course.id)
             changed = true
             totalSuccess++
+            consecutiveFails = 0
             console.log(` ✅ ${captured.length} 句`)
           } else {
-            process.stdout.write(" ✗ 超时\n")
+            consecutiveFails++
+            process.stdout.write(` ✗ 超时 (${consecutiveFails}/3)\n`)
           }
         } finally {
           await page.close()
