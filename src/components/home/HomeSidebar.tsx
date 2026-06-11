@@ -63,7 +63,7 @@ export function HomeSidebar({ collapsed, isPartner, onNavigate }: HomeSidebarPro
     return (
       <button
         key={item.key}
-        onClick={() => { router.push(item.key); onNavigate?.() }}
+        onClick={() => { onNavigate?.(); setTimeout(() => router.push(item.key), 100) }}
         title={collapsed ? item.label : undefined}
         className={cn(
           "flex items-center gap-3 w-full rounded-lg text-sm font-medium transition-all duration-200 whitespace-nowrap",
@@ -106,7 +106,7 @@ export function HomeSidebar({ collapsed, isPartner, onNavigate }: HomeSidebarPro
         {/* 合伙人入口 */}
         <div className="mt-4 pt-4 border-t border-border">
           <button
-            onClick={() => { router.push("/home/partner"); onNavigate?.() }}
+            onClick={() => { onNavigate?.(); setTimeout(() => router.push("/home/partner"), 100) }}
             title={collapsed ? (isPartner ? "推广中心" : "加入合伙人") : undefined}
             className={cn(
               "flex items-center gap-3 w-full rounded-lg text-sm font-medium transition-all duration-200 border",
