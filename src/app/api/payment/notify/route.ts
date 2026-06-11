@@ -12,7 +12,8 @@ export async function POST(request: Request) {
     const timestamp = request.headers.get("Wechatpay-Timestamp") || ""
     const nonce = request.headers.get("Wechatpay-Nonce") || ""
 
-    if (!verifyNotifySignature(timestamp, nonce, body, signature)) {
+    const serialNo = request.headers.get("Wechatpay-Serial") || ""
+    if (!(await verifyNotifySignature(timestamp, nonce, body, signature, serialNo))) {
       return NextResponse.json({ code: "FAIL", message: "Invalid signature" }, { status: 401 })
     }
 

@@ -3,6 +3,7 @@ import { createHash } from "crypto"
 import { db } from "@/lib/db"
 import { sentenceKnowledge } from "@/lib/db/schema"
 import { eq } from "drizzle-orm"
+import { getSession } from "@/lib/auth/session"
 
 const SYSTEM_PROMPT = `你是一个专业的英语教学助手，精通英语语法、词汇和文化背景知识。请分析给定的英语句子，只返回纯JSON，不要包含任何markdown标记或其他文字。
 
@@ -60,6 +61,11 @@ async function callDeepSeek(english: string) {
 }
 
 export async function POST(request: Request) {
+  const session = await getSession()
+  if (!session) {
+    return NextResponse.json({ error: "未登录" }, { status: 401 })
+  }
+
   let body: { sentence?: string }
   try {
     body = await request.json()

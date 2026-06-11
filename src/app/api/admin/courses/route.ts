@@ -29,8 +29,9 @@ export async function POST(request: Request) {
   if (!db) return NextResponse.json({ error: "DB not configured" }, { status: 500 })
 
   const body = await request.json()
+  const { title, description, coverUrl, source, sourceName, sourceAvatar, categoryKey, subCategoryKey, isPublished } = body
   const id = randomUUID()
-  await db.insert(courses).values({ ...body, id, createdBy: auth.userId })
+  await db.insert(courses).values({ id, title, description, coverUrl, source, sourceName, sourceAvatar, categoryKey, subCategoryKey, isPublished, createdBy: auth.userId })
   const [row] = await db.select().from(courses).where(eq(courses.id, id)).limit(1)
   return NextResponse.json({ data: row }, { status: 201 })
 }

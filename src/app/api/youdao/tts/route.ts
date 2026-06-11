@@ -3,6 +3,7 @@ import { createHash, randomUUID } from "crypto"
 import { db } from "@/lib/db"
 import { ttsCache } from "@/lib/db/schema"
 import { eq } from "drizzle-orm"
+import { getSession } from "@/lib/auth/session"
 
 function truncateInput(q: string): string {
   if (q.length <= 20) return q
@@ -10,6 +11,10 @@ function truncateInput(q: string): string {
 }
 
 export async function POST(request: Request) {
+  const session = await getSession()
+  if (!session) {
+    return NextResponse.json({ error: "未登录" }, { status: 401 })
+  }
   let body: { text?: string; voiceName?: string; speed?: number; volume?: number }
   try {
     body = await request.json()

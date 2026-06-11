@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server"
 import { createHash, randomUUID } from "crypto"
+import { getSession } from "@/lib/auth/session"
 
 function truncateInput(q: string): string {
   if (q.length <= 20) return q
@@ -7,6 +8,10 @@ function truncateInput(q: string): string {
 }
 
 export async function POST(request: Request) {
+  const session = await getSession()
+  if (!session) {
+    return NextResponse.json({ error: "未登录" }, { status: 401 })
+  }
   let body: { audio?: string; text?: string }
   try {
     body = await request.json()

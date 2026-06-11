@@ -23,7 +23,8 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
 
   const { id } = await params
   const body = await request.json()
-  await db.update(lessons).set(body).where(eq(lessons.id, id))
+  const { courseId, title, summary, sortOrder } = body
+  await db.update(lessons).set({ courseId, title, summary, sortOrder }).where(eq(lessons.id, id))
   const [row] = await db.select().from(lessons).where(eq(lessons.id, id)).limit(1)
   return NextResponse.json({ data: row })
 }

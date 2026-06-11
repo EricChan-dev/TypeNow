@@ -1,4 +1,4 @@
-import { createHash, randomUUID, createSign } from "crypto"
+import { randomUUID, createSign, createVerify } from "crypto"
 
 const WECHAT_PAY_HOST = "https://api.mch.weixin.qq.com"
 
@@ -147,30 +147,117 @@ export async function queryOrder(
   return result as unknown as QueryOrderResult
 }
 
-export function verifyNotifySignature(
+// ─── WeChat Pay platform certificate management ────────────────────────────────
+
+interface PlatformCert {
+  serial_no: string
+  effective_time: string
+  expire_time: string
+  encrypt_certificate: {
+    algorithm: string
+    nonce: string
+    associated_data: string
+    ciphertext: string
+  }
+}
+
+interface CertEntry {
+  serialNo: string
+  publicKey: string
+  expiresAt: number
+}
+
+let certCache: CertEntry[] | null = null
+let certCacheExpiresAt = 0
+
+async function getWechatPayCerts(): Promise<CertEntry[]> {
+  // Return cached certs if still valid (cache for 6 hours)
+  if (certCache && Date.now() < certCacheExpiresAt) {
+    return certCache
+  }
+
+  const cfg = getConfig()
+  const urlPath = "/v3/certificates"
+  const bodyStr = ""
+  const { Authorization } = buildAuthHeader("GET", urlPath, bodyStr)
+
+  const url = `${WECHAT_PAY_HOST}${urlPath}`
+  const res = await fetch(url, {
+    method: "GET",
+    headers: { Authorization, Accept: "application/json" },
+  })
+
+  if (!res.ok) {
+    const errText = await res.text()
+    console.error("[WeChat Pay] Failed to fetch certificates:", res.status, errText)
+    // Fall back to cached certs even if expired
+    if (certCache) return certCache
+    throw new Error(`Failed to fetch WeChat platform certificates: ${res.status}`)
+  }
+
+  const data = await res.json()
+  const certs: PlatformCert[] = (data as Record<string, unknown>).data as PlatformCert[] || []
+
+  // Decrypt each certificate using the APIv3 key
+  certCache = certs.map((cert) => {
+    const { ciphertext, nonce, associated_data } = cert.encrypt_certificate
+    const publicKey = decryptCert(ciphertext, nonce, associated_data, cfg.apiV3Key)
+    return {
+      serialNo: cert.serial_no,
+      publicKey,
+      expiresAt: new Date(cert.expire_time).getTime(),
+    }
+  })
+
+  certCacheExpiresAt = Date.now() + 6 * 60 * 60 * 1000 // 6 hours
+  return certCache
+}
+
+function decryptCert(
+  ciphertext: string,
+  nonce: string,
+  associatedData: string,
+  apiV3Key: string,
+): string {
+  const crypto = require("crypto") as typeof import("crypto")
+  const key = crypto.createHash("sha256").update(apiV3Key).digest()
+  const authTagLength = 16
+  const ciphertextBytes = Buffer.from(ciphertext, "base64")
+  const tag = ciphertextBytes.subarray(ciphertextBytes.length - authTagLength)
+  const actualCipher = ciphertextBytes.subarray(0, ciphertextBytes.length - authTagLength)
+  const decipher = crypto.createDecipheriv("aes-256-gcm", key, Buffer.from(nonce, "base64"))
+  decipher.setAuthTag(tag)
+  if (associatedData) decipher.setAAD(Buffer.from(associatedData, "base64"))
+  return Buffer.concat([decipher.update(actualCipher), decipher.final()]).toString("utf-8")
+}
+
+export async function verifyNotifySignature(
   timestamp: string,
   nonce: string,
   body: string,
-  signature: string
-): boolean {
-  const cfg = getConfig()
-
+  signature: string,
+  serialNo: string,
+): Promise<boolean> {
   if (!isWeChatPayConfigured()) {
-    // Dev mode: accept all callbacks
-    return true
+    return true // Dev mode: accept all
   }
 
   try {
+    const certs = await getWechatPayCerts()
+    const cert = certs.find((c) => c.serialNo === serialNo)
+
+    if (!cert) {
+      console.error(`[WeChat Pay] Certificate not found for serial: ${serialNo}`)
+      return false
+    }
+
     const message = `${timestamp}\n${nonce}\n${body}\n`
-    const verify = createSign("RSA-SHA256")
-    // Note: production should use WeChat platform certificate (from GET /v3/certificates)
-    // For now verify with the merchant private key as a basic check
-    verify.update(message)
-    const privateKey = decodePrivateKey(cfg.privateKey)
-    const expectedSig = verify.sign(privateKey, "base64")
-    // In production, compare against platform pubkey verification
-    return signature.length > 0 && expectedSig.length > 0
-  } catch {
+    const verifier = createVerify("RSA-SHA256")
+    verifier.update(message)
+
+    return verifier.verify(cert.publicKey, signature, "base64")
+  } catch (err) {
+    console.error("[WeChat Pay] Signature verification error:", err)
     return false
   }
 }
