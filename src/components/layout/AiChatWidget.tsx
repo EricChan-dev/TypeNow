@@ -10,11 +10,27 @@ interface Message {
   content: string
 }
 
+const STORAGE_KEY = "typenow_ai_chat"
+
+function loadMessages(): Message[] {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY)
+    if (raw) return JSON.parse(raw) as Message[]
+  } catch { /* ignore */ }
+  return []
+}
+
+function saveMessages(msgs: Message[]) {
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(msgs))
+  } catch { /* ignore */ }
+}
+
 export function AiChatWidget() {
   const pathname = usePathname()
   const [open, setOpen] = useState(false)
   const [loggedIn, setLoggedIn] = useState(false)
-  const [messages, setMessages] = useState<Message[]>([])
+  const [messages, setMessages] = useState<Message[]>(loadMessages)
   const [input, setInput] = useState("")
   const [sending, setSending] = useState(false)
   const [diamonds, setDiamonds] = useState<number | null>(null)
@@ -22,6 +38,11 @@ export function AiChatWidget() {
 
   const bottomRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLTextAreaElement>(null)
+
+  // Persist messages to localStorage
+  useEffect(() => {
+    saveMessages(messages)
+  }, [messages])
 
   useEffect(() => {
     fetch("/api/auth/me")
