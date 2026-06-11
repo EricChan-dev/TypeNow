@@ -292,7 +292,7 @@ async function handleDevLogin(request: NextRequest): Promise<NextResponse> {
     const res = NextResponse.redirect(homeUrl)
     res.cookies.set("typenow_session", "dev:dev_wechat_user", {
       httpOnly: true,
-      secure: false,
+      secure: process.env.NODE_ENV === "production",
       sameSite: "lax",
       expires: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
       path: "/",
@@ -322,7 +322,7 @@ async function handleDevLogin(request: NextRequest): Promise<NextResponse> {
     const res = NextResponse.redirect(homeUrl)
     res.cookies.set("typenow_session", "dev:dev_wechat_user", {
       httpOnly: true,
-      secure: false,
+      secure: process.env.NODE_ENV === "production",
       sameSite: "lax",
       expires: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
       path: "/",

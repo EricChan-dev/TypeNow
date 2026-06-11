@@ -391,6 +391,8 @@ interface SceneData {
 
 const sceneStore = new Map<string, SceneData>()
 
+// NOTE: sceneStore is in-memory — server restart or multi-instance deployment will
+// lose pending login scenes. Replace with Redis if scaling horizontally.
 // Clean expired scenes every 5 minutes
 const SCENE_TTL_MS = 120_000 // 2 min — longer than QR expiry to allow network delays
 setInterval(() => {
