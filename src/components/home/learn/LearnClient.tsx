@@ -346,25 +346,29 @@ export function LearnClient({
 
   // Enqueue current sentence for spaced-repetition review when completed
   useEffect(() => {
-    if (status !== "complete" || !sentence?.id) return
-    // Use parent sentence id (strip chunk suffix like _c1)
-    const parentId = sentence.id.includes("_c") ? sentence.id.split("_c")[0] : sentence.id
+    if (status !== "complete") return
+    const s = sentencesRef.current[currentIndexRef.current]
+    if (!s?.id) return
+    const parentId = s.id.includes("_c") ? s.id.split("_c")[0] : s.id
     fetch("/api/review/enqueue", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ sentenceId: parentId }),
     }).catch((e) => { console.error(e) })
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [status, sentence?.id])
+  }, [status])
 
   // Earn diamonds when a sentence is completed
   useEffect(() => {
-    if (status !== "complete" || !sentence?.id) return
+    if (status !== "complete") return
+    const s = sentencesRef.current[currentIndexRef.current]
+    if (!s?.id) return
+    const parentId = s.id.includes("_c") ? s.id.split("_c")[0] : s.id
+
     const isPerfect = !sentenceHasErrorRef.current
     const newStreak = isPerfect ? consecutivePerfectRef.current + 1 : 0
     consecutivePerfectRef.current = newStreak
     const durationSeconds = Math.max(1, Math.round((Date.now() - sentenceStartTimeRef.current) / 1000))
-    const parentId = sentence.id.includes("_c") ? sentence.id.split("_c")[0] : sentence.id
 
     let earned = 5
     let variant: FeedbackVariant = "great"
@@ -380,7 +384,7 @@ export function LearnClient({
       body: JSON.stringify({ type: "sentence", refId: parentId, streak: newStreak, perfect: isPerfect, durationSeconds }),
     }).catch((e) => { console.error(e) })
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [status, sentence?.id])
+  }, [status])
   const progressPercent = useMemo(
     () => sentences.length > 0 ? (completedCount / sentences.length) * 100 : 0,
     [completedCount, sentences.length],
