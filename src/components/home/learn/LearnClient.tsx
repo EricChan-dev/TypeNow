@@ -304,11 +304,20 @@ export function LearnClient({
   }, [lessonId])
 
   // Animate loading bar while waiting for sentences
+  const loadingAnimRef = useRef<ReturnType<typeof animate> | null>(null)
   useEffect(() => {
     const bar = loadingBarRef.current
     if (!bar) return
-    animate(bar, { width: ["0%", "100%"], duration: 2200, ease: "out(2)" })
+    loadingAnimRef.current = animate(bar, { width: ["0%", "100%"], duration: 2200, ease: "out(2)" })
+    return () => { loadingAnimRef.current = null }
   }, [])
+  // Complete loading bar early once data arrives
+  useEffect(() => {
+    if (sentences.length > 0 && loadingAnimRef.current) {
+      if (loadingBarRef.current) loadingBarRef.current.style.width = "100%"
+      loadingAnimRef.current = null
+    }
+  }, [sentences])
 
   const sentence = sentences[currentIndex]
   const inputWords = useMemo(
@@ -572,18 +581,18 @@ export function LearnClient({
   }, [])
 
   // Debounced wrappers for button clicks
-  const debouncedConfirmWord = useDebounce(confirmWord, 1000)
-  const debouncedSubmitAll = useDebounce(submitAll, 1000)
-  const debouncedGoNext = useDebounce(goNext, 1000)
-  const debouncedGoPrev = useDebounce(goPrev, 1000)
+  const debouncedConfirmWord = useDebounce(confirmWord, 300)
+  const debouncedSubmitAll = useDebounce(submitAll, 300)
+  const debouncedGoNext = useDebounce(goNext, 300)
+  const debouncedGoPrev = useDebounce(goPrev, 300)
   const debouncedTogglePause = useDebounce(() => {
     setIsPaused((prev) => {
       if (!prev) setShowLeaveModal(true)
       else setShowLeaveModal(false)
       return !prev
     })
-  }, 1000)
-  const debouncedToggleAnswer = useDebounce(() => setShowAnswer((v) => !v), 1000)
+  }, 300)
+  const debouncedToggleAnswer = useDebounce(() => setShowAnswer((v) => !v), 300)
 
   // Keyboard handler (stable ref, no re-binding)
   useEffect(() => {
@@ -791,21 +800,20 @@ export function LearnClient({
     ]
     const COUNT = 40
     let done = 0
+    const timers: ReturnType<typeof setTimeout>[] = []
 
     centers.forEach(({ x, y, t }) => {
-      // Pre-compute per-particle burst vectors
       const txArr: number[] = []
       const tyArr: number[] = []
       const gravArr: number[] = []
       const els: HTMLDivElement[] = []
 
       for (let i = 0; i < COUNT; i++) {
-        // Evenly spaced angles with small jitter for true radial burst
         const angle = (i / COUNT) * Math.PI * 2 + (Math.random() - 0.5) * 0.45
         const dist = 90 + Math.random() * 230
         txArr[i] = Math.cos(angle) * dist
         tyArr[i] = Math.sin(angle) * dist
-        gravArr[i] = 220 + Math.random() * 180 // how far each falls after burst peak
+        gravArr[i] = 220 + Math.random() * 180
 
         const isRibbon = Math.random() < 0.38
         const sz = isRibbon ? 0 : 5 + Math.random() * 8
@@ -827,8 +835,7 @@ export function LearnClient({
         els.push(el)
       }
 
-      setTimeout(() => {
-        // Phase 1 — fast radial burst outward (350ms, out(5))
+      timers.push(setTimeout(() => {
         animate(els, {
           translateX: (_: Element, i: number) => txArr[i],
           translateY: (_: Element, i: number) => tyArr[i],
@@ -840,8 +847,7 @@ export function LearnClient({
           delay: (_: Element, i: number) => i * 4,
         })
 
-        // Phase 2 — gravity fall (starts 280ms in, in(2) acceleration)
-        setTimeout(() => {
+        timers.push(setTimeout(() => {
           animate(els, {
             translateY: (_: Element, i: number) => tyArr[i] + gravArr[i],
             opacity: 0,
@@ -854,9 +860,14 @@ export function LearnClient({
               if (done >= centers.length) container.innerHTML = ""
             },
           })
-        }, 280)
-      }, t)
+        }, 280))
+      }, t))
     })
+
+    return () => {
+      timers.forEach(clearTimeout)
+      container.innerHTML = ""
+    }
   }, [showConfetti])
 
   // Underline pop when active word changes
@@ -1029,7 +1040,10 @@ export function LearnClient({
       )}
 
       {/* Main Content */}
-      <div className="flex-1 flex flex-col items-center justify-center px-3 sm:px-6 md:px-8 py-6 sm:py-10 md:py-12 overflow-y-auto">
+      <div
+        key={`${currentIndex}-${status}`}
+        className="flex-1 flex flex-col items-center justify-center px-3 sm:px-6 md:px-8 py-6 sm:py-10 md:py-12 overflow-y-auto animate-fadein"
+      >
         {status === "complete" ? (
           /* Completed Sentence Display */
           <div className="w-full max-w-5xl flex flex-col items-center gap-6 sm:gap-10 px-2">
