@@ -2,7 +2,14 @@ import { NextResponse } from "next/server"
 import { getCurrentUser } from "@/lib/auth/user"
 import { getActiveSubscription, checkAndExpirePro } from "@/lib/subscription"
 
-const ADMIN_PHONES = ["16634482010"]
+function getAdminPhones(): string[] {
+  if (process.env.NODE_ENV === "development") {
+    return ["16634482010"]
+  }
+  const raw = process.env.ADMIN_PHONES
+  if (raw) return raw.split(",").map((s) => s.trim()).filter(Boolean)
+  return []
+}
 
 export async function GET() {
   const user = await getCurrentUser()
@@ -11,7 +18,7 @@ export async function GET() {
   // Ensure pro status is current
   await checkAndExpirePro(user.id)
 
-  const isAdmin = user.role === "admin" || (user.phone != null && ADMIN_PHONES.includes(user.phone))
+  const isAdmin = user.role === "admin" || (user.phone != null && getAdminPhones().includes(user.phone))
 
   let memberTier: "trial" | "monthly" | "yearly" | "partner" | "free" = "free"
   if (user.isPartner) {

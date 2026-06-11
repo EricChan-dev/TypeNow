@@ -3,7 +3,14 @@ import { db } from "@/lib/db"
 import { sessions, users } from "@/lib/db/schema"
 import { and, eq, gt } from "drizzle-orm"
 
-const ADMIN_PHONES = ["16634482010"]
+function getAdminPhones(): string[] {
+  if (process.env.NODE_ENV === "development") {
+    return ["16634482010"]
+  }
+  const raw = process.env.ADMIN_PHONES
+  if (raw) return raw.split(",").map((s) => s.trim()).filter(Boolean)
+  return []
+}
 
 async function getSessionUser(request: NextRequest) {
   if (!db) return null
@@ -20,9 +27,15 @@ async function getSessionUser(request: NextRequest) {
   return row ?? null
 }
 
+function isWechatCallback(pathname: string): boolean {
+  return pathname.startsWith("/api/auth/wechat/callback") ||
+    pathname.startsWith("/api/wechat/oa/event") ||
+    pathname.startsWith("/api/payment/notify")
+}
+
 function isAdmin(user: { role: string | null; phone: string | null } | null) {
   if (!user) return false
-  return user.role === "admin" || (user.phone != null && ADMIN_PHONES.includes(user.phone))
+  return user.role === "admin" || (user.phone != null && getAdminPhones().includes(user.phone))
 }
 
 export async function proxy(request: NextRequest) {
@@ -31,6 +44,24 @@ export async function proxy(request: NextRequest) {
   // Log API requests
   if (pathname.startsWith("/api/")) {
     console.log(`[API] → ${request.method} ${pathname}${request.nextUrl.search || ""}`)
+  }
+
+  // CSRF defense-in-depth: check Origin/Referer on critical mutation endpoints.
+  // Skip server-to-server endpoints (WeChat callbacks, payment notify).
+  const CRITICAL_MUTATIONS = ["/api/payment/", "/api/partner/withdraw", "/api/subscription/cancel"]
+  const isCriticalMutation = CRITICAL_MUTATIONS.some((p) => pathname.startsWith(p))
+  if (isCriticalMutation && !["GET", "HEAD"].includes(request.method)) {
+    if (!isWechatCallback(pathname)) {
+      const siteOrigin = process.env.SITE_URL?.replace(/\/$/, "") ?? request.nextUrl.origin
+      const origin = request.headers.get("origin")
+      const referer = request.headers.get("referer")
+      if (origin && origin !== siteOrigin) {
+        return new NextResponse("Invalid origin", { status: 403 })
+      }
+      if (!origin && referer && !referer.startsWith(siteOrigin)) {
+        return new NextResponse("Invalid referer", { status: 403 })
+      }
+    }
   }
 
   // Dev mode: allow all

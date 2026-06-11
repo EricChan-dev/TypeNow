@@ -1,7 +1,15 @@
 import { getCurrentUser } from "@/lib/auth/user"
 import { NextResponse } from "next/server"
 
-const ADMIN_PHONES = ["16634482010"]
+function getAdminPhones(): string[] {
+  // In dev, allow the hardcoded phone as fallback
+  if (process.env.NODE_ENV === "development") {
+    return ["16634482010"]
+  }
+  const raw = process.env.ADMIN_PHONES
+  if (raw) return raw.split(",").map((s) => s.trim()).filter(Boolean)
+  return []
+}
 
 function isDevMode() {
   return process.env.NODE_ENV === "development"
@@ -17,7 +25,7 @@ export async function requireAdmin(): Promise<{ userId: string } | NextResponse>
   if (!user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
   }
-  const isAdmin = user.role === "admin" || (user.phone != null && ADMIN_PHONES.includes(user.phone))
+  const isAdmin = user.role === "admin" || (user.phone != null && getAdminPhones().includes(user.phone))
   if (!isAdmin) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
   }

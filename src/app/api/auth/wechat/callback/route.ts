@@ -5,6 +5,7 @@ import { users } from "@/lib/db/schema"
 import { eq } from "drizzle-orm"
 import { createSession } from "@/lib/auth/session"
 import { getUserById, getUserByWechatUnionid } from "@/lib/auth/user"
+import { encrypt } from "@/lib/crypto"
 import {
   exchangeCodeForAccessToken,
   getUserInfo,
@@ -155,7 +156,7 @@ async function upsertWeChatUser(
         wechatOpenid: wechatUser.openid,
         wechatUnionid: wechatUser.unionid || null,
         wechatAccessToken: tokenData.access_token,
-        wechatRefreshToken: tokenData.refresh_token,
+        wechatRefreshToken: encrypt(tokenData.refresh_token),
         wechatTokenExpiresAt: tokenExpiresAt,
       })
       .where(eq(users.id, user.id))
