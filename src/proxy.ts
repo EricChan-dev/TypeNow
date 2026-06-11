@@ -26,10 +26,15 @@ function isAdmin(user: { role: string | null; phone: string | null } | null) {
 }
 
 export async function proxy(request: NextRequest) {
+  const { pathname } = request.nextUrl
+
+  // Log API requests
+  if (pathname.startsWith("/api/")) {
+    console.log(`[API] → ${request.method} ${pathname}${request.nextUrl.search || ""}`)
+  }
+
   // Dev mode: allow all
   if (process.env.NODE_ENV === "development") return NextResponse.next()
-
-  const { pathname } = request.nextUrl
 
   const protectedPaths = ["/home", "/practice", "/profile", "/strengthen", "/share"]
   const isProtected = protectedPaths.some((p) => pathname.startsWith(p))
