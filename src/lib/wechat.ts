@@ -289,6 +289,42 @@ export async function getOAUserInfo(openid: string): Promise<OAUserInfo | null> 
   }
 }
 
+// ─── OA customer service message (主动客服消息) ────────────────────────────────
+
+export async function sendOACustomerMessage(
+  openid: string,
+  content: string
+): Promise<boolean> {
+  try {
+    const token = await getOAGlobalAccessToken()
+    const res = await fetch(
+      `https://api.weixin.qq.com/cgi-bin/message/custom/send?access_token=${token}`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          touser: openid,
+          msgtype: "text",
+          text: { content },
+        }),
+      }
+    )
+
+    if (!res.ok) return false
+
+    const data = await res.json()
+    if (isWechatError(data)) {
+      console.error("[WeChat] sendOACustomerMessage failed:", data)
+      return false
+    }
+
+    return true
+  } catch (err) {
+    console.error("[WeChat] sendOACustomerMessage error:", err)
+    return false
+  }
+}
+
 // ─── OA temporary QR code with scene ───────────────────────────────────────────
 
 interface OACreateQrCodeResponse {

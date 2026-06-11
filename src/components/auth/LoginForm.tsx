@@ -198,7 +198,7 @@ export function LoginForm() {
           }`}
         >
           <MessageCircle className="h-4 w-4" />
-          公众号登录
+          扫码登录
         </button>
         <button
           type="button"

@@ -8,6 +8,7 @@ import {
   decryptOAMessage,
   getOAUserInfo,
   storeSceneLogin,
+  sendOACustomerMessage,
 } from "@/lib/wechat"
 
 function getOAConfig() {
@@ -153,22 +154,25 @@ async function handleEvent(event: Record<string, string>): Promise<void> {
 
     if (sceneStr) {
       console.log("[OA Event] Subscribe with scene:", sceneStr)
-      await processSceneLogin(openid, sceneStr)
+      await processSceneLogin(openid, sceneStr, "subscribe")
     } else {
       console.log("[OA Event] Subscribe without scene")
+      // Still send a welcome message for direct follows
+      await sendOACustomerMessage(openid, "感谢关注 TypeNow · 码上英语！\n\n🔤 AI 驱动中译英打字练习\n📚 丰富课程 + 智能复习\n🎯 碎片时间，轻松提升\n\n👉 <a href=\"https://typenow.cn/login\">点击登录开始学习</a>")
     }
   }
 
   // Handle SCAN event (user already subscribed, scans QR code)
   if (eventType === "SCAN" && eventKey) {
     console.log("[OA Event] SCAN with scene:", eventKey)
-    await processSceneLogin(openid, eventKey)
+    await processSceneLogin(openid, eventKey, "scan")
   }
 }
 
 async function processSceneLogin(
   openid: string,
   sceneStr: string,
+  eventType: "subscribe" | "scan",
 ): Promise<void> {
   try {
     // Get user info from WeChat OA
@@ -179,7 +183,6 @@ async function processSceneLogin(
     }
 
     if (!db) {
-      // No DB — store minimal scene data for the polling endpoint
       storeSceneLogin(sceneStr, {
         openid,
         unionid: oaUser.unionid,
@@ -225,6 +228,10 @@ async function processSceneLogin(
         avatar: oaUser.headimgurl,
         createdAt: Date.now(),
       })
+
+      // Send message: returning user
+      const name = user.name || oaUser.nickname || "同学"
+      await sendOACustomerMessage(openid, `👋 欢迎回来，${name}！\n\n已成功登录 TypeNow，继续你的英语学习之旅吧～`)
     } else {
       // Create new user
       const id = randomUUID()
@@ -247,6 +254,10 @@ async function processSceneLogin(
         avatar: oaUser.headimgurl,
         createdAt: Date.now(),
       })
+
+      // Send message: new user
+      const name = oaUser.nickname || "同学"
+      await sendOACustomerMessage(openid, `🎉 ${name}，欢迎关注 TypeNow · 码上英语！\n\n🔤 AI 驱动中译英打字练习\n📚 丰富课程 + 智能复习\n🎯 碎片时间，轻松提升\n\n已自动登录，快去网站开始学习吧！`)
     }
   } catch (err) {
     console.error("[OA Event] processSceneLogin error:", err)
