@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useEffect, useRef, useCallback, useMemo } from "react"
+import { toast } from "sonner"
 import { animate } from "animejs"
 import Link from "next/link"
 import { ChevronLeft, ChevronRight, ArrowLeft, BookOpen, ShoppingBag, Pause, Play, RotateCcw, Shuffle, Maximize, Minimize, Keyboard, List, Settings, Eye, EyeOff } from "lucide-react"
@@ -258,7 +259,7 @@ export function LearnClient({
     fetch(`/api/courses/${courseId}`)
       .then((r) => r.json())
       .then((json) => { if (json.data?.title) setCourseTitle(json.data.title) })
-      .catch(() => {})
+      .catch((e) => { console.error(e) })
   }, [courseId])
 
   // Record study time locally and persist to backend
@@ -274,7 +275,7 @@ export function LearnClient({
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ courseId, sentenceCount: 0 }),
-    }).catch(() => {})
+    }).catch((e) => { console.error(e) })
   }, [courseId])
 
   // Refs for keyboard handler to avoid re-binding
@@ -299,7 +300,7 @@ export function LearnClient({
     fetch(`/api/courses/sentences?lessonId=${lessonId}`)
       .then((r) => r.json())
       .then((json) => { if (json.sentences) setSentences(expandSentences(json.sentences as Sentence[])) })
-      .catch(() => {})
+      .catch((e) => { console.error(e); toast.error("加载课程内容失败，请刷新重试") })
   }, [lessonId])
 
   // Animate loading bar while waiting for sentences
@@ -331,7 +332,7 @@ export function LearnClient({
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ courseId, sentenceCount: completedCount }),
-    }).catch(() => {})
+    }).catch((e) => { console.error(e) })
   }, [completedCount, courseId])
 
   // Enqueue current sentence for spaced-repetition review when completed
@@ -343,7 +344,7 @@ export function LearnClient({
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ sentenceId: parentId }),
-    }).catch(() => {})
+    }).catch((e) => { console.error(e) })
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [status, sentence?.id])
 
@@ -368,7 +369,7 @@ export function LearnClient({
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ type: "sentence", refId: parentId, streak: newStreak, perfect: isPerfect, durationSeconds }),
-    }).catch(() => {})
+    }).catch((e) => { console.error(e) })
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [status, sentence?.id])
   const progressPercent = useMemo(
@@ -879,7 +880,7 @@ export function LearnClient({
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ type: "lesson_complete", refId: lessonId }),
-    }).catch(() => {})
+    }).catch((e) => { console.error(e) })
   }, [isFinished, lessonId])
 
   if (!sentence) {
@@ -1052,7 +1053,7 @@ export function LearnClient({
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
                     body: JSON.stringify({ sentenceId: sid, mastered: true }),
-                  }).catch(() => {})
+                  }).catch((e) => { console.error(e) })
                 }}
                 className="px-4 py-1.5 rounded-lg border border-emerald-500/40 bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 text-xs font-semibold transition-all"
               >
