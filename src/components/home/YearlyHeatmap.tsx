@@ -9,9 +9,9 @@ function toLocalDateStr(d = new Date()): string {
 
 function getHeatColor(count: number): string {
   if (count === 0) return "var(--heat-empty)"
-  if (count <= 5) return "rgba(124,58,237,0.30)"
-  if (count <= 15) return "rgba(124,58,237,0.52)"
-  if (count <= 30) return "rgba(139,92,246,0.75)"
+  if (count <= 10) return "rgba(124,58,237,0.30)"
+  if (count <= 50) return "rgba(124,58,237,0.52)"
+  if (count <= 100) return "rgba(139,92,246,0.75)"
   return "rgba(167,139,250,0.95)"
 }
 
@@ -99,7 +99,7 @@ export function YearlyHeatmap({ heatmap }: { heatmap: Record<string, number> }) 
         </div>
         <div className="flex items-center gap-1.5 mt-3 justify-end">
           <span className="text-[10px] text-foreground/20">少</span>
-          {[0, 5, 15, 30, 45].map((v) => (
+          {[0, 10, 50, 100, 500].map((v) => (
             <div key={v} className="w-3 h-3 rounded-sm" style={{ background: getHeatColor(v) }} />
           ))}
           <span className="text-[10px] text-foreground/20">多</span>
