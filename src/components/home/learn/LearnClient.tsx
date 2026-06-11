@@ -960,44 +960,46 @@ export function LearnClient({
       ref={containerRef}
       tabIndex={0}
       className="h-full flex flex-col outline-none"
+      style={{ minHeight: "100dvh" }}
     >
       {/* === Layer 1: Action Bar === */}
-      <div className="flex items-center justify-between shrink-0 px-5 py-3">
+      <div className="flex items-center justify-between shrink-0 px-3 sm:px-5 py-2 sm:py-3">
         {/* Left: back + course title + progress */}
-        <div className="flex items-center gap-4 min-w-0">
+        <div className="flex items-center gap-2 sm:gap-4 min-w-0">
           <button
             onClick={() => setShowBackModal(true)}
-            className="inline-flex items-center gap-1.5 text-lg text-foreground hover:text-foreground/80 transition-colors shrink-0"
+            className="inline-flex items-center gap-1 sm:gap-1.5 text-base sm:text-lg text-foreground hover:text-foreground/80 transition-colors shrink-0"
           >
-            <ArrowLeft className="h-6 w-6" />
-            返回
+            <ArrowLeft className="h-5 w-5 sm:h-6 sm:w-6" />
+            <span className="hidden sm:inline">返回</span>
           </button>
-          <span className="text-lg text-foreground truncate">{courseTitle}</span>
-          <span className="text-sm text-foreground/70 shrink-0">{currentIndex + 1}/{sentences.length}</span>
+          <span className="text-sm sm:text-lg text-foreground truncate">{courseTitle}</span>
+          <span className="text-xs sm:text-sm text-foreground/70 shrink-0">{currentIndex + 1}/{sentences.length}</span>
         </div>
 
-        {/* Right: action icons */}
-        <div className="flex items-center gap-2 shrink-0">
-          <TooltipButton
-            label={showAnswer ? "隐藏答案" : "显示答案"}
-            onClick={debouncedToggleAnswer}
-          >
-            {showAnswer ? <EyeOff className="h-6 w-6" /> : <Eye className="h-6 w-6" />}
+        {/* Right: action icons — collapse lesser-used on mobile */}
+        <div className="flex items-center gap-1 sm:gap-2 shrink-0">
+          <TooltipButton label={showAnswer ? "隐藏答案" : "显示答案"} onClick={debouncedToggleAnswer}>
+            {showAnswer ? <EyeOff className="h-5 w-5 sm:h-6 sm:w-6" /> : <Eye className="h-5 w-5 sm:h-6 sm:w-6" />}
           </TooltipButton>
-          <TooltipButton label="快捷键" onClick={() => setShowShortcuts(true)}><Keyboard className="h-6 w-6" /></TooltipButton>
-          <TooltipButton label="设置" onClick={() => setShowSettings(true)}><Settings className="h-6 w-6" /></TooltipButton>
-          <TooltipButton label="暂停" onClick={debouncedTogglePause}><Pause className="h-6 w-6" /></TooltipButton>
-          <TooltipButton label="重置进度" onClick={() => setShowResetConfirm(true)}><RotateCcw className="h-6 w-6" /></TooltipButton>
-          <TooltipButton label="打乱顺序" onClick={() => setShowShuffleConfirm(true)}><Shuffle className="h-6 w-6" /></TooltipButton>
-          <TooltipButton label="内容大纲" onClick={() => setShowOutline(true)}><List className="h-6 w-6" /></TooltipButton>
+          <span className="hidden sm:contents">
+            <TooltipButton label="快捷键" onClick={() => setShowShortcuts(true)}><Keyboard className="h-6 w-6" /></TooltipButton>
+            <TooltipButton label="设置" onClick={() => setShowSettings(true)}><Settings className="h-6 w-6" /></TooltipButton>
+          </span>
+          <TooltipButton label="暂停" onClick={debouncedTogglePause}><Pause className="h-5 w-5 sm:h-6 sm:w-6" /></TooltipButton>
+          <span className="hidden md:contents">
+            <TooltipButton label="重置进度" onClick={() => setShowResetConfirm(true)}><RotateCcw className="h-6 w-6" /></TooltipButton>
+            <TooltipButton label="打乱顺序" onClick={() => setShowShuffleConfirm(true)}><Shuffle className="h-6 w-6" /></TooltipButton>
+          </span>
+          <TooltipButton label="内容大纲" onClick={() => setShowOutline(true)}><List className="h-5 w-5 sm:h-6 sm:w-6" /></TooltipButton>
           <TooltipButton label={isFullscreen ? "退出全屏" : "全屏"} onClick={toggleFullscreen}>
-            {isFullscreen ? <Minimize className="h-6 w-6" /> : <Maximize className="h-6 w-6" />}
+            {isFullscreen ? <Minimize className="h-5 w-5 sm:h-6 sm:w-6" /> : <Maximize className="h-5 w-5 sm:h-6 sm:w-6" />}
           </TooltipButton>
         </div>
       </div>
 
       {/* === Layer 2: Progress Bar === */}
-      <div className="shrink-0 px-5 pb-2">
+      <div className="shrink-0 px-3 sm:px-5 pb-1 sm:pb-2">
         <div className="h-2 rounded-full border border-foreground/40 bg-transparent overflow-hidden">
           <div
             className="h-full rounded-full bg-green-500 transition-all duration-500 ease-out"
@@ -1007,16 +1009,16 @@ export function LearnClient({
       </div>
 
       {/* === Layer 3: Timer === */}
-      <div className="shrink-0 px-5 pb-2 flex items-center gap-3">
-        <span className="text-4xl font-bold text-foreground/85 font-mono">{timerStr}</span>
-        {isPaused && <span className="text-base text-amber-400/60">已暂停</span>}
+      <div className="shrink-0 px-3 sm:px-5 pb-1 sm:pb-2 flex items-center gap-2 sm:gap-3">
+        <span className="text-2xl sm:text-3xl md:text-4xl font-bold text-foreground/85 font-mono">{timerStr}</span>
+        {isPaused && <span className="text-sm sm:text-base text-amber-400/60">已暂停</span>}
       </div>
 
       {/* Answer Preview (below timer, centered) */}
       {showAnswer && status === "input" && (
-        <div className="shrink-0 px-5 pb-4 flex justify-center">
-          <div className="rounded-2xl border border-accent/20 bg-accent/[0.02] px-6 py-4 max-w-2xl w-full">
-            <div className="flex items-center justify-center gap-2 mb-3">
+        <div className="shrink-0 px-3 sm:px-5 pb-3 sm:pb-4 flex justify-center">
+          <div className="rounded-2xl border border-accent/20 bg-accent/[0.02] px-4 sm:px-6 py-3 sm:py-4 w-full max-w-2xl">
+            <div className="flex items-center justify-center gap-2 mb-2 sm:mb-3">
               <Eye className="h-3.5 w-3.5 text-accent/50" />
               <span className="text-[11px] font-medium text-accent/50 uppercase tracking-wide">答案预览</span>
             </div>
@@ -1026,21 +1028,21 @@ export function LearnClient({
       )}
 
       {/* Main Content */}
-      <div className="flex-1 flex flex-col items-center justify-center px-8 py-12 overflow-y-auto">
+      <div className="flex-1 flex flex-col items-center justify-center px-3 sm:px-6 md:px-8 py-6 sm:py-10 md:py-12 overflow-y-auto">
         {status === "complete" ? (
           /* Completed Sentence Display */
-          <div className="w-[88%] max-w-5xl flex flex-col items-center gap-10">
+          <div className="w-full max-w-5xl flex flex-col items-center gap-6 sm:gap-10 px-2">
             <CompletedSentence words={sentence.words || []} />
 
             {/* Full Chinese translation */}
-            <p className="text-center text-2xl font-semibold text-foreground/65 tracking-wide">
+            <p className="text-center text-xl sm:text-2xl font-semibold text-foreground/65 tracking-wide">
               {sentence.chinese}
             </p>
 
             <VoicePanel english={sentence.english} />
 
-            <div className="flex flex-col items-center gap-3">
-              <p className="text-base text-foreground/30 font-medium">
+            <div className="flex flex-col items-center gap-2 sm:gap-3">
+              <p className="text-xs sm:text-base text-foreground/30 font-medium text-center">
                 按 Enter 继续下一句 · 鼠标悬停单词查看词性说明
               </p>
               <button
@@ -1060,21 +1062,22 @@ export function LearnClient({
           </div>
         ) : sentence.chunks && sentence.chunks.length > 0 ? (
           /* Chunk Mode Input */
-          <div className="w-full max-w-2xl space-y-8">
+          <div className="w-full max-w-2xl space-y-6 sm:space-y-8 px-2">
             {/* Current chunk Chinese hint */}
-            <p className="text-center text-2xl font-medium text-foreground">
+            <p className="text-center text-xl sm:text-2xl font-medium text-foreground">
               {sentence.chunks[activeChunkIndex]?.chinese ?? sentence.chinese}
             </p>
 
             {/* Chunk progress row */}
-            <div className="flex flex-wrap justify-center items-center gap-3">
+            <div className="flex flex-wrap justify-center items-center gap-2 sm:gap-3">
               {sentence.chunks.map((chunk, i) => {
                 const status = chunkStatuses[i]
+                const chunkWidth = Math.min(chunk.text.length * 16 + 16, 280)
                 return (
-                  <div key={i} className="flex flex-col items-center gap-1.5">
+                  <div key={i} className="flex flex-col items-center gap-1 sm:gap-1.5">
                     <div
                       className={`
-                        min-h-[64px] flex items-center justify-center px-4 text-4xl font-medium transition-colors rounded-xl
+                        min-h-[44px] sm:min-h-[56px] md:min-h-[64px] flex items-center justify-center px-3 sm:px-4 text-2xl sm:text-3xl md:text-4xl font-medium transition-colors rounded-xl
                         ${status === "done"
                           ? "text-foreground"
                           : status === "error"
@@ -1085,7 +1088,7 @@ export function LearnClient({
                         }
                         ${i === activeChunkIndex && shakeChunk ? "animate-shake" : ""}
                       `}
-                      style={{ minWidth: chunk.text.length * 28 + 24 }}
+                      style={{ minWidth: chunkWidth }}
                     >
                       {status === "done"
                         ? chunk.text
@@ -1104,9 +1107,9 @@ export function LearnClient({
                               ? "bg-accent shadow-[0_0_6px_var(--accent)]"
                               : "bg-foreground/20"
                       }`}
-                      style={{ width: chunk.text.length * 28 + 24 }}
+                      style={{ width: chunkWidth }}
                     />
-                    <span className="text-xs text-foreground/30">{chunk.chinese}</span>
+                    <span className="text-[10px] sm:text-xs text-foreground/30">{chunk.chinese}</span>
                   </div>
                 )
               })}
@@ -1114,12 +1117,12 @@ export function LearnClient({
           </div>
         ) : (
           /* Word Mode Input */
-          <div className="w-[82%] max-w-4xl space-y-8">
-            <p className="text-center text-4xl font-semibold text-foreground">
+          <div className="w-full max-w-4xl space-y-6 sm:space-y-8 px-2">
+            <p className="text-center text-2xl sm:text-3xl md:text-4xl font-semibold text-foreground">
               {sentence.chinese}
             </p>
 
-            <div className="flex flex-wrap justify-center items-end gap-x-4 gap-y-4">
+            <div className="flex flex-wrap justify-center items-end gap-x-3 sm:gap-x-4 gap-y-3 sm:gap-y-4">
               {(sentence.words || []).map((word, i) => {
                 const isInput = word.pos !== "标点"
                 const wsIdx = inputWords.indexOf(word)
@@ -1129,20 +1132,20 @@ export function LearnClient({
 
                 if (!isInput) {
                   return (
-                    <span key={i} className="text-xl font-medium text-foreground/70 self-end pb-1.5">
+                    <span key={i} className="text-base sm:text-xl font-medium text-foreground/70 self-end pb-1 sm:pb-1.5">
                       {word.english}
                     </span>
                   )
                 }
 
-                // Width based on expected word length: font-6xl ~60px, avg char ~38px + buffer
-                const underlineWidth = word.english.length * 38 + 20
+                // Responsive width: use ch units relative to font size
+                const wordLen = Math.max(word.english.length, 2)
                 const isPending = !ws || ws.status === "idle"
 
                 return (
                   <div
                     key={i}
-                    className={`flex flex-col items-center gap-[5px] ${isShaking ? "animate-shake" : ""}`}
+                    className={`flex flex-col items-center gap-[4px] sm:gap-[5px] ${isShaking ? "animate-shake" : ""}`}
                     onMouseEnter={(e) => {
                       if (!isPending) return
                       const ul = e.currentTarget.querySelector<HTMLElement>("[data-underline]")
@@ -1156,7 +1159,8 @@ export function LearnClient({
                   >
                     <div
                       className={`
-                        flex items-center justify-center h-16 text-6xl font-medium transition-colors
+                        flex items-center justify-center text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-medium transition-colors
+                        h-10 sm:h-12 md:h-14 lg:h-16
                         ${ws?.status === "done"
                           ? "text-foreground"
                           : ws?.status === "error"
@@ -1166,13 +1170,13 @@ export function LearnClient({
                               : "text-transparent"
                         }
                       `}
-                      style={{ minWidth: underlineWidth }}
+                      style={{ minWidth: `calc(${wordLen}ch + 10px)` }}
                     >
                       {ws?.value || ""}
                     </div>
                     <div
                       data-underline={wsIdx}
-                      className={`h-[3px] transition-colors duration-150 ${
+                      className={`h-[2px] sm:h-[3px] transition-colors duration-150 ${
                         ws?.status === "error"
                           ? "bg-red-500"
                           : ws?.status === "done"
@@ -1182,7 +1186,7 @@ export function LearnClient({
                               : "bg-foreground/20"
                       }`}
                       style={{
-                        width: underlineWidth,
+                        width: `calc(${wordLen}ch + 10px)`,
                         clipPath: "polygon(0 0, 100% 0, calc(100% - 2px) 100%, 2px 100%)",
                       }}
                     />
@@ -1211,14 +1215,14 @@ export function LearnClient({
             <div className="px-8 pt-8 pb-9 flex flex-col items-center gap-7">
               {/* Heading */}
               <div className="text-center">
-                <p className="text-4xl font-black text-foreground tracking-tight">太棒了！</p>
-                <p className="text-foreground/35 text-sm mt-1.5">你已完成本课全部 {sentences.length} 个句子</p>
+                <p className="text-3xl sm:text-4xl font-black text-foreground tracking-tight">太棒了！</p>
+                <p className="text-foreground/35 text-xs sm:text-sm mt-1.5">你已完成本课全部 {sentences.length} 个句子</p>
               </div>
 
               {/* Score */}
               <div className="flex flex-col items-center gap-1">
                 <span className="text-[11px] font-mono tracking-widest text-foreground/25 uppercase">Score</span>
-                <span className="text-6xl font-extrabold" style={{ background: "linear-gradient(135deg, #a78bfa, #f472b6)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}>
+                <span className="text-4xl sm:text-6xl font-extrabold" style={{ background: "linear-gradient(135deg, #a78bfa, #f472b6)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}>
                   {score.toLocaleString()}
                 </span>
               </div>
@@ -1272,7 +1276,7 @@ export function LearnClient({
       {showShortcuts && (
         <div className="fixed inset-0 z-50 flex justify-end">
           <div className="absolute inset-0 bg-background/70 backdrop-blur-sm" onClick={() => setShowShortcuts(false)} />
-          <div className="relative w-[380px] h-full bg-card border-l border-border shadow-2xl overflow-y-auto">
+          <div className="relative w-full sm:w-[380px] h-full bg-card border-l border-border shadow-2xl overflow-y-auto">
             <div className="flex items-center justify-between px-5 py-4 border-b border-border">
               <h2 className="text-base font-bold text-foreground">快捷键</h2>
               <button onClick={() => setShowShortcuts(false)} className="p-1 rounded text-foreground/40 hover:text-foreground transition-colors">
@@ -1425,18 +1429,18 @@ export function LearnClient({
       )}
 
       {/* Bottom Nav */}
-      <div className="flex items-center justify-center gap-8 shrink-0 px-6 py-4">
+      <div className="flex items-center justify-center gap-3 sm:gap-4 md:gap-8 shrink-0 px-3 sm:px-6 py-3 sm:py-4">
         <button
           onClick={debouncedGoPrev}
           disabled={currentIndex === 0}
-          className="flex items-center gap-1 text-sm text-foreground hover:text-foreground/70 disabled:opacity-20 disabled:cursor-not-allowed transition-colors"
+          className="flex items-center gap-0.5 sm:gap-1 text-xs sm:text-sm text-foreground hover:text-foreground/70 disabled:opacity-20 disabled:cursor-not-allowed transition-colors shrink-0"
         >
-          <ChevronLeft className="h-8 w-8" />
-          上一句
+          <ChevronLeft className="h-6 w-6 sm:h-8 sm:w-8" />
+          <span className="hidden sm:inline">上一句</span>
         </button>
 
-        {/* Keyboard shortcuts */}
-        <div className="flex items-center gap-2 flex-wrap justify-center">
+        {/* Keyboard shortcuts — hidden on smallest mobile */}
+        <div className="hidden sm:flex items-center gap-1 sm:gap-2 flex-wrap justify-center">
           <ShortcutBadge keys={["Ctrl", "'"]} label="发音" onClick={() => { const s = sentencesRef.current[currentIndexRef.current]; if (s) globalSpeak(s.english) }} />
           <ShortcutBadge keys={["Ctrl", ";"]} label={showAnswer ? "隐藏答案" : "显示答案"} onClick={debouncedToggleAnswer} />
           <ShortcutBadge keys={["Ctrl", "P"]} label={isPaused ? "继续" : "暂停"} onClick={debouncedTogglePause} />
@@ -1446,10 +1450,10 @@ export function LearnClient({
 
         <button
           onClick={debouncedGoNext}
-          className="flex items-center gap-1 text-sm text-foreground hover:text-foreground/70 transition-colors"
+          className="flex items-center gap-0.5 sm:gap-1 text-xs sm:text-sm text-foreground hover:text-foreground/70 transition-colors shrink-0"
         >
-          下一句
-          <ChevronRight className="h-8 w-8" />
+          <span className="hidden sm:inline">下一句</span>
+          <ChevronRight className="h-6 w-6 sm:h-8 sm:w-8" />
         </button>
       </div>
     </div>
