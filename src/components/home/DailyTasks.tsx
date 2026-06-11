@@ -46,7 +46,7 @@ export function DailyTasks({ className, refreshKey }: { className?: string; refr
     }
 
     const inviteLink = status?.inviteCode
-      ? `${typeof window !== "undefined" ? window.location.origin : ""}/register?ref=${status.inviteCode}`
+      ? `${typeof window !== "undefined" ? window.location.origin : ""}/ref/${status.inviteCode}`
       : typeof window !== "undefined" ? window.location.origin : ""
 
     if (navigator.share) {

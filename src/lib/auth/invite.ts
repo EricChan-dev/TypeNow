@@ -14,7 +14,7 @@ export async function awardInviteRegister(inviterId: string, inviteeId: string) 
       refId: inviteeId,
     })
   } catch {
-    return
+    // Duplicate key or transient error — don't block the Pro time reward
   }
 
   const threeDays = 3 * 24 * 60 * 60 * 1000

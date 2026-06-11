@@ -9,7 +9,7 @@ function getPlanDurationDays(plan: "monthly" | "yearly" | "partner"): number {
   return 365 * 99 // partner: effectively permanent (2099)
 }
 
-function generateInviteCode(): string {
+export function generateInviteCode(): string {
   const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
   return Array.from({ length: 8 }, () => chars[Math.floor(Math.random() * chars.length)]).join("")
 }

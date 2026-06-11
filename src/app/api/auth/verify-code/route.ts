@@ -5,6 +5,7 @@ import { verificationCodes, users } from "@/lib/db/schema"
 import { eq, and, gt } from "drizzle-orm"
 import { createSession } from "@/lib/auth/session"
 import { checkRateLimit, getClientIP } from "@/lib/rate-limit"
+import { generateInviteCode } from "@/lib/subscription"
 
 const PHONE_REGEX = /^1[3-9]\d{9}$/
 
@@ -98,7 +99,7 @@ export async function POST(request: NextRequest) {
     const id = randomUUID()
     const trialExpiresAt = new Date(Date.now() + 3 * 24 * 60 * 60 * 1000)
     const defaultName = `用户${Math.floor(1000 + Math.random() * 9000)}`
-    await db.insert(users).values({ id, phone, name: defaultName, referredBy, isPro: 1, proExpires: trialExpiresAt })
+    await db.insert(users).values({ id, phone, name: defaultName, referredBy, isPro: 1, proExpires: trialExpiresAt, inviteCode: generateInviteCode() })
     const [newUser] = await db.select().from(users).where(eq(users.id, id)).limit(1)
     user = newUser
 

@@ -6,6 +6,7 @@ import { eq } from "drizzle-orm"
 import { createSession } from "@/lib/auth/session"
 import { getUserById, getUserByWechatUnionid } from "@/lib/auth/user"
 import { encrypt } from "@/lib/crypto"
+import { generateInviteCode } from "@/lib/subscription"
 import {
   exchangeCodeForAccessToken,
   getUserInfo,
@@ -187,6 +188,7 @@ async function upsertWeChatUser(
       wechatAccessToken: tokenData.access_token,
       wechatRefreshToken: tokenData.refresh_token,
       wechatTokenExpiresAt: tokenExpiresAt,
+      inviteCode: generateInviteCode(),
     })
     const [newUser] = await db.select().from(users).where(eq(users.id, id)).limit(1)
     user = newUser

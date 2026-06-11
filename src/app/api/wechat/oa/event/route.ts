@@ -10,6 +10,7 @@ import {
   storeSceneLogin,
   sendOACustomerMessage,
 } from "@/lib/wechat"
+import { generateInviteCode } from "@/lib/subscription"
 
 function getOAConfig() {
   return {
@@ -245,6 +246,7 @@ async function processSceneLogin(
         avatar: oaUser.headimgurl,
         isPro: 1,
         proExpires: trialExpiresAt,
+        inviteCode: generateInviteCode(),
       })
 
       storeSceneLogin(sceneStr, {

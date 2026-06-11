@@ -460,7 +460,7 @@ function InviteCard() {
   }, [])
 
   const inviteLink = inviteData?.inviteCode
-    ? `${typeof window !== "undefined" ? window.location.origin : ""}/register?ref=${inviteData.inviteCode}`
+    ? `${typeof window !== "undefined" ? window.location.origin : ""}/ref/${inviteData.inviteCode}`
     : ""
 
   const handleCopy = () => {
