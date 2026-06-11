@@ -547,8 +547,15 @@ export function HomeClient({ name }: HomeClientProps) {
   }, [fetchStats])
 
   // Refresh data when user returns to the page (visibility change or focus)
+  // Debounced to avoid duplicate calls from rapid focus+visibility events
   useEffect(() => {
-    const refresh = () => { fetchStats() }
+    let lastRefresh = 0
+    const refresh = () => {
+      const now = Date.now()
+      if (now - lastRefresh < 5000) return // 5s debounce
+      lastRefresh = now
+      fetchStats()
+    }
     document.addEventListener("visibilitychange", refresh)
     window.addEventListener("focus", refresh)
     return () => {
