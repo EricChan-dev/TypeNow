@@ -173,6 +173,12 @@ body {
   animation: shake 0.4s ease-in-out;
 }
 
+@media (prefers-reduced-motion: reduce) {
+  .animate-shake {
+    animation: none;
+  }
+}
+
 /* Toast floating animation */
 @keyframes toast-float {
   0%, 100% { transform: translateY(0); }

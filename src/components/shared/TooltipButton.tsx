@@ -12,6 +12,7 @@ export function TooltipButton({ label, children, className = "", ...props }: Too
     <div className="relative group">
       <button
         className={`p-1.5 rounded text-foreground/60 hover:text-foreground hover:bg-foreground/10 transition-colors ${className}`}
+        aria-label={label}
         {...props}
       >
         {children}
