@@ -3,10 +3,8 @@
 import { useEffect, useState, useCallback, useRef } from "react"
 import { RefreshCw, Loader2, Smartphone, CheckCircle2 } from "lucide-react"
 import { isWechatBrowser, isMobile } from "@/lib/device"
-import { useRouter } from "next/navigation"
 
 export function WeChatQRCode() {
-  const router = useRouter()
 
   const [qrImageUrl, setQrImageUrl] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
@@ -83,10 +81,9 @@ export function WeChatQRCode() {
         if (data.success) {
           stopPolling()
           setLoggedIn(true)
-          // Redirect to home
+          // Redirect to home (use window.location for reliable navigation)
           setTimeout(() => {
-            router.push("/home?login_success=wechat" + (data.isNewUser ? "&new_user=1" : ""))
-            router.refresh()
+            window.location.href = "/home?login_success=wechat" + (data.isNewUser ? "&new_user=1" : "")
           }, 800)
         } else if (data.error === "no_scene") {
           // Scene cookie missing — refresh QR
@@ -97,7 +94,7 @@ export function WeChatQRCode() {
         // Network error — try again next interval
       }
     }, 2000)
-  }, [stopPolling, fetchQrCode, router])
+  }, [stopPolling, fetchQrCode])
 
   // Auto-refresh QR code when it expires
   useEffect(() => {
