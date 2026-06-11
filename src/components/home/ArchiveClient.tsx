@@ -145,7 +145,7 @@ function CompactStat({
       style={{ background: "var(--surface)", border: "1px solid var(--surface-border)" }}
     >
       <div className="p-1.5 rounded-lg shrink-0" style={{ background: `${color}18` }}>
-        <Icon className="h-4 w-4" style={{ color }} />
+        <Icon className="h-4 w-4" color={color} />
       </div>
       <div className="min-w-0">
         <div className="flex items-baseline gap-1">
