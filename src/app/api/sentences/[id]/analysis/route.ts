@@ -3,8 +3,14 @@ import { createHash } from "crypto"
 import { db } from "@/lib/db"
 import { sentences, sentenceKnowledge } from "@/lib/db/schema"
 import { eq } from "drizzle-orm"
+import { getSession } from "@/lib/auth/session"
 
 export async function GET(_: Request, { params }: { params: Promise<{ id: string }> }) {
+  const session = await getSession()
+  if (!session) {
+    return NextResponse.json({ error: "请先登录" }, { status: 401 })
+  }
+
   if (!db) return NextResponse.json({ error: "DB not configured" }, { status: 500 })
 
   const { id } = await params

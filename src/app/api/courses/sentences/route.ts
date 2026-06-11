@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import { db } from "@/lib/db"
 import { sentences } from "@/lib/db/schema"
 import { eq, asc } from "drizzle-orm"
+import { getSession } from "@/lib/auth/session"
 
 const TOKEN_RE = /[a-zA-Z\d'-]+|[.,!?;:'"()…—]/g
 
@@ -17,6 +18,11 @@ function textToWords(text: string) {
 }
 
 export async function GET(request: Request) {
+  const session = await getSession()
+  if (!session) {
+    return NextResponse.json({ error: "请先登录" }, { status: 401 })
+  }
+
   const { searchParams } = new URL(request.url)
   const lessonId = searchParams.get("lessonId")
 
