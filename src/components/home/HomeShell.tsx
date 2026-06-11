@@ -39,7 +39,7 @@ export function HomeShell({ children, isPartner }: { children: React.ReactNode; 
         <div className="lg:hidden fixed inset-0 z-40">
           <div className="absolute inset-0 bg-background/80 backdrop-blur-sm" onClick={() => setMobileMenuOpen(false)} />
           <div className="relative w-[240px] h-full">
-            <HomeSidebar collapsed={false} isPartner={!!isPartner} />
+            <HomeSidebar collapsed={false} isPartner={!!isPartner} onNavigate={() => setMobileMenuOpen(false)} />
           </div>
         </div>
       )}

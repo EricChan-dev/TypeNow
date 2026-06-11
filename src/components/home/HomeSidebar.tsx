@@ -8,6 +8,7 @@ import { cn } from "@/lib/utils"
 interface HomeSidebarProps {
   collapsed: boolean
   isPartner?: boolean
+  onNavigate?: () => void
 }
 
 interface SidebarItem {
@@ -17,7 +18,7 @@ interface SidebarItem {
   badge?: number | null
 }
 
-export function HomeSidebar({ collapsed, isPartner }: HomeSidebarProps) {
+export function HomeSidebar({ collapsed, isPartner, onNavigate }: HomeSidebarProps) {
   const pathname = usePathname()
   const router = useRouter()
   const [dueCount, setDueCount] = useState(0)
@@ -30,7 +31,8 @@ export function HomeSidebar({ collapsed, isPartner }: HomeSidebarProps) {
   }, [])
 
   // ── Group 1: 学习主线 ──
-  // ── Group 2: 工具 & 社区 ──
+  // ── Group 2: 学习工具 ──
+  // ── Group 3: 社区 ──
   const groups: { items: SidebarItem[] }[] = [
     {
       items: [
@@ -44,6 +46,10 @@ export function HomeSidebar({ collapsed, isPartner }: HomeSidebarProps) {
         { key: "/home/wordbook", label: "单词本", icon: BookText },
         { key: "/home/review", label: "复习本", icon: BookMarked, badge: dueCount > 0 ? dueCount : null },
         { key: "/home/notes", label: "笔记本", icon: FileText },
+      ],
+    },
+    {
+      items: [
         { key: "/home/feed", label: "动态广场", icon: Newspaper },
         { key: "/home/leaderboard", label: "排行榜", icon: Trophy },
       ],
@@ -57,7 +63,7 @@ export function HomeSidebar({ collapsed, isPartner }: HomeSidebarProps) {
     return (
       <button
         key={item.key}
-        onClick={() => router.push(item.key)}
+        onClick={() => { router.push(item.key); onNavigate?.() }}
         title={collapsed ? item.label : undefined}
         className={cn(
           "flex items-center gap-3 w-full rounded-lg text-sm font-medium transition-all duration-200 whitespace-nowrap",
@@ -100,7 +106,7 @@ export function HomeSidebar({ collapsed, isPartner }: HomeSidebarProps) {
         {/* 合伙人入口 */}
         <div className="mt-4 pt-4 border-t border-border">
           <button
-            onClick={() => router.push("/home/partner")}
+            onClick={() => { router.push("/home/partner"); onNavigate?.() }}
             title={collapsed ? (isPartner ? "推广中心" : "加入合伙人") : undefined}
             className={cn(
               "flex items-center gap-3 w-full rounded-lg text-sm font-medium transition-all duration-200 border",
