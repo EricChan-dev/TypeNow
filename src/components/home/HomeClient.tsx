@@ -662,26 +662,26 @@ export function HomeClient({ name }: HomeClientProps) {
             ))}
           </div>
           {activeTab === "today" && (
-            <div className="flex items-center gap-4">
-              <span className="text-sm font-medium text-foreground/60">
+            <div className="flex items-center gap-2 sm:gap-4">
+              <span className="hidden sm:inline text-sm font-medium text-foreground/60">
                 {greeting}，<span className="font-bold text-foreground/80">{name || "同学"}</span>
               </span>
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap">
                 {stats?.todayCount !== undefined && (
                   <div
-                    className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1"
+                    className="inline-flex items-center gap-1 sm:gap-1.5 rounded-full px-2 sm:px-2.5 py-1"
                     style={{ background: "var(--banner-pill-today-bg)", border: "1px solid var(--banner-pill-today-border)" }}
                   >
                     <Zap className="h-3 w-3 text-amber-400" />
-                    <span className="text-[12px] font-semibold" style={{ color: "var(--banner-pill-today-text)" }}>今日 {stats.todayCount} 句</span>
+                    <span className="text-[11px] sm:text-[12px] font-semibold" style={{ color: "var(--banner-pill-today-text)" }}>今日 {stats.todayCount} 句</span>
                   </div>
                 )}
                 <div
-                  className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1"
+                  className="inline-flex items-center gap-1 sm:gap-1.5 rounded-full px-2 sm:px-2.5 py-1"
                   style={{ background: "var(--banner-pill-streak-bg)", border: "1px solid var(--banner-pill-streak-border)" }}
                 >
                   <Flame className="h-3 w-3 text-amber-400" />
-                  <span className="text-[12px] font-semibold" style={{ color: "var(--banner-pill-streak-text)" }}>连续 {streak} 天</span>
+                  <span className="text-[11px] sm:text-[12px] font-semibold" style={{ color: "var(--banner-pill-streak-text)" }}>连续 {streak} 天</span>
                 </div>
               </div>
             </div>
@@ -710,7 +710,7 @@ export function HomeClient({ name }: HomeClientProps) {
 
           <div className="relative">
             {/* 3 compact stats */}
-            <div className="grid grid-cols-3 gap-4">
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 sm:gap-4">
               {[
                 {
                   label: "累计练习",
@@ -788,25 +788,25 @@ export function HomeClient({ name }: HomeClientProps) {
                 borderColor: "var(--surface-violet-border)",
               }}
             >
-              <div className="relative flex items-center justify-between gap-4 mb-4">
-                <div className="flex items-center gap-3.5">
+              <div className="relative flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-4 mb-4">
+                <div className="flex items-center gap-3 sm:gap-3.5">
                   <div
-                    className="flex items-center justify-center w-12 h-12 rounded-xl shrink-0"
+                    className="flex items-center justify-center w-10 h-10 sm:w-12 sm:h-12 rounded-xl shrink-0"
                     style={{ background: "var(--stat-2-icon-bg)", border: "1px solid var(--stat-2-border)" }}
                   >
-                    <Flame className="h-6 w-6 text-amber-400" />
+                    <Flame className="h-5 w-5 sm:h-6 sm:w-6 text-amber-400" />
                   </div>
                   <div>
-                    <p className="text-foreground/65 text-[11px] font-bold tracking-wider uppercase">连续打卡</p>
-                    <div className="flex items-baseline gap-1.5 mt-0.5">
+                    <p className="text-foreground/65 text-[10px] sm:text-[11px] font-bold tracking-wider uppercase">连续打卡</p>
+                    <div className="flex items-baseline gap-1 sm:gap-1.5 mt-0.5">
                       <span
                         ref={streakRef}
-                        className="text-5xl font-black tabular-nums"
+                        className="text-3xl sm:text-5xl font-black tabular-nums"
                         style={{ background: "linear-gradient(135deg, #a78bfa, #ec4899)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}
                       >
                         {streak}
                       </span>
-                      <span className="text-foreground/40 text-sm font-medium">天</span>
+                      <span className="text-foreground/40 text-xs sm:text-sm font-medium">天</span>
                     </div>
                   </div>
                 </div>
