@@ -74,7 +74,7 @@ export function HomeSidebar({ collapsed, isPartner }: HomeSidebarProps) {
               )}>
                 {item.label}
                 {"badge" in item && item.badge ? (
-                  <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-amber-500/20 text-amber-300 leading-none">
+                  <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-red-500 text-white leading-none">
                     {item.badge}
                   </span>
                 ) : null}
@@ -86,34 +86,47 @@ export function HomeSidebar({ collapsed, isPartner }: HomeSidebarProps) {
         {/* 合伙人入口 — 合伙人显示"推广中心"，非合伙人显示"加入合伙人" */}
         <button
           onClick={() => router.push("/home/partner")}
-          title={collapsed ? (isPartner ? "推广中心" : "加入合伙人") : undefined}
+          title={collapsed ? (isPartner ? "推广中心 · 0门槛 · 分享即可赚佣金" : "加入合伙人") : undefined}
           className={cn(
-            "relative flex items-center gap-3 w-full rounded-lg text-sm font-semibold transition-all duration-200 whitespace-nowrap",
-            collapsed ? "justify-center px-0 py-3.5 mt-2" : "px-3 py-3.5 mt-2",
+            "flex items-center gap-3 w-full rounded-lg text-sm font-medium transition-all duration-200 mt-2 border",
+            collapsed ? "justify-center px-0 py-3" : "px-3 py-3",
             isPartnerActive
-              ? "bg-amber-500/15 text-amber-600"
-              : "bg-amber-500/[0.07] text-amber-600 hover:bg-amber-500/15 hover:text-amber-500"
+              ? "bg-amber-500/10 border-amber-500/30 text-amber-500"
+              : "bg-amber-500/5 border-amber-500/15 text-amber-500 hover:bg-amber-500/10 hover:border-amber-500/30"
           )}
-          style={{
-            border: "1px solid",
-            borderColor: isPartnerActive ? "rgba(217,119,6,0.5)" : "rgba(217,119,6,0.35)",
-          }}
         >
-          {isPartner
-            ? <TrendingUp className="h-[18px] w-[18px] shrink-0 text-amber-500" />
-            : <Sparkles className="h-[18px] w-[18px] shrink-0 text-amber-500" />
-          }
-          <span className={cn(
-            "transition-opacity duration-200 flex items-center gap-2",
-            collapsed ? "opacity-0 w-0 overflow-hidden" : "opacity-100"
-          )}>
-            {isPartner ? "推广中心" : "加入合伙人"}
-            {!isPartner && (
-              <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-amber-500/25 text-amber-700 leading-none">
+          <TrendingUp
+            className={cn(
+              "h-[18px] w-[18px] shrink-0",
+              isPartnerActive ? "text-amber-500" : ""
+            )}
+          />
+          {isPartner ? (
+            <span className={cn(
+              "transition-opacity duration-200 flex flex-col items-start gap-0.5 leading-tight",
+              collapsed ? "opacity-0 w-0 overflow-hidden" : "opacity-100"
+            )}>
+              <span className="flex items-center gap-2">
+                推广中心
+                <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-red-500 text-white leading-none">
+                  0门槛
+                </span>
+              </span>
+              <span className="text-[11px] text-muted-foreground/60 leading-none">
+                分享即可赚佣金
+              </span>
+            </span>
+          ) : (
+            <span className={cn(
+              "transition-opacity duration-200 flex items-center gap-2",
+              collapsed ? "opacity-0 w-0 overflow-hidden" : "opacity-100"
+            )}>
+              加入合伙人
+              <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-red-500 text-white leading-none">
                 NEW
               </span>
-            )}
-          </span>
+            </span>
+          )}
         </button>
       </nav>
     </aside>

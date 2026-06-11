@@ -1,12 +1,13 @@
 "use client"
 
-import { useState, useEffect, useRef, useCallback } from "react"
+import { useState, useEffect, useLayoutEffect, useRef, useCallback } from "react"
 import { animate, stagger } from "animejs"
 import {
   CalendarDays, BookOpen, Flame, Trophy,
   Target, Zap, BarChart2, TrendingUp, Loader2,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
+import { useCountUp } from "@/lib/hooks/useCountUp"
 import { YearlyHeatmap } from "@/components/home/YearlyHeatmap"
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -24,26 +25,6 @@ interface ArchiveStats {
   trend: { date: string; count: number }[]
   heatmap: Record<string, number>
   today: string
-}
-
-// ─── Count-up hook ────────────────────────────────────────────────────────────
-
-function useCountUp(target: number, enabled: boolean, duration = 1200) {
-  const [value, setValue] = useState(0)
-  const objRef = useRef({ val: 0 })
-
-  useEffect(() => {
-    if (!enabled) { setValue(target); return }
-    objRef.current.val = 0
-    animate(objRef.current, {
-      val: target,
-      duration,
-      ease: "out(3)",
-      onUpdate: () => setValue(Math.round(objRef.current.val)),
-    })
-  }, [target, enabled, duration])
-
-  return value
 }
 
 // ─── SVG Area Chart ───────────────────────────────────────────────────────────
@@ -143,74 +124,35 @@ function TrendChart({ data, period }: { data: { date: string; count: number }[];
   )
 }
 
-// ─── Stat Card ────────────────────────────────────────────────────────────────
+// ─── Compact Stat Card ─────────────────────────────────────────────────────────
 
-function StatCard({
+function CompactStat({
   label,
   value,
   unit,
   icon: Icon,
-  iconColor,
-  iconBg,
-  gradient,
+  color,
 }: {
   label: string
-  value: number
-  unit: string
-  icon: React.ComponentType<{ className?: string }>
-  iconColor: string
-  iconBg: string
-  gradient: string
-}) {
-  return (
-    <div
-      className="archive-card rounded-2xl p-4 flex flex-col gap-3"
-      style={{ background: "var(--surface)", border: "1px solid var(--surface-border)" }}
-    >
-      <div className="flex items-center justify-between">
-        <p className="text-[11px] text-foreground/65 font-bold">{label}</p>
-        <div className="p-1.5 rounded-lg" style={{ background: iconBg }}>
-          <Icon className={cn("h-3.5 w-3.5", iconColor)} />
-        </div>
-      </div>
-      <div className="flex items-baseline gap-1">
-        <span
-          className="text-2xl font-black tabular-nums"
-          style={{ background: gradient, WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}
-        >
-          {value}
-        </span>
-        <span className="text-foreground/55 text-xs">{unit}</span>
-      </div>
-    </div>
-  )
-}
-
-// ─── Highlight Card ───────────────────────────────────────────────────────────
-
-function HighlightCard({
-  label,
-  value,
-  unit,
-  icon: Icon,
-}: {
-  label: string
-  value: string | number
+  value: number | string
   unit?: string
   icon: React.ComponentType<{ className?: string }>
+  color: string
 }) {
   return (
     <div
-      className="archive-card rounded-2xl p-4 flex flex-col gap-2"
+      className="archive-card rounded-2xl p-3.5 flex items-center gap-3"
       style={{ background: "var(--surface)", border: "1px solid var(--surface-border)" }}
     >
-      <div className="flex items-center gap-2">
-        <Icon className="h-3.5 w-3.5 text-foreground/55" />
-        <p className="text-[11px] text-foreground/65 font-bold">{label}</p>
+      <div className="p-1.5 rounded-lg shrink-0" style={{ background: `${color}18` }}>
+        <Icon className="h-4 w-4" style={{ color }} />
       </div>
-      <div className="flex items-baseline gap-1">
-        <span className="text-xl font-black text-foreground/80 tabular-nums">{value}</span>
-        {unit && <span className="text-foreground/55 text-xs">{unit}</span>}
+      <div className="min-w-0">
+        <div className="flex items-baseline gap-1">
+          <span className="text-lg font-black tabular-nums text-foreground/85">{value}</span>
+          {unit && <span className="text-[11px] text-foreground/40">{unit}</span>}
+        </div>
+        <p className="text-[10px] text-foreground/45 font-medium mt-0.5">{label}</p>
       </div>
     </div>
   )
@@ -225,6 +167,7 @@ export function ArchivePanel() {
   const pageRef = useRef<HTMLDivElement>(null)
 
   const animEnabled = !!stats
+  const initialLoadRef = useRef(true)
 
   const learningDays = useCountUp(stats?.learningDays ?? 0, animEnabled)
   const totalSentences = useCountUp(stats?.totalSentences ?? 0, animEnabled)
@@ -241,6 +184,7 @@ export function ArchivePanel() {
       console.error(e)
     } finally {
       setLoading(false)
+      initialLoadRef.current = false
     }
   }, [])
 
@@ -248,15 +192,18 @@ export function ArchivePanel() {
     fetchStats(period)
   }, [period, fetchStats])
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (!stats || !pageRef.current) return
-    const cards = pageRef.current.querySelectorAll(".archive-card")
-    animate(cards, {
-      translateY: [20, 0],
-      opacity: [0, 1],
-      duration: 500,
-      delay: stagger(60, { start: 80 }),
-      ease: "out(3)",
+    const cards = Array.from(pageRef.current.querySelectorAll(".archive-card") as NodeListOf<HTMLElement>)
+    cards.forEach((c) => { c.style.opacity = "0"; c.style.transform = "translateY(20px)" })
+    requestAnimationFrame(() => {
+      animate(cards, {
+        translateY: [20, 0],
+        opacity: [0, 1],
+        duration: 500,
+        delay: stagger(60, { start: 80 }),
+        ease: "out(3)",
+      })
     })
   }, [stats])
 
@@ -293,7 +240,7 @@ export function ArchivePanel() {
           </div>
         </div>
 
-        {loading ? (
+        {loading && !stats ? (
           <div className="flex items-center justify-center py-24">
             <div className="flex flex-col items-center gap-3">
               <Loader2 className="h-6 w-6 text-violet-400 animate-spin" />
@@ -302,82 +249,46 @@ export function ArchivePanel() {
           </div>
         ) : stats ? (
           <>
-            {/* Section 1 — 学习投入 */}
-            <div>
-              <p className="text-[11px] text-foreground/55 font-semibold uppercase tracking-widest mb-3">学习投入</p>
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                <StatCard
-                  label="学习天数"
-                  value={learningDays}
-                  unit="天"
-                  icon={CalendarDays}
-                  iconColor="text-violet-400"
-                  iconBg="rgba(124,58,237,0.15)"
-                  gradient="linear-gradient(135deg, #a78bfa, #7c3aed)"
-                />
-                <StatCard
-                  label="练习句数"
-                  value={totalSentences}
-                  unit="句"
-                  icon={BookOpen}
-                  iconColor="text-blue-400"
-                  iconBg="rgba(59,130,246,0.15)"
-                  gradient="linear-gradient(135deg, #60a5fa, #06b6d4)"
-                />
-                <StatCard
-                  label="连续打卡"
-                  value={streakDays}
-                  unit="天"
-                  icon={Flame}
-                  iconColor="text-amber-400"
-                  iconBg="rgba(245,158,11,0.15)"
-                  gradient="linear-gradient(135deg, #fbbf24, #f97316)"
-                />
-                <StatCard
-                  label="完成课程"
-                  value={completedCourses}
-                  unit="门"
-                  icon={Trophy}
-                  iconColor="text-emerald-400"
-                  iconBg="rgba(16,185,129,0.15)"
-                  gradient="linear-gradient(135deg, #34d399, #0d9488)"
-                />
+            {loading && (
+              <div className="flex justify-center -mb-2">
+                <Loader2 className="h-4 w-4 text-violet-400 animate-spin" />
               </div>
+            )}
+            {/* Unified stats grid */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+              <CompactStat label="学习天数" value={learningDays} unit="天" icon={CalendarDays} color="#7c3aed" />
+              <CompactStat label="练习句数" value={totalSentences} unit="句" icon={BookOpen} color="#3b82f6" />
+              <CompactStat label="连续打卡" value={streakDays} unit="天" icon={Flame} color="#f59e0b" />
+              <CompactStat label="完成课程" value={completedCourses} unit="门" icon={Trophy} color="#10b981" />
+              <CompactStat label="最高分" value={stats.bestScore || "—"} unit={stats.bestScore ? "分" : undefined} icon={Zap} color="#ec4899" />
+              <CompactStat label="平均分" value={stats.avgScore || "—"} unit={stats.avgScore ? "分" : undefined} icon={Target} color="#06b6d4" />
+              <CompactStat label="累计错误" value={stats.totalMistakes} unit="次" icon={BarChart2} color="#f97316" />
+              <CompactStat label="单日最多" value={maxDailySentences} unit="句" icon={TrendingUp} color="#8b5cf6" />
             </div>
 
-            {/* Section 2 — 高光时刻 */}
-            <div>
-              <p className="text-[11px] text-foreground/55 font-semibold uppercase tracking-widest mb-3">高光时刻</p>
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                <HighlightCard label="最高分" value={stats.bestScore || "—"} unit={stats.bestScore ? "分" : undefined} icon={Zap} />
-                <HighlightCard label="平均分" value={stats.avgScore || "—"} unit={stats.avgScore ? "分" : undefined} icon={Target} />
-                <HighlightCard label="累计错误" value={stats.totalMistakes} unit="次" icon={BarChart2} />
-                <HighlightCard label="单日最多" value={maxDailySentences} unit="句" icon={TrendingUp} />
+            {/* Trend + Heatmap side by side */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+              <div
+                className="archive-card rounded-2xl p-5"
+                style={{ background: "var(--surface-alt)", border: "1px solid var(--surface-border)" }}
+              >
+                <div className="flex items-center gap-2 mb-4">
+                  <TrendingUp className="h-4 w-4 text-violet-400" />
+                  <h3 className="text-sm font-semibold text-foreground/70">练习趋势</h3>
+                </div>
+                <TrendChart data={stats.trend} period={period} />
               </div>
-            </div>
 
-            {/* Section 3 — 练习趋势 */}
-            <div
-              className="archive-card rounded-2xl p-5"
-              style={{ background: "var(--surface-alt)", border: "1px solid var(--surface-border)" }}
-            >
-              <div className="flex items-center gap-2 mb-5">
-                <TrendingUp className="h-4 w-4 text-violet-400" />
-                <h3 className="text-sm font-semibold text-foreground/70">练习趋势</h3>
+              <div
+                className="archive-card rounded-2xl p-5"
+                style={{ background: "var(--surface-alt)", border: "1px solid var(--surface-border)" }}
+              >
+                <div className="flex items-center gap-2 mb-4">
+                  <CalendarDays className="h-4 w-4 text-blue-400" />
+                  <h3 className="text-sm font-semibold text-foreground/70">年度热力图</h3>
+                </div>
+                <YearlyHeatmap heatmap={stats.heatmap} />
               </div>
-              <TrendChart data={stats.trend} period={period} />
-            </div>
-
-            {/* Section 4 — 年度热力图 */}
-            <div
-              className="archive-card rounded-2xl p-5"
-              style={{ background: "var(--surface-alt)", border: "1px solid var(--surface-border)" }}
-            >
-              <div className="flex items-center gap-2 mb-5">
-                <CalendarDays className="h-4 w-4 text-blue-400" />
-                <h3 className="text-sm font-semibold text-foreground/70">年度学习热力图</h3>
-              </div>
-              <YearlyHeatmap heatmap={stats.heatmap} />
             </div>
           </>
         ) : null}

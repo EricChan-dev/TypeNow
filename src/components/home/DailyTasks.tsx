@@ -13,7 +13,7 @@ interface TaskStatus {
   diamonds: number
 }
 
-export function DailyTasks() {
+export function DailyTasks({ className, refreshKey }: { className?: string; refreshKey?: number }) {
   const [status, setStatus] = useState<TaskStatus | null>(null)
   const [sharing, setSharing] = useState(false)
 
@@ -22,7 +22,7 @@ export function DailyTasks() {
       .then((r) => r.json())
       .then((d) => setStatus(d))
       .catch(() => null)
-  }, [])
+  }, [refreshKey])
 
   async function handleShare() {
     if (!status || status.share) return
@@ -96,7 +96,7 @@ export function DailyTasks() {
 
   return (
     <div
-      className="anim-card rounded-2xl border p-5"
+      className={cn("anim-card rounded-2xl border p-5 flex flex-col", className)}
       style={{ background: "var(--surface-alt)", borderColor: "var(--surface-border)" }}
     >
       <div className="flex items-center gap-2 mb-4">

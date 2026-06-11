@@ -1,18 +1,21 @@
 "use client"
 
-import { useState, useEffect, useRef, useMemo, useCallback, Suspense } from "react"
+import { useState, useEffect, useLayoutEffect, useRef, useMemo, useCallback, Suspense } from "react"
 import Link from "next/link"
 import { useSearchParams } from "next/navigation"
 import { animate, stagger } from "animejs"
 import {
   Flame, BookOpen, ChevronRight, Zap,
   BarChart2, Clock, Check,
-  CalendarDays, ArrowRight, Loader2,
+  CalendarDays, Loader2,
   ChevronLeft, Trophy, HelpCircle,
   Smartphone, X, MessageCircle,
+  FileText, BookText, ShoppingBag,
+  Gift,
 } from "lucide-react"
 import { toast } from "sonner"
 import { cn } from "@/lib/utils"
+import { useCountUp } from "@/lib/hooks/useCountUp"
 import { ArchivePanel } from "@/components/home/ArchiveClient"
 import { CheckInRulesModal } from "@/components/home/CheckInRulesModal"
 import { GlobalSettingsModal } from "@/components/home/GlobalSettingsModal"
@@ -39,6 +42,14 @@ interface StatsData {
     lessonTitle: string
     studiedAt: string
   } | null
+  recentPractices: {
+    courseId: string
+    lessonId: string
+    courseTitle: string
+    lessonTitle: string
+    sentenceText: string
+    studiedAt: string
+  }[]
   checkInDatesThisMonth: string[]
   todayDiamonds: number
   checkInGoal: number
@@ -80,34 +91,6 @@ function relativeTime(isoStr: string): string {
   if (hours < 24) return `${hours}小时前`
   const days = Math.floor(diff / 86400000)
   return `${days}天前`
-}
-
-function getWeekDayShort(dateStr: string): string {
-  const labels = ["日", "一", "二", "三", "四", "五", "六"]
-  return labels[new Date(dateStr + "T12:00:00").getDay()]
-}
-
-// Rainbow bar colors — one per day of week
-const BAR_COLORS = ["#8b5cf6", "#ec4899", "#f59e0b", "#06b6d4", "#34d399", "#f97316", "#a78bfa"]
-
-// ─── Count-up hook ────────────────────────────────────────────────────────────
-
-function useCountUp(target: number, enabled: boolean, duration = 1400) {
-  const [value, setValue] = useState(0)
-  const objRef = useRef({ val: 0 })
-
-  useEffect(() => {
-    if (!enabled || target === 0) { setValue(target); return }
-    objRef.current.val = 0
-    animate(objRef.current, {
-      val: target,
-      duration,
-      ease: "out(3)",
-      onUpdate: () => setValue(Math.round(objRef.current.val)),
-    })
-  }, [target, enabled, duration])
-
-  return value
 }
 
 // ─── Monthly Check-In Calendar ────────────────────────────────────────────────
@@ -209,7 +192,7 @@ function MonthlyCheckInCalendar({
                   ? { border: "2px solid var(--accent)", color: "var(--accent)" }
                   : cell.isFuture
                   ? { color: "var(--heat-cell-text-empty)" }
-                  : { color: "var(--heat-cell-text-empty)" }
+                  : { color: "var(--heat-cell-text-empty)", border: "1px dashed rgba(156,163,175,0.4)" }
               }
               title={cell.date}
             >
@@ -324,58 +307,6 @@ function MonthlyHeatmap({ heatmap, heatmapDuration }: { heatmap: Record<string, 
 }
 
 // ─── Weekly Bar Chart ─────────────────────────────────────────────────────────
-
-function WeeklyChart({ weekly }: { weekly: { date: string; count: number }[] }) {
-  const max = Math.max(...weekly.map((w) => w.count), 1)
-  const barsRef = useRef<HTMLDivElement>(null)
-
-  useEffect(() => {
-    if (!barsRef.current) return
-    const bars = barsRef.current.querySelectorAll(".week-bar")
-    animate(bars, {
-      scaleY: [0, 1],
-      opacity: [0, 1],
-      duration: 600,
-      delay: stagger(60, { start: 200 }),
-      ease: "out(3)",
-    })
-  }, [weekly])
-
-  return (
-    <div ref={barsRef} className="flex items-end justify-between gap-2 h-28">
-      {weekly.map((w, i) => {
-        const pct = Math.max((w.count / max) * 100, w.count > 0 ? 8 : 2)
-        const isToday = w.date === toLocalDateStr()
-        const color = BAR_COLORS[i % BAR_COLORS.length]
-        return (
-          <div key={i} className="flex flex-col items-center gap-1.5 flex-1">
-            {w.count > 0 && (
-              <span className="text-[10px] font-mono text-foreground/40">{w.count}</span>
-            )}
-            <div
-              className="week-bar w-full rounded-t-[5px] origin-bottom"
-              style={{
-                height: `${pct}%`,
-                minHeight: 3,
-                background: isToday
-                  ? `linear-gradient(to top, ${color}, ${color}cc)`
-                  : w.count > 0
-                  ? `linear-gradient(to top, ${color}80, ${color}50)`
-                  : "var(--bar-empty)",
-                boxShadow: isToday ? `0 0 10px ${color}60` : undefined,
-              }}
-            />
-            <span className={cn("text-[10px]", isToday ? "font-semibold" : "text-foreground/25")}
-              style={isToday ? { color } : undefined}
-            >
-              {getWeekDayShort(w.date)}
-            </span>
-          </div>
-        )
-      })}
-    </div>
-  )
-}
 
 // ─── WeChat Login Banner (uses useSearchParams, needs Suspense) ─────────────
 
@@ -515,6 +446,61 @@ function PhoneBindBanner() {
   )
 }
 
+// ─── Invite Card ──────────────────────────────────────────────────────────────
+
+function InviteCard() {
+  const [inviteData, setInviteData] = useState<{ inviteCode: string | null; inviteTotal: number } | null>(null)
+  const [copied, setCopied] = useState(false)
+
+  useEffect(() => {
+    fetch("/api/tasks/status")
+      .then((r) => r.json())
+      .then((d) => setInviteData({ inviteCode: d.inviteCode, inviteTotal: d.inviteTotal ?? 0 }))
+      .catch(() => null)
+  }, [])
+
+  const inviteLink = inviteData?.inviteCode
+    ? `${typeof window !== "undefined" ? window.location.origin : ""}/register?ref=${inviteData.inviteCode}`
+    : ""
+
+  const handleCopy = () => {
+    if (!inviteLink) return
+    navigator.clipboard.writeText(inviteLink).then(() => {
+      setCopied(true)
+      toast.success("邀请链接已复制！")
+      setTimeout(() => setCopied(false), 2000)
+    }).catch(() => null)
+  }
+
+  return (
+    <div
+      onClick={handleCopy}
+      className="anim-card rounded-2xl border p-3.5 cursor-pointer hover:opacity-90 transition-all duration-200 active:scale-[0.98]"
+      style={{ background: "var(--surface-violet)", borderColor: "var(--surface-violet-border)" }}
+    >
+      <div className="flex items-center gap-3">
+        <div
+          className="flex items-center justify-center w-9 h-9 rounded-lg shrink-0"
+          style={{ background: "var(--stat-2-icon-bg)", border: "1px solid var(--stat-2-border)" }}
+        >
+          <Gift className="h-4 w-4 text-amber-400" />
+        </div>
+        <div className="min-w-0">
+          <p className="text-[13px] font-semibold text-foreground/80">邀请好友</p>
+          <p className="text-[10px] text-foreground/40 mt-0.5">
+            {copied ? "链接已复制！" : "点击复制分享链接"}
+          </p>
+        </div>
+        {inviteData && inviteData.inviteTotal > 0 && (
+          <span className="text-[10px] text-muted-foreground/50 ml-auto shrink-0">
+            已邀请 {inviteData.inviteTotal} 人
+          </span>
+        )}
+      </div>
+    </div>
+  )
+}
+
 // ─── Main Component ───────────────────────────────────────────────────────────
 
 export function HomeClient({ name }: HomeClientProps) {
@@ -529,6 +515,7 @@ export function HomeClient({ name }: HomeClientProps) {
   const [checkInGoal, setCheckInGoal] = useState(50)
   const [checkInRulesOpen, setCheckInRulesOpen] = useState(false)
   const [settingsOpen, setSettingsOpen] = useState(false)
+  const [checkInVersion, setCheckInVersion] = useState(0)
 
   const checkInBtnRef = useRef<HTMLButtonElement>(null)
   const streakRef = useRef<HTMLSpanElement>(null)
@@ -540,30 +527,49 @@ export function HomeClient({ name }: HomeClientProps) {
   const totalDays = useCountUp(stats?.totalDays ?? 0, animEnabled)
   const pendingCount = useCountUp(stats?.pendingReviews ?? 0, animEnabled)
 
-  useEffect(() => {
-    fetch("/api/home/stats")
-      .then((r) => r.json())
-      .then((d: StatsData) => {
-        setStats(d)
-        setCheckedIn(d.checkedInToday)
-        setStreak(d.streakDays)
-        setCheckInDatesThisMonth(d.checkInDatesThisMonth ?? [])
-        setTodayDiamonds(d.todayDiamonds ?? 0)
-        setCheckInGoal(d.checkInGoal ?? 50)
-      })
-      .catch(console.error)
-      .finally(() => setLoading(false))
+  const fetchStats = useCallback(async () => {
+    try {
+      const res = await fetch("/api/home/stats")
+      const d: StatsData = await res.json()
+      setStats(d)
+      setCheckedIn(d.checkedInToday)
+      setStreak(d.streakDays)
+      setCheckInDatesThisMonth(d.checkInDatesThisMonth ?? [])
+      setTodayDiamonds(d.todayDiamonds ?? 0)
+      setCheckInGoal(d.checkInGoal ?? 50)
+    } catch (e) {
+      console.error(e)
+    }
   }, [])
 
   useEffect(() => {
+    fetchStats().finally(() => setLoading(false))
+  }, [fetchStats])
+
+  // Refresh data when user returns to the page (visibility change or focus)
+  useEffect(() => {
+    const refresh = () => { fetchStats() }
+    document.addEventListener("visibilitychange", refresh)
+    window.addEventListener("focus", refresh)
+    return () => {
+      document.removeEventListener("visibilitychange", refresh)
+      window.removeEventListener("focus", refresh)
+    }
+  }, [fetchStats])
+
+  // Animation — useLayoutEffect to set invisible BEFORE paint, then animate in
+  useLayoutEffect(() => {
     if (!stats || !pageRef.current) return
-    const cards = pageRef.current.querySelectorAll(".anim-card")
-    animate(cards, {
-      translateY: [24, 0],
-      opacity: [0, 1],
-      duration: 550,
-      delay: stagger(70, { start: 100 }),
-      ease: "out(3)",
+    const cards = Array.from(pageRef.current.querySelectorAll(".anim-card") as NodeListOf<HTMLElement>)
+    cards.forEach((c) => { c.style.opacity = "0"; c.style.transform = "translateY(24px)" })
+    requestAnimationFrame(() => {
+      animate(cards, {
+        translateY: [24, 0],
+        opacity: [0, 1],
+        duration: 550,
+        delay: stagger(70, { start: 100 }),
+        ease: "out(3)",
+      })
     })
   }, [stats])
 
@@ -585,6 +591,7 @@ export function HomeClient({ name }: HomeClientProps) {
       if (data.success) {
         setCheckedIn(true)
         setStreak(data.streakDays)
+        setCheckInVersion((v) => v + 1)
 
         const todayStr = toLocalDateStr()
         setCheckInDatesThisMonth((prev) => prev.includes(todayStr) ? prev : [...prev, todayStr])
@@ -629,32 +636,57 @@ export function HomeClient({ name }: HomeClientProps) {
     <div ref={pageRef} className="h-full overflow-y-auto scrollbar-none">
       <div className="w-full px-4 sm:px-6 lg:px-8 py-6 pb-16 max-w-7xl mx-auto">
 
-        {/* ── Tab switcher ── */}
-        <div className="flex items-center gap-1 mb-5 rounded-xl p-1 w-fit" style={{ background: "var(--surface)", border: "1px solid var(--surface-border)" }}>
-          {(["today", "archive"] as const).map((tab) => (
-            <button
-              key={tab}
-              onClick={() => setActiveTab(tab)}
-              className={cn(
-                "px-4 py-1.5 rounded-lg text-sm font-semibold transition-all duration-200",
-                activeTab === tab
-                  ? "bg-accent text-primary-foreground shadow-sm"
-                  : "text-muted-foreground hover:text-foreground"
-              )}
-            >
-              {tab === "today" ? "今日" : "档案"}
-            </button>
-          ))}
+        {/* ── Tab switcher + greeting ── */}
+        <div className="flex items-center justify-between mb-5">
+          <div className="flex items-center gap-1 rounded-xl p-1" style={{ background: "var(--surface)", border: "1px solid var(--surface-border)" }}>
+            {(["today", "archive"] as const).map((tab) => (
+              <button
+                key={tab}
+                onClick={() => setActiveTab(tab)}
+                className={cn(
+                  "px-4 py-1.5 rounded-lg text-sm font-semibold transition-all duration-200",
+                  activeTab === tab
+                    ? "bg-accent text-primary-foreground shadow-sm"
+                    : "text-muted-foreground hover:text-foreground"
+                )}
+              >
+                {tab === "today" ? "今日" : "档案"}
+              </button>
+            ))}
+          </div>
+          {activeTab === "today" && (
+            <div className="flex items-center gap-4">
+              <span className="text-sm font-medium text-foreground/60">
+                {greeting}，<span className="font-bold text-foreground/80">{name || "同学"}</span>
+              </span>
+              <div className="flex items-center gap-2">
+                {stats?.todayCount !== undefined && (
+                  <div
+                    className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1"
+                    style={{ background: "var(--banner-pill-today-bg)", border: "1px solid var(--banner-pill-today-border)" }}
+                  >
+                    <Zap className="h-3 w-3 text-amber-400" />
+                    <span className="text-[12px] font-semibold" style={{ color: "var(--banner-pill-today-text)" }}>今日 {stats.todayCount} 句</span>
+                  </div>
+                )}
+                <div
+                  className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1"
+                  style={{ background: "var(--banner-pill-streak-bg)", border: "1px solid var(--banner-pill-streak-border)" }}
+                >
+                  <Flame className="h-3 w-3 text-amber-400" />
+                  <span className="text-[12px] font-semibold" style={{ color: "var(--banner-pill-streak-text)" }}>连续 {streak} 天</span>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
 
-        {activeTab === "archive" ? (
-          <ArchivePanel />
-        ) : (
+        <div className={cn(activeTab === "today" ? "block" : "hidden")}>
         <div className="space-y-5">
 
-        {/* ── Greeting Banner ── */}
+        {/* ── Stats card ── */}
         <div
-          className="anim-card relative overflow-hidden rounded-2xl px-6 py-6"
+          className="anim-card relative overflow-hidden rounded-2xl px-6 py-5"
           style={{
             background: "var(--banner-bg)",
             border: "1px solid var(--banner-border)",
@@ -669,28 +701,59 @@ export function HomeClient({ name }: HomeClientProps) {
             style={{ background: "radial-gradient(ellipse, #ec489920, transparent 70%)" }}
           />
 
-          <div className="relative flex flex-wrap items-center justify-between gap-4">
-            <div>
-              <p className="text-sm font-medium mb-0.5" style={{ color: "var(--banner-subtitle)" }}>{greeting}，</p>
-              <h1 className="text-2xl sm:text-3xl font-black tracking-tight" style={{ color: "var(--banner-title)" }}>{name || "同学"}</h1>
-            </div>
-            <div className="flex items-center gap-3 flex-wrap">
-              {stats?.todayCount !== undefined && (
-                <div
-                  className="inline-flex items-center gap-1.5 rounded-full px-3 py-1.5"
-                  style={{ background: "var(--banner-pill-today-bg)", border: "1px solid var(--banner-pill-today-border)" }}
-                >
-                  <Zap className="h-3.5 w-3.5 text-amber-400" />
-                  <span className="text-[13px] font-semibold" style={{ color: "var(--banner-pill-today-text)" }}>今日 {stats.todayCount} 句</span>
-                </div>
-              )}
-              <div
-                className="inline-flex items-center gap-1.5 rounded-full px-3 py-1.5"
-                style={{ background: "var(--banner-pill-streak-bg)", border: "1px solid var(--banner-pill-streak-border)" }}
-              >
-                <Flame className="h-3.5 w-3.5 text-amber-400" />
-                <span className="text-[13px] font-semibold" style={{ color: "var(--banner-pill-streak-text)" }}>连续 {streak} 天</span>
-              </div>
+          <div className="relative">
+            {/* 3 compact stats */}
+            <div className="grid grid-cols-3 gap-4">
+              {[
+                {
+                  label: "累计练习",
+                  value: totalCount,
+                  unit: "句",
+                  icon: BookOpen,
+                  color: "#ec4899",
+                  gradient: "linear-gradient(135deg, #f472b6, #ec4899)",
+                },
+                {
+                  label: "学习天数",
+                  value: totalDays,
+                  unit: "天",
+                  icon: BarChart2,
+                  color: "#f59e0b",
+                  gradient: "linear-gradient(135deg, #fbbf24, #f59e0b)",
+                },
+                {
+                  label: "待复习",
+                  value: pendingCount,
+                  unit: "项",
+                  icon: Clock,
+                  color: "#06b6d4",
+                  gradient: "linear-gradient(135deg, #22d3ee, #06b6d4)",
+                  link: "/home/review",
+                },
+              ].map(({ label, value, unit, icon: Icon, color, gradient, link }) => {
+                const inner = (
+                  <div className="flex items-center gap-3">
+                    <div className="p-1.5 rounded-lg shrink-0" style={{ background: "var(--surface)" }}>
+                      <Icon className="h-4 w-4" style={{ color }} />
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-[11px] font-medium mb-0.5" style={{ color: "var(--banner-subtitle)" }}>{label}</p>
+                      <div className="flex items-baseline gap-1">
+                        <span
+                          className="text-lg font-black tabular-nums"
+                          style={{ background: gradient, WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}
+                        >
+                          {value}
+                        </span>
+                        <span className="text-[11px]" style={{ color: "var(--banner-subtitle)" }}>{unit}</span>
+                      </div>
+                    </div>
+                  </div>
+                )
+                return link
+                  ? <Link key={label} href={link} className="block hover:opacity-80 transition-opacity">{inner}</Link>
+                  : <div key={label}>{inner}</div>
+              })}
             </div>
           </div>
         </div>
@@ -705,79 +768,12 @@ export function HomeClient({ name }: HomeClientProps) {
           <PaymentSuccessModal />
         </Suspense>
 
-        {/* ── Stats row — full width above grid ── */}
-        <div className="grid grid-cols-3 gap-3">
-          {[
-            {
-              label: "累计练习",
-              value: totalCount,
-              unit: "句",
-              icon: BookOpen,
-              iconColor: "#ec4899",
-              gradient: "linear-gradient(135deg, #f472b6, #ec4899)",
-              bgVar: "var(--stat-1-bg)",
-              borderVar: "var(--stat-1-border)",
-              iconBgVar: "var(--stat-1-icon-bg)",
-            },
-            {
-              label: "学习天数",
-              value: totalDays,
-              unit: "天",
-              icon: BarChart2,
-              iconColor: "#f59e0b",
-              gradient: "linear-gradient(135deg, #fbbf24, #f59e0b)",
-              bgVar: "var(--stat-2-bg)",
-              borderVar: "var(--stat-2-border)",
-              iconBgVar: "var(--stat-2-icon-bg)",
-            },
-            {
-              label: "待复习",
-              value: pendingCount,
-              unit: "项",
-              icon: Clock,
-              iconColor: "#06b6d4",
-              gradient: "linear-gradient(135deg, #22d3ee, #06b6d4)",
-              bgVar: "var(--stat-3-bg)",
-              borderVar: "var(--stat-3-border)",
-              iconBgVar: "var(--stat-3-icon-bg)",
-              link: "/home/review",
-            },
-          ].map(({ label, value, unit, icon: Icon, iconColor, gradient, bgVar, borderVar, iconBgVar, link }) => {
-            const inner = (
-              <div
-                className="anim-card h-full rounded-2xl border p-5 flex flex-col gap-4 transition-colors"
-                style={{ background: bgVar, borderColor: borderVar }}
-              >
-                <div className="flex items-center justify-between">
-                  <p className="text-[13px] text-foreground/70 font-bold">{label}</p>
-                  <div className="p-2 rounded-lg" style={{ background: iconBgVar }}>
-                    <Icon className="h-[18px] w-[18px]" style={{ color: iconColor }} />
-                  </div>
-                </div>
-                <div className="flex items-baseline gap-1.5">
-                  <span
-                    className="text-3xl font-black tabular-nums"
-                    style={{ background: gradient, WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}
-                  >
-                    {value}
-                  </span>
-                  <span className="text-foreground/55 text-sm">{unit}</span>
-                </div>
-              </div>
-            )
-            return link
-              ? <Link key={label} href={link} className="block">{inner}</Link>
-              : <div key={label}>{inner}</div>
-          })}
-        </div>
+        {/* ── Three-column grid ── */}
+        <div className="grid grid-cols-1 lg:grid-cols-[1fr_1fr_260px] gap-5">
 
-        {/* ── Two-column grid ── */}
-        <div className="grid grid-cols-1 lg:grid-cols-[1fr_340px] gap-5">
-
-          {/* ── Left column ── */}
-          <div className="space-y-5">
-
-            {/* Streak + check-in card */}
+          {/* ── Column 1: 签到区 ── */}
+          <div className="flex flex-col gap-5 h-full">
+            {/* Check-in card (compact) */}
             <div
               className="anim-card relative overflow-hidden rounded-2xl border p-5"
               style={{
@@ -785,7 +781,7 @@ export function HomeClient({ name }: HomeClientProps) {
                 borderColor: "var(--surface-violet-border)",
               }}
             >
-              <div className="relative flex items-center justify-between gap-4 mb-5">
+              <div className="relative flex items-center justify-between gap-4 mb-4">
                 <div className="flex items-center gap-3.5">
                   <div
                     className="flex items-center justify-center w-12 h-12 rounded-xl shrink-0"
@@ -839,7 +835,7 @@ export function HomeClient({ name }: HomeClientProps) {
               </div>
 
               {/* Diamond progress bar */}
-              <div className="mb-4">
+              <div>
                 <div className="flex items-center gap-2 mb-1.5">
                   <span className="text-sm font-semibold text-foreground/70">
                     💎 {todayDiamonds} / {checkInGoal}
@@ -869,101 +865,122 @@ export function HomeClient({ name }: HomeClientProps) {
                   />
                 </div>
               </div>
-
-              {/* Monthly check-in calendar */}
-              <div className="border-t pt-4" style={{ borderColor: "var(--surface-divider)" }}>
-                <MonthlyCheckInCalendar
-                  checkInDates={checkInDatesThisMonth}
-                  checkedInToday={checkedIn}
-                />
-              </div>
             </div>
 
-            {/* Weekly trend */}
-            {stats && (
-              <div
-                className="anim-card rounded-2xl border p-5"
-                style={{ background: "var(--surface-alt)", borderColor: "var(--surface-border)" }}
-              >
-                <div className="flex items-center justify-between mb-5">
-                  <div className="flex items-center gap-2">
-                    <BarChart2 className="h-4 w-4 text-violet-400" />
-                    <h3 className="text-sm font-semibold text-foreground/70">本周趋势</h3>
-                  </div>
-                  <span className="text-[11px] text-foreground/25 font-mono">
-                    共 {stats.weekly.reduce((s, w) => s + w.count, 0)} 句
-                  </span>
-                </div>
-                <WeeklyChart weekly={stats.weekly} />
-              </div>
-            )}
-
+            {/* Monthly check-in calendar — fills remaining space */}
+            <div
+              className="anim-card rounded-2xl border p-5 flex-1 flex flex-col"
+              style={{ background: "var(--surface-violet)", borderColor: "var(--surface-violet-border)" }}
+            >
+              <MonthlyCheckInCalendar
+                checkInDates={checkInDatesThisMonth}
+                checkedInToday={checkedIn}
+              />
+            </div>
           </div>
 
-          {/* ── Right column ── */}
-          <div className="space-y-5">
+          {/* ── Column 2: 每日任务 ── */}
+          <div className="h-full">
+            <DailyTasks className="h-full" refreshKey={checkInVersion} />
+          </div>
 
+          {/* ── Column 3: 热力图 + 邀请好友 + 课程广场 + 最近学习 ── */}
+          <div className="space-y-3">
             {/* Monthly heatmap */}
             <div
-              className="anim-card rounded-2xl border p-5"
+              className="anim-card rounded-2xl border p-4"
               style={{ background: "var(--surface-alt)", borderColor: "var(--surface-border)" }}
             >
-              <div className="flex items-center gap-2 mb-4">
-                <Trophy className="h-4 w-4 text-amber-400" />
-                <h3 className="text-sm font-semibold text-foreground/70">学习热力图</h3>
+              <div className="flex items-center gap-2 mb-3">
+                <Trophy className="h-3.5 w-3.5 text-amber-400" />
+                <h3 className="text-[13px] font-semibold text-foreground/70">学习热力图</h3>
               </div>
               {stats && <MonthlyHeatmap heatmap={stats.heatmap} heatmapDuration={stats.heatmapDuration ?? {}} />}
             </div>
 
-            {/* Continue studying */}
-            {stats?.lastStudied && (
-              <Link
-                href={`/home/learn/${stats.lastStudied.courseId}?lesson=${stats.lastStudied.lessonId}`}
-                className="anim-card group block rounded-2xl border hover:border-violet-500/40 transition-all duration-300 overflow-hidden"
-                style={{ background: "var(--surface)", borderColor: "var(--surface-border)" }}
-              >
-                <div className="px-5 py-4">
-                  <div className="flex items-center gap-3 min-w-0">
-                    <div
-                      className="flex items-center justify-center w-10 h-10 rounded-xl shrink-0"
-                      style={{ background: "var(--surface-violet)", border: "1px solid var(--surface-violet-border)" }}
-                    >
-                      <BookOpen className="h-5 w-5 text-violet-400" />
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <p className="text-[11px] text-foreground/65 font-bold mb-0.5">继续上次学习</p>
-                      <p className="text-sm font-semibold text-foreground truncate">{stats.lastStudied.courseTitle}</p>
-                      <p className="text-[12px] text-foreground/40 truncate mt-0.5">{stats.lastStudied.lessonTitle}</p>
-                    </div>
-                    <div
-                      className="flex items-center justify-center w-8 h-8 rounded-full shrink-0 transition-colors"
-                      style={{ background: "var(--surface-violet)" }}
-                    >
-                      <ArrowRight className="h-4 w-4 text-violet-400" />
-                    </div>
-                  </div>
-                  <p className="text-[11px] text-foreground/20 mt-3">{relativeTime(stats.lastStudied.studiedAt)}</p>
-                </div>
-              </Link>
-            )}
-
-            {/* Daily tasks */}
-            <DailyTasks />
+            {/* Invite friends */}
+            <InviteCard />
 
             {/* Store link */}
             <Link
               href="/home/store"
-              className="anim-card flex items-center justify-between rounded-2xl border hover:border-violet-500/40 px-5 py-4 transition-all group"
+              className="anim-card flex items-center gap-3 rounded-2xl border p-3.5 hover:border-foreground/15 transition-all duration-200 group"
               style={{ background: "var(--surface-alt)", borderColor: "var(--surface-border)" }}
             >
-              <span className="text-sm text-foreground/50 group-hover:text-foreground/70 transition-colors">浏览课程广场</span>
-              <ChevronRight className="h-4 w-4 text-foreground/25 group-hover:text-violet-400 transition-colors" />
+              <div
+                className="flex items-center justify-center w-9 h-9 rounded-lg shrink-0"
+                style={{ background: "#ec489918", border: "1px solid #ec489930" }}
+              >
+                <ShoppingBag className="h-4 w-4 text-[#ec4899]" />
+              </div>
+              <div className="min-w-0">
+                <p className="text-[13px] font-semibold text-foreground/80">课程广场</p>
+                <p className="text-[10px] text-foreground/40 mt-0.5">浏览更多课程</p>
+              </div>
             </Link>
 
+            {/* Recent learning list */}
+            {stats?.recentPractices && stats.recentPractices.length > 0 && (
+              <div
+                className="anim-card rounded-2xl border p-4"
+                style={{ background: "var(--surface)", borderColor: "var(--surface-border)" }}
+              >
+                <div className="flex items-center gap-2 mb-2.5">
+                  <Clock className="h-3.5 w-3.5 text-sky-400" />
+                  <h3 className="text-[13px] font-semibold text-foreground/70">最近学习</h3>
+                </div>
+                <div className="space-y-1.5">
+                  {stats.recentPractices.slice(0, 4).map((p, i) => (
+                    <Link
+                      key={`${p.courseId}-${p.lessonId}-${i}`}
+                      href={`/home/learn/${p.courseId}?lesson=${p.lessonId}`}
+                      className="flex items-center gap-2 group/item rounded-lg px-2 py-1.5 -mx-2 hover:bg-foreground/[0.04] transition-colors"
+                    >
+                      <div className="flex-1 min-w-0">
+                        <p className="text-[12px] font-medium text-foreground/80 truncate">{p.courseTitle}</p>
+                        <p className="text-[10px] text-muted-foreground/55 truncate mt-0.5">{p.lessonTitle}</p>
+                      </div>
+                      <span className="text-[10px] text-foreground/25 shrink-0">{relativeTime(p.studiedAt)}</span>
+                    </Link>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         </div>
+
+        {/* ── Bottom row: 复习本 / 笔记本 / 单词本 ── */}
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mt-5">
+          {[
+            { label: "复习本", desc: "待复习项", icon: BookOpen, href: "/home/review", color: "#06b6d4" },
+            { label: "笔记本", desc: "学习笔记", icon: FileText, href: "/home/notes", color: "#8b5cf6" },
+            { label: "单词本", desc: "我的单词", icon: BookText, href: "/home/wordbook", color: "#f59e0b" },
+          ].map(({ label, desc, icon: Icon, href, color }) => (
+            <Link
+              key={label}
+              href={href}
+              className="anim-card group flex items-center gap-4 rounded-2xl border p-4 hover:border-foreground/15 transition-all duration-200"
+              style={{ background: "var(--surface-alt)", borderColor: "var(--surface-border)" }}
+            >
+              <div
+                className="flex items-center justify-center w-10 h-10 rounded-xl shrink-0"
+                style={{ background: `${color}18`, border: `1px solid ${color}30` }}
+              >
+                <Icon className="h-5 w-5" style={{ color }} />
+              </div>
+              <div className="min-w-0">
+                <p className="text-sm font-semibold text-foreground/80">{label}</p>
+                <p className="text-[11px] text-foreground/40 mt-0.5">{desc}</p>
+              </div>
+            </Link>
+          ))}
         </div>
-        )}
+        </div>
+        </div>
+
+        <div className={cn(activeTab === "archive" ? "block" : "hidden")}>
+          <ArchivePanel />
+        </div>
 
       </div>
 

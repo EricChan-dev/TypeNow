@@ -61,6 +61,7 @@ export async function GET() {
     checkInsThisMonthResult,
     todayDiamondResult,
     userGoalResult,
+    recentPracticesResult,
   ] = await Promise.all([
     // Total sentences practiced (all time)
     db
@@ -165,6 +166,24 @@ export async function GET() {
       .from(users)
       .where(eq(users.id, userId))
       .limit(1),
+
+    // Recent practices (last 8)
+    db
+      .select({
+        courseId: courses.id,
+        lessonId: lessons.id,
+        courseTitle: courses.title,
+        lessonTitle: lessons.title,
+        sentenceText: sentences.english,
+        studiedAt: practiceRecords.createdAt,
+      })
+      .from(practiceRecords)
+      .innerJoin(sentences, eq(practiceRecords.sentenceId, sentences.id))
+      .innerJoin(lessons, eq(sentences.lessonId, lessons.id))
+      .innerJoin(courses, eq(lessons.courseId, courses.id))
+      .where(eq(practiceRecords.userId, userId))
+      .orderBy(desc(practiceRecords.createdAt))
+      .limit(8),
   ])
 
   const checkInDates = checkInResult.map((r) => r.date)
@@ -199,6 +218,24 @@ export async function GET() {
   const todayDiamonds = Number(todayDiamondResult[0]?.total ?? 0)
   const checkInGoal = userGoalResult[0]?.checkInGoal ?? 50
 
+  // Deduplicate by (courseId, lessonId), keeping the latest
+  const seenKey = new Set<string>()
+  const recentPractices = recentPracticesResult
+    .filter((r) => {
+      const key = `${r.courseId}-${r.lessonId}`
+      if (seenKey.has(key)) return false
+      seenKey.add(key)
+      return true
+    })
+    .map((r) => ({
+      courseId: r.courseId,
+      lessonId: r.lessonId,
+      courseTitle: r.courseTitle,
+      lessonTitle: r.lessonTitle,
+      sentenceText: r.sentenceText,
+      studiedAt: r.studiedAt?.toISOString() ?? "",
+    }))
+
   return NextResponse.json({
     totalSentences: Number(totalResult[0]?.cnt ?? 0),
     totalDays: Number(totalDaysResult[0]?.cnt ?? 0),
@@ -210,6 +247,7 @@ export async function GET() {
     heatmapDuration,
     weekly,
     lastStudied,
+    recentPractices,
     checkInDatesThisMonth,
     todayDiamonds,
     checkInGoal,

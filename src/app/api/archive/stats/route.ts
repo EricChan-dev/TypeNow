@@ -84,7 +84,7 @@ export async function GET(req: NextRequest) {
       .orderBy(desc(checkIns.date))
       .limit(400),
 
-    // Scores (all time — "highlight moments" don't change by period)
+    // Scores (period)
     db
       .select({
         bestScore: max(practiceRecords.score),
@@ -92,7 +92,7 @@ export async function GET(req: NextRequest) {
         totalMistakes: sum(practiceRecords.mistakes),
       })
       .from(practiceRecords)
-      .where(eq(practiceRecords.userId, userId)),
+      .where(periodFilter),
 
     // Completed courses (period)
     db
