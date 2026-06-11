@@ -43,6 +43,11 @@ export function AiChatWidget() {
     setShowToast(!open)
   }, [open])
 
+  // Close panel on route change
+  useEffect(() => {
+    setOpen(false)
+  }, [pathname])
+
   // Hide on landing page and learn/practice pages（必须在所有 hooks 之后）
   const hidden = pathname === "/" || pathname.startsWith("/home/learn/")
   if (hidden || !loggedIn) return null
