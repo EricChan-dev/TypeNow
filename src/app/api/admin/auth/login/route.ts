@@ -4,6 +4,7 @@ import { users } from "@/lib/db/schema"
 import { eq } from "drizzle-orm"
 import { createSession } from "@/lib/auth/session"
 import { createHash } from "crypto"
+import { checkRateLimit, getClientIP } from "@/lib/rate-limit"
 
 function hashPassword(password: string): string {
   return createHash("sha256").update(password).digest("hex")
@@ -11,6 +12,13 @@ function hashPassword(password: string): string {
 
 export async function POST(request: Request) {
   if (!db) return NextResponse.json({ error: "服务未配置" }, { status: 500 })
+
+  // Rate limit: 5 attempts per minute per IP
+  const ip = getClientIP(request)
+  const limit = checkRateLimit("admin-login", ip, 5, 60_000)
+  if (!limit.allowed) {
+    return NextResponse.json({ error: `登录尝试过多，请${limit.retryAfter}秒后重试` }, { status: 429 })
+  }
 
   const { email, password } = await request.json().catch(() => ({}))
   if (!email || !password) {

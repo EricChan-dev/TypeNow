@@ -22,7 +22,8 @@ export async function POST(request: Request) {
     }
 
     const outTradeNo = generateOutTradeNo()
-    const amount = (process.env.NODE_ENV === "development" || process.env.WECHAT_PAY_TEST_MODE) ? 1 : getPlanAmount(plan)
+    const isTestMode = process.env.NODE_ENV === "development" || process.env.WECHAT_PAY_TEST_MODE === "true"
+    const amount = isTestMode ? 1 : getPlanAmount(plan)
     const description = getPlanDescription(plan)
 
     const { code_url } = await createNativeOrder({ plan, outTradeNo, description, amount })

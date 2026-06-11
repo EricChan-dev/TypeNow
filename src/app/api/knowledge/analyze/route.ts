@@ -31,7 +31,7 @@ function extractJson(raw: string): string {
 }
 
 async function callDeepSeek(english: string) {
-  const apiKey = process.env.DEEPSEEK_API_KEY ?? process.env.NEXT_PUBLIC_DEEPSEEK_API_KEY
+  const apiKey = process.env.DEEPSEEK_API_KEY
   if (!apiKey) throw new Error("DEEPSEEK_API_KEY not configured")
 
   const res = await fetch("https://api.deepseek.com/v1/chat/completions", {

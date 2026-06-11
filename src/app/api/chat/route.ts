@@ -45,7 +45,7 @@ export async function POST(request: Request) {
     { role: "user", content: body.message.trim() },
   ]
 
-  const apiKey = process.env.DEEPSEEK_API_KEY ?? process.env.NEXT_PUBLIC_DEEPSEEK_API_KEY
+  const apiKey = process.env.DEEPSEEK_API_KEY
   if (!apiKey) return NextResponse.json({ error: "AI 服务未配置" }, { status: 500 })
 
   const aiRes = await fetch("https://api.deepseek.com/v1/chat/completions", {

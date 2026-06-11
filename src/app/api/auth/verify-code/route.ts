@@ -4,6 +4,7 @@ import { db } from "@/lib/db"
 import { verificationCodes, users } from "@/lib/db/schema"
 import { eq, and, gt } from "drizzle-orm"
 import { createSession } from "@/lib/auth/session"
+import { checkRateLimit, getClientIP } from "@/lib/rate-limit"
 
 const PHONE_REGEX = /^1[3-9]\d{9}$/
 
@@ -38,6 +39,17 @@ export async function POST(request: NextRequest) {
   }
   if (!code || code.length !== 6) {
     return NextResponse.json({ error: "请输入6位验证码" }, { status: 400 })
+  }
+
+  // Rate limit: IP (10/min) + phone (5/5min)
+  const ip = getClientIP(request)
+  const ipLimit = checkRateLimit("verify-code-ip", ip, 10, 60_000)
+  if (!ipLimit.allowed) {
+    return NextResponse.json({ error: `尝试次数过多，请${ipLimit.retryAfter}秒后重试` }, { status: 429 })
+  }
+  const phoneLimit = checkRateLimit("verify-code-phone", phone, 5, 300_000)
+  if (!phoneLimit.allowed) {
+    return NextResponse.json({ error: `该号码尝试次数过多，请${phoneLimit.retryAfter}秒后重试` }, { status: 429 })
   }
 
   // Dev mode: accept 123456 without DB

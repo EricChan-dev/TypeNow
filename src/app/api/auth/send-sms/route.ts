@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server"
+import crypto from "crypto"
 import { db } from "@/lib/db"
 import { verificationCodes } from "@/lib/db/schema"
 import { eq, and, gt, gte, count } from "drizzle-orm"
@@ -78,7 +79,7 @@ export async function POST(request: Request) {
     )
   }
 
-  const code = Math.floor(100000 + Math.random() * 900000).toString()
+  const code = crypto.randomInt(100000, 999999).toString()
 
   if (!process.env.ALIYUN_ACCESS_KEY_ID || !process.env.ALIYUN_ACCESS_KEY_SECRET) {
     return NextResponse.json({ error: "短信服务未配置" }, { status: 500 })
