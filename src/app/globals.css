@@ -191,6 +191,11 @@ body {
   .animate-fadein { animation: none; }
 }
 
+/* Mobile bottom safe area (for notch devices) */
+.safe-area-bottom {
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+
 /* Toast floating animation */
 @keyframes toast-float {
   0%, 100% { transform: translateY(0); }
