@@ -16,12 +16,22 @@ export function generateInviteCode(): string {
 
 async function grantPartnerAccess(userId: string): Promise<void> {
   if (!db) return
-  let inviteCode: string
-  let attempts = 0
-  do {
-    inviteCode = generateInviteCode()
-    attempts++
-  } while (attempts < 10)
+
+  // Preserve existing inviteCode if user already has one (avoid breaking referral links)
+  const [existingUser] = await db
+    .select({ inviteCode: users.inviteCode })
+    .from(users)
+    .where(eq(users.id, userId))
+    .limit(1)
+
+  let inviteCode = existingUser?.inviteCode
+  if (!inviteCode) {
+    let attempts = 0
+    do {
+      inviteCode = generateInviteCode()
+      attempts++
+    } while (attempts < 10)
+  }
 
   await db
     .update(users)
@@ -39,7 +49,7 @@ async function grantPartnerAccess(userId: string): Promise<void> {
     .where(
       and(
         eq(users.referredBy, userId),
-        eq(subscriptions.status, "active"),
+        // Include all subscriptions (active/cancelled/expired), not just active
       )
     )
 
@@ -73,9 +83,19 @@ async function triggerCommission(
 
   if (!buyer?.referredBy) return
 
-  // Only trigger commission if buyer registered within the 90-day attribution window
+  // Only trigger commission if buyer registered within the 90-day attribution window.
+  // Use the order timestamp (not Date.now()) so delayed payment notifications don't skip commission.
+  let orderTime = Date.now()
+  if (orderId) {
+    const [order] = await db
+      .select({ createdAt: paymentOrdersTable.createdAt })
+      .from(paymentOrdersTable)
+      .where(eq(paymentOrdersTable.id, orderId))
+      .limit(1)
+    if (order?.createdAt) orderTime = new Date(order.createdAt).getTime()
+  }
   const ATTRIBUTION_WINDOW_MS = 90 * 24 * 60 * 60 * 1000
-  if (!buyer.createdAt || Date.now() - new Date(buyer.createdAt).getTime() > ATTRIBUTION_WINDOW_MS) return
+  if (!buyer.createdAt || orderTime - new Date(buyer.createdAt).getTime() > ATTRIBUTION_WINDOW_MS) return
 
   const [partner] = await db
     .select({ id: users.id, isPartner: users.isPartner })
@@ -214,7 +234,7 @@ export async function cancelSubscription(userId: string) {
   if (!db) throw new Error("Database not configured")
 
   const [sub] = await db
-    .select({ id: subscriptions.id })
+    .select({ id: subscriptions.id, paymentOrderId: subscriptions.paymentOrderId })
     .from(subscriptions)
     .where(and(eq(subscriptions.userId, userId), eq(subscriptions.status, "active")))
     .limit(1)
@@ -225,6 +245,15 @@ export async function cancelSubscription(userId: string) {
     .update(subscriptions)
     .set({ status: "cancelled", cancelledAt: new Date() })
     .where(eq(subscriptions.id, sub.id))
+
+  // Clawback: mark any commissions from this order as clawed_back
+  if (sub.paymentOrderId) {
+    await db
+      .update(partnerCommissions)
+      .set({ status: "clawed_back" })
+      .where(eq(partnerCommissions.orderId, sub.paymentOrderId))
+      .catch(() => { /* non-critical */ })
+  }
 
   return { success: true }
 }

@@ -88,14 +88,20 @@ export async function POST(request: Request) {
       completedAt: new Date(),
     })
 
-    // Mark used commissions as withdrawn (FIFO)
+    // Atomically mark used commissions as withdrawn (FIFO).
+    // The WHERE status='available' guard prevents double-withdrawal race conditions.
     let remaining = amount
     for (const row of availableRows) {
       if (remaining <= 0) break
-      await db
+      const result = await db
         .update(partnerCommissions)
         .set({ status: "withdrawn" })
-        .where(eq(partnerCommissions.id, row.id))
+        .where(and(eq(partnerCommissions.id, row.id), eq(partnerCommissions.status, "available")))
+      // If 0 rows affected, this row was already claimed by a concurrent request
+      if ((result as unknown as { rowsAffected: number }).rowsAffected === 0) {
+        console.error(`[Withdraw] Concurrent withdrawal detected for commission ${row.id}. Rolling back.`)
+        return NextResponse.json({ error: "提现失败，请稍后重试" }, { status: 409 })
+      }
       remaining -= row.commissionAmount
     }
 

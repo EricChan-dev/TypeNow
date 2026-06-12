@@ -1,7 +1,7 @@
 "use client"
 
 import { usePathname, useRouter } from "next/navigation"
-import { LayoutDashboard, BookOpen, ShoppingBag, BookText, BookMarked } from "lucide-react"
+import { LayoutDashboard, BookOpen, ShoppingBag, BookText, BookMarked, TrendingUp } from "lucide-react"
 import { cn } from "@/lib/utils"
 
 const tabs = [
@@ -10,6 +10,7 @@ const tabs = [
   { key: "/home/store", label: "广场", icon: ShoppingBag },
   { key: "/home/wordbook", label: "单词本", icon: BookText },
   { key: "/home/review", label: "复习", icon: BookMarked },
+  { key: "/home/partner", label: "合伙人", icon: TrendingUp },
 ]
 
 export function MobileBottomNav() {

@@ -58,7 +58,7 @@ export default function PartnerDashboard() {
   useEffect(() => {
     fetch("/api/partner/dashboard")
       .then((r) => r.json())
-      .then((d) => setData(d))
+      .then((d) => { setData(d); setWithdrawAmount(String(d.available / 100)) })
       .catch(() => toast.error("加载数据失败"))
 
     fetch("/api/partner/commissions")
@@ -295,9 +295,9 @@ export default function PartnerDashboard() {
               <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground text-sm">¥</span>
               <input
                 type="number"
-                value={withdrawAmount}
+                value={withdrawAmount || String(data.available / 100)}
                 onChange={(e) => setWithdrawAmount(e.target.value)}
-                placeholder={`最低 ¥50，余额 ${fmt(data.available)}`}
+                placeholder={`全额提现 ${fmt(data.available)}`}
                 className="w-full bg-muted/60 border border-border rounded-xl py-3 pl-8 pr-3 text-sm text-foreground placeholder:text-muted-foreground outline-none focus:border-foreground/30"
               />
             </div>
