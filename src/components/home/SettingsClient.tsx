@@ -161,6 +161,7 @@ export function SettingsClient({ initialUser }: { initialUser: InitialUser }) {
   const [saving, setSaving] = useState(false)
   const [subs, setSubs] = useState<Sub[]>([])
   const [subsLoading, setSubsLoading] = useState(true)
+  const [subsError, setSubsError] = useState(false)
 
   // Bind flow state
   const searchParams = useSearchParams()
@@ -214,7 +215,7 @@ export function SettingsClient({ initialUser }: { initialUser: InitialUser }) {
     fetch("/api/user/subscriptions")
       .then((r) => r.json())
       .then((d) => setSubs(d.data ?? []))
-      .catch(() => {})
+      .catch(() => setSubsError(true))
       .finally(() => setSubsLoading(false))
   }, [])
 
@@ -622,7 +623,9 @@ export function SettingsClient({ initialUser }: { initialUser: InitialUser }) {
 
         {/* Subscription history */}
         <SectionCard title="订阅记录">
-          {subsLoading ? (
+          {subsError ? (
+            <p className="text-xs text-muted-foreground text-center py-4">加载失败</p>
+          ) : subsLoading ? (
             <div className="flex items-center justify-center py-6">
               <Loader2 className="h-4 w-4 text-muted-foreground animate-spin" />
             </div>

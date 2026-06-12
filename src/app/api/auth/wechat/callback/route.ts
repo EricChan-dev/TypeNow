@@ -186,7 +186,7 @@ async function upsertWeChatUser(
       isPro: 1,
       proExpires: trialExpiresAt,
       wechatAccessToken: tokenData.access_token,
-      wechatRefreshToken: tokenData.refresh_token,
+      wechatRefreshToken: encrypt(tokenData.refresh_token),
       wechatTokenExpiresAt: tokenExpiresAt,
       inviteCode: generateInviteCode(),
     })
@@ -277,7 +277,7 @@ async function handleWechatBind(
       name: currentUser.name ?? wechatUser.nickname,
       avatar: wechatUser.headimgurl || currentUser.avatar,
       wechatAccessToken: tokenData.access_token,
-      wechatRefreshToken: tokenData.refresh_token,
+      wechatRefreshToken: encrypt(tokenData.refresh_token),
       wechatTokenExpiresAt: tokenExpiresAt,
     })
     .where(eq(users.id, session.userId))

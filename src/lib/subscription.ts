@@ -1,6 +1,6 @@
 import { db } from "@/lib/db"
 import { subscriptions, users, partnerCommissions, paymentOrders as paymentOrdersTable } from "@/lib/db/schema"
-import { eq, and, lte, isNotNull, count as sqlCount } from "drizzle-orm"
+import { eq, and, lte, isNotNull, desc, count as sqlCount } from "drizzle-orm"
 import { randomUUID } from "crypto"
 
 function getPlanDurationDays(plan: "monthly" | "yearly" | "partner"): number {
@@ -219,7 +219,7 @@ export async function getActiveSubscription(userId: string) {
     .select()
     .from(subscriptions)
     .where(and(eq(subscriptions.userId, userId), eq(subscriptions.status, "active")))
-    .orderBy(subscriptions.createdAt)
+    .orderBy(desc(subscriptions.createdAt))
     .limit(1)
 
   return sub ?? null

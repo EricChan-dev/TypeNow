@@ -54,13 +54,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "验证码错误或已过期" }, { status: 400 })
   }
 
-  // Mark code as used
-  await db
-    .update(verificationCodes)
-    .set({ used: 1 })
-    .where(eq(verificationCodes.id, record.id))
-
-  // Check if phone is already bound to another user
+  // Check if phone is already bound to another user BEFORE consuming code
   const existingUser = await getUserByPhone(phone)
   if (existingUser && existingUser.id !== session.userId) {
     return NextResponse.json({ error: "该手机号已被其他账号绑定" }, { status: 409 })
@@ -69,6 +63,12 @@ export async function POST(request: NextRequest) {
   if (existingUser?.id === session.userId) {
     return NextResponse.json({ error: "该手机号已绑定当前账号" }, { status: 409 })
   }
+
+  // Mark code as used only after validation passes
+  await db
+    .update(verificationCodes)
+    .set({ used: 1 })
+    .where(eq(verificationCodes.id, record.id))
 
   // Bind phone to current user
   await db

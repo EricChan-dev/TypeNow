@@ -58,9 +58,9 @@ export function ExpiryWarningModal({ memberTier, proExpires }: Props) {
     setOpen(true)
   }, [memberTier, proExpires])
 
-  // Live minute-level countdown for trial
+  // Live minute-level countdown for all tiers
   useEffect(() => {
-    if (!open || memberTier !== "trial") return
+    if (!open) return
     const id = setInterval(() => {
       setMsLeft((prev) => {
         const next = prev - 60_000
