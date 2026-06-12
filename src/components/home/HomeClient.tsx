@@ -21,6 +21,7 @@ import { CheckInRulesModal } from "@/components/home/CheckInRulesModal"
 import { GlobalSettingsModal } from "@/components/home/GlobalSettingsModal"
 import { WelcomeTrialModal } from "@/components/home/WelcomeTrialModal"
 import { DailyTasks } from "@/components/home/DailyTasks"
+import { ProgressCard } from "@/components/home/ProgressCard"
 import { PaymentSuccessModal } from "@/components/payment/PaymentSuccessModal"
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -507,6 +508,7 @@ export function HomeClient({ name }: HomeClientProps) {
   const [activeTab, setActiveTab] = useState<"today" | "archive">("today")
   const [stats, setStats] = useState<StatsData | null>(null)
   const [loading, setLoading] = useState(true)
+  const [fetchError, setFetchError] = useState(false)
   const [checkingIn, setCheckingIn] = useState(false)
   const [checkedIn, setCheckedIn] = useState(false)
   const [streak, setStreak] = useState(0)
@@ -528,8 +530,10 @@ export function HomeClient({ name }: HomeClientProps) {
   const pendingCount = useCountUp(stats?.pendingReviews ?? 0, animEnabled)
 
   const fetchStats = useCallback(async () => {
+    setFetchError(false)
     try {
       const res = await fetch("/api/home/stats")
+      if (!res.ok) throw new Error(`HTTP ${res.status}`)
       const d: StatsData = await res.json()
       setStats(d)
       setCheckedIn(d.checkedInToday)
@@ -539,6 +543,7 @@ export function HomeClient({ name }: HomeClientProps) {
       setCheckInGoal(d.checkInGoal ?? 50)
     } catch (e) {
       console.error(e)
+      setFetchError(true)
     }
   }, [])
 
@@ -767,6 +772,62 @@ export function HomeClient({ name }: HomeClientProps) {
           </div>
         </div>
 
+        {/* ── Error banner ── */}
+        {fetchError && (
+          <div className="rounded-2xl border border-red-500/20 bg-red-500/5 p-4 flex items-center justify-between">
+            <span className="text-sm text-red-500/80">数据加载失败</span>
+            <button
+              onClick={fetchStats}
+              className="text-sm font-medium text-red-500 hover:text-red-400 transition-colors"
+            >
+              点击重试
+            </button>
+          </div>
+        )}
+
+        {/* ── Weekly bar + ProgressCard ── */}
+        {stats && !fetchError && (
+          <>
+            {/* Weekly diamond bar */}
+            <div className="rounded-2xl border p-4" style={{ background: "var(--surface-alt)", borderColor: "var(--surface-border)" }}>
+              <div className="flex items-center gap-2 mb-3">
+                <Zap className="h-3.5 w-3.5 text-amber-400" />
+                <h3 className="text-[13px] font-semibold text-foreground/70">本周钻石</h3>
+              </div>
+              <div className="flex items-end justify-between gap-1 h-16">
+                {stats.weekly.map((d, i) => {
+                  const max = Math.max(...stats.weekly.map(w => w.count), 1)
+                  const pct = (d.count / max) * 100
+                  const day = ["日","一","二","三","四","五","六"][new Date(d.date + "T12:00:00").getDay()]
+                  return (
+                    <div key={i} className="flex-1 flex flex-col items-center gap-1">
+                      <span className="text-[10px] font-mono text-foreground/40">{d.count || ""}</span>
+                      <div className="w-full rounded-full overflow-hidden" style={{ background: "var(--border)" }}>
+                        <div
+                          className="w-full rounded-full transition-all duration-500 min-h-[4px]"
+                          style={{
+                            height: `${Math.max(pct, 4)}%`,
+                            minHeight: d.count > 0 ? 8 : 4,
+                            background: d.count > 0 ? "linear-gradient(180deg, #a78bfa, #7c3aed)" : "transparent",
+                          }}
+                        />
+                      </div>
+                      <span className="text-[10px] text-foreground/30">{day}</span>
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+
+            {/* ProgressCard — today's numbers */}
+            <ProgressCard
+              todayPracticed={stats.todayCount}
+              todayReviewed={stats.pendingReviews}
+              streak={stats.streakDays}
+            />
+          </>
+        )}
+
         {/* ── WeChat login feedback ── */}
         <Suspense fallback={null}>
           <WeChatLoginBanner />
@@ -898,8 +959,31 @@ export function HomeClient({ name }: HomeClientProps) {
             <DailyTasks className="h-full" refreshKey={checkInVersion} />
           </div>
 
-          {/* ── Column 3: 热力图 + 邀请好友 + 课程广场 + 最近学习 ── */}
+          {/* ── Column 3: 上次学习 + 热力图 + 邀请好友 + 课程广场 + 最近学习 ── */}
           <div className="space-y-3">
+            {/* Last studied — "继续学习" quick link */}
+            {stats?.lastStudied && (
+              <Link
+                href={`/home/learn/${stats.lastStudied.courseId}?lesson=${stats.lastStudied.lessonId}`}
+                className="anim-card flex items-center gap-3 rounded-2xl border p-3.5 hover:border-accent/30 transition-all duration-200 group"
+                style={{ background: "var(--surface-alt)", borderColor: "var(--surface-border)" }}
+              >
+                <div
+                  className="flex items-center justify-center w-9 h-9 rounded-lg shrink-0"
+                  style={{ background: "#7c3aed18", border: "1px solid #7c3aed30" }}
+                >
+                  <BookOpen className="h-4 w-4 text-[#7c3aed]" />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="text-[13px] font-semibold text-foreground/80">继续学习</p>
+                  <p className="text-[11px] text-foreground/40 mt-0.5 truncate">
+                    {stats.lastStudied.courseTitle} · {stats.lastStudied.lessonTitle}
+                  </p>
+                </div>
+                <ChevronRight className="h-4 w-4 text-foreground/30 group-hover:text-foreground/50 transition-colors" />
+              </Link>
+            )}
+
             {/* Monthly heatmap */}
             <div
               className="anim-card rounded-2xl border p-4"
