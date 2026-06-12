@@ -176,6 +176,7 @@ export function ArchivePanel() {
 
   const fetchStats = useCallback(async (p: Period) => {
     setLoading(true)
+    setStats(null)
     try {
       const res = await fetch(`/api/archive/stats?period=${p}`)
       const data = await res.json()
@@ -212,8 +213,8 @@ export function ArchivePanel() {
     : 0
 
   const PERIODS: { value: Period; label: string }[] = [
-    { value: "week", label: "本周" },
-    { value: "month", label: "本月" },
+    { value: "week", label: "近 7 天" },
+    { value: "month", label: "近 30 天" },
     { value: "all", label: "全部" },
   ]
 
@@ -259,9 +260,9 @@ export function ArchivePanel() {
               <CompactStat label="学习天数" value={learningDays} unit="天" icon={CalendarDays} color="#7c3aed" />
               <CompactStat label="练习句数" value={totalSentences} unit="句" icon={BookOpen} color="#3b82f6" />
               <CompactStat label="连续打卡" value={streakDays} unit="天" icon={Flame} color="#f59e0b" />
-              <CompactStat label="完成课程" value={completedCourses} unit="门" icon={Trophy} color="#10b981" />
-              <CompactStat label="最高分" value={stats.bestScore || "—"} unit={stats.bestScore ? "分" : undefined} icon={Zap} color="#ec4899" />
-              <CompactStat label="平均分" value={stats.avgScore || "—"} unit={stats.avgScore ? "分" : undefined} icon={Target} color="#06b6d4" />
+              <CompactStat label="练习课程" value={completedCourses} unit="门" icon={Trophy} color="#10b981" />
+              <CompactStat label="最高分" value={stats.bestScore ?? "—"} unit={stats.bestScore != null ? "分" : undefined} icon={Zap} color="#ec4899" />
+              <CompactStat label="平均分" value={stats.avgScore ?? "—"} unit={stats.avgScore != null ? "分" : undefined} icon={Target} color="#06b6d4" />
               <CompactStat label="累计错误" value={stats.totalMistakes} unit="次" icon={BarChart2} color="#f97316" />
               <CompactStat label="单日最多" value={maxDailySentences} unit="句" icon={TrendingUp} color="#8b5cf6" />
             </div>
