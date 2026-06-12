@@ -11,10 +11,7 @@ import {
 import { eq, and, gte, desc, sql, count, max, avg, sum } from "drizzle-orm"
 
 function toLocalDateStr(d = new Date()): string {
-  const y = d.getFullYear()
-  const m = String(d.getMonth() + 1).padStart(2, "0")
-  const day = String(d.getDate()).padStart(2, "0")
-  return `${y}-${m}-${day}`
+  return d.toISOString().slice(0, 10)
 }
 
 function computeStreak(sortedDates: string[]): number {

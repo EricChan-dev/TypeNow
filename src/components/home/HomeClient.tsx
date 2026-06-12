@@ -617,6 +617,8 @@ export function HomeClient({ name }: HomeClientProps) {
             ease: "out(2)",
           })
         }
+      } else {
+        toast.error(data.error || "签到失败，请稍后重试")
       }
     } finally {
       setCheckingIn(false)
@@ -815,6 +817,11 @@ export function HomeClient({ name }: HomeClientProps) {
                   ref={checkInBtnRef}
                   onClick={handleCheckIn}
                   disabled={checkedIn || checkingIn}
+                  aria-label={
+                    checkedIn ? "已签到" :
+                    !checkedIn && todayDiamonds < checkInGoal ? `钻石不足，还差 ${checkInGoal - todayDiamonds} 颗` :
+                    "签到打卡"
+                  }
                   className={cn(
                     "flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold transition-all duration-300 shrink-0",
                     checkedIn

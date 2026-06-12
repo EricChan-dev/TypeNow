@@ -5,7 +5,7 @@ import { checkIns, diamondLogs, users } from "@/lib/db/schema"
 import { eq, desc, and, sql } from "drizzle-orm"
 
 function toLocalDateStr(d = new Date()): string {
-  return d.toLocaleDateString("sv-SE", { timeZone: "Asia/Shanghai" })
+  return d.toISOString().slice(0, 10)
 }
 
 function computeStreak(sortedDates: string[]): number {

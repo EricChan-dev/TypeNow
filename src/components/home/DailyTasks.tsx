@@ -35,12 +35,15 @@ export function DailyTasks({ className, refreshKey }: { className?: string; refr
         setStatus((s) => s && { ...s, share: true })
         return
       }
-      if (data.success) {
-        setStatus((s) => s && { ...s, share: true, diamonds: s.diamonds + 10 })
-        toast.success("🎉 +10 💎 分享奖励已到账！")
+      if (!data.success) {
+        toast.error(data.error || "操作失败，请稍后重试")
+        return
       }
+      setStatus((s) => s && { ...s, share: true, diamonds: s.diamonds + 10 })
+      toast.success("🎉 +10 💎 分享奖励已到账！")
     } catch {
       toast.error("操作失败，请稍后重试")
+      return
     } finally {
       setSharing(false)
     }
