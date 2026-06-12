@@ -63,13 +63,15 @@ export async function POST() {
     )
   }
 
-  let alreadyCheckedIn = false
+  // Check for duplicate BEFORE insert — avoids treating all DB errors as "already checked in"
+  const [existingCheckIn] = await db
+    .select({ date: checkIns.date })
+    .from(checkIns)
+    .where(and(eq(checkIns.userId, userId), eq(checkIns.date, today)))
+    .limit(1)
 
-  try {
+  if (!existingCheckIn) {
     await db.insert(checkIns).values({ userId, date: today })
-  } catch {
-    // Duplicate key = already checked in today
-    alreadyCheckedIn = true
   }
 
   const allDates = await db
@@ -81,5 +83,5 @@ export async function POST() {
 
   const streakDays = computeStreak(allDates.map((r) => r.date))
 
-  return NextResponse.json({ success: true, streakDays, alreadyCheckedIn })
+  return NextResponse.json({ success: true, streakDays, alreadyCheckedIn: !!existingCheckIn })
 }

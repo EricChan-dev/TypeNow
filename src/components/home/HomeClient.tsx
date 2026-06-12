@@ -25,15 +25,11 @@ import { PaymentSuccessModal } from "@/components/payment/PaymentSuccessModal"
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 interface StatsData {
-  totalSentences: number
-  totalDays: number
   streakDays: number
   todayCount: number
-  pendingReviews: number
   checkedInToday: boolean
   heatmap: Record<string, number>
   heatmapDuration: Record<string, number>
-  weekly: { date: string; count: number }[]
   lastStudied: {
     courseId: string
     lessonId: string
@@ -535,6 +531,7 @@ export function HomeClient({ name }: HomeClientProps) {
       setCheckInGoal(d.checkInGoal ?? 50)
     } catch (e) {
       console.error(e)
+      setStats(null)
       setFetchError(true)
     }
   }, [])

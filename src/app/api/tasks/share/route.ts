@@ -13,6 +13,20 @@ export async function POST() {
   if (!session) return NextResponse.json({ error: "请先登录" }, { status: 401 })
   if (!db) return NextResponse.json({ error: "服务未配置" }, { status: 500 })
 
+  // Award diamonds first — if this fails, nothing is lost.
+  // Then insert taskLog. If taskLog fails (duplicate key), diamonds were already
+  // awarded which is the safer direction (user keeps reward rather than losing it).
+  await Promise.all([
+    db.insert(diamondLogs).values({
+      userId: session.userId,
+      amount: 10,
+      type: "share_invite",
+    }),
+    db.update(users)
+      .set({ diamonds: sql`${users.diamonds} + 10` })
+      .where(eq(users.id, session.userId)),
+  ])
+
   try {
     await db.insert(taskLogs).values({
       userId: session.userId,
@@ -24,17 +38,6 @@ export async function POST() {
   } catch {
     return NextResponse.json({ success: false, alreadyClaimed: true })
   }
-
-  await Promise.all([
-    db.insert(diamondLogs).values({
-      userId: session.userId,
-      amount: 10,
-      type: "share_invite",
-    }),
-    db.update(users)
-      .set({ diamonds: sql`${users.diamonds} + 10` })
-      .where(eq(users.id, session.userId)),
-  ])
 
   return NextResponse.json({ success: true, alreadyClaimed: false })
 }

@@ -68,7 +68,7 @@ export function YearlyHeatmap({ heatmap }: { heatmap: Record<string, number> }) 
             <div
               key={i}
               className="text-[10px] text-foreground/25 font-mono"
-              style={{ width: 13, marginLeft: i === 0 ? ml.col * 16 : (ml.col - (monthLabels[i - 1]?.col ?? 0) - 1) * 16 }}
+              style={{ width: 13, marginLeft: i === 0 ? ml.col * 16 : (ml.col - (monthLabels[i - 1]?.col ?? 0)) * 16 }}
             >
               {ml.label}
             </div>

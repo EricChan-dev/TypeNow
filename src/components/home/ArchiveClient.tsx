@@ -164,6 +164,7 @@ export function ArchivePanel() {
   const [period, setPeriod] = useState<Period>("all")
   const [stats, setStats] = useState<ArchiveStats | null>(null)
   const [loading, setLoading] = useState(true)
+  const [fetchError, setFetchError] = useState(false)
   const pageRef = useRef<HTMLDivElement>(null)
 
   const animEnabled = !!stats
@@ -177,12 +178,15 @@ export function ArchivePanel() {
   const fetchStats = useCallback(async (p: Period) => {
     setLoading(true)
     setStats(null)
+    setFetchError(false)
     try {
       const res = await fetch(`/api/archive/stats?period=${p}`)
+      if (!res.ok) throw new Error(`HTTP ${res.status}`)
       const data = await res.json()
       setStats(data)
     } catch (e) {
       console.error(e)
+      setFetchError(true)
     } finally {
       setLoading(false)
       initialLoadRef.current = false
@@ -241,7 +245,14 @@ export function ArchivePanel() {
           </div>
         </div>
 
-        {loading && !stats ? (
+        {fetchError ? (
+          <div className="flex items-center justify-center py-24">
+            <div className="flex flex-col items-center gap-4">
+              <p className="text-foreground/30 text-sm">数据加载失败</p>
+              <button onClick={() => fetchStats(period)} className="rounded-xl bg-accent px-6 py-2.5 text-sm font-semibold text-white hover:bg-accent/90 transition-colors">点击重试</button>
+            </div>
+          </div>
+        ) : loading && !stats ? (
           <div className="flex items-center justify-center py-24">
             <div className="flex flex-col items-center gap-3">
               <Loader2 className="h-6 w-6 text-violet-400 animate-spin" />
