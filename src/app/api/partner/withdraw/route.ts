@@ -54,6 +54,13 @@ export async function POST(request: Request) {
   if (amount > totalAvailable) {
     return NextResponse.json({ error: "可提现余额不足" }, { status: 400 })
   }
+  // Only allow full withdrawal to prevent partial FIFO balance loss.
+  // Each commission row is fully marked "withdrawn"; partial amounts would destroy remaining balance.
+  if (amount !== totalAvailable) {
+    return NextResponse.json({
+      error: `当前只能全额提现 ¥${(totalAvailable / 100).toFixed(2)}，不支持部分提现。请提现全部可提余额`,
+    }, { status: 400 })
+  }
 
   const outBatchNo = `WD-${Date.now().toString(36).toUpperCase()}-${randomUUID().replace(/-/g, "").substring(0, 6).toUpperCase()}`
   const requestId = randomUUID()

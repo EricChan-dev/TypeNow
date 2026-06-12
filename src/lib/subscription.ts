@@ -1,5 +1,5 @@
 import { db } from "@/lib/db"
-import { subscriptions, users, partnerCommissions } from "@/lib/db/schema"
+import { subscriptions, users, partnerCommissions, paymentOrders as paymentOrdersTable } from "@/lib/db/schema"
 import { eq, and, lte, isNotNull, count as sqlCount } from "drizzle-orm"
 import { randomUUID } from "crypto"
 
@@ -27,6 +27,35 @@ async function grantPartnerAccess(userId: string): Promise<void> {
     .update(users)
     .set({ isPartner: 1, partnerAgreedAt: new Date(), inviteCode })
     .where(eq(users.id, userId))
+
+  // Retroactive: scan referred users' past purchases and award commissions
+  const referredUsers = await db
+    .select({
+      userId: users.id,
+      orderId: subscriptions.paymentOrderId,
+    })
+    .from(users)
+    .innerJoin(subscriptions, eq(users.id, subscriptions.userId))
+    .where(
+      and(
+        eq(users.referredBy, userId),
+        eq(subscriptions.status, "active"),
+      )
+    )
+
+  for (const row of referredUsers) {
+    if (!row.orderId) continue
+    const [order] = await db
+      .select({ amount: paymentOrdersTable.amount })
+      .from(paymentOrdersTable)
+      .where(and(eq(paymentOrdersTable.id, row.orderId), eq(paymentOrdersTable.status, "paid")))
+      .limit(1)
+    if (order?.amount) {
+      await triggerCommission(row.userId, row.orderId, order.amount).catch((e) =>
+        console.error("Retroactive commission failed:", e)
+      )
+    }
+  }
 }
 
 async function triggerCommission(
@@ -90,6 +119,19 @@ export async function activateSubscription(
 
   const days = getPlanDurationDays(plan)
 
+  // Idempotency: if this payment order was already processed, skip duplicate activation
+  if (paymentOrderId) {
+    const [dup] = await db
+      .select({ id: subscriptions.id })
+      .from(subscriptions)
+      .where(eq(subscriptions.paymentOrderId, paymentOrderId))
+      .limit(1)
+    if (dup) {
+      console.warn(`[Subscription] Duplicate activation skipped for paymentOrder: ${paymentOrderId}`)
+      return
+    }
+  }
+
   const [existing] = await db
     .select({ expiresAt: subscriptions.expiresAt })
     .from(subscriptions)
@@ -116,7 +158,9 @@ export async function activateSubscription(
 
   if (plan === "partner") {
     await grantPartnerAccess(userId)
-  } else if (paymentOrderId && orderAmount) {
+  }
+  // Trigger commission regardless of plan — partner plan also earns referral commission
+  if (paymentOrderId && orderAmount) {
     void triggerCommission(userId, paymentOrderId, orderAmount).catch((e) =>
       console.error("Commission trigger failed:", e)
     )
