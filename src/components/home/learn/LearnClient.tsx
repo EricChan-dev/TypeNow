@@ -953,19 +953,19 @@ export function LearnClient({
         {/* Bottom progress area */}
         <div className="absolute bottom-16 left-0 right-0 px-12 max-w-sm mx-auto">
           <div className="flex items-center justify-between mb-3">
-            <span className="text-[11px] font-mono tracking-[4px] text-white/25 uppercase">Preparing</span>
-            <span className="text-[11px] font-mono text-white/20">
+            <span className="text-[11px] font-semibold tracking-[4px] text-violet-300/70 uppercase">Preparing</span>
+            <span className="text-[11px] font-bold font-mono text-violet-200/80">
 {sentences.length > 0 ? 100 : loadingPercent}%
             </span>
           </div>
-          <div className="h-1.5 bg-white/[0.06] rounded-full overflow-hidden backdrop-blur-sm">
+          <div className="h-1.5 bg-violet-300/15 rounded-full overflow-hidden">
             <div
               ref={loadingBarRef}
               className="h-full rounded-full transition-all duration-300"
-              style={{ width: "0%", background: "linear-gradient(90deg, #7c3aed, #a78bfa, #c084fc)" }}
+              style={{ width: "0%", background: "linear-gradient(90deg, #c084fc, #a78bfa, #7c3aed)", boxShadow: "0 0 12px rgba(168,85,247,0.5)" }}
             />
           </div>
-          <p className="mt-4 text-white/10 text-[11px] text-center tracking-wider">
+          <p className="mt-4 text-violet-200/35 text-[11px] text-center tracking-wider">
             正在加载课程内容…
           </p>
         </div>
