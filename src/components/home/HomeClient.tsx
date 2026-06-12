@@ -15,13 +15,11 @@ import {
 } from "lucide-react"
 import { toast } from "sonner"
 import { cn } from "@/lib/utils"
-import { useCountUp } from "@/lib/hooks/useCountUp"
 import { ArchivePanel } from "@/components/home/ArchiveClient"
 import { CheckInRulesModal } from "@/components/home/CheckInRulesModal"
 import { GlobalSettingsModal } from "@/components/home/GlobalSettingsModal"
 import { WelcomeTrialModal } from "@/components/home/WelcomeTrialModal"
 import { DailyTasks } from "@/components/home/DailyTasks"
-import { ProgressCard } from "@/components/home/ProgressCard"
 import { PaymentSuccessModal } from "@/components/payment/PaymentSuccessModal"
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -523,12 +521,6 @@ export function HomeClient({ name }: HomeClientProps) {
   const streakRef = useRef<HTMLSpanElement>(null)
   const pageRef = useRef<HTMLDivElement>(null)
 
-  const animEnabled = !!stats
-
-  const totalCount = useCountUp(stats?.totalSentences ?? 0, animEnabled)
-  const totalDays = useCountUp(stats?.totalDays ?? 0, animEnabled)
-  const pendingCount = useCountUp(stats?.pendingReviews ?? 0, animEnabled)
-
   const fetchStats = useCallback(async () => {
     setFetchError(false)
     try {
@@ -698,80 +690,6 @@ export function HomeClient({ name }: HomeClientProps) {
         <div className={cn(activeTab === "today" ? "block" : "hidden")}>
         <div className="space-y-5">
 
-        {/* ── Stats card ── */}
-        <div
-          className="anim-card relative overflow-hidden rounded-2xl px-6 py-5"
-          style={{
-            background: "var(--banner-bg)",
-            border: "1px solid var(--banner-border)",
-          }}
-        >
-          <div
-            className="absolute -top-12 -right-8 w-52 h-52 rounded-full pointer-events-none"
-            style={{ background: "radial-gradient(circle, #7c3aed40, transparent 70%)" }}
-          />
-          <div
-            className="absolute bottom-0 left-1/3 w-36 h-20 pointer-events-none"
-            style={{ background: "radial-gradient(ellipse, #ec489920, transparent 70%)" }}
-          />
-
-          <div className="relative">
-            {/* 3 compact stats */}
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 sm:gap-4">
-              {[
-                {
-                  label: "累计练习",
-                  value: totalCount,
-                  unit: "句",
-                  icon: BookOpen,
-                  color: "#ec4899",
-                  gradient: "linear-gradient(135deg, #f472b6, #ec4899)",
-                },
-                {
-                  label: "学习天数",
-                  value: totalDays,
-                  unit: "天",
-                  icon: BarChart2,
-                  color: "#f59e0b",
-                  gradient: "linear-gradient(135deg, #fbbf24, #f59e0b)",
-                },
-                {
-                  label: "待复习",
-                  value: pendingCount,
-                  unit: "项",
-                  icon: Clock,
-                  color: "#06b6d4",
-                  gradient: "linear-gradient(135deg, #22d3ee, #06b6d4)",
-                  link: "/home/review",
-                },
-              ].map(({ label, value, unit, icon: Icon, color, gradient, link }) => {
-                const inner = (
-                  <div className="flex items-center gap-3">
-                    <div className="p-1.5 rounded-lg shrink-0" style={{ background: "var(--surface)" }}>
-                      <Icon className="h-4 w-4" style={{ color }} />
-                    </div>
-                    <div className="min-w-0">
-                      <p className="text-[11px] font-medium mb-0.5" style={{ color: "var(--banner-subtitle)" }}>{label}</p>
-                      <div className="flex items-baseline gap-1">
-                        <span
-                          className="text-lg font-black tabular-nums"
-                          style={{ background: gradient, WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}
-                        >
-                          {value}
-                        </span>
-                        <span className="text-[11px]" style={{ color: "var(--banner-subtitle)" }}>{unit}</span>
-                      </div>
-                    </div>
-                  </div>
-                )
-                return link
-                  ? <Link key={label} href={link} className="block hover:opacity-80 transition-opacity">{inner}</Link>
-                  : <div key={label}>{inner}</div>
-              })}
-            </div>
-          </div>
-        </div>
-
         {/* ── Error banner ── */}
         {fetchError && (
           <div className="rounded-2xl border border-red-500/20 bg-red-500/5 p-4 flex items-center justify-between">
@@ -785,49 +703,6 @@ export function HomeClient({ name }: HomeClientProps) {
           </div>
         )}
 
-        {/* ── Weekly bar + ProgressCard ── */}
-        {stats && !fetchError && (
-          <>
-            {/* Weekly diamond bar */}
-            <div className="rounded-2xl border p-4" style={{ background: "var(--surface-alt)", borderColor: "var(--surface-border)" }}>
-              <div className="flex items-center gap-2 mb-3">
-                <Zap className="h-3.5 w-3.5 text-amber-400" />
-                <h3 className="text-[13px] font-semibold text-foreground/70">本周钻石</h3>
-              </div>
-              <div className="flex items-end justify-between gap-1 h-16">
-                {stats.weekly.map((d, i) => {
-                  const max = Math.max(...stats.weekly.map(w => w.count), 1)
-                  const pct = (d.count / max) * 100
-                  const day = ["日","一","二","三","四","五","六"][new Date(d.date + "T12:00:00").getDay()]
-                  return (
-                    <div key={i} className="flex-1 flex flex-col items-center gap-1">
-                      <span className="text-[10px] font-mono text-foreground/40">{d.count || ""}</span>
-                      <div className="w-full rounded-full overflow-hidden" style={{ background: "var(--border)" }}>
-                        <div
-                          className="w-full rounded-full transition-all duration-500 min-h-[4px]"
-                          style={{
-                            height: `${Math.max(pct, 4)}%`,
-                            minHeight: d.count > 0 ? 8 : 4,
-                            background: d.count > 0 ? "linear-gradient(180deg, #a78bfa, #7c3aed)" : "transparent",
-                          }}
-                        />
-                      </div>
-                      <span className="text-[10px] text-foreground/30">{day}</span>
-                    </div>
-                  )
-                })}
-              </div>
-            </div>
-
-            {/* ProgressCard — today's numbers */}
-            <ProgressCard
-              todayPracticed={stats.todayCount}
-              todayReviewed={stats.pendingReviews}
-              streak={stats.streakDays}
-            />
-          </>
-        )}
-
         {/* ── WeChat login feedback ── */}
         <Suspense fallback={null}>
           <WeChatLoginBanner />
@@ -837,6 +712,29 @@ export function HomeClient({ name }: HomeClientProps) {
         <Suspense fallback={null}>
           <PaymentSuccessModal />
         </Suspense>
+
+        {/* ── Continue Learning ── */}
+        {stats?.lastStudied && (
+          <Link
+            href={`/home/learn/${stats.lastStudied.courseId}?lesson=${stats.lastStudied.lessonId}`}
+            className="flex items-center gap-3 rounded-2xl border p-3.5 hover:border-accent/30 transition-all duration-200 group"
+            style={{ background: "var(--surface-alt)", borderColor: "var(--surface-border)" }}
+          >
+            <div
+              className="flex items-center justify-center w-10 h-10 rounded-xl shrink-0"
+              style={{ background: "linear-gradient(135deg, #7c3aed, #a855f7)" }}
+            >
+              <BookOpen className="h-5 w-5 text-white" />
+            </div>
+            <div className="min-w-0 flex-1">
+              <p className="text-sm font-semibold text-foreground/80">继续学习</p>
+              <p className="text-[12px] text-foreground/40 mt-0.5 truncate">
+                {stats.lastStudied.courseTitle} · {stats.lastStudied.lessonTitle}
+              </p>
+            </div>
+            <ChevronRight className="h-5 w-5 text-foreground/30 group-hover:text-foreground/50 transition-colors shrink-0" />
+          </Link>
+        )}
 
         {/* ── Three-column grid ── */}
         <div className="grid grid-cols-1 lg:grid-cols-[1fr_1fr_260px] gap-5">
@@ -959,31 +857,8 @@ export function HomeClient({ name }: HomeClientProps) {
             <DailyTasks className="h-full" refreshKey={checkInVersion} />
           </div>
 
-          {/* ── Column 3: 上次学习 + 热力图 + 邀请好友 + 课程广场 + 最近学习 ── */}
+          {/* ── Column 3: 热力图 + 邀请好友 + 课程广场 + 最近学习 ── */}
           <div className="space-y-3">
-            {/* Last studied — "继续学习" quick link */}
-            {stats?.lastStudied && (
-              <Link
-                href={`/home/learn/${stats.lastStudied.courseId}?lesson=${stats.lastStudied.lessonId}`}
-                className="anim-card flex items-center gap-3 rounded-2xl border p-3.5 hover:border-accent/30 transition-all duration-200 group"
-                style={{ background: "var(--surface-alt)", borderColor: "var(--surface-border)" }}
-              >
-                <div
-                  className="flex items-center justify-center w-9 h-9 rounded-lg shrink-0"
-                  style={{ background: "#7c3aed18", border: "1px solid #7c3aed30" }}
-                >
-                  <BookOpen className="h-4 w-4 text-[#7c3aed]" />
-                </div>
-                <div className="min-w-0 flex-1">
-                  <p className="text-[13px] font-semibold text-foreground/80">继续学习</p>
-                  <p className="text-[11px] text-foreground/40 mt-0.5 truncate">
-                    {stats.lastStudied.courseTitle} · {stats.lastStudied.lessonTitle}
-                  </p>
-                </div>
-                <ChevronRight className="h-4 w-4 text-foreground/30 group-hover:text-foreground/50 transition-colors" />
-              </Link>
-            )}
-
             {/* Monthly heatmap */}
             <div
               className="anim-card rounded-2xl border p-4"
