@@ -713,28 +713,33 @@ export function HomeClient({ name }: HomeClientProps) {
           <PaymentSuccessModal />
         </Suspense>
 
-        {/* ── Continue Learning ── */}
-        {stats?.lastStudied && (
-          <Link
-            href={`/home/learn/${stats.lastStudied.courseId}?lesson=${stats.lastStudied.lessonId}`}
-            className="flex items-center gap-3 rounded-2xl border p-3.5 hover:border-accent/30 transition-all duration-200 group"
-            style={{ background: "var(--surface-alt)", borderColor: "var(--surface-border)" }}
+        {/* ── Continue Learning / Start Learning ── */}
+        <Link
+          href={stats?.lastStudied
+            ? `/home/learn/${stats.lastStudied.courseId}?lesson=${stats.lastStudied.lessonId}`
+            : "/home/store"
+          }
+          className="flex items-center gap-3 rounded-2xl border p-3.5 hover:border-accent/30 transition-all duration-200 group"
+          style={{ background: "var(--surface-alt)", borderColor: "var(--surface-border)" }}
+        >
+          <div
+            className="flex items-center justify-center w-10 h-10 rounded-xl shrink-0"
+            style={{ background: "linear-gradient(135deg, #7c3aed, #a855f7)" }}
           >
-            <div
-              className="flex items-center justify-center w-10 h-10 rounded-xl shrink-0"
-              style={{ background: "linear-gradient(135deg, #7c3aed, #a855f7)" }}
-            >
-              <BookOpen className="h-5 w-5 text-white" />
-            </div>
-            <div className="min-w-0 flex-1">
-              <p className="text-sm font-semibold text-foreground/80">继续学习</p>
-              <p className="text-[12px] text-foreground/40 mt-0.5 truncate">
-                {stats.lastStudied.courseTitle} · {stats.lastStudied.lessonTitle}
-              </p>
-            </div>
-            <ChevronRight className="h-5 w-5 text-foreground/30 group-hover:text-foreground/50 transition-colors shrink-0" />
-          </Link>
-        )}
+            <BookOpen className="h-5 w-5 text-white" />
+          </div>
+          <div className="min-w-0 flex-1">
+            <p className="text-sm font-semibold text-foreground/80">
+              {stats?.lastStudied ? "继续学习" : "开始学习"}
+            </p>
+            <p className="text-[12px] text-foreground/40 mt-0.5 truncate">
+              {stats?.lastStudied
+                ? `${stats.lastStudied.courseTitle} · ${stats.lastStudied.lessonTitle}`
+                : "前往课程广场，选择你的第一课"}
+            </p>
+          </div>
+          <ChevronRight className="h-5 w-5 text-foreground/30 group-hover:text-foreground/50 transition-colors shrink-0" />
+        </Link>
 
         {/* ── Three-column grid ── */}
         <div className="grid grid-cols-1 lg:grid-cols-[1fr_1fr_260px] gap-5">
@@ -893,15 +898,15 @@ export function HomeClient({ name }: HomeClientProps) {
             </Link>
 
             {/* Recent learning list */}
-            {stats?.recentPractices && stats.recentPractices.length > 0 && (
-              <div
-                className="anim-card rounded-2xl border p-4"
-                style={{ background: "var(--surface)", borderColor: "var(--surface-border)" }}
-              >
-                <div className="flex items-center gap-2 mb-2.5">
-                  <Clock className="h-3.5 w-3.5 text-sky-400" />
-                  <h3 className="text-[13px] font-semibold text-foreground/70">最近学习</h3>
-                </div>
+            <div
+              className="anim-card rounded-2xl border p-4"
+              style={{ background: "var(--surface)", borderColor: "var(--surface-border)" }}
+            >
+              <div className="flex items-center gap-2 mb-2.5">
+                <Clock className="h-3.5 w-3.5 text-sky-400" />
+                <h3 className="text-[13px] font-semibold text-foreground/70">最近学习</h3>
+              </div>
+              {stats?.recentPractices && stats.recentPractices.length > 0 ? (
                 <div className="space-y-1.5">
                   {stats.recentPractices.slice(0, 4).map((p, i) => (
                     <Link
@@ -917,8 +922,10 @@ export function HomeClient({ name }: HomeClientProps) {
                     </Link>
                   ))}
                 </div>
-              </div>
-            )}
+              ) : (
+                <p className="text-[12px] text-muted-foreground/40 text-center py-3">暂无学习记录</p>
+              )}
+            </div>
           </div>
         </div>
 
