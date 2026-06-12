@@ -31,7 +31,7 @@ export function PaymentSuccessModal() {
     const params = new URLSearchParams(window.location.search)
     params.delete("payment_success")
     const newSearch = params.toString()
-    window.location.href = window.location.pathname + (newSearch ? `?${newSearch}` : "")
+    window.history.replaceState(null, "", window.location.pathname + (newSearch ? `?${newSearch}` : ""))
   }
 
   return (

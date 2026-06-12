@@ -30,6 +30,7 @@ interface ArchiveStats {
 // ─── SVG Area Chart ───────────────────────────────────────────────────────────
 
 function TrendChart({ data, period }: { data: { date: string; count: number }[]; period: Period }) {
+  const gradId = useRef(`area-grad-${Math.random().toString(36).slice(2, 8)}`).current!
   if (data.length < 2) {
     return (
       <div className="flex items-center justify-center h-40 text-foreground/20 text-sm">
@@ -81,8 +82,8 @@ function TrendChart({ data, period }: { data: { date: string; count: number }[];
   }
 
   const total = data.reduce((s, d) => s + d.count, 0)
-  const avgPerDay = data.filter((d) => d.count > 0).length > 0
-    ? Math.round(total / data.filter((d) => d.count > 0).length)
+  const avgPerDay = data.length > 0
+    ? Math.round(total / data.length)
     : 0
 
   return (
@@ -93,12 +94,12 @@ function TrendChart({ data, period }: { data: { date: string; count: number }[];
         className="w-full h-40"
       >
         <defs>
-          <linearGradient id="area-grad" x1="0" y1="0" x2="0" y2="1">
+          <linearGradient id={gradId} x1="0" y1="0" x2="0" y2="1">
             <stop offset="0%" stopColor="#7c3aed" stopOpacity="0.45" />
             <stop offset="100%" stopColor="#7c3aed" stopOpacity="0.02" />
           </linearGradient>
         </defs>
-        <path d={areaPath} fill="url(#area-grad)" />
+        <path d={areaPath} fill={`url(#${gradId})`} />
         <path d={linePath} fill="none" stroke="#a78bfa" strokeWidth="0.8" />
         {pts.map((p, i) =>
           p.count > 0 ? (

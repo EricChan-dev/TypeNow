@@ -4,15 +4,15 @@ import { useMemo, useRef, useEffect } from "react"
 import { animate, stagger } from "animejs"
 
 function toLocalDateStr(d = new Date()): string {
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`
+  return d.toISOString().slice(0, 10)
 }
 
 function getHeatColor(count: number): string {
   if (count === 0) return "var(--heat-empty)"
-  if (count <= 10) return "rgba(124,58,237,0.30)"
-  if (count <= 50) return "rgba(124,58,237,0.52)"
-  if (count <= 100) return "rgba(139,92,246,0.75)"
-  return "rgba(167,139,250,0.95)"
+  if (count <= 10) return "var(--heat-low, rgba(124,58,237,0.30))"
+  if (count <= 50) return "var(--heat-mid, rgba(124,58,237,0.52))"
+  if (count <= 100) return "var(--heat-high, rgba(139,92,246,0.75))"
+  return "var(--heat-max, rgba(167,139,250,0.95))"
 }
 
 export function YearlyHeatmap({ heatmap }: { heatmap: Record<string, number> }) {

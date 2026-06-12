@@ -6,7 +6,7 @@ import { useSearchParams } from "next/navigation"
 import { animate, stagger } from "animejs"
 import {
   Flame, BookOpen, ChevronRight, Zap,
-  BarChart2, Clock, Check,
+  Clock, Check,
   CalendarDays, Loader2,
   ChevronLeft, Trophy, HelpCircle,
   Smartphone, X, MessageCircle,
@@ -57,7 +57,7 @@ interface HomeClientProps {
 // ─── Utilities ────────────────────────────────────────────────────────────────
 
 function toLocalDateStr(d = new Date()): string {
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`
+  return d.toISOString().slice(0, 10)
 }
 
 function getHeatColor(count: number): string {
@@ -141,15 +141,17 @@ function MonthlyCheckInCalendar({
     <div>
       <div className="flex items-center justify-between mb-3">
         <button
-          onClick={() => setOffset((o) => o - 1)}
+          onClick={() => setOffset((o) => Math.max(-12, o - 1))}
           className="w-7 h-7 flex items-center justify-center rounded-lg text-foreground/30 hover:text-foreground/60 hover:bg-foreground/[0.06] transition-all"
+          aria-label="上个月"
         >
           <ChevronLeft className="h-4 w-4" />
         </button>
-        <span className="text-sm font-semibold text-foreground/70">{year}年 {monthName}</span>
+        <button onClick={() => setOffset(0)} className="text-sm font-semibold text-foreground/70 hover:text-foreground transition-colors">{year}年 {monthName}</button>
         <button
           onClick={() => setOffset((o) => Math.min(0, o + 1))}
           disabled={offset === 0}
+          aria-label="下个月"
           className={cn(
             "w-7 h-7 flex items-center justify-center rounded-lg transition-all",
             offset === 0 ? "text-foreground/15 cursor-default" : "text-foreground/30 hover:text-foreground/60 hover:bg-foreground/[0.06]"
@@ -246,15 +248,17 @@ function MonthlyHeatmap({ heatmap, heatmapDuration }: { heatmap: Record<string, 
     <div>
       <div className="flex items-center justify-between mb-3">
         <button
-          onClick={() => setOffset((o) => o - 1)}
+          onClick={() => setOffset((o) => Math.max(-12, o - 1))}
           className="w-7 h-7 flex items-center justify-center rounded-lg text-foreground/30 hover:text-foreground/60 hover:bg-foreground/[0.06] transition-all"
+          aria-label="上个月"
         >
           <ChevronLeft className="h-4 w-4" />
         </button>
-        <span className="text-xs font-semibold text-foreground/60">{year}年 {monthName}</span>
+        <button onClick={() => setOffset(0)} className="text-xs font-semibold text-foreground/60 hover:text-foreground transition-colors">{year}年 {monthName}</button>
         <button
           onClick={() => setOffset((o) => Math.min(0, o + 1))}
           disabled={offset === 0}
+          aria-label="下个月"
           className={cn(
             "w-7 h-7 flex items-center justify-center rounded-lg transition-all",
             offset === 0 ? "text-foreground/15 cursor-default" : "text-foreground/30 hover:text-foreground/60 hover:bg-foreground/[0.06]"
