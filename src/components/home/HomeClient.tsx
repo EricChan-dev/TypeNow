@@ -859,14 +859,14 @@ export function HomeClient({ name }: HomeClientProps) {
 
           {/* ── Column 2: 每日任务 + 最近学习 ── */}
           <div className="h-full flex flex-col gap-5">
-            <DailyTasks refreshKey={checkInVersion} />
+            <DailyTasks className="flex-1" refreshKey={checkInVersion} />
             <div
-              className="anim-card rounded-2xl border p-4"
-              style={{ background: "var(--surface)", borderColor: "var(--surface-border)" }}
+              className="anim-card rounded-2xl border p-5"
+              style={{ background: "var(--surface-alt)", borderColor: "var(--surface-border)" }}
             >
-              <div className="flex items-center gap-2 mb-2.5">
+              <div className="flex items-center gap-2 mb-3">
                 <Clock className="h-3.5 w-3.5 text-sky-400" />
-                <h3 className="text-[13px] font-semibold text-foreground/70">最近学习</h3>
+                <h3 className="text-sm font-semibold text-foreground/70">最近学习</h3>
               </div>
               {stats?.recentPractices && stats.recentPractices.length > 0 ? (
                 <div className="space-y-1.5">
