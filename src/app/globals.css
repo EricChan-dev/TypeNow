@@ -196,6 +196,18 @@ body {
   padding-bottom: env(safe-area-inset-bottom, 0px);
 }
 
+/* Partner detail panel slide-in */
+@keyframes slidein {
+  from { transform: translateX(100%); }
+  to { transform: translateX(0); }
+}
+.animate-slidein {
+  animation: slidein 0.25s ease-out;
+}
+@media (prefers-reduced-motion: reduce) {
+  .animate-slidein { animation: none; }
+}
+
 /* Toast floating animation */
 @keyframes toast-float {
   0%, 100% { transform: translateY(0); }

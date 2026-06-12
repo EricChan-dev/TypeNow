@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef, useCallback, Suspense } from "react"
 import { toast } from "sonner"
 import QRCode from "qrcode"
+import { ChevronRight, ArrowLeft, X } from "lucide-react"
 import { PaymentSuccessModal } from "@/components/payment/PaymentSuccessModal"
 
 interface DashboardData {
@@ -47,6 +48,7 @@ export default function PartnerDashboard() {
   const [commissions, setCommissions] = useState<Commission[]>([])
   const [withdrawals, setWithdrawals] = useState<{ amount: number; status: string; createdAt: string }[]>([])
   const [tab, setTab] = useState<"link" | "poster" | "scripts">("link")
+  const [detailPanel, setDetailPanel] = useState<"withdrawals" | "commissions" | "invites" | null>(null)
   const [withdrawAmount, setWithdrawAmount] = useState("")
   const [withdrawing, setWithdrawing] = useState(false)
   const [posterUrl, setPosterUrl] = useState<string | null>(null)
@@ -203,10 +205,10 @@ export default function PartnerDashboard() {
 
         {/* Stats */}
         <div className="grid grid-cols-2 gap-3">
-          <StatCard label="累计佣金" value={fmt(data.totalEarned)} />
+          <StatCard label="累计佣金" value={fmt(data.totalEarned)} onClick={() => setDetailPanel("commissions")} clickable />
           <StatCard label="可提现余额" value={fmt(data.available)} accent />
           <StatCard label="待生效" value={fmt(data.cooling)} sub="15天冷静期" />
-          <StatCard label="邀请注册" value={String(data.referredCount)} sub={`付费 ${data.paidCount} 人 · 转化 ${conversionRate}%`} />
+          <StatCard label="邀请注册" value={String(data.referredCount)} sub={`付费 ${data.paidCount} 人 · 转化 ${conversionRate}%`} onClick={() => setDetailPanel("invites")} clickable />
         </div>
 
         {/* Material tabs */}
@@ -277,7 +279,12 @@ export default function PartnerDashboard() {
 
         {/* Withdraw */}
         <div className="bg-muted/40 border border-border rounded-2xl p-4 flex flex-col gap-4">
-          <div className="font-medium">申请提现</div>
+          <div className="flex items-center justify-between">
+            <span className="font-medium">申请提现</span>
+            <button onClick={() => setDetailPanel("withdrawals")} className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors">
+              提现记录 <ChevronRight className="h-3 w-3" />
+            </button>
+          </div>
           {!data.hasWechat && (
             <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl p-3 text-xs text-amber-400">
               请先在个人设置中绑定微信账号，提现将转入微信零钱
@@ -305,27 +312,91 @@ export default function PartnerDashboard() {
           <p className="text-xs text-muted-foreground/70">提现后将实时转入微信零钱，可在微信中提现至银行卡</p>
         </div>
 
-        {/* Commission list */}
-        {commissions.length > 0 && (
-          <div className="flex flex-col gap-2">
-            <div className="text-sm font-medium text-foreground/70">佣金明细</div>
-            {commissions.map((c) => (
-              <div key={c.id} className="bg-muted/40 border border-border rounded-xl p-3 flex items-center justify-between">
-                <div className="flex flex-col gap-0.5">
-                  <span className="text-sm text-foreground/80">
-                    {c.referredUserPhone ?? "用户"} · {c.commissionType === "first" ? "首次" : "续费"}
-                  </span>
-                  <span className="text-xs text-muted-foreground/70">{new Date(c.createdAt).toLocaleDateString()}</span>
-                </div>
-                <div className="flex flex-col items-end gap-0.5">
-                  <span className="text-sm font-medium text-emerald-400">{fmt(c.commissionAmount)}</span>
-                  <StatusBadge status={c.status} availableAt={c.availableAt} />
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
       </div>
+
+      {/* Detail Panel — slide-over */}
+      {detailPanel && (
+        <div className="fixed inset-0 z-50 flex justify-end">
+          <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={() => setDetailPanel(null)} />
+          <div className="relative w-full sm:w-[400px] h-full bg-card border-l border-border shadow-2xl overflow-y-auto animate-slidein">
+            <div className="flex items-center justify-between px-4 py-3 border-b border-border sticky top-0 bg-card z-10">
+              <button onClick={() => setDetailPanel(null)} className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground">
+                <ArrowLeft className="h-4 w-4" />
+                返回
+              </button>
+              <span className="text-sm font-semibold">
+                {detailPanel === "withdrawals" ? "提现记录" : detailPanel === "commissions" ? "佣金明细" : "邀请记录"}
+              </span>
+              <div className="w-12" />
+            </div>
+
+            <div className="p-4">
+              {detailPanel === "withdrawals" && (
+                withdrawals.length === 0 ? (
+                  <p className="text-sm text-muted-foreground text-center py-12">暂无提现记录</p>
+                ) : (
+                  <div className="flex flex-col gap-2">
+                    {withdrawals.map((w, i) => (
+                      <div key={i} className="bg-muted/40 border border-border rounded-xl p-3 flex items-center justify-between">
+                        <div>
+                          <span className="text-sm text-foreground/80">{fmt(w.amount)}</span>
+                          <div className="text-xs text-muted-foreground/70 mt-0.5">{new Date(w.createdAt).toLocaleDateString()}</div>
+                        </div>
+                        <span className={`text-xs px-2 py-0.5 rounded-full ${w.status === "completed" ? "bg-emerald-500/10 text-emerald-400" : "bg-red-500/10 text-red-400"}`}>
+                          {w.status === "completed" ? "已到账" : w.status}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                )
+              )}
+
+              {detailPanel === "commissions" && (
+                commissions.length === 0 ? (
+                  <p className="text-sm text-muted-foreground text-center py-12">暂无佣金记录</p>
+                ) : (
+                  <div className="flex flex-col gap-2">
+                    {commissions.map((c) => (
+                      <div key={c.id} className="bg-muted/40 border border-border rounded-xl p-3">
+                        <div className="flex items-center justify-between">
+                          <span className="text-sm text-foreground/80">
+                            {c.referredUserPhone ?? "用户"} · {c.commissionType === "first" ? "首次购买" : "续费"}
+                          </span>
+                          <span className="text-sm font-medium text-emerald-400">{fmt(c.commissionAmount)}</span>
+                        </div>
+                        <div className="flex items-center justify-between mt-1">
+                          <span className="text-xs text-muted-foreground/70">{new Date(c.createdAt).toLocaleDateString()}</span>
+                          <StatusBadge status={c.status} availableAt={c.availableAt} />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )
+              )}
+
+              {detailPanel === "invites" && (
+                <div className="flex flex-col gap-4">
+                  <div className="bg-muted/40 border border-border rounded-2xl p-4 text-center">
+                    <div className="text-3xl font-bold text-foreground">{data?.referredCount ?? 0}</div>
+                    <div className="text-xs text-muted-foreground mt-1">邀请注册人数</div>
+                  </div>
+                  <div className="bg-muted/40 border border-border rounded-2xl p-4 text-center">
+                    <div className="text-3xl font-bold text-emerald-400">{data?.paidCount ?? 0}</div>
+                    <div className="text-xs text-muted-foreground mt-1">付费转化人数</div>
+                  </div>
+                  <div className="bg-muted/40 border border-border rounded-2xl p-4 text-center">
+                    <div className="text-3xl font-bold text-foreground">{conversionRate}%</div>
+                    <div className="text-xs text-muted-foreground mt-1">转化率</div>
+                  </div>
+                  <p className="text-xs text-muted-foreground/50 text-center mt-2">
+                    邀请好友注册并购买会员，即可获得佣金。首次购买佣金 50%，续费佣金 30%。
+                  </p>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       <Suspense fallback={null}>
         <PaymentSuccessModal />
@@ -334,13 +405,17 @@ export default function PartnerDashboard() {
   )
 }
 
-function StatCard({ label, value, sub, accent }: { label: string; value: string; sub?: string; accent?: boolean }) {
+function StatCard({ label, value, sub, accent, onClick, clickable }: { label: string; value: string; sub?: string; accent?: boolean; onClick?: () => void; clickable?: boolean }) {
+  const Comp = clickable ? "button" : "div"
   return (
-    <div className="bg-muted/40 border border-border rounded-2xl p-4">
-      <div className="text-xs text-muted-foreground mb-1">{label}</div>
+    <Comp onClick={onClick} className={`bg-muted/40 border border-border rounded-2xl p-4 text-left ${clickable ? "hover:bg-muted/60 transition-colors active:scale-[0.98]" : ""}`}>
+      <div className="flex items-center justify-between">
+        <div className="text-xs text-muted-foreground mb-1">{label}</div>
+        {clickable && <ChevronRight className="h-3.5 w-3.5 text-muted-foreground/50" />}
+      </div>
       <div className={`text-xl font-bold ${accent ? "text-emerald-400" : "text-foreground"}`}>{value}</div>
       {sub && <div className="text-xs text-muted-foreground/70 mt-0.5">{sub}</div>}
-    </div>
+    </Comp>
   )
 }
 
