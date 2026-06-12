@@ -303,10 +303,12 @@ export function LearnClient({
       .catch((e) => { console.error(e); toast.error("加载课程内容失败，请刷新重试") })
   }, [lessonId])
 
-  // Animate loading bar while waiting for sentences
+  // Animate loading bar while waiting for sentences — minimum 2s show time
+  const loadingStartRef = useRef(Date.now())
   const [loadingPercent, setLoadingPercent] = useState(0)
   const loadingAnimRef = useRef<ReturnType<typeof animate> | null>(null)
   useEffect(() => {
+    loadingStartRef.current = Date.now()
     const bar = loadingBarRef.current
     if (!bar) return
     let val = { pct: 0 }
@@ -319,11 +321,19 @@ export function LearnClient({
     })
     return () => { loadingAnimRef.current = null }
   }, [])
-  // Complete loading bar early once data arrives
+  // Complete loading bar when data arrives, but enforce minimum 2s display
   useEffect(() => {
-    if (sentences.length > 0 && loadingAnimRef.current) {
-      if (loadingBarRef.current) loadingBarRef.current.style.width = "100%"
+    if (sentences.length === 0) return
+    const elapsed = Date.now() - loadingStartRef.current
+    const remaining = Math.max(0, 2000 - elapsed)
+    const finish = () => {
+      setLoadingPercent(100)
       loadingAnimRef.current = null
+    }
+    if (remaining > 0) {
+      setTimeout(finish, remaining)
+    } else {
+      finish()
     }
   }, [sentences])
 
