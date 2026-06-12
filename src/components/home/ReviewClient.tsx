@@ -72,6 +72,8 @@ export function ReviewClient() {
   const [activeWordIndex, setActiveWordIndex] = useState(0)
   const [shakeWords, setShakeWords] = useState<Set<number>>(new Set())
   const [errorCount, setErrorCount] = useState(0)
+  const errorCountRef = useRef(errorCount)
+  errorCountRef.current = errorCount
   const [done, setDone] = useState(false)
 
   const statusRef = useRef(status)
@@ -185,7 +187,7 @@ export function ReviewClient() {
       const isLast = activeIdx >= words.length - 1
       if (isLast) {
         // Auto-mastery: zero errors on this sentence
-        if (errorCount === 0) {
+        if (errorCountRef.current === 0) {
           submitGrade(5, true)
           const next = currentIdxRef.current + 1
           if (next >= itemsRef.current.length) setDone(true)

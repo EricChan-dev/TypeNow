@@ -12,12 +12,6 @@ const PLAN_LABELS: Record<string, string> = {
   yearly: "年度会员",
 }
 
-const PLAN_AMOUNTS: Record<string, string> = {
-  partner: "399.00",
-  monthly: "29.00",
-  yearly: "199.00",
-}
-
 export default function CheckoutPage() {
   const params = useSearchParams()
   const router = useRouter()
@@ -99,7 +93,6 @@ export default function CheckoutPage() {
   const minutes = Math.floor(countdown / 60)
   const seconds = countdown % 60
   const planLabel = PLAN_LABELS[plan] ?? "会员"
-  const amountYuan = PLAN_AMOUNTS[plan] ?? "—"
 
   return (
     <div className="min-h-full bg-background flex flex-col items-center justify-center px-4 py-10">
@@ -177,7 +170,7 @@ export default function CheckoutPage() {
         {/* Price + timer */}
         {step === "ready" && (
           <div className="text-center space-y-1.5 w-full">
-            <p className="text-3xl font-extrabold text-foreground">¥{amountYuan}</p>
+            <p className="text-3xl font-extrabold text-foreground">{planLabel}</p>
             <p className="flex items-center justify-center gap-1.5 text-xs text-foreground/35">
               <Clock className="h-3 w-3" />
               二维码有效期 {minutes}:{String(seconds).padStart(2, "0")}

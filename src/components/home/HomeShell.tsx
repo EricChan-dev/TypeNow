@@ -13,6 +13,12 @@ const pageTitles: Record<string, string> = {
   "/home/feed": "动态广场",
   "/home/archive": "学习档案",
   "/home/leaderboard": "排行榜",
+  "/home/review": "复习本",
+  "/home/wordbook": "单词本",
+  "/home/notes": "笔记本",
+  "/home/settings": "设置",
+  "/home/partner": "合伙人中心",
+  "/home/membership": "会员中心",
 }
 
 export function HomeShell({ children, isPartner }: { children: React.ReactNode; isPartner?: boolean }) {

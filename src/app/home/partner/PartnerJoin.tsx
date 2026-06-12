@@ -77,7 +77,7 @@ export default function PartnerJoin() {
         disabled={loading}
         className="w-full py-3.5 rounded-2xl bg-amber-500 hover:bg-amber-400 disabled:opacity-40 text-black font-bold text-base transition-colors"
       >
-        {loading ? "处理中..." : "¥399 立即开通合伙人"}
+        {loading ? "处理中..." : "立即开通合伙人"}
       </button>
       <label className="flex items-start gap-2.5 cursor-pointer">
         <input

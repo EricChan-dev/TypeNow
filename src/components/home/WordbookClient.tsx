@@ -31,6 +31,7 @@ export function WordbookClient() {
   const [items, setItems] = useState<WordbookRow[]>([])
   const [total, setTotal] = useState(0)
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
   const [expanded, setExpanded] = useState<Set<string>>(new Set())
   const [busy, setBusy] = useState<string | null>(null)
   const [speaking, setSpeaking] = useState<string | null>(null)
@@ -40,10 +41,11 @@ export function WordbookClient() {
     setLoading(true)
     try {
       const res = await fetch("/api/wordbook?page=1&size=100")
+      if (!res.ok) { setError("加载失败"); return }
       const j = await res.json()
       setItems(j.items ?? [])
       setTotal(Number(j.total ?? 0))
-    } finally {
+    } catch { setError("加载失败") } finally {
       setLoading(false)
     }
   }, [])

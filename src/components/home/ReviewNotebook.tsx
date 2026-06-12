@@ -48,10 +48,11 @@ export function ReviewNotebook() {
     setLoading(true)
     try {
       const res = await fetch(`/api/review/list?status=${t}&pageSize=100`)
+      if (!res.ok) throw new Error(`HTTP ${res.status}`)
       const data = await res.json()
       setItems(data.items ?? [])
       setStats({ dueCount: data.dueCount ?? 0, doneCount: data.doneCount ?? 0, allCount: data.allCount ?? 0 })
-    } finally {
+    } catch { /* silently handled — shows empty list */ } finally {
       setLoading(false)
     }
   }, [])
@@ -158,7 +159,7 @@ export function ReviewNotebook() {
                 {/* Course */}
                 {item.courseTitle && item.courseId ? (
                   <button
-                    onClick={() => router.push(`/home/courses/${item.courseId}`)}
+                    onClick={() => router.push(`/home/store/${item.courseId}`)}
                     className="shrink-0 text-[11px] text-foreground/35 hover:text-violet-400 transition-colors max-w-[120px] truncate"
                   >
                     {item.courseTitle}

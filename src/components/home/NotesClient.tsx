@@ -31,6 +31,7 @@ const AUTOSAVE_MS = 800
 export function NotesClient() {
   const [items, setItems] = useState<NoteRow[]>([])
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
   const [activeId, setActiveId] = useState<string | null>(null)
   const [draftTitle, setDraftTitle] = useState("")
   const [draftContent, setDraftContent] = useState("")
@@ -47,6 +48,7 @@ export function NotesClient() {
     setLoading(true)
     try {
       const res = await fetch("/api/notes?page=1&size=100")
+      if (!res.ok) throw new Error(`HTTP ${res.status}`)
       const j = await res.json()
       const list: NoteRow[] = j.items ?? []
       setItems(list)
@@ -56,7 +58,7 @@ export function NotesClient() {
         setDraftTitle(list[0].title ?? "")
         setDraftContent(list[0].content ?? "")
       }
-    } finally {
+    } catch { setError("加载失败") } finally {
       setLoading(false)
     }
   }, [activeId])
