@@ -19,7 +19,7 @@ export function CheckoutModal({ plan, onClose, onSuccess }: CheckoutModalProps) 
     out_trade_no: string
     amount: number
   } | null>(null)
-  const [countdown, setCountdown] = useState(120) // 2 minutes
+  const [countdown, setCountdown] = useState(7200) // 2 hours — matches backend expiry
   const [errorMsg, setErrorMsg] = useState("")
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const countdownRef = useRef<ReturnType<typeof setInterval> | null>(null)
@@ -49,7 +49,7 @@ export function CheckoutModal({ plan, onClose, onSuccess }: CheckoutModalProps) 
       setQrDataUrl(qrData)
       setOrderInfo({ out_trade_no: data.out_trade_no, amount: data.amount })
       setStep("ready")
-      setCountdown(120)
+      setCountdown(7200)
     } catch (err) {
       setErrorMsg(err instanceof Error ? err.message : "创建订单失败")
       setStep("error")
@@ -96,14 +96,15 @@ export function CheckoutModal({ plan, onClose, onSuccess }: CheckoutModalProps) 
   // Create order on mount
   useEffect(() => { createOrder() }, [createOrder])
 
-  const planName = plan === "monthly" ? "月度会员" : "年度会员"
-  const amountYuan = plan === "monthly" ? "29.00" : "199.00"
-  const minutes = Math.floor(countdown / 60)
-  const seconds = countdown % 60
+  const planName = plan === "monthly" ? "月度会员" : plan === "yearly" ? "年度会员" : "合伙人"
+  const amountYuan = orderInfo?.amount ? (orderInfo.amount / 100).toFixed(2) : "—"
+  const hrs = Math.floor(countdown / 3600)
+  const mins = Math.floor((countdown % 3600) / 60)
+  const secs = countdown % 60
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-      <div className="relative w-full max-w-[400px] rounded-2xl bg-card border border-border p-8 shadow-2xl flex flex-col items-center gap-6">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4" onClick={onClose}>
+      <div className="relative w-full max-w-[400px] rounded-2xl bg-card border border-border p-8 shadow-2xl flex flex-col items-center gap-6" onClick={(e) => e.stopPropagation()}>
         {/* Close button */}
         <button
           onClick={onClose}
@@ -187,7 +188,7 @@ export function CheckoutModal({ plan, onClose, onSuccess }: CheckoutModalProps) 
               </p>
               <p className="flex items-center justify-center gap-1.5 text-xs text-muted-foreground mt-1">
                 <Clock className="h-3 w-3" />
-                二维码有效期 {minutes}:{String(seconds).padStart(2, "0")}
+                二维码有效期 {hrs > 0 ? `${hrs}:` : ""}{String(mins).padStart(2, "0")}:{String(secs).padStart(2, "0")}
               </p>
             </div>
 
@@ -198,8 +199,6 @@ export function CheckoutModal({ plan, onClose, onSuccess }: CheckoutModalProps) 
         )}
         </div>
 
-        {/* Backdrop click to close */}
-        <div className="absolute inset-0 -z-10" onClick={onClose} />
       </div>
     )
 }

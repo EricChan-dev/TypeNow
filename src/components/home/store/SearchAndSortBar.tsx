@@ -79,9 +79,9 @@ export function SearchAndSortBar({
       </div>
 
       {/* Course count */}
-      <div className="hidden sm:flex items-center gap-3 ml-auto">
-        <span className="text-xs text-muted-foreground">
-          共 <span className="text-foreground font-medium">{courseCount}</span> 门课程
+      <div className="flex items-center gap-3 ml-auto">
+        <span className="text-[10px] sm:text-xs text-muted-foreground whitespace-nowrap">
+          共 <span className="text-foreground font-medium">{courseCount}</span> 门
         </span>
       </div>
     </div>

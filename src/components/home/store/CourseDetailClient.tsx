@@ -37,7 +37,7 @@ export function CourseDetailClient({ courseId }: CourseDetailClientProps) {
   const [course, setCourse] = useState<Course | null>(null)
   const [lessons, setLessons] = useState<LessonRow[]>([])
   const [loading, setLoading] = useState(true)
-  const [activeTab, setActiveTab] = useState<"outline" | "reviews">("outline")
+  const [loadError, setLoadError] = useState(false)
   const { isAcquired, acquire } = useAcquiredCourses()
 
   useEffect(() => {
@@ -48,13 +48,22 @@ export function CourseDetailClient({ courseId }: CourseDetailClientProps) {
     ]).then(([courseJson, lessonsJson]) => {
       if (courseJson.data) setCourse(courseJson.data as Course)
       if (lessonsJson.data) setLessons(lessonsJson.data as LessonRow[])
-    }).catch(() => {}).finally(() => setLoading(false))
+    }).catch(() => setLoadError(true)).finally(() => setLoading(false))
   }, [courseId])
 
   if (loading) {
     return (
       <div className="flex items-center justify-center py-32">
         <div className="h-6 w-6 rounded-full border-2 border-accent border-t-transparent animate-spin" />
+      </div>
+    )
+  }
+
+  if (loadError) {
+    return (
+      <div className="flex flex-col items-center justify-center py-24 px-6 text-center">
+        <p className="text-sm text-muted-foreground mb-3">加载失败</p>
+        <button onClick={() => window.location.reload()} className="text-sm text-accent font-medium hover:underline">点击重试</button>
       </div>
     )
   }
@@ -150,6 +159,7 @@ export function CourseDetailClient({ courseId }: CourseDetailClientProps) {
                 <button
                   onClick={() => firstLessonId && router.push(`/home/learn/${courseId}?lesson=${firstLessonId}`)}
                   disabled={!firstLessonId}
+                  title={!firstLessonId ? "暂无可用章节" : undefined}
                   className="inline-flex items-center gap-1.5 rounded-lg bg-accent px-5 py-2.5 text-sm font-semibold text-white hover:bg-accent/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   <Play className="h-4 w-4" />
@@ -172,34 +182,14 @@ export function CourseDetailClient({ courseId }: CourseDetailClientProps) {
       {/* Tabs */}
       <div className="border-b border-border mb-5">
         <div className="flex items-center gap-0">
-          <button
-            onClick={() => setActiveTab("outline")}
-            className={cn(
-              "relative px-4 py-3 text-sm font-medium transition-colors",
-              activeTab === "outline"
-                ? "text-accent after:absolute after:bottom-0 after:left-0 after:right-0 after:h-[2px] after:bg-accent after:rounded-full"
-                : "text-muted-foreground hover:text-foreground"
-            )}
-          >
+          <span className="relative px-4 py-3 text-sm font-medium text-accent after:absolute after:bottom-0 after:left-0 after:right-0 after:h-[2px] after:bg-accent after:rounded-full">
             大纲 ({lessons.length})
-          </button>
-          <button
-            onClick={() => setActiveTab("reviews")}
-            className={cn(
-              "relative px-4 py-3 text-sm font-medium transition-colors",
-              activeTab === "reviews"
-                ? "text-accent after:absolute after:bottom-0 after:left-0 after:right-0 after:h-[2px] after:bg-accent after:rounded-full"
-                : "text-muted-foreground hover:text-foreground"
-            )}
-          >
-            评价
-          </button>
+          </span>
         </div>
       </div>
 
       {/* Tab Content */}
-      {activeTab === "outline" ? (
-        lessons.length > 0 ? (
+      {lessons.length > 0 ? (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
             {lessons.map((lesson, i) => (
               <Link
@@ -227,13 +217,7 @@ export function CourseDetailClient({ courseId }: CourseDetailClientProps) {
           <div className="flex flex-col items-center justify-center py-20 text-center">
             <p className="text-sm font-medium text-muted-foreground">暂无章节</p>
           </div>
-        )
-      ) : (
-        <div className="flex flex-col items-center justify-center py-20 text-center">
-          <p className="text-sm font-medium text-muted-foreground">功能开发中…</p>
-          <p className="text-xs text-muted-foreground/70 mt-1">课程评价功能即将上线</p>
-        </div>
-      )}
+        )}
     </div>
   )
 }

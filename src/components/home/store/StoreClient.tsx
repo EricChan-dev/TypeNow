@@ -16,16 +16,19 @@ export function StoreClient() {
   const [sortMode, setSortMode] = useState<SortMode>("latest")
   const [displayCount, setDisplayCount] = useState(PAGE_SIZE)
   const [allCourses, setAllCourses] = useState<Course[]>([])
+  const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState(false)
 
   useEffect(() => {
+    setLoading(true)
     fetch("/api/courses/list?pageSize=200")
       .then((r) => r.json())
       .then((json) => { if (json.data) setAllCourses(json.data) })
-      .catch(() => {})
+      .catch(() => setLoadError(true))
+      .finally(() => setLoading(false))
   }, [])
 
   const sentinelRef = useRef<HTMLDivElement>(null)
-  const [loadingMore, setLoadingMore] = useState(false)
   const loadingRef = useRef(false)
 
   const filteredCourses = useMemo(() => {
@@ -79,13 +82,8 @@ export function StoreClient() {
   const loadMore = useCallback(() => {
     if (loadingRef.current || !hasMore) return
     loadingRef.current = true
-    setLoadingMore(true)
-
-    setTimeout(() => {
-      setDisplayCount((prev) => Math.min(prev + PAGE_SIZE, sortedCourses.length))
-      setLoadingMore(false)
-      loadingRef.current = false
-    }, 500)
+    setDisplayCount((prev) => Math.min(prev + PAGE_SIZE, sortedCourses.length))
+    loadingRef.current = false
   }, [hasMore, sortedCourses.length])
 
   useEffect(() => {
@@ -122,7 +120,24 @@ export function StoreClient() {
         onSubTabChange={setActiveSubTab}
       />
 
-      {visibleCourses.length > 0 ? (
+      {loadError ? (
+        <div className="flex flex-col items-center justify-center py-24 text-center">
+          <p className="text-sm text-muted-foreground mb-3">加载失败</p>
+          <button onClick={() => window.location.reload()} className="text-sm text-accent font-medium hover:underline">点击重试</button>
+        </div>
+      ) : loading ? (
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
+          {Array.from({ length: 10 }).map((_, i) => (
+            <div key={i} className="rounded-2xl border border-border bg-card animate-pulse">
+              <div className="aspect-[16/10] bg-foreground/[0.04]" />
+              <div className="p-3 space-y-2">
+                <div className="h-4 bg-foreground/[0.06] rounded w-3/4" />
+                <div className="h-3 bg-foreground/[0.04] rounded w-1/2" />
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : visibleCourses.length > 0 ? (
         <>
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
             {visibleCourses.map((course) => (
@@ -136,7 +151,6 @@ export function StoreClient() {
               ref={sentinelRef}
               className="flex items-center justify-center py-8 text-sm text-muted-foreground"
             >
-              {loadingMore && "加载中…"}
             </div>
           )}
 

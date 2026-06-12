@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useMemo } from "react"
 import Link from "next/link"
 import { ShoppingBag } from "lucide-react"
 import type { Course } from "@/types/course"
@@ -24,16 +24,19 @@ export function MyCoursesClient() {
   const { acquiredIds } = useAcquiredCourses()
   const [allCourses, setAllCourses] = useState<Course[]>([])
   const [studyHistory, setStudyHistory] = useState<Record<string, number>>({})
+  const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState(false)
 
   useEffect(() => {
+    setLoading(true)
     fetch("/api/courses/list?pageSize=500")
       .then((r) => r.json())
       .then((json) => { if (json.data) setAllCourses(json.data as Course[]) })
-      .catch(() => {})
+      .catch(() => setLoadError(true))
+      .finally(() => setLoading(false))
   }, [])
 
   useEffect(() => {
-    // Load localStorage history first
     let local: Record<string, number> = {}
     try {
       const raw = localStorage.getItem("typenow_study_history")
@@ -41,7 +44,6 @@ export function MyCoursesClient() {
     } catch {}
     setStudyHistory(local)
 
-    // Merge with backend progress (backend is source of truth for cross-device)
     fetch("/api/user/progress")
       .then((r) => r.json())
       .then((json: { data?: { courseId: string; lastStudiedAt: string }[] }) => {
@@ -59,11 +61,13 @@ export function MyCoursesClient() {
   }, [])
 
   // My Courses = acquired OR studied, sorted by last studied (most recent first)
-  const studiedIds = new Set(Object.keys(studyHistory))
-  const allMyIds = new Set([...acquiredIds, ...studiedIds])
-  const myCourses = allCourses
-    .filter((c) => allMyIds.has(c.id))
-    .sort((a, b) => (studyHistory[b.id] ?? 0) - (studyHistory[a.id] ?? 0))
+  const myCourses = useMemo(() => {
+    const studiedIds = new Set(Object.keys(studyHistory))
+    const allMyIds = new Set([...acquiredIds, ...studiedIds])
+    return allCourses
+      .filter((c) => allMyIds.has(c.id))
+      .sort((a, b) => (studyHistory[b.id] ?? 0) - (studyHistory[a.id] ?? 0))
+  }, [allCourses, studyHistory, acquiredIds])
 
   return (
     <div className="px-6 lg:px-10 xl:px-14 py-6">
@@ -76,7 +80,24 @@ export function MyCoursesClient() {
         </div>
       </div>
 
-      {myCourses.length > 0 ? (
+      {loadError ? (
+        <div className="flex flex-col items-center justify-center py-24 text-center">
+          <p className="text-sm text-muted-foreground mb-3">加载失败</p>
+          <button onClick={() => window.location.reload()} className="text-sm text-accent font-medium hover:underline">点击重试</button>
+        </div>
+      ) : loading ? (
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
+          {Array.from({ length: 6 }).map((_, i) => (
+            <div key={i} className="rounded-2xl border border-border bg-card animate-pulse">
+              <div className="aspect-[16/10] bg-foreground/[0.04]" />
+              <div className="p-3 space-y-2">
+                <div className="h-4 bg-foreground/[0.06] rounded w-3/4" />
+                <div className="h-3 bg-foreground/[0.04] rounded w-1/2" />
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : myCourses.length > 0 ? (
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
           {myCourses.map((course) => (
             <div key={course.id} className="relative">
