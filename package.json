@@ -14,7 +14,8 @@
     "switch-role": "tsx scripts/switch-role.ts",
     "import-julebu": "tsx scripts/import-julebu.ts",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "import-julebu-files": "tsx scripts/import-julebu-files.ts"
   },
   "dependencies": {
     "@alicloud/dysmsapi20170525": "^4.5.1",

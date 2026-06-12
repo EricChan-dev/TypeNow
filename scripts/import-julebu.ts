@@ -35,11 +35,11 @@ const __dirname = dirname(__filename)
 // ── Load env BEFORE imports that read process.env at init time ─────
 config({ path: join(__dirname, "..", ".env.local") })
 
-// ── Dynamic imports (after env loaded) ────────────────────────────
-const { courses, lessons, sentences } = await import("../src/lib/db/schema")
-const { drizzle } = await import("drizzle-orm/mysql2")
-const mysql = await import("mysql2/promise")
-const { eq } = await import("drizzle-orm")
+// ── Static imports (safe — no module reads process.env at init time) ──
+import { drizzle } from "drizzle-orm/mysql2"
+import mysql from "mysql2/promise"
+import { eq } from "drizzle-orm"
+import { courses, lessons, sentences } from "../src/lib/db/schema"
 
 // ── Config ─────────────────────────────────────────────────────────
 
@@ -125,7 +125,24 @@ async function julebuApi<T = unknown>(endpoint: string, input: unknown = null): 
   return data[0]?.result?.data?.json ?? null
 }
 
-async function fetchAllPacks(): Promise<JulebuPack[]> {
+async function fetchAllPacks(useCache: boolean = false): Promise<JulebuPack[]> {
+  // ── Cache fallback: read packs-metadata.json instead of hitting API ──
+  if (useCache) {
+    const cacheFile = join(DATA_DIR, "packs-metadata.json")
+    if (existsSync(cacheFile)) {
+      const cached = JSON.parse(readFileSync(cacheFile, "utf-8"))
+      log("📦", `Loaded ${cached.length} packs from cache`)
+      if (TARGET_PACKS) {
+        const filtered = cached.filter(p => TARGET_PACKS.includes(p.id))
+        if (filtered.length === 0) { error("None of TARGET_PACKS found in cached packs"); return [] }
+        return filtered
+      }
+      return cached
+    }
+    error("No cached packs-metadata.json found")
+    return []
+  }
+
   log("📡", "Phase 1: Fetching pack metadata via Node.js API...")
 
   // Get user's course packs
@@ -410,13 +427,13 @@ async function main() {
   }
 
   // ── Phase 1: Get pack metadata ──
-  if (!JULEBU_COOKIE) {
-    console.error("❌ JULEBU_COOKIE environment variable not set!")
-    console.error("   Copy it from Chrome DevTools → Application → Cookies on julebu.co")
-    process.exit(1)
+  const useCache = !JULEBU_COOKIE || SKIP_PUPPETEER
+  const packs = await fetchAllPacks(useCache)
+  if (packs.length === 0 && useCache && JULEBU_COOKIE) {
+    console.log("📡 Retrying pack fetch via API...")
+    const apiPacks = await fetchAllPacks(false)
+    if (apiPacks.length > 0) { packs.push(...apiPacks) }
   }
-
-  const packs = await fetchAllPacks()
   if (packs.length === 0) {
     console.log("\n❌ No course packs to import.")
     process.exit(1)
