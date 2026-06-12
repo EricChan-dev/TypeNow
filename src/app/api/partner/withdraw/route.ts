@@ -66,6 +66,24 @@ export async function POST(request: Request) {
   const requestId = randomUUID()
   const appId = process.env.WECHAT_APP_ID ?? process.env.NEXT_PUBLIC_WECHAT_APP_ID ?? ""
 
+  // Step 1: Atomically claim commissions BEFORE calling WeChat transfer.
+  // This prevents double-withdrawal: if two concurrent requests arrive,
+  // the second one will see rowsAffected=0 and bail out before any money moves.
+  const originalAmount = amount
+  let remaining = amount
+  for (const row of availableRows) {
+    if (remaining <= 0) break
+    const result = await db
+      .update(partnerCommissions)
+      .set({ status: "withdrawn" })
+      .where(and(eq(partnerCommissions.id, row.id), eq(partnerCommissions.status, "available")))
+    if ((result as unknown as { rowsAffected: number }).rowsAffected === 0) {
+      return NextResponse.json({ error: "提现失败，请稍后重试" }, { status: 409 })
+    }
+    remaining -= row.commissionAmount
+  }
+
+  // Step 2: Now initiate the WeChat transfer with the claimed balance
   try {
     if (!isWeChatPayConfigured()) throw new Error("微信支付未配置，请联系管理员")
 
@@ -88,35 +106,30 @@ export async function POST(request: Request) {
       completedAt: new Date(),
     })
 
-    // Atomically mark used commissions as withdrawn (FIFO).
-    // The WHERE status='available' guard prevents double-withdrawal race conditions.
-    let remaining = amount
-    for (const row of availableRows) {
-      if (remaining <= 0) break
-      const result = await db
-        .update(partnerCommissions)
-        .set({ status: "withdrawn" })
-        .where(and(eq(partnerCommissions.id, row.id), eq(partnerCommissions.status, "available")))
-      // If 0 rows affected, this row was already claimed by a concurrent request
-      if ((result as unknown as { rowsAffected: number }).rowsAffected === 0) {
-        console.error(`[Withdraw] Concurrent withdrawal detected for commission ${row.id}. Rolling back.`)
-        return NextResponse.json({ error: "提现失败，请稍后重试" }, { status: 409 })
-      }
-      remaining -= row.commissionAmount
-    }
-
     return NextResponse.json({ success: true, amount, outBatchNo })
   } catch (e) {
+    // Rollback: restore commission status if transfer failed
+    let rb = originalAmount
+    for (const row of availableRows) {
+      if (rb <= 0) break
+      await db
+        .update(partnerCommissions)
+        .set({ status: "available" })
+        .where(eq(partnerCommissions.id, row.id))
+        .catch(() => {})
+      rb -= row.commissionAmount
+    }
+
     const failReason = e instanceof Error ? e.message : String(e)
     await db.insert(withdrawalRequests).values({
       id: requestId,
       partnerId: session.userId,
-      amount,
+      amount: originalAmount,
       wechatOpenid: partner.wechatOpenid,
       partnerTradeNo: outBatchNo,
       status: "failed",
       failReason,
-    })
+    }).catch(() => {})
     console.error("Withdrawal failed:", e)
     return NextResponse.json({ error: "提现失败，请联系客服处理" }, { status: 500 })
   }

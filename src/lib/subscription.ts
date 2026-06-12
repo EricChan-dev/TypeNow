@@ -46,12 +46,7 @@ async function grantPartnerAccess(userId: string): Promise<void> {
     })
     .from(users)
     .innerJoin(subscriptions, eq(users.id, subscriptions.userId))
-    .where(
-      and(
-        eq(users.referredBy, userId),
-        // Include all subscriptions (active/cancelled/expired), not just active
-      )
-    )
+    .where(eq(users.referredBy, userId))
 
   for (const row of referredUsers) {
     if (!row.orderId) continue
