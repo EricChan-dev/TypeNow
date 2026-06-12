@@ -304,11 +304,19 @@ export function LearnClient({
   }, [lessonId])
 
   // Animate loading bar while waiting for sentences
+  const [loadingPercent, setLoadingPercent] = useState(0)
   const loadingAnimRef = useRef<ReturnType<typeof animate> | null>(null)
   useEffect(() => {
     const bar = loadingBarRef.current
     if (!bar) return
-    loadingAnimRef.current = animate(bar, { width: ["0%", "100%"], duration: 2200, ease: "out(2)" })
+    let val = { pct: 0 }
+    setLoadingPercent(0)
+    loadingAnimRef.current = animate(val, {
+      pct: 100,
+      duration: 2200,
+      ease: "out(2)",
+      onUpdate: () => setLoadingPercent(Math.round(val.pct)),
+    })
     return () => { loadingAnimRef.current = null }
   }, [])
   // Complete loading bar early once data arrives
@@ -900,35 +908,55 @@ export function LearnClient({
 
   if (!sentence) {
     return (
-      <div className="fixed inset-0 bg-background flex flex-col items-center justify-center">
-        {/* Center logo */}
-        <div className="flex flex-col items-center gap-5 mb-40">
-          <div className="relative">
-            <div className="absolute inset-0 rounded-[28px] bg-violet-500/20 blur-3xl scale-125" />
-            <div className="relative w-28 h-28 rounded-[28px] bg-foreground/[0.04] border border-foreground/[0.08] flex items-center justify-center">
-              <Keyboard className="h-12 w-12 text-foreground/40" />
-            </div>
-          </div>
-          <div className="text-center">
-            <p className="text-foreground/50 text-base font-medium tracking-wider">码上英语</p>
-            <p className="text-foreground/20 text-xs mt-0.5 tracking-widest font-mono">TypeNow</p>
-          </div>
+      <div className="fixed inset-0 flex flex-col items-center justify-center overflow-hidden" style={{ background: "linear-gradient(135deg, #0f0a1a 0%, #1a1028 30%, #0d1525 60%, #0a0f1a 100%)" }}>
+        {/* Animated background particles */}
+        <div className="absolute inset-0 overflow-hidden pointer-events-none">
+          <div className="absolute top-1/4 left-1/4 w-96 h-96 rounded-full bg-violet-500/10 blur-[120px] animate-pulse" />
+          <div className="absolute bottom-1/3 right-1/4 w-80 h-80 rounded-full bg-cyan-500/8 blur-[100px] animate-pulse" style={{ animationDelay: "1.5s" }} />
+          <div className="absolute top-1/2 left-1/2 w-64 h-64 rounded-full bg-fuchsia-500/6 blur-[90px] animate-pulse" style={{ animationDelay: "3s" }} />
         </div>
 
-        {/* Bottom loading area */}
-        <div className="absolute bottom-14 left-0 right-0 px-10 max-w-md mx-auto">
-          <div className="flex items-center justify-between mb-2.5">
-            <span className="text-[10px] font-mono tracking-[0.22em] text-foreground/20 uppercase">Loading</span>
+        {/* Content */}
+        <div className="relative z-10 flex flex-col items-center gap-10">
+          {/* Logo with ring animation */}
+          <div className="relative">
+            <div className="absolute inset-0 rounded-[32px] bg-violet-500/30 blur-3xl scale-150 animate-pulse" />
+            <div className="absolute -inset-4 rounded-[40px] border border-violet-400/10 animate-spin" style={{ animationDuration: "8s" }} />
+            <div className="absolute -inset-8 rounded-[48px] border border-violet-400/5 animate-spin" style={{ animationDuration: "12s", animationDirection: "reverse" }} />
+            <div className="relative w-32 h-32 rounded-[32px] bg-white/[0.03] border border-white/[0.06] backdrop-blur-sm flex items-center justify-center shadow-2xl shadow-violet-500/10">
+              <Keyboard className="h-14 w-14 text-violet-400/60" />
+            </div>
           </div>
-          <div className="h-[1.5px] bg-foreground/[0.07] rounded-full overflow-hidden">
+
+          {/* Brand text */}
+          <div className="text-center space-y-2">
+            <p className="text-white/60 text-xl font-bold tracking-[4px]">码上英语</p>
+            <p className="text-white/20 text-xs tracking-[6px] font-mono uppercase">TypeNow</p>
+          </div>
+
+          {/* Motivational quote */}
+          <p className="text-white/15 text-sm font-light tracking-wider max-w-xs text-center leading-relaxed px-4">
+            "The limits of my language mean the limits of my world."
+          </p>
+        </div>
+
+        {/* Bottom progress area */}
+        <div className="absolute bottom-16 left-0 right-0 px-12 max-w-sm mx-auto">
+          <div className="flex items-center justify-between mb-3">
+            <span className="text-[10px] font-mono tracking-[4px] text-white/15 uppercase">Preparing</span>
+            <span className="text-[10px] font-mono text-white/10">
+{sentences.length > 0 ? 100 : loadingPercent}%
+            </span>
+          </div>
+          <div className="h-[2px] bg-white/[0.05] rounded-full overflow-hidden backdrop-blur-sm">
             <div
               ref={loadingBarRef}
-              className="h-full rounded-full"
-              style={{ width: "0%", background: "linear-gradient(90deg, #7c3aed 0%, #a78bfa 100%)" }}
+              className="h-full rounded-full transition-all duration-300"
+              style={{ width: "0%", background: "linear-gradient(90deg, #7c3aed, #a78bfa, #c084fc)" }}
             />
           </div>
-          <p className="mt-4 text-foreground/15 text-[11px] text-center leading-relaxed">
-            正在为你加载课程内容，请稍候…
+          <p className="mt-4 text-white/10 text-[11px] text-center tracking-wider">
+            正在加载课程内容…
           </p>
         </div>
       </div>
