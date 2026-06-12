@@ -857,12 +857,40 @@ export function HomeClient({ name }: HomeClientProps) {
             </div>
           </div>
 
-          {/* ── Column 2: 每日任务 ── */}
-          <div className="h-full">
-            <DailyTasks className="h-full" refreshKey={checkInVersion} />
+          {/* ── Column 2: 每日任务 + 最近学习 ── */}
+          <div className="h-full flex flex-col gap-5">
+            <DailyTasks refreshKey={checkInVersion} />
+            <div
+              className="anim-card rounded-2xl border p-4"
+              style={{ background: "var(--surface)", borderColor: "var(--surface-border)" }}
+            >
+              <div className="flex items-center gap-2 mb-2.5">
+                <Clock className="h-3.5 w-3.5 text-sky-400" />
+                <h3 className="text-[13px] font-semibold text-foreground/70">最近学习</h3>
+              </div>
+              {stats?.recentPractices && stats.recentPractices.length > 0 ? (
+                <div className="space-y-1.5">
+                  {stats.recentPractices.slice(0, 4).map((p, i) => (
+                    <Link
+                      key={`${p.courseId}-${p.lessonId}-${i}`}
+                      href={`/home/learn/${p.courseId}?lesson=${p.lessonId}`}
+                      className="flex items-center gap-2 group/item rounded-lg px-2 py-1.5 -mx-2 hover:bg-foreground/[0.04] transition-colors"
+                    >
+                      <div className="flex-1 min-w-0">
+                        <p className="text-[12px] font-medium text-foreground/80 truncate">{p.courseTitle}</p>
+                        <p className="text-[10px] text-muted-foreground/55 truncate mt-0.5">{p.lessonTitle}</p>
+                      </div>
+                      <span className="text-[10px] text-foreground/25 shrink-0">{relativeTime(p.studiedAt)}</span>
+                    </Link>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-[12px] text-muted-foreground/40 text-center py-3">暂无学习记录</p>
+              )}
+            </div>
           </div>
 
-          {/* ── Column 3: 热力图 + 邀请好友 + 课程广场 + 最近学习 ── */}
+          {/* ── Column 3: 热力图 + 邀请好友 + 课程广场 ── */}
           <div className="space-y-3">
             {/* Monthly heatmap */}
             <div
@@ -897,35 +925,6 @@ export function HomeClient({ name }: HomeClientProps) {
               </div>
             </Link>
 
-            {/* Recent learning list */}
-            <div
-              className="anim-card rounded-2xl border p-4"
-              style={{ background: "var(--surface)", borderColor: "var(--surface-border)" }}
-            >
-              <div className="flex items-center gap-2 mb-2.5">
-                <Clock className="h-3.5 w-3.5 text-sky-400" />
-                <h3 className="text-[13px] font-semibold text-foreground/70">最近学习</h3>
-              </div>
-              {stats?.recentPractices && stats.recentPractices.length > 0 ? (
-                <div className="space-y-1.5">
-                  {stats.recentPractices.slice(0, 4).map((p, i) => (
-                    <Link
-                      key={`${p.courseId}-${p.lessonId}-${i}`}
-                      href={`/home/learn/${p.courseId}?lesson=${p.lessonId}`}
-                      className="flex items-center gap-2 group/item rounded-lg px-2 py-1.5 -mx-2 hover:bg-foreground/[0.04] transition-colors"
-                    >
-                      <div className="flex-1 min-w-0">
-                        <p className="text-[12px] font-medium text-foreground/80 truncate">{p.courseTitle}</p>
-                        <p className="text-[10px] text-muted-foreground/55 truncate mt-0.5">{p.lessonTitle}</p>
-                      </div>
-                      <span className="text-[10px] text-foreground/25 shrink-0">{relativeTime(p.studiedAt)}</span>
-                    </Link>
-                  ))}
-                </div>
-              ) : (
-                <p className="text-[12px] text-muted-foreground/40 text-center py-3">暂无学习记录</p>
-              )}
-            </div>
           </div>
         </div>
 
