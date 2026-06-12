@@ -953,12 +953,12 @@ export function LearnClient({
         {/* Bottom progress area */}
         <div className="absolute bottom-16 left-0 right-0 px-12 max-w-sm mx-auto">
           <div className="flex items-center justify-between mb-3">
-            <span className="text-[10px] font-mono tracking-[4px] text-white/15 uppercase">Preparing</span>
-            <span className="text-[10px] font-mono text-white/10">
+            <span className="text-[11px] font-mono tracking-[4px] text-white/25 uppercase">Preparing</span>
+            <span className="text-[11px] font-mono text-white/20">
 {sentences.length > 0 ? 100 : loadingPercent}%
             </span>
           </div>
-          <div className="h-[2px] bg-white/[0.05] rounded-full overflow-hidden backdrop-blur-sm">
+          <div className="h-1.5 bg-white/[0.06] rounded-full overflow-hidden backdrop-blur-sm">
             <div
               ref={loadingBarRef}
               className="h-full rounded-full transition-all duration-300"
