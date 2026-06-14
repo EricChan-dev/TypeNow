@@ -12,6 +12,17 @@ import {
 } from "@/lib/wechat"
 import { generateInviteCode } from "@/lib/subscription"
 
+async function resolveReferredBy(refCode: string | null): Promise<string | null> {
+  if (!refCode || !db) return null
+  const code = refCode.toUpperCase()
+  const [partner] = await db
+    .select({ id: users.id })
+    .from(users)
+    .where(eq(users.inviteCode, code))
+    .limit(1)
+  return partner?.id ?? null
+}
+
 function getOAConfig() {
   return {
     token: process.env.WECHAT_OA_TOKEN,
@@ -237,6 +248,7 @@ async function processSceneLogin(
       // Create new user
       const id = randomUUID()
       const trialExpiresAt = new Date(Date.now() + 3 * 24 * 60 * 60 * 1000)
+      const referredBy = await resolveReferredBy(sceneStr)
 
       await db.insert(users).values({
         id,
@@ -244,10 +256,16 @@ async function processSceneLogin(
         wechatUnionid: oaUser.unionid || null,
         name: oaUser.nickname || `微信用户${Math.floor(1000 + Math.random() * 9000)}`,
         avatar: oaUser.headimgurl,
+        referredBy,
         isPro: 1,
         proExpires: trialExpiresAt,
         inviteCode: generateInviteCode(),
       })
+
+      if (referredBy) {
+        const { awardInviteRegister } = await import("@/lib/auth/invite")
+        await awardInviteRegister(referredBy, id).catch(() => null)
+      }
 
       storeSceneLogin(sceneStr, {
         openid,

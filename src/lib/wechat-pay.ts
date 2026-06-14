@@ -231,6 +231,28 @@ function decryptCert(
   return Buffer.concat([decipher.update(actualCipher), decipher.final()]).toString("utf-8")
 }
 
+/**
+ * Decrypt WeChat Pay v3 callback notification resource.
+ * Used for both TRANSACTION.SUCCESS and REFUND.SUCCESS events.
+ */
+export function decryptNotifyResource(
+  ciphertext: string,
+  nonce: string,
+  associatedData: string,
+): Record<string, unknown> {
+  const cfg = getConfig()
+  if (cfg.apiV3Key) {
+    const decrypted = decryptCert(ciphertext, nonce, associatedData, cfg.apiV3Key)
+    return JSON.parse(decrypted) as Record<string, unknown>
+  }
+  // Dev mode / unconfigured: attempt to parse ciphertext directly as JSON
+  try {
+    return JSON.parse(ciphertext) as Record<string, unknown>
+  } catch {
+    return {}
+  }
+}
+
 export async function verifyNotifySignature(
   timestamp: string,
   nonce: string,
