@@ -1456,8 +1456,8 @@ export function LearnClient({
 
       {/* Back Modal */}
       {showBackModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm">
-          <div className="rounded-2xl bg-card border border-border p-8 text-center max-w-sm mx-4 shadow-2xl">
+        <div className="fixed inset-0 z-50 flex items-start justify-start bg-background/80 backdrop-blur-sm">
+          <div className="rounded-2xl bg-card border border-border p-8 text-center max-w-sm m-6 shadow-2xl">
             <p className="text-lg font-bold text-foreground">确认返回</p>
             <div className="mt-5 space-y-2.5">
               <Link

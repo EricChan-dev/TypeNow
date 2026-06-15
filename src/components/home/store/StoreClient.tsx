@@ -1,7 +1,7 @@
 "use client"
 
-import { useState, useMemo, useEffect, useRef, useCallback } from "react"
-import { SearchX } from "lucide-react"
+import { useState, useEffect, useRef, useCallback } from "react"
+import { SearchX, Loader2 } from "lucide-react"
 import type { Course, SortMode } from "@/types/course"
 import { SearchAndSortBar } from "./SearchAndSortBar"
 import { CourseTabs } from "./CourseTabs"
@@ -14,94 +14,123 @@ export function StoreClient() {
   const [activeMainTab, setActiveMainTab] = useState("all")
   const [activeSubTab, setActiveSubTab] = useState<string | null>(null)
   const [sortMode, setSortMode] = useState<SortMode>("latest")
-  const [displayCount, setDisplayCount] = useState(PAGE_SIZE)
-  const [allCourses, setAllCourses] = useState<Course[]>([])
+
+  const [courses, setCourses] = useState<Course[]>([])
+  const [totalCount, setTotalCount] = useState(0)
+  const [page, setPage] = useState(1)
   const [loading, setLoading] = useState(true)
+  const [loadingMore, setLoadingMore] = useState(false)
   const [loadError, setLoadError] = useState(false)
 
-  useEffect(() => {
-    setLoading(true)
-    fetch("/api/courses/list?pageSize=200")
-      .then((r) => r.json())
-      .then((json) => { if (json.data) setAllCourses(json.data) })
-      .catch(() => setLoadError(true))
-      .finally(() => setLoading(false))
-  }, [])
-
+  const abortRef = useRef<AbortController | null>(null)
   const sentinelRef = useRef<HTMLDivElement>(null)
-  const loadingRef = useRef(false)
+  const loadingMoreRef = useRef(false)
+  const mountedRef = useRef(false)
 
-  const filteredCourses = useMemo(() => {
-    let result = allCourses
+  // Build query params
+  const buildUrl = useCallback(
+    (p: number) => {
+      const params = new URLSearchParams()
+      params.set("current", String(p))
+      params.set("pageSize", String(PAGE_SIZE))
+      if (activeMainTab !== "all") params.set("categoryKey", activeMainTab)
+      if (activeSubTab) params.set("subCategoryKey", activeSubTab)
+      if (searchQuery.trim()) params.set("search", searchQuery.trim())
+      params.set("sortMode", sortMode)
+      return `/api/courses/list?${params.toString()}`
+    },
+    [activeMainTab, activeSubTab, searchQuery, sortMode]
+  )
 
-    if (activeMainTab !== "all") {
-      result = result.filter((c) => c.categoryKey === activeMainTab)
-    }
+  // Fetch: page=1 replaces, page>1 appends
+  const doFetch = useCallback(
+    async (p: number, append: boolean, signal: AbortSignal) => {
+      if (p === 1) {
+        setLoading(true)
+        setLoadError(false)
+      } else {
+        setLoadingMore(true)
+        loadingMoreRef.current = true
+      }
 
-    if (activeSubTab !== null) {
-      result = result.filter((c) => c.subCategoryKey === activeSubTab)
-    }
+      try {
+        const res = await fetch(buildUrl(p), { signal })
+        const json = await res.json()
+        if (signal.aborted) return
 
-    if (searchQuery.trim()) {
-      const q = searchQuery.trim().toLowerCase()
-      result = result.filter(
-        (c) =>
-          c.title.toLowerCase().includes(q) ||
-          c.sourceName.toLowerCase().includes(q)
-      )
-    }
+        if (json.data) {
+          setCourses((prev) => {
+            const next = append ? [...prev, ...json.data] : json.data
+            // Dedup by id — concurrent DB writes may shift items between pages
+            const seen = new Set<string>()
+            return next.filter((c) => {
+              if (seen.has(c.id)) return false
+              seen.add(c.id)
+              return true
+            })
+          })
+          setTotalCount(json.total ?? 0)
+          setPage(p)
+        }
+      } catch (err: unknown) {
+        if (err instanceof DOMException && err.name === "AbortError") return
+        setLoadError(true)
+      } finally {
+        if (!signal.aborted) {
+          setLoading(false)
+          setLoadingMore(false)
+          loadingMoreRef.current = false
+        }
+      }
+    },
+    [buildUrl]
+  )
 
-    return result
-  }, [searchQuery, activeMainTab, activeSubTab, allCourses])
-
-  const sortedCourses = useMemo(() => {
-    const sorted = [...filteredCourses]
-    switch (sortMode) {
-      case "latest":
-        sorted.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
-        break
-      case "most_used":
-        sorted.sort((a, b) => b.usageCount - a.usageCount)
-        break
-      case "name":
-        sorted.sort((a, b) => a.title.localeCompare(b.title, "zh"))
-        break
-    }
-    return sorted
-  }, [filteredCourses, sortMode])
-
-  // Reset display count when filters change
+  // Reset + fetch page 1 when filters change
   useEffect(() => {
-    setDisplayCount(PAGE_SIZE)
-  }, [searchQuery, activeMainTab, activeSubTab])
+    if (abortRef.current) abortRef.current.abort()
+    const controller = new AbortController()
+    abortRef.current = controller
 
-  const visibleCourses = sortedCourses.slice(0, displayCount)
-  const hasMore = displayCount < sortedCourses.length
+    // Skip initial mount — React 19 Strict Mode double-mount would trigger twice
+    if (mountedRef.current) {
+      doFetch(1, false, controller.signal)
+    } else {
+      mountedRef.current = true
+      doFetch(1, false, controller.signal)
+    }
 
-  // IntersectionObserver for infinite scroll
+    return () => controller.abort()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeMainTab, activeSubTab, searchQuery, sortMode])
+
+  // Load next page (infinite scroll)
   const loadMore = useCallback(() => {
-    if (loadingRef.current || !hasMore) return
-    loadingRef.current = true
-    setDisplayCount((prev) => Math.min(prev + PAGE_SIZE, sortedCourses.length))
-    loadingRef.current = false
-  }, [hasMore, sortedCourses.length])
+    if (loadingMoreRef.current) return
+    if (courses.length >= totalCount) return
+    const controller = new AbortController()
+    abortRef.current = controller
+    doFetch(page + 1, true, controller.signal)
+  }, [doFetch, page, courses.length, totalCount])
 
   useEffect(() => {
     const sentinel = sentinelRef.current
-    if (!sentinel || !hasMore) return
+    if (!sentinel) return
+    const hasMore = courses.length < totalCount
+    if (!hasMore) return
 
     const observer = new IntersectionObserver(
       (entries) => {
-        if (entries[0].isIntersecting) {
-          loadMore()
-        }
+        if (entries[0].isIntersecting) loadMore()
       },
       { rootMargin: "200px" }
     )
 
     observer.observe(sentinel)
     return () => observer.disconnect()
-  }, [loadMore, hasMore])
+  }, [loadMore, courses.length, totalCount])
+
+  const hasMore = courses.length < totalCount
 
   return (
     <div className="px-6 lg:px-10 xl:px-14 py-6">
@@ -110,7 +139,7 @@ export function StoreClient() {
         onSearchChange={setSearchQuery}
         sortMode={sortMode}
         onSortChange={setSortMode}
-        courseCount={sortedCourses.length}
+        courseCount={totalCount}
       />
 
       <CourseTabs
@@ -123,7 +152,7 @@ export function StoreClient() {
       {loadError ? (
         <div className="flex flex-col items-center justify-center py-24 text-center">
           <p className="text-sm text-muted-foreground mb-3">加载失败</p>
-          <button onClick={() => window.location.reload()} className="text-sm text-accent font-medium hover:underline">点击重试</button>
+          <button onClick={() => doFetch(1, false, new AbortController().signal)} className="text-sm text-accent font-medium hover:underline">点击重试</button>
         </div>
       ) : loading ? (
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
@@ -137,24 +166,24 @@ export function StoreClient() {
             </div>
           ))}
         </div>
-      ) : visibleCourses.length > 0 ? (
+      ) : courses.length > 0 ? (
         <>
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
-            {visibleCourses.map((course) => (
+            {courses.map((course) => (
               <CourseCard key={course.id} course={course} />
             ))}
           </div>
 
-          {/* Sentinel for infinite scroll */}
           {hasMore && (
             <div
               ref={sentinelRef}
               className="flex items-center justify-center py-8 text-sm text-muted-foreground"
             >
+              {loadingMore && <Loader2 className="h-5 w-5 animate-spin" />}
             </div>
           )}
 
-          {!hasMore && (
+          {!hasMore && courses.length > 0 && (
             <div className="flex items-center justify-center py-8 text-sm text-muted-foreground/60">
               已经到底了
             </div>

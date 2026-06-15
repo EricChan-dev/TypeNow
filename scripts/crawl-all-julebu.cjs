@@ -6,6 +6,7 @@
  */
 require("dotenv").config({ path: require("path").join(__dirname, "..", ".env.local") })
 const fs = require("fs"), path = require("path")
+const { classify } = require("./julebu-category")
 const DATA_DIR = path.join(__dirname, "..", ".data", "julebu")
 const C = process.env.JULEBU_COOKIE
 const MAX_PACKS = process.env.MAX_PACKS ? Number(process.env.MAX_PACKS) : Infinity
@@ -32,17 +33,19 @@ async function getDb() {
 
 async function importPackToDB(pack, packFile) {
   const pool = await getDb()
+  let data
   try {
-    const data = JSON.parse(fs.readFileSync(packFile, "utf-8"))
+    data = JSON.parse(fs.readFileSync(packFile, "utf-8"))
     if (!data.courses?.length) return { lessons: 0, sentences: 0 }
 
     // Check if already exists
-    const [rows] = await pool.query("SELECT id FROM courses WHERE title = ? AND source_name = '句乐部' LIMIT 1", [data.title])
+    const [rows] = await pool.query("SELECT id FROM courses WHERE title = ? AND source_name = '官方' LIMIT 1", [data.title])
     if (rows.length > 0) return { lessons: 0, sentences: 0 }
 
     const courseId = require("crypto").randomUUID()
-    await pool.query("INSERT INTO courses (id, title, description, source, source_name, learner_count, usage_count, is_published) VALUES (?,?,?,'official','句乐部',0,0,1)",
-      [courseId, data.title, data.title])
+    const cls = classify(data.title)
+    await pool.query("INSERT INTO courses (id, title, description, source, source_name, learner_count, usage_count, is_published, category_key, sub_category_key) VALUES (?,?,?,'official','官方',0,0,1,?,?)",
+      [courseId, data.title, data.title, cls.categoryKey, cls.subCategoryKey])
 
     let lessonCount = 0, sentenceCount = 0
     for (const jc of data.courses) {

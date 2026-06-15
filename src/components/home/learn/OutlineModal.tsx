@@ -3,7 +3,6 @@
 import { useState } from "react"
 import { X, Play } from "lucide-react"
 import type { Sentence } from "@/types"
-import { SentenceKnowledge } from "./SentenceKnowledge"
 
 interface OutlineModalProps {
   sentences: Sentence[]
@@ -14,11 +13,10 @@ interface OutlineModalProps {
 
 export function OutlineModal({ sentences, currentIndex, onClose, onJumpTo }: OutlineModalProps) {
   const [selectedIndex, setSelectedIndex] = useState(currentIndex)
-  const selected = sentences[selectedIndex]
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm">
-      <div className="w-[95vw] max-w-5xl h-[85vh] rounded-2xl bg-card border border-border shadow-2xl flex flex-col overflow-hidden">
+      <div className="w-[95vw] max-w-2xl h-[85vh] rounded-2xl bg-card border border-border shadow-2xl flex flex-col overflow-hidden">
         {/* Header */}
         <div className="flex items-center justify-between shrink-0 px-6 py-4 border-b border-border">
           <h2 className="text-lg font-bold text-foreground">内容大纲</h2>
@@ -30,10 +28,9 @@ export function OutlineModal({ sentences, currentIndex, onClose, onJumpTo }: Out
           </button>
         </div>
 
-        {/* Body: left list + right detail */}
+        {/* Body: sentence list only */}
         <div className="flex-1 flex min-h-0">
-          {/* Left: sentence list */}
-          <div className="w-[38%] border-r border-border overflow-y-auto">
+          <div className="flex-1 overflow-y-auto">
             {sentences.map((s, i) => (
               <div
                 key={s.id}
@@ -68,16 +65,6 @@ export function OutlineModal({ sentences, currentIndex, onClose, onJumpTo }: Out
                 </button>
               </div>
             ))}
-          </div>
-
-          {/* Right: knowledge detail */}
-          <div className="flex-1 overflow-y-auto px-6 py-5">
-            <h3 className="text-sm font-bold text-accent mb-5">知识点讲解</h3>
-            {selected ? (
-              <SentenceKnowledge key={selected.id} sentence={selected} />
-            ) : (
-              <p className="text-sm text-foreground/40">请选择一个句子查看知识点</p>
-            )}
           </div>
         </div>
 
