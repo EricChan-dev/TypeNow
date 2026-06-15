@@ -16,7 +16,7 @@ export async function GET(request: Request) {
       .where(eq(courses.isPublished, 1))
       .limit(pageSize)
       .offset(offset)
-      .orderBy(desc(courses.learnerCount), courses.createdAt),
+      .orderBy(desc(courses.createdAt)),
     db.select({ total: sql<number>`count(*)` }).from(courses).where(eq(courses.isPublished, 1)),
   ])
 

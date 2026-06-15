@@ -109,7 +109,7 @@ async function main() {
   const startTime = Date.now()
 
   for (const pack of pending) {
-    const packFile = path.join(DATA_DIR, `${pack.title}.json`)
+    const packFile = path.join(DATA_DIR, `${pack.title.replace(/[\/?%*:|"<>]/g, "_")}.json`)
     const loaded = { packId: pack.id, title: pack.title, courses: [] }
     const doneIds = new Set()
 
