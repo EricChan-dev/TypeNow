@@ -63,7 +63,7 @@ export function StoreClient() {
             const next = append ? [...prev, ...json.data] : json.data
             // Dedup by id — concurrent DB writes may shift items between pages
             const seen = new Set<string>()
-            return next.filter((c) => {
+            return next.filter((c: Course) => {
               if (seen.has(c.id)) return false
               seen.add(c.id)
               return true
