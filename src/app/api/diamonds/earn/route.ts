@@ -23,7 +23,8 @@ export async function POST(request: NextRequest) {
     if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     if (!db) return NextResponse.json({ error: "DB not configured" }, { status: 500 })
 
-    let body: Record<string, unknown>
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    let body: any
     try { body = await request.json() } catch { return NextResponse.json({ error: "请求格式错误" }, { status: 400 }) }
   const {
     type,
