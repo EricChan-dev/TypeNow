@@ -5,12 +5,18 @@ import { users } from "@/lib/db/schema"
 import { eq } from "drizzle-orm"
 
 export async function PUT(request: NextRequest) {
-  const session = await getSession()
-  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-  if (!db) return NextResponse.json({ error: "DB not configured" }, { status: 500 })
+  try {
+    const session = await getSession()
+    if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    if (!db) return NextResponse.json({ error: "DB not configured" }, { status: 500 })
 
-  const body = await request.json()
-  const { name, avatar, checkInGoal } = body
+    let body: { name?: string; avatar?: string; checkInGoal?: number }
+    try {
+      body = await request.json()
+    } catch {
+      return NextResponse.json({ error: "请求格式错误" }, { status: 400 })
+    }
+    const { name, avatar, checkInGoal } = body
 
   const updates: Record<string, string | number> = {}
 
@@ -45,4 +51,8 @@ export async function PUT(request: NextRequest) {
   await db.update(users).set(updates).where(eq(users.id, session.userId))
 
   return NextResponse.json({ success: true })
+  } catch (e) {
+    console.error("[user/profile]", e)
+    return NextResponse.json({ error: "更新个人信息失败" }, { status: 500 })
+  }
 }

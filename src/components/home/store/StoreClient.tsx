@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef, useCallback } from "react"
 import { SearchX, Loader2 } from "lucide-react"
 import type { Course, SortMode } from "@/types/course"
+import { ErrorBoundary } from "@/components/shared/ErrorBoundary"
 import { SearchAndSortBar } from "./SearchAndSortBar"
 import { CourseTabs } from "./CourseTabs"
 import { CourseCard } from "./CourseCard"
@@ -133,6 +134,7 @@ export function StoreClient() {
   const hasMore = courses.length < totalCount
 
   return (
+    <ErrorBoundary>
     <div className="px-6 lg:px-10 xl:px-14 py-6">
       <SearchAndSortBar
         searchQuery={searchQuery}
@@ -198,5 +200,6 @@ export function StoreClient() {
         </div>
       )}
     </div>
+    </ErrorBoundary>
   )
 }

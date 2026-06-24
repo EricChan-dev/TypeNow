@@ -18,11 +18,13 @@ function calcEarned(type: string, streak: number, perfect: boolean): number {
 }
 
 export async function POST(request: NextRequest) {
-  const session = await getSession()
-  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-  if (!db) return NextResponse.json({ error: "DB not configured" }, { status: 500 })
+  try {
+    const session = await getSession()
+    if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    if (!db) return NextResponse.json({ error: "DB not configured" }, { status: 500 })
 
-  const body = await request.json()
+    let body: Record<string, unknown>
+    try { body = await request.json() } catch { return NextResponse.json({ error: "请求格式错误" }, { status: 400 }) }
   const {
     type,
     refId,
@@ -84,4 +86,8 @@ export async function POST(request: NextRequest) {
     todayDiamonds: Number(todayRow?.todayDiamonds ?? 0),
     todayDurationSeconds: Number(todayRow?.todayDuration ?? 0),
   })
+  } catch (e) {
+    console.error("[diamonds/earn]", e)
+    return NextResponse.json({ earned: 0 }, { status: 500 })
+  }
 }

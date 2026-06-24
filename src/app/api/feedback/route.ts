@@ -13,11 +13,18 @@ const CATEGORY_LABELS: Record<string, string> = {
 }
 
 export async function POST(request: Request) {
-  const session = await getSession()
-  if (!session) return NextResponse.json({ error: "请先登录" }, { status: 401 })
-  if (!db) return NextResponse.json({ error: "服务未配置" }, { status: 500 })
+  try {
+    const session = await getSession()
+    if (!session) return NextResponse.json({ error: "请先登录" }, { status: 401 })
+    if (!db) return NextResponse.json({ error: "服务未配置" }, { status: 500 })
 
-  const { category, content } = await request.json()
+    let body: { category?: string; content?: string }
+    try {
+      body = await request.json()
+    } catch {
+      return NextResponse.json({ error: "请求格式错误" }, { status: 400 })
+    }
+    const { category, content } = body
   if (!content || typeof content !== "string" || content.trim().length === 0) {
     return NextResponse.json({ error: "请填写反馈内容" }, { status: 400 })
   }
@@ -70,4 +77,8 @@ export async function POST(request: Request) {
   }
 
   return NextResponse.json({ success: true })
+  } catch (e) {
+    console.error("[feedback]", e)
+    return NextResponse.json({ error: "提交失败，请稍后重试" }, { status: 500 })
+  }
 }

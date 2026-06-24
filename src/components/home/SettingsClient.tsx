@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect, useCallback } from "react"
 import Link from "next/link"
-import { useSearchParams } from "next/navigation"
+import { useSearchParams, useRouter } from "next/navigation"
 import { animate, stagger } from "animejs"
 import {
   Camera, Check, Loader2, Phone, Crown,
@@ -156,6 +156,7 @@ function SubRow({ sub }: { sub: Sub }) {
 // ─── Main Component ───────────────────────────────────────────────────────────
 
 export function SettingsClient({ initialUser }: { initialUser: InitialUser }) {
+  const router = useRouter()
   const [name, setName] = useState(initialUser.name ?? "")
   const [avatarPreview, setAvatarPreview] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
@@ -185,7 +186,7 @@ export function SettingsClient({ initialUser }: { initialUser: InitialUser }) {
     if (bindSuccess === "wechat") {
       toast.success("微信绑定成功")
       // Delay reload so user sees the toast
-      setTimeout(() => window.location.reload(), 800)
+      setTimeout(() => router.refresh(), 800)
     }
     if (bindError) {
       const messages: Record<string, string> = {
@@ -331,7 +332,7 @@ export function SettingsClient({ initialUser }: { initialUser: InitialUser }) {
       const data = await res.json()
       if (!res.ok) throw new Error(data.error ?? "绑定失败")
       toast.success("手机号绑定成功")
-      setTimeout(() => window.location.reload(), 800)
+      setTimeout(() => router.refresh(), 800)
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "绑定失败，请重试")
     } finally {

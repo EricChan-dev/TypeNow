@@ -2,22 +2,15 @@ import { getCurrentUser } from "@/lib/auth/user"
 import { NextResponse } from "next/server"
 
 function getAdminPhones(): string[] {
-  // In dev, allow the hardcoded phone as fallback
-  if (process.env.NODE_ENV === "development") {
-    return ["16634482010"]
-  }
+  // Always require explicit phone list; dev fallback requires opt-in via ADMIN_DEV_BYPASS
   const raw = process.env.ADMIN_PHONES
   if (raw) return raw.split(",").map((s) => s.trim()).filter(Boolean)
   return []
 }
 
-function isDevMode() {
-  return process.env.NODE_ENV === "development"
-}
-
 export async function requireAdmin(): Promise<{ userId: string } | NextResponse> {
-  // Dev mode: skip auth entirely, return a placeholder userId
-  if (isDevMode()) {
+  // Dev bypass: only when explicitly opted in — NOT auto-enabled by NODE_ENV
+  if (process.env.NODE_ENV === "development" && process.env.ADMIN_DEV_BYPASS === "1") {
     return { userId: "dev-admin" }
   }
 

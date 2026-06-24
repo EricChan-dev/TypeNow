@@ -24,14 +24,20 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
-  const auth = await requireAdmin()
-  if (auth instanceof NextResponse) return auth
-  if (!db) return NextResponse.json({ error: "DB not configured" }, { status: 500 })
+  try {
+    const auth = await requireAdmin()
+    if (auth instanceof NextResponse) return auth
+    if (!db) return NextResponse.json({ error: "DB not configured" }, { status: 500 })
 
-  const body = await request.json()
-  const { title, description, coverUrl, source, sourceName, sourceAvatar, categoryKey, subCategoryKey, isPublished } = body
-  const id = randomUUID()
-  await db.insert(courses).values({ id, title, description, coverUrl, source, sourceName, sourceAvatar, categoryKey, subCategoryKey, isPublished, createdBy: auth.userId })
-  const [row] = await db.select().from(courses).where(eq(courses.id, id)).limit(1)
-  return NextResponse.json({ data: row }, { status: 201 })
+    let body: Record<string, unknown>
+    try { body = await request.json() } catch { return NextResponse.json({ error: "请求格式错误" }, { status: 400 }) }
+    const { title, description, coverUrl, source, sourceName, sourceAvatar, categoryKey, subCategoryKey, isPublished } = body
+    const id = randomUUID()
+    await db.insert(courses).values({ id, title, description, coverUrl, source, sourceName, sourceAvatar, categoryKey, subCategoryKey, isPublished, createdBy: auth.userId })
+    const [row] = await db.select().from(courses).where(eq(courses.id, id)).limit(1)
+    return NextResponse.json({ data: row }, { status: 201 })
+  } catch (e) {
+    console.error("[admin/courses POST]", e)
+    return NextResponse.json({ error: "创建课程失败" }, { status: 500 })
+  }
 }
