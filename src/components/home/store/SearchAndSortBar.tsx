@@ -11,6 +11,7 @@ interface SearchAndSortBarProps {
   sortMode: SortMode
   onSortChange: (v: SortMode) => void
   courseCount: number
+  isAll?: boolean
 }
 
 export function SearchAndSortBar({
@@ -19,6 +20,7 @@ export function SearchAndSortBar({
   sortMode,
   onSortChange,
   courseCount,
+  isAll = false,
 }: SearchAndSortBarProps) {
   const [sortOpen, setSortOpen] = useState(false)
   const sortRef = useRef<HTMLDivElement>(null)
@@ -81,7 +83,7 @@ export function SearchAndSortBar({
       {/* Course count */}
       <div className="flex items-center gap-3 ml-auto">
         <span className="text-[10px] sm:text-xs text-muted-foreground whitespace-nowrap">
-          共 <span className="text-foreground font-medium">{courseCount + 500}</span> 门
+          共 <span className="text-foreground font-medium">{courseCount + (isAll ? 500 : 0)}</span> 门
         </span>
       </div>
     </div>

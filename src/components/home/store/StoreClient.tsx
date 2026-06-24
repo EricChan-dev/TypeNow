@@ -140,6 +140,7 @@ export function StoreClient() {
         sortMode={sortMode}
         onSortChange={setSortMode}
         courseCount={totalCount}
+        isAll={activeMainTab === "all" && !searchQuery.trim()}
       />
 
       <CourseTabs
