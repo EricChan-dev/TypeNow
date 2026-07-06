@@ -32,7 +32,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "内容不能超过 500 字" }, { status: 400 })
   }
 
-  const validCategory = ["bug", "feature", "suggestion", "other"].includes(category)
+  const validCategory = ["bug", "feature", "suggestion", "other"].includes(category ?? "")
     ? (category as "bug" | "feature" | "suggestion" | "other")
     : "other"
 
