@@ -40,7 +40,9 @@ export async function GET(request: NextRequest) {
   }
 
   // Dev mode: mock WeChat login or bind
-  if (code === "dev_mock") {
+  // 必须限定 development：此分支位于下方 CSRF state 校验之前，
+  // 若在生产生效，匿名请求 `?code=dev_mock&state=x` 即可直接获得登录会话。
+  if (process.env.NODE_ENV === "development" && code === "dev_mock") {
     const isBind = state.startsWith("bind_") ||
       !!request.cookies.get("wechat_bind_intent")?.value
     if (isBind) return handleDevBind(request)

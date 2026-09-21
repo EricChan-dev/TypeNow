@@ -16,8 +16,10 @@ export async function GET(request: NextRequest) {
   }
 
   // Dev mode: simulate login with a magic click
+  // 必须限定 development：scene 值由 oa-qrcode 在响应体中回显，
+  // 若在生产生效，匿名请求带上该值即可直接获得登录会话（且被授予 Pro）。
   const devScene = request.nextUrl.searchParams.get("dev_scene")
-  if (devScene && devScene === scene) {
+  if (process.env.NODE_ENV === "development" && devScene && devScene === scene) {
     return handleDevMode(scene)
   }
 

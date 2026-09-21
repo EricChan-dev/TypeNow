@@ -2,8 +2,9 @@ import { NextResponse } from "next/server"
 import crypto from "crypto"
 import { db } from "@/lib/db"
 import { verificationCodes } from "@/lib/db/schema"
-import { eq, and, gt, gte, count } from "drizzle-orm"
+import { eq, and, gte, lt, count } from "drizzle-orm"
 import { sendVerificationCode } from "@/lib/aliyun-sms"
+import { getClientIP } from "@/lib/rate-limit"
 
 const PHONE_REGEX = /^1[3-9]\d{9}$/
 
@@ -29,7 +30,10 @@ export async function POST(request: Request) {
     return NextResponse.json({ success: true, message: "验证码已发送（开发模式：输入 123456）" })
   }
 
-  const ip = (request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "unknown").slice(0, 50)
+  // 必须用共享的 getClientIP：它优先取 nginx 覆盖写入的 X-Real-IP。
+  // 原先取 X-Forwarded-For 的最左值，而该段由客户端自带、可任意伪造，
+  // 导致「IP 3 次/分钟」的限流形同虚设，短信可被批量刷取。
+  const ip = getClientIP(request).slice(0, 50)
   const now = Date.now()
   const minus1min = new Date(now - 60 * 1000)
   const minus1hr = new Date(now - 60 * 60 * 1000)
@@ -96,13 +100,17 @@ export async function POST(request: Request) {
   const expiresAt = new Date(Date.now() + 5 * 60 * 1000)
   await db.insert(verificationCodes).values({ phone, code, ip, expiresAt })
 
-  // Clean up old expired codes for this phone (fire-and-forget)
+  // 清理该手机号已过期的验证码（fire-and-forget）。
+  // 原条件 gt(expiresAt, new Date(0)) 恒为真（new Date(0) 是 1970 年），
+  // 实际会删除该手机号的全部验证码，包括上面刚插入的那条有效码，
+  // 使 verify-code 永远查不到记录 —— 短信登录因此彻底失效。
+  // 正确语义是「已过期」：expiresAt < now。
   void db
     .delete(verificationCodes)
     .where(
       and(
         eq(verificationCodes.phone, phone),
-        gt(verificationCodes.expiresAt, new Date(0))
+        lt(verificationCodes.expiresAt, new Date())
       )
     )
     .catch(() => {})
