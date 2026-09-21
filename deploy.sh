@@ -15,6 +15,19 @@ if [ "$(whoami)" != "$EXPECTED_USER" ]; then
   exit 1
 fi
 
+# ─────────────────────────────────────────────────────────────
+# 串行化：GitHub webhook 会自动触发本脚本，人工部署也可能同时进行。
+# 两个构建并发会互相踩踏 node_modules / .next（2026-09-21 实际发生过：
+# 依赖目录被删掉一半，靠内存中的进程苟活）。flock 保证同一时刻只有一个
+# 部署在运行；后到的等待而非直接失败，避免漏掉真实推送。
+# ─────────────────────────────────────────────────────────────
+LOCK_FILE="/tmp/typenow-deploy.lock"
+exec 200>"$LOCK_FILE"
+if ! flock -w 900 200; then
+  echo "错误：等待其他部署超时（超过 15 分钟），本次取消。" >&2
+  exit 1
+fi
+
 PROJECT_DIR="/home/admin/TypeNow"
 LOG_FILE="$PROJECT_DIR/deploy.log"
 
