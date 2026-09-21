@@ -32,6 +32,12 @@ interface SentenceItem {
   chunks: Array<{ order: number; text: string; chinese: string }>
 }
 
+// 每个分片都会触发一次 LLM 调用，因此必须给 fan-out 设硬上限：
+// 45_000 字符 / 3000 字符每片 = 至多 15 次调用。超限直接拒绝，
+// 否则单次请求即可打出成百上千次付费调用。
+const MAX_TOTAL_CHARS = 45_000
+const MAX_CHUNKS = 15
+
 function chunkText(text: string, maxLen = 3000): string[] {
   const chunks: string[] = []
   let start = 0
@@ -68,10 +74,29 @@ export async function POST(request: Request) {
   if (!record) return NextResponse.json({ error: "Not found" }, { status: 404 })
   if (!record.rawText) return NextResponse.json({ error: "No raw text to analyze" }, { status: 400 })
 
+  // 先做上限校验，再改状态：超限时不做任何处理，也不污染记录状态。
+  if (record.rawText.length > MAX_TOTAL_CHARS) {
+    return NextResponse.json(
+      {
+        error: `文本过长，单次最多分析 ${MAX_TOTAL_CHARS} 字符（当前 ${record.rawText.length} 字符），请拆分后分批导入`,
+      },
+      { status: 400 },
+    )
+  }
+
+  const textChunks = chunkText(record.rawText)
+  if (textChunks.length > MAX_CHUNKS) {
+    return NextResponse.json(
+      {
+        error: `分片过多，单次最多处理 ${MAX_CHUNKS} 个分片（当前 ${textChunks.length} 个），请拆分后分批导入`,
+      },
+      { status: 400 },
+    )
+  }
+
   await db.update(materialImports).set({ status: "processing" }).where(eq(materialImports.id, importId))
 
   try {
-    const textChunks = chunkText(record.rawText)
     const allSentences: SentenceItem[] = []
 
     for (const chunk of textChunks) {

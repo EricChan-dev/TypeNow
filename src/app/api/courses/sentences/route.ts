@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server"
 import { db } from "@/lib/db"
-import { sentences } from "@/lib/db/schema"
-import { eq, asc } from "drizzle-orm"
+import { courses, lessons, sentences } from "@/lib/db/schema"
+import { and, eq, asc } from "drizzle-orm"
 import { getSession } from "@/lib/auth/session"
 
 const TOKEN_RE = /[a-zA-Z\d'-]+|[.,!?;:'"()…—]/g
@@ -26,6 +26,15 @@ export async function GET(request: Request) {
     const lessonId = searchParams.get("lessonId")
     if (!lessonId) return NextResponse.json({ error: "缺少 lessonId 参数" }, { status: 400 })
     if (!db) return NextResponse.json({ sentences: [] })
+
+    // 公开接口：只返回已发布课程下的句子，避免未发布内容泄露
+    const [lesson] = await db
+      .select({ id: lessons.id })
+      .from(lessons)
+      .innerJoin(courses, eq(lessons.courseId, courses.id))
+      .where(and(eq(lessons.id, lessonId), eq(courses.isPublished, 1)))
+      .limit(1)
+    if (!lesson) return NextResponse.json({ error: "课时不存在或未发布" }, { status: 404 })
 
     const data = await db.select().from(sentences).where(eq(sentences.lessonId, lessonId)).orderBy(asc(sentences.sortOrder))
 

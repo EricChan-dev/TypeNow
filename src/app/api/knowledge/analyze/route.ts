@@ -4,6 +4,14 @@ import { db } from "@/lib/db"
 import { sentenceKnowledge } from "@/lib/db/schema"
 import { eq } from "drizzle-orm"
 import { getSession } from "@/lib/auth/session"
+import { checkRateLimit } from "@/lib/rate-limit"
+
+// 每次 LLM 调用都是真金白银，必须给单用户额度上限：
+// 5 次/分钟防突发，20 次/小时作为实际成本上限。
+// 注意：checkRateLimit 的内存清理只保留 1 小时内的记录，
+// 因此更长的窗口（如每日额度）在此实现下不可靠，这里只用 ≤1 小时的窗口。
+const MAX_ANALYZE_PER_MINUTE = 5
+const MAX_ANALYZE_PER_HOUR = 20
 
 const SYSTEM_PROMPT = `你是一个专业的英语教学助手，精通英语语法、词汇和文化背景知识。请分析给定的英语句子，只返回纯JSON，不要包含任何markdown标记或其他文字。
 
@@ -41,7 +49,7 @@ async function callDeepSeek(english: string) {
       Authorization: `Bearer ${apiKey}`,
     },
     body: JSON.stringify({
-      model: "deepseek-v4-pro",
+      model: "deepseek-chat",
       messages: [
         { role: "system", content: SYSTEM_PROMPT },
         { role: "user", content: english },
@@ -74,11 +82,12 @@ export async function POST(request: Request) {
   }
 
   const { sentence } = body
-  if (!sentence || sentence.length > 2048) {
+  const trimmed = typeof sentence === "string" ? sentence.trim() : ""
+  if (!trimmed || trimmed.length > 2048) {
     return NextResponse.json({ error: "句子不能为空且不超过2048字符" }, { status: 400 })
   }
 
-  const sentenceHash = createHash("sha256").update(sentence.trim()).digest("hex")
+  const sentenceHash = createHash("sha256").update(trimmed).digest("hex")
 
   // 1. Try cache
   if (db) {
@@ -91,15 +100,42 @@ export async function POST(request: Request) {
     if (cached) return NextResponse.json({ data: cached.data, cached: true })
   }
 
-  // 2. Cache miss — call DeepSeek
-  try {
-    const knowledge = await callDeepSeek(sentence.trim())
+  // 2. Cache miss — 只有真正要调用高价模型时才消耗额度（缓存命中不计费也不限流）
+  const minuteLimit = checkRateLimit(
+    "knowledge-analyze-minute",
+    session.userId,
+    MAX_ANALYZE_PER_MINUTE,
+    60_000,
+  )
+  if (!minuteLimit.allowed) {
+    return NextResponse.json(
+      { error: `请求过于频繁，请${minuteLimit.retryAfter}秒后重试` },
+      { status: 429 },
+    )
+  }
 
-    // 3. Store in cache (fire-and-forget)
+  const hourLimit = checkRateLimit(
+    "knowledge-analyze-hour",
+    session.userId,
+    MAX_ANALYZE_PER_HOUR,
+    3600_000,
+  )
+  if (!hourLimit.allowed) {
+    return NextResponse.json(
+      { error: `今日分析额度已用完，请${hourLimit.retryAfter}秒后重试` },
+      { status: 429 },
+    )
+  }
+
+  // 3. Call DeepSeek
+  try {
+    const knowledge = await callDeepSeek(trimmed)
+
+    // 4. Store in cache (fire-and-forget)
     if (db) {
       void db
         .insert(sentenceKnowledge)
-        .values({ sentenceHash, sentenceText: sentence.trim(), data: knowledge })
+        .values({ sentenceHash, sentenceText: trimmed, data: knowledge })
         .onDuplicateKeyUpdate({ set: { data: knowledge } })
         .catch((err) => console.error("Cache upsert failed:", err))
     }

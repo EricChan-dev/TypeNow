@@ -2,7 +2,7 @@ import { NextResponse } from "next/server"
 import { db } from "@/lib/db"
 import { partnerCommissions, withdrawalRequests, users } from "@/lib/db/schema"
 import { getSession } from "@/lib/auth/session"
-import { eq, and } from "drizzle-orm"
+import { eq, and, inArray } from "drizzle-orm"
 import { randomUUID } from "crypto"
 import { wechatTransferBatch, isWeChatPayConfigured } from "@/lib/wechat-pay"
 
@@ -48,6 +48,10 @@ export async function POST(request: Request) {
   // FOR UPDATE locks the rows so concurrent withdrawals on the same partner
   // serialize at the DB level — no double-withdrawal possible.
   let lockedAmount = 0
+  // 记录本次真正被占用的佣金行。回滚时必须只恢复这些行：
+  // 早先的实现按 (partnerId, status='withdrawn') 恢复，会把历史上**已成功
+  // 打款**的批次也一并退回 available，同一笔佣金因此可以被重复提现。
+  const claimedIds: string[] = []
   try {
     await db.transaction(async (tx) => {
       const rows = await tx
@@ -65,6 +69,7 @@ export async function POST(request: Request) {
         .for("update")
 
       lockedAmount = rows.reduce((s: number, r) => s + r.commissionAmount, 0)
+      claimedIds.push(...rows.map((r) => r.id))
 
       if (lockedAmount === 0) {
         throw new Error("INSUFFICIENT_BALANCE")
@@ -102,6 +107,9 @@ export async function POST(request: Request) {
   }
 
   // ── Step 2: WeChat transfer (outside transaction) ─────────────────────────
+  // transferDone 一旦为 true 表示钱**已经转出**，此后任何失败都不允许回滚佣金，
+  // 否则会出现"钱已打给对方、佣金又变回可提现"的重复打款。
+  let transferDone = false
   try {
     if (!isWeChatPayConfigured()) throw new Error("微信支付未配置，请联系管理员")
 
@@ -112,6 +120,7 @@ export async function POST(request: Request) {
       amount: lockedAmount,
       remark: "TypeNow 合伙人佣金提现",
     })
+    transferDone = true
 
     await db.insert(withdrawalRequests).values({
       id: requestId,
@@ -126,21 +135,38 @@ export async function POST(request: Request) {
 
     return NextResponse.json({ success: true, amount: lockedAmount, outBatchNo })
   } catch (e) {
-    // ── Step 3: Rollback — atomically restore commission status ────────────
     const failReason = e instanceof Error ? e.message : String(e)
-    console.error("[Withdraw] Transfer failed, rolling back:", failReason)
+    console.error("[Withdraw] Transfer failed:", failReason)
 
+    // 转账已成功、仅本地记账失败：绝不回滚佣金，改为人工核对。
+    if (transferDone) {
+      console.error(
+        "[Withdraw] CRITICAL: 转账已成功但记账失败，佣金保持 withdrawn，需要人工核对 outBatchNo=",
+        outBatchNo,
+      )
+      return NextResponse.json(
+        { error: "提现已提交，请稍后联系客服确认到账" },
+        { status: 500 },
+      )
+    }
+
+    // ── Step 3: Rollback — 只恢复本次占用的佣金行 ──────────────────────────
+    // 必须限定 claimedIds：按 (partnerId, status='withdrawn') 恢复会把历史
+    // 上已成功打款的批次也退回 available，造成重复提现。
     try {
       await db.transaction(async (tx) => {
-        await tx
-          .update(partnerCommissions)
-          .set({ status: "available" })
-          .where(
-            and(
-              eq(partnerCommissions.partnerId, session.userId),
-              eq(partnerCommissions.status, "withdrawn"),
-            ),
-          )
+        if (claimedIds.length > 0) {
+          await tx
+            .update(partnerCommissions)
+            .set({ status: "available" })
+            .where(
+              and(
+                eq(partnerCommissions.partnerId, session.userId),
+                eq(partnerCommissions.status, "withdrawn"),
+                inArray(partnerCommissions.id, claimedIds),
+              ),
+            )
+        }
 
         await tx.insert(withdrawalRequests).values({
           id: requestId,

@@ -4,6 +4,7 @@ import { users, verificationCodes } from "@/lib/db/schema"
 import { eq, and, gt } from "drizzle-orm"
 import { getSession } from "@/lib/auth/session"
 import { getUserByPhone } from "@/lib/auth/user"
+import { checkRateLimit, getClientIP } from "@/lib/rate-limit"
 
 const PHONE_REGEX = /^1[3-9]\d{9}$/
 
@@ -33,6 +34,19 @@ export async function POST(request: NextRequest) {
   }
   if (!code || code.length !== 6) {
     return NextResponse.json({ error: "请输入6位验证码" }, { status: 400 })
+  }
+
+  // 防验证码枚举：IP（10次/分钟）+ 手机号（5次/5分钟）双维度限流。
+  // 手机号维度是关键——否则单个 IP 可对同一号码高速试 6 位码（10^6 空间）。
+  // 阈值与 verify-code 保持一致（5次/5分钟），一个有效验证码一次即可通过，不影响正常用户。
+  const ip = getClientIP(request)
+  const ipLimit = checkRateLimit("bind-phone-ip", ip, 10, 60_000)
+  if (!ipLimit.allowed) {
+    return NextResponse.json({ error: `尝试次数过多，请${ipLimit.retryAfter}秒后重试` }, { status: 429 })
+  }
+  const phoneLimit = checkRateLimit("bind-phone-phone", phone, 5, 300_000)
+  if (!phoneLimit.allowed) {
+    return NextResponse.json({ error: `该号码尝试次数过多，请${phoneLimit.retryAfter}秒后重试` }, { status: 429 })
   }
 
   // Verify SMS code

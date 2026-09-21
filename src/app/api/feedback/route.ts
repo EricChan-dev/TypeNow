@@ -4,6 +4,7 @@ import { db } from "@/lib/db"
 import { userFeedback, users } from "@/lib/db/schema"
 import { eq } from "drizzle-orm"
 import { getOAGlobalAccessToken } from "@/lib/wechat"
+import { checkRateLimit } from "@/lib/rate-limit"
 
 const CATEGORY_LABELS: Record<string, string> = {
   bug: "🐛 Bug 反馈",
@@ -17,6 +18,16 @@ export async function POST(request: Request) {
     const session = await getSession()
     if (!session) return NextResponse.json({ error: "请先登录" }, { status: 401 })
     if (!db) return NextResponse.json({ error: "服务未配置" }, { status: 500 })
+
+    // 每条反馈都会向管理员微信推送一条客服消息。此前没有任何限流，
+    // 登录用户可无限刷推送（骚扰管理员并消耗公众号接口额度）。
+    const rl = checkRateLimit("feedback", session.userId, 5, 10 * 60 * 1000)
+    if (!rl.allowed) {
+      return NextResponse.json(
+        { error: `提交过于频繁，请${rl.retryAfter ?? 60}秒后再试` },
+        { status: 429 },
+      )
+    }
 
     let body: { category?: string; content?: string }
     try {
