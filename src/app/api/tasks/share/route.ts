@@ -3,10 +3,7 @@ import { getSession } from "@/lib/auth/session"
 import { db } from "@/lib/db"
 import { taskLogs, diamondLogs, users } from "@/lib/db/schema"
 import { eq, sql } from "drizzle-orm"
-
-function todayStr() {
-  return new Date().toISOString().slice(0, 10)
-}
+import { toShanghaiDateStr } from "@/lib/practice-stats"
 
 export async function POST() {
   const session = await getSession()
@@ -33,7 +30,7 @@ export async function POST() {
       taskType: "share_invite",
       rewardType: "diamond",
       rewardAmount: 10,
-      date: todayStr(),
+      date: toShanghaiDateStr(),
     })
   } catch {
     return NextResponse.json({ success: false, alreadyClaimed: true })

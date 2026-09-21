@@ -3,13 +3,14 @@ import { getSession } from "@/lib/auth/session"
 import { db } from "@/lib/db"
 import { checkIns, taskLogs, users } from "@/lib/db/schema"
 import { eq, and, count } from "drizzle-orm"
+import { toShanghaiDateStr } from "@/lib/practice-stats"
 
 export async function GET() {
   const session = await getSession()
   if (!session) return NextResponse.json({ error: "请先登录" }, { status: 401 })
   if (!db) return NextResponse.json({ error: "服务未配置" }, { status: 500 })
 
-  const today = new Date().toISOString().slice(0, 10)
+  const today = toShanghaiDateStr()
 
   const [checkInRow, shareRow, inviteRows, userRow] = await Promise.all([
     db.select({ id: checkIns.id }).from(checkIns)

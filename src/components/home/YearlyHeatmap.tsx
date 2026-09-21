@@ -2,10 +2,7 @@
 
 import { useMemo, useRef, useEffect } from "react"
 import { animate, stagger } from "animejs"
-
-function toLocalDateStr(d = new Date()): string {
-  return d.toISOString().slice(0, 10)
-}
+import { toShanghaiDateStr } from "@/lib/practice-stats"
 
 function getHeatColor(count: number): string {
   if (count === 0) return "var(--heat-empty)"
@@ -32,7 +29,7 @@ export function YearlyHeatmap({ heatmap }: { heatmap: Record<string, number> }) 
     while (cur <= end) {
       const week: { date: string; count: number }[] = []
       for (let d = 0; d < 7; d++) {
-        const s = toLocalDateStr(cur)
+        const s = toShanghaiDateStr(cur)
         week.push({ date: s, count: heatmap[s] ?? 0 })
         const m = cur.getMonth()
         if (m !== lastMonth) {

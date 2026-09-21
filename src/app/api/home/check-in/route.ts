@@ -3,38 +3,14 @@ import { getSession } from "@/lib/auth/session"
 import { db } from "@/lib/db"
 import { checkIns, diamondLogs, users } from "@/lib/db/schema"
 import { eq, desc, and, sql } from "drizzle-orm"
-
-function toLocalDateStr(d = new Date()): string {
-  return d.toISOString().slice(0, 10)
-}
-
-function computeStreak(sortedDates: string[]): number {
-  if (sortedDates.length === 0) return 0
-  const today = toLocalDateStr()
-  const yesterday = toLocalDateStr(new Date(Date.now() - 86400000))
-
-  let expected = sortedDates[0] === today ? today : yesterday
-  let streak = 0
-
-  for (const date of sortedDates) {
-    if (date === expected) {
-      streak++
-      const prev = new Date(date)
-      prev.setDate(prev.getDate() - 1)
-      expected = toLocalDateStr(prev)
-    } else if (date < expected) {
-      break
-    }
-  }
-  return streak
-}
+import { computeStreak, toShanghaiDateStr } from "@/lib/practice-stats"
 
 export async function POST() {
   const session = await getSession()
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
   if (!db) return NextResponse.json({ error: "DB not configured" }, { status: 500 })
 
-  const today = toLocalDateStr()
+  const today = toShanghaiDateStr()
   const userId = session.userId
 
   // Verify diamond goal
@@ -51,7 +27,7 @@ export async function POST() {
     .where(
       and(
         eq(diamondLogs.userId, userId),
-        sql`DATE(CONVERT_TZ(${diamondLogs.createdAt}, '+00:00', '+08:00')) = ${today}`
+        sql`DATE(${diamondLogs.createdAt}) = ${today}`
       )
     )
   const todayDiamonds = Number(diamondRow?.total ?? 0)
@@ -81,7 +57,7 @@ export async function POST() {
     .orderBy(desc(checkIns.date))
     .limit(400)
 
-  const streakDays = computeStreak(allDates.map((r) => r.date))
+  const streakDays = computeStreak(allDates.map((r) => r.date), today)
 
   return NextResponse.json({ success: true, streakDays, alreadyCheckedIn: !!existingCheckIn })
 }

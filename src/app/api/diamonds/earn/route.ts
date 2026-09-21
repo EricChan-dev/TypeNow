@@ -3,10 +3,7 @@ import { getSession } from "@/lib/auth/session"
 import { db } from "@/lib/db"
 import { diamondLogs, users } from "@/lib/db/schema"
 import { eq, and, sql } from "drizzle-orm"
-
-function toLocalDateStr(d = new Date()): string {
-  return d.toLocaleDateString("sv-SE", { timeZone: "Asia/Shanghai" })
-}
+import { toShanghaiDateStr } from "@/lib/practice-stats"
 
 function calcEarned(type: string, streak: number, perfect: boolean): number {
   if (type === "lesson_complete") return 30
@@ -46,7 +43,7 @@ export async function POST(request: NextRequest) {
 
   const userId = session.userId
   const earned = calcEarned(type, streak, perfect)
-  const today = toLocalDateStr()
+  const today = toShanghaiDateStr()
 
   await db.insert(diamondLogs).values({
     userId,
@@ -71,7 +68,7 @@ export async function POST(request: NextRequest) {
     .where(
       and(
         eq(diamondLogs.userId, userId),
-        sql`DATE(CONVERT_TZ(${diamondLogs.createdAt}, '+00:00', '+08:00')) = ${today}`
+        sql`DATE(${diamondLogs.createdAt}) = ${today}`
       )
     )
 

@@ -239,6 +239,8 @@ export function LearnClient({
   const [errorCount, setErrorCount] = useState(0)
   const consecutivePerfectRef = useRef(0)
   const sentenceHasErrorRef = useRef(false)
+  // 当前句累计错误次数 —— 写入 practice_records 并按 10/6/2 折算 score
+  const sentenceMistakesRef = useRef(0)
   const sentenceStartTimeRef = useRef(Date.now())
   const [feedback, setFeedback] = useState<{ trigger: number; variant: FeedbackVariant; streak: number; earned: number }>({ trigger: 0, variant: "great", streak: 0, earned: 0 })
   const loadingBarRef = useRef<HTMLDivElement>(null)
@@ -376,6 +378,28 @@ export function LearnClient({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [status])
 
+  // Persist the practice attempt. This is the only writer of practice_records,
+  // which /api/home/stats and /api/archive/stats aggregate.
+  useEffect(() => {
+    if (status !== "complete") return
+    const s = sentencesRef.current[currentIndexRef.current]
+    if (!s?.id) return
+    const parentId = s.id.includes("_c") ? s.id.split("_c")[0] : s.id
+    const userInput = wordStatesRef.current
+      .map((w) => w?.value ?? "")
+      .join(" ")
+      .trim()
+    fetch("/api/practice/record", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        sentenceId: parentId,
+        mistakes: sentenceMistakesRef.current,
+        userInput: userInput || null,
+      }),
+    }).catch((e) => { console.error(e) })
+  }, [status])
+
   // Earn diamonds when a sentence is completed
   useEffect(() => {
     if (status !== "complete") return
@@ -421,6 +445,7 @@ export function LearnClient({
   useEffect(() => {
     if (!sentence) return
     sentenceHasErrorRef.current = false
+    sentenceMistakesRef.current = 0
     sentenceStartTimeRef.current = Date.now()
     setStatus("input")
     globalSpeak(sentence.english)
@@ -495,6 +520,7 @@ export function LearnClient({
     } else {
       playBuzz()
       sentenceHasErrorRef.current = true
+      sentenceMistakesRef.current += 1
       setErrorCount((c) => c + 1)
       setWordStates((prev) => {
         const next = [...prev]
@@ -528,6 +554,10 @@ export function LearnClient({
     if (hasError) {
       playBuzz()
       sentenceHasErrorRef.current = true
+      // 只累计「本次新出现的」错误词，避免重复提交时重复计数
+      sentenceMistakesRef.current += newStates.filter(
+        (s, i) => s.status === "error" && wStates[i]?.status !== "error"
+      ).length
       setErrorCount((c) => c + newStates.filter((s) => s.status === "error").length)
       const firstError = newStates.findIndex((s) => s.status === "error")
       const errorIndices = newStates.reduce<number[]>((acc, s, i) => {
@@ -588,6 +618,7 @@ export function LearnClient({
     } else {
       playBuzz()
       sentenceHasErrorRef.current = true
+      sentenceMistakesRef.current += 1
       setErrorCount((c) => c + 1)
       const newStatuses = [...chunkStatusesRef.current]
       newStatuses[activeIdx] = "error"

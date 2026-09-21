@@ -130,6 +130,17 @@ export function ReviewClient() {
         : { sentenceId: item.sentenceId, grade }),
     }).catch(() => {})
 
+    // Persist the review attempt so home/archive stats include review practice
+    await fetch("/api/practice/record", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        sentenceId: item.sentenceId,
+        mistakes: errorCountRef.current,
+        isReview: true,
+      }),
+    }).catch(() => {})
+
     const next = currentIdxRef.current + 1
     if (next >= itemsRef.current.length) {
       setDone(true)

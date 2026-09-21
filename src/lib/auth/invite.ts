@@ -1,6 +1,7 @@
 import { db } from "@/lib/db"
 import { taskLogs, users } from "@/lib/db/schema"
 import { eq, sql } from "drizzle-orm"
+import { toShanghaiDateStr } from "@/lib/practice-stats"
 
 export async function awardInviteRegister(inviterId: string, inviteeId: string) {
   if (!db) return
@@ -10,7 +11,7 @@ export async function awardInviteRegister(inviterId: string, inviteeId: string) 
       taskType: "invite_register",
       rewardType: "trial_days",
       rewardAmount: 3,
-      date: new Date().toISOString().slice(0, 10),
+      date: toShanghaiDateStr(),
       refId: inviteeId,
     })
   } catch {

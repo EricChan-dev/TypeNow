@@ -9,29 +9,7 @@ import {
   courses,
 } from "@/lib/db/schema"
 import { eq, and, gte, desc, sql, count, max, avg, sum } from "drizzle-orm"
-
-function toLocalDateStr(d = new Date()): string {
-  return d.toISOString().slice(0, 10)
-}
-
-function computeStreak(sortedDates: string[]): number {
-  if (sortedDates.length === 0) return 0
-  const today = toLocalDateStr()
-  const yesterday = toLocalDateStr(new Date(Date.now() - 86400000))
-  let expected = sortedDates[0] === today ? today : yesterday
-  let streak = 0
-  for (const date of sortedDates) {
-    if (date === expected) {
-      streak++
-      const prev = new Date(date)
-      prev.setDate(prev.getDate() - 1)
-      expected = toLocalDateStr(prev)
-    } else if (date < expected) {
-      break
-    }
-  }
-  return streak
-}
+import { computeStreak, shiftShanghaiDate, toShanghaiDateStr } from "@/lib/practice-stats"
 
 export async function GET(req: NextRequest) {
   const session = await getSession()
@@ -40,7 +18,7 @@ export async function GET(req: NextRequest) {
 
   const userId = session.userId
   const period = req.nextUrl.searchParams.get("period") ?? "all"
-  const today = toLocalDateStr()
+  const today = toShanghaiDateStr()
   const yearAgo = new Date(Date.now() - 365 * 24 * 60 * 60 * 1000)
 
   // Period filter date
@@ -128,7 +106,7 @@ export async function GET(req: NextRequest) {
   ])
 
   const checkInDates = checkInResult.map((r) => r.date)
-  const streakDays = computeStreak(checkInDates)
+  const streakDays = computeStreak(checkInDates, today)
 
   const heatmap: Record<string, number> = {}
   for (const row of heatmapResult) {
@@ -142,8 +120,7 @@ export async function GET(req: NextRequest) {
     const days = period === "week" ? 7 : 30
     const trendMap = new Map(trend.map((t) => [t.date, t.count]))
     const filled = Array.from({ length: days }, (_, i) => {
-      const d = new Date(Date.now() - (days - 1 - i) * 86400000)
-      const dateStr = toLocalDateStr(d)
+      const dateStr = shiftShanghaiDate(today, -(days - 1 - i))
       return { date: dateStr, count: trendMap.get(dateStr) ?? 0 }
     })
     return NextResponse.json({

@@ -11,7 +11,7 @@ import {
   ChevronLeft, Trophy, HelpCircle,
   Smartphone, X, MessageCircle,
   FileText, BookText, ShoppingBag,
-  Gift,
+  Gift, TrendingUp,
 } from "lucide-react"
 import { toast } from "sonner"
 import { cn } from "@/lib/utils"
@@ -21,6 +21,7 @@ import { GlobalSettingsModal } from "@/components/home/GlobalSettingsModal"
 import { WelcomeTrialModal } from "@/components/home/WelcomeTrialModal"
 import { DailyTasks } from "@/components/home/DailyTasks"
 import { PaymentSuccessModal } from "@/components/payment/PaymentSuccessModal"
+import { toShanghaiDateStr } from "@/lib/practice-stats"
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -48,6 +49,7 @@ interface StatsData {
   checkInDatesThisMonth: string[]
   todayDiamonds: number
   checkInGoal: number
+  weekly: { date: string; count: number }[]
 }
 
 interface HomeClientProps {
@@ -56,9 +58,8 @@ interface HomeClientProps {
 
 // ─── Utilities ────────────────────────────────────────────────────────────────
 
-function toLocalDateStr(d = new Date()): string {
-  return d.toISOString().slice(0, 10)
-}
+// 日期键必须与后端 DATE(created_at) 的上海口径一致，见 lib/practice-stats。
+// 不要用 toISOString().slice(0,10) —— 那是 UTC 日期，CST 00:00-08:00 会差一天。
 
 function getHeatColor(count: number): string {
   if (count === 0) return "var(--heat-empty)"
@@ -111,7 +112,7 @@ function MonthlyCheckInCalendar({
     const startPad = firstDow === 0 ? 6 : firstDow - 1
     const cells: { date: string | null; day: number | null; isCheckedIn: boolean; isToday: boolean; isFuture: boolean }[] = []
     for (let i = 0; i < startPad; i++) cells.push({ date: null, day: null, isCheckedIn: false, isToday: false, isFuture: false })
-    const today = toLocalDateStr()
+    const today = toShanghaiDateStr()
     for (let n = 1; n <= daysInMonth; n++) {
       const dateStr = `${y}-${String(m + 1).padStart(2, "0")}-${String(n).padStart(2, "0")}`
       const isToday = dateStr === today
@@ -228,7 +229,7 @@ function MonthlyHeatmap({ heatmap, heatmapDuration }: { heatmap: Record<string, 
     return { year: y, month: m, days: cells }
   }, [offset, heatmap])
 
-  const today = toLocalDateStr()
+  const today = toShanghaiDateStr()
   const monthName = ["一月","二月","三月","四月","五月","六月","七月","八月","九月","十月","十一月","十二月"][month]
   const cellRef = useRef<HTMLDivElement>(null)
 
@@ -306,6 +307,84 @@ function MonthlyHeatmap({ heatmap, heatmapDuration }: { heatmap: Record<string, 
 }
 
 // ─── Weekly Bar Chart ─────────────────────────────────────────────────────────
+
+const WEEK_DOW = ["日", "一", "二", "三", "四", "五", "六"]
+
+// data 的日期口径是 Asia/Shanghai（由服务端保证），最后一项恒为「今天」，
+// 因此今天的高亮不依赖客户端时区，不会与服务端错开一天。
+function WeeklyChart({ data }: { data: { date: string; count: number }[] }) {
+  const barRef = useRef<HTMLDivElement>(null)
+
+  const max = data.length > 0 ? Math.max(...data.map((d) => d.count)) : 0
+  const total = data.reduce((sum, d) => sum + d.count, 0)
+  const avg = data.length > 0 ? Math.round(total / data.length) : 0
+
+  useEffect(() => {
+    if (!barRef.current) return
+    const bars = barRef.current.querySelectorAll(".week-bar")
+    animate(bars, {
+      scaleY: [0, 1],
+      opacity: [0, 1],
+      duration: 260,
+      delay: stagger(40, { start: 0 }),
+      ease: "out(3)",
+    })
+  }, [data])
+
+  if (data.length === 0) return null
+
+  return (
+    <div>
+      <div className="flex items-baseline justify-between mb-3">
+        <div className="flex items-baseline gap-1">
+          <span className="text-[15px] font-semibold text-foreground/85 tabular-nums">{total}</span>
+          <span className="text-[10px] text-foreground/40">句 · 本周</span>
+        </div>
+        <span className="text-[10px] text-foreground/35 tabular-nums">日均 {avg} 句</span>
+      </div>
+
+      {total === 0 ? (
+        <p className="text-[11px] text-muted-foreground/40 text-center py-6">本周还没有练习</p>
+      ) : (
+        <div ref={barRef} className="flex items-end justify-between gap-1.5">
+          {data.map((d, i) => {
+            const isToday = i === data.length - 1
+            // 上海时区正午取值，避免 UTC 解析把星期几算偏
+            const dow = WEEK_DOW[new Date(`${d.date}T12:00:00+08:00`).getDay()]
+            const ratio = max > 0 ? d.count / max : 0
+            const heightPct = d.count > 0 ? Math.max(ratio * 100, 12) : 0
+            return (
+              <div key={d.date} className="flex-1 flex flex-col items-center gap-1.5">
+                <div className="w-full h-20 flex items-end">
+                  {d.count > 0 ? (
+                    <div
+                      className={cn(
+                        "week-bar w-full rounded-md origin-bottom",
+                        isToday ? "bg-violet-400" : "bg-violet-400/35"
+                      )}
+                      style={{ height: `${heightPct}%` }}
+                    />
+                  ) : (
+                    <div className="w-full h-0.5 rounded-full bg-foreground/[0.08]" />
+                  )}
+                </div>
+                <span
+                  className={cn(
+                    "text-[9px] font-medium",
+                    isToday ? "text-violet-400" : "text-foreground/25"
+                  )}
+                  title={`${d.date} · ${d.count} 句`}
+                >
+                  {dow}
+                </span>
+              </div>
+            )
+          })}
+        </div>
+      )}
+    </div>
+  )
+}
 
 // ─── WeChat Login Banner (uses useSearchParams, needs Suspense) ─────────────
 
@@ -598,7 +677,7 @@ export function HomeClient({ name }: HomeClientProps) {
         setStreak(data.streakDays)
         setCheckInVersion((v) => v + 1)
 
-        const todayStr = toLocalDateStr()
+        const todayStr = toShanghaiDateStr()
         setCheckInDatesThisMonth((prev) => prev.includes(todayStr) ? prev : [...prev, todayStr])
 
         if (checkInBtnRef.current) {
@@ -891,8 +970,20 @@ export function HomeClient({ name }: HomeClientProps) {
             </div>
           </div>
 
-          {/* ── Column 3: 热力图 + 邀请好友 + 课程广场 ── */}
+          {/* ── Column 3: 本周练习 + 热力图 + 邀请好友 + 课程广场 ── */}
           <div className="space-y-3">
+            {/* Weekly practice chart */}
+            <div
+              className="anim-card rounded-2xl border p-4"
+              style={{ background: "var(--surface-alt)", borderColor: "var(--surface-border)" }}
+            >
+              <div className="flex items-center gap-2 mb-3">
+                <TrendingUp className="h-3.5 w-3.5 text-violet-400" />
+                <h3 className="text-[13px] font-semibold text-foreground/70">本周练习</h3>
+              </div>
+              {stats && <WeeklyChart data={stats.weekly ?? []} />}
+            </div>
+
             {/* Monthly heatmap */}
             <div
               className="anim-card rounded-2xl border p-4"
