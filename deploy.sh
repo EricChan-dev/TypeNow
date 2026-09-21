@@ -27,10 +27,14 @@ cd "$PROJECT_DIR"
 log "=== 开始部署 ==="
 
 log "拉取最新代码..."
-git pull origin main 2>&1 | tee -a "$LOG_FILE"
+# --ff-only：服务器出现本地提交/分叉时必须显式失败，而不是静默生成合并提交
+git pull --ff-only origin main 2>&1 | tee -a "$LOG_FILE"
 
 log "安装依赖..."
-pnpm install 2>&1 | tee -a "$LOG_FILE"
+# CI=true：非交互环境下 pnpm 会因缺少 TTY 中止清空 node_modules
+#   （ERR_PNPM_ABORTED_REMOVE_MODULES_DIR_NO_TTY），导致部署静默中断。
+# --frozen-lockfile：package.json 与锁文件不一致时立即失败，避免装上未锁定的依赖。
+CI=true pnpm install --frozen-lockfile 2>&1 | tee -a "$LOG_FILE"
 
 log "构建项目..."
 pnpm run build 2>&1 | tee -a "$LOG_FILE"
