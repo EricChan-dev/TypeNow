@@ -1,4 +1,4 @@
-import { randomUUID, createSign, createVerify } from "crypto"
+import { randomUUID, createSign, createVerify, createDecipheriv } from "crypto"
 
 const WECHAT_PAY_HOST = "https://api.mch.weixin.qq.com"
 
@@ -17,6 +17,17 @@ function getConfig() {
 export function isWeChatPayConfigured(): boolean {
   const cfg = getConfig()
   return Boolean(cfg.mchId && cfg.apiV3Key && cfg.serialNo && cfg.privateKey)
+}
+
+/**
+ * 是否为开发环境。
+ *
+ * 支付相关的"模拟"兜底（假二维码、跳过验签、明文报文）都必须以此为条件，
+ * 不能以"是否配置了微信支付"为条件：生产环境一旦漏配密钥，前者会静默降级
+ * 成一个任何人可用的支付后门，后者只是报错。
+ */
+function isDevMode(): boolean {
+  return process.env.NODE_ENV === "development"
 }
 
 function decodePrivateKey(encoded: string): string {
@@ -101,12 +112,16 @@ export async function createNativeOrder(
 ): Promise<CreateOrderResult> {
   const cfg = getConfig()
 
-  // Dev mode: return mock QR code
   if (!isWeChatPayConfigured()) {
-    return {
-      code_url: `weixin://wxpay/bizpayurl?pr=mock_${params.outTradeNo}`,
-      out_trade_no: params.outTradeNo,
+    // 仅开发环境返回假二维码。生产环境必须拒绝下单：否则用户拿到一个
+    // 永远无法支付的二维码，同时在库里留下一条真实的 pending 订单。
+    if (isDevMode()) {
+      return {
+        code_url: `weixin://wxpay/bizpayurl?pr=mock_${params.outTradeNo}`,
+        out_trade_no: params.outTradeNo,
+      }
     }
+    throw new Error("微信支付未配置，暂时无法下单")
   }
 
   const urlPath = "/v3/pay/transactions/native"
@@ -133,13 +148,15 @@ export async function queryOrder(
 ): Promise<QueryOrderResult> {
   const cfg = getConfig()
 
-  // Dev mode: simulate success after a brief delay
   if (!isWeChatPayConfigured()) {
-    return {
-      out_trade_no: outTradeNo,
-      trade_state: "NOTPAY",
-      trade_state_desc: "开发模式 - 未支付",
+    if (isDevMode()) {
+      return {
+        out_trade_no: outTradeNo,
+        trade_state: "NOTPAY",
+        trade_state_desc: "开发模式 - 未支付",
+      }
     }
+    throw new Error("微信支付未配置，无法查询订单")
   }
 
   const urlPath = `/v3/pay/transactions/out-trade-no/${outTradeNo}?mchid=${cfg.mchId}`
@@ -201,7 +218,7 @@ async function getWechatPayCerts(): Promise<CertEntry[]> {
   // Decrypt each certificate using the APIv3 key
   certCache = certs.map((cert) => {
     const { ciphertext, nonce, associated_data } = cert.encrypt_certificate
-    const publicKey = decryptCert(ciphertext, nonce, associated_data, cfg.apiV3Key)
+    const publicKey = decryptAesGcm(ciphertext, nonce, associated_data, cfg.apiV3Key)
     return {
       serialNo: cert.serial_no,
       publicKey,
@@ -213,21 +230,38 @@ async function getWechatPayCerts(): Promise<CertEntry[]> {
   return certCache
 }
 
-function decryptCert(
+/**
+ * 解密微信支付 v3 的 AES-256-GCM 报文（平台证书与回调 resource 通用）。
+ *
+ * 微信支付 APIv3 规范：
+ *   key             = APIv3 密钥原样的 32 字节 UTF-8 内容（不是它的哈希）
+ *   nonce           = UTF-8 字符串字节（不是 base64）
+ *   associated_data = UTF-8 字符串字节（不是 base64）
+ *   ciphertext      = base64，末尾 16 字节为 GCM auth tag
+ *
+ * 旧实现把 key 做了 SHA-256、又把 nonce / AAD 当 base64 解码，因此一旦真的
+ * 配置了微信支付，验签通过后的解密必然抛错（回调全部 500）。
+ */
+export function decryptAesGcm(
   ciphertext: string,
   nonce: string,
   associatedData: string,
   apiV3Key: string,
 ): string {
-  const crypto = require("crypto") as typeof import("crypto")
-  const key = crypto.createHash("sha256").update(apiV3Key).digest()
+  const key = Buffer.from(apiV3Key, "utf-8")
+  if (key.length !== 32) {
+    throw new Error("WECHAT_PAY_API_V3_KEY 必须为 32 字节")
+  }
   const authTagLength = 16
   const ciphertextBytes = Buffer.from(ciphertext, "base64")
+  if (ciphertextBytes.length <= authTagLength) {
+    throw new Error("微信支付密文长度非法")
+  }
   const tag = ciphertextBytes.subarray(ciphertextBytes.length - authTagLength)
   const actualCipher = ciphertextBytes.subarray(0, ciphertextBytes.length - authTagLength)
-  const decipher = crypto.createDecipheriv("aes-256-gcm", key, Buffer.from(nonce, "base64"))
+  const decipher = createDecipheriv("aes-256-gcm", key, Buffer.from(nonce, "utf-8"))
   decipher.setAuthTag(tag)
-  if (associatedData) decipher.setAAD(Buffer.from(associatedData, "base64"))
+  if (associatedData) decipher.setAAD(Buffer.from(associatedData, "utf-8"))
   return Buffer.concat([decipher.update(actualCipher), decipher.final()]).toString("utf-8")
 }
 
@@ -242,15 +276,19 @@ export function decryptNotifyResource(
 ): Record<string, unknown> {
   const cfg = getConfig()
   if (cfg.apiV3Key) {
-    const decrypted = decryptCert(ciphertext, nonce, associatedData, cfg.apiV3Key)
+    const decrypted = decryptAesGcm(ciphertext, nonce, associatedData, cfg.apiV3Key)
     return JSON.parse(decrypted) as Record<string, unknown>
   }
-  // Dev mode / unconfigured: attempt to parse ciphertext directly as JSON
-  try {
-    return JSON.parse(ciphertext) as Record<string, unknown>
-  } catch {
-    return {}
+  // 只有开发环境允许把明文 body 当作报文解析（便于本地模拟回调）。
+  // 生产环境必须抛错：否则任何人提交明文 body 即可伪造一笔"已支付"。
+  if (isDevMode()) {
+    try {
+      return JSON.parse(ciphertext) as Record<string, unknown>
+    } catch {
+      return {}
+    }
   }
+  throw new Error("微信支付未配置，无法解密回调报文")
 }
 
 export async function verifyNotifySignature(
@@ -261,7 +299,11 @@ export async function verifyNotifySignature(
   serialNo: string,
 ): Promise<boolean> {
   if (!isWeChatPayConfigured()) {
-    return true // Dev mode: accept all
+    // 仅开发环境放行。生产环境必须拒绝：否则 /api/payment/notify 无需任何
+    // 签名即可被伪造，直接给任意账号开通会员。
+    if (isDevMode()) return true
+    console.error("[WeChat Pay] 支付参数未配置，拒绝回调通知")
+    return false
   }
 
   try {
@@ -314,7 +356,6 @@ export async function wechatTransferBatch(params: {
   amount: number
   remark: string
 }): Promise<TransferResult> {
-  const cfg = getConfig()
   if (!isWeChatPayConfigured()) throw new Error("微信支付未配置")
 
   const body = {

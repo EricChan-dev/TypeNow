@@ -1,6 +1,6 @@
 import { db } from "@/lib/db"
 import { subscriptions, users, partnerCommissions, paymentOrders as paymentOrdersTable } from "@/lib/db/schema"
-import { eq, and, lte, isNotNull, desc, count as sqlCount } from "drizzle-orm"
+import { eq, and, lte, desc, count as sqlCount } from "drizzle-orm"
 import { randomUUID } from "crypto"
 
 function getPlanDurationDays(plan: "monthly" | "yearly" | "partner"): number {
@@ -137,11 +137,20 @@ export async function activateSubscription(
   // Idempotency: if this payment order was already processed, skip duplicate activation
   if (paymentOrderId) {
     const [dup] = await db
-      .select({ id: subscriptions.id })
+      .select({ id: subscriptions.id, expiresAt: subscriptions.expiresAt })
       .from(subscriptions)
       .where(eq(subscriptions.paymentOrderId, paymentOrderId))
       .limit(1)
     if (dup) {
+      // 幂等：该订单已经开通过订阅。此前直接 return，若上一次在"写入订阅"之后、
+      // "更新用户权益"之前失败，就会永久留下"有订阅但没会员"的状态；这里把
+      // 用户权益补齐再返回。
+      if (dup.expiresAt && new Date(dup.expiresAt) > new Date()) {
+        await db
+          .update(users)
+          .set({ isPro: 1, proExpires: dup.expiresAt })
+          .where(eq(users.id, userId))
+      }
       console.warn(`[Subscription] Duplicate activation skipped for paymentOrder: ${paymentOrderId}`)
       return
     }

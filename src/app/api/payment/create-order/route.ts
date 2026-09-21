@@ -22,7 +22,10 @@ export async function POST(request: Request) {
     }
 
     const outTradeNo = generateOutTradeNo()
-    const isTestMode = process.env.NODE_ENV === "development" || process.env.WECHAT_PAY_TEST_MODE === "true"
+    // 测试价（1 分钱）只在开发环境生效。此前还接受 WECHAT_PAY_TEST_MODE
+    // 环境变量，生产环境只要该变量为 "true"，就能用 1 分钱买下 ¥399 的
+    // 合伙人终身会员（库里那两条 amount=1 的 paid 订单就是这么来的）。
+    const isTestMode = process.env.NODE_ENV === "development"
     const amount = isTestMode ? 1 : getPlanAmount(plan)
     const description = getPlanDescription(plan)
 
