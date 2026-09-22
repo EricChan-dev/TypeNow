@@ -18,6 +18,7 @@
     "selfcheck:new-user": "tsx scripts/selfcheck-new-user.ts",
     "audit:content": "tsx scripts/audit-course-data.ts",
     "repair:content": "tsx scripts/repair-course-data.ts",
+    "repair:duplicates": "tsx scripts/repair-duplicates.ts",
     "import-julebu-files": "tsx scripts/import-julebu-files.ts"
   },
   "dependencies": {

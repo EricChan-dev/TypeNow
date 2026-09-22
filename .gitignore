@@ -55,3 +55,6 @@ crawl.log
 deploy.log
 # 课程内容体检产物（每次 `pnpm run audit:content --json` 重新生成）
 content-audit.json
+
+# 数据清理脚本导出的「已删除内容」安全网（不可逆删除前留底，本地留存即可）
+content-deleted/
