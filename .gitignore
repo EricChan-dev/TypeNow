@@ -53,3 +53,5 @@ src/generated/
 # 运行时日志（爬虫/部署输出，非源码；曾误入版本库产生大量噪声 diff）
 crawl.log
 deploy.log
+# 课程内容体检产物（每次 `pnpm run audit:content --json` 重新生成）
+content-audit.json

@@ -63,7 +63,7 @@ function julebuSentenceToTypeNowRow(
     words: js.wordDetails?.map(w => ({
       english: w.word,
       chinese: w.definition || null,
-      phonetic: w.phonetic as unknown as string,
+      phonetic: w.phonetic,                          // {uk, us} JSON 对象，勿 String()
       pos: w.pos,
     })) ?? null,
     dependencyAnalysis: js.dependencyAnalysis as typeof sentences.$inferInsert["dependencyAnalysis"] ?? null,

@@ -25,7 +25,12 @@ interface SentencePreview {
   english: string
   chinese: string
   difficulty: number
-  words: Array<{ english: string; chinese: string; phonetic: string; pos: string }>
+  words: Array<{
+    english: string
+    chinese: string
+    phonetic: string | { uk: string; us: string } | null
+    pos: string
+  }>
   chunks: Array<{ order: number; text: string; chinese: string }>
 }
 

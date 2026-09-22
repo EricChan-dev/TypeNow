@@ -145,7 +145,11 @@ export const sentences = mysqlTable(
     words: json("words").$type<Array<{
       english: string
       chinese: string | null
-      phonetic: string | null
+      /**
+       * 历史遗留两种形态：句乐部导入的是 { uk, us } 对象，AI 解析产出的是字符串。
+       * 不要收窄成 string —— 曾因 String(对象) 把 17 万行写成 "[object Object]"。
+       */
+      phonetic: string | { uk: string; us: string } | null
       pos: string
     }>>(),
     chunks: json("chunks").$type<Array<{

@@ -327,7 +327,7 @@ function julebuToTypeNowRow(
     words: js.wordDetails?.map(w => ({
       english: w.word,
       chinese: w.definition || null,
-      phonetic: w.phonetic as unknown as string,   // {uk, us} object stored as JSON
+      phonetic: w.phonetic,                          // {uk, us} JSON 对象，勿 String()
       pos: w.pos,                                    // VERB/NOUN/PRON...
     })) ?? null,
     dependencyAnalysis: js.dependencyAnalysis as typeof sentences.$inferInsert["dependencyAnalysis"] ?? null,

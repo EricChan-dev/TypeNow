@@ -23,6 +23,28 @@ const pending = allPacks.filter(p => !existingTitles.has(p.title) && p.courses.l
 console.log(`📋 待爬: ${pending.length} 包, ${pending.reduce((s,p) => s + p.courses.length, 0)} 课`)
 if (pending.length === 0) { console.log("✅ 全部完成"); process.exit(0) }
 
+// ── 入库前清洗 ──
+// 上游句乐部会在句子文本里注入一段 71 字符的不可见水印
+// （U+200C/200D/2061/2062/2063/2064），并会把 NBSP 混进音标。
+// 2026-09 曾因此污染 25 万行 english 与 17 万行音标，必须在这里挡住。
+const INVIS_PATTERN = /[\u00ad\u034f\u061c\u115f\u1160\u17b4\u17b5\u180b-\u180e\u200b-\u200f\u202a-\u202e\u2060-\u2064\u2066-\u2069\u3164\ufeff\ufe00-\ufe0f\uffa0]+/g
+function cleanText(v) {
+  if (v === null || v === undefined) return v
+  if (typeof v !== "string") return v
+  return v.replace(/\u00a0/g, " ").replace(INVIS_PATTERN, "").replace(/ {2,}/g, " ").trim()
+}
+/** 深度清洗：dependency_analysis / sentence_structure 的叶子字符串同样带水印。 */
+function cleanDeep(v) {
+  if (typeof v === "string") return cleanText(v)
+  if (Array.isArray(v)) return v.map(cleanDeep)
+  if (v && typeof v === "object") {
+    const out = {}
+    for (const k of Object.keys(v)) out[k] = cleanDeep(v[k])
+    return out
+  }
+  return v
+}
+
 // ── 数据库模块 ──
 const mysql = require("mysql2/promise")
 let dbPool
@@ -59,11 +81,18 @@ async function importPackToDB(pack, packFile) {
       const batch = []
       for (const s of jc.sentences) {
         const sid = require("crypto").randomUUID()
-        const words = s.wordDetails?.map(w => ({ english: w.word, chinese: w.definition ?? null, phonetic: String(w.phonetic ?? ""), pos: w.pos })) ?? null
-        batch.push([sid, s.chinese ?? "", s.english ?? "", lessonId, s.sortOrder ?? 0,
+        // phonetic 在源数据里是 { uk, us } 对象。绝不能 String() 它——
+        // 那会写出字面量 "[object Object]"（2026-09 事故的根因）。
+        const words = s.wordDetails?.map(w => ({
+          english: cleanText(w.word),
+          chinese: cleanText(w.definition ?? null),
+          phonetic: w.phonetic ?? null,
+          pos: cleanText(w.pos),
+        })) ?? null
+        batch.push([sid, cleanText(s.chinese ?? ""), cleanText(s.english ?? ""), lessonId, s.sortOrder ?? 0,
           words ? JSON.stringify(words) : null,
-          s.dependencyAnalysis ? JSON.stringify(s.dependencyAnalysis) : null,
-          s.sentenceStructure ? JSON.stringify(s.sentenceStructure) : null])
+          s.dependencyAnalysis ? JSON.stringify(cleanDeep(s.dependencyAnalysis)) : null,
+          s.sentenceStructure ? JSON.stringify(cleanDeep(s.sentenceStructure)) : null])
         sentenceCount++
       }
       // Insert in batches

@@ -7,7 +7,14 @@ interface SentenceInput {
   english: string
   chinese: string
   difficulty?: number
-  words?: Array<{ english: string; chinese: string | null; phonetic: string | null; pos: string }>
+  // phonetic 允许 { uk, us } 对象：句乐部导入的音标就是这个形态。
+  // 收窄成 string 会诱使调用方 String(对象)，那是 "[object Object]" 事故的来源。
+  words?: Array<{
+    english: string
+    chinese: string | null
+    phonetic: string | { uk: string; us: string } | null
+    pos: string
+  }>
   chunks?: Array<{ order: number; text: string; chinese: string }>
 }
 
