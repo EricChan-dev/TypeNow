@@ -32,6 +32,8 @@ yarn-error.log*
 
 # env files (can opt-in for committing if needed)
 .env*
+# 只有「模板」可以进版本库，用来记录需要哪些变量；真实值一律不入库
+!.env.webhook.example
 
 # vercel
 .vercel
