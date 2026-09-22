@@ -15,6 +15,7 @@
     "import-julebu": "tsx scripts/import-julebu.ts",
     "test": "vitest run",
     "test:watch": "vitest",
+    "selfcheck:new-user": "tsx scripts/selfcheck-new-user.ts",
     "import-julebu-files": "tsx scripts/import-julebu-files.ts"
   },
   "dependencies": {
