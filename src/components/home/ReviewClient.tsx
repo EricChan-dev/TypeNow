@@ -7,8 +7,7 @@ import { X, CheckCircle2, RotateCcw, BookOpen } from "lucide-react"
 import { CompletedSentence } from "@/components/home/learn/CompletedSentence"
 import type { Word } from "@/types"
 import { cn } from "@/lib/utils"
-
-const TOKEN_RE = /[a-zA-Z\d'-]+|[.,!?;:'"()…—]/g
+import { isTypingMatch, isTypingPrefix, tokenizeEnglish } from "@/lib/typing-compare"
 
 interface ReviewItem {
   reviewId: string
@@ -32,7 +31,7 @@ function getInputWords(words: Word[]): Word[] {
 }
 
 function textToWords(text: string): Word[] {
-  const tokens = text.match(TOKEN_RE) ?? []
+  const tokens = tokenizeEnglish(text)
   return tokens.map((t) => ({
     english: t,
     chinese: null,
@@ -186,8 +185,8 @@ export function ReviewClient() {
     e.preventDefault()
 
     const next = currentVal + e.key
-    const correctSoFar = expected.toLowerCase().startsWith(next.toLowerCase())
-    const fullMatch = next.toLowerCase() === expected.toLowerCase()
+    const correctSoFar = isTypingPrefix(next, expected)
+    const fullMatch = isTypingMatch(next, expected)
 
     if (fullMatch) {
       setWordStates((prev) => {

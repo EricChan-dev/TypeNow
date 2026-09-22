@@ -6,12 +6,10 @@ import { animate } from "animejs"
 import Link from "next/link"
 import { ChevronLeft, ChevronRight, ArrowLeft, BookOpen, ShoppingBag, Pause, Play, RotateCcw, Shuffle, Maximize, Minimize, Keyboard, List, Settings, Eye, EyeOff } from "lucide-react"
 import type { Sentence, Word } from "@/types"
-
-// Tokenize text the same way as textToWords — shared by both helpers
-const TOKEN_RE = /[a-zA-Z\d'-]+|[.,!?;:'"()…—]/g
+import { isTypingMatch, tokenizeEnglish } from "@/lib/typing-compare"
 
 function textToWords(text: string): Word[] {
-  const tokens = text.match(TOKEN_RE) ?? []
+  const tokens = tokenizeEnglish(text)
   return tokens.map((t) => ({
     english: t,
     chinese: null,
@@ -22,13 +20,13 @@ function textToWords(text: string): Word[] {
 
 // Look up each token in the parent sentence's words array to get real phonetics/POS
 function matchWordsFromParent(parentWords: Word[], chunkText: string): Word[] {
-  const tokens = chunkText.match(TOKEN_RE) ?? []
+  const tokens = tokenizeEnglish(chunkText)
   const result: Word[] = []
   let startIdx = 0
   for (const token of tokens) {
     let matched = false
     for (let i = startIdx; i < parentWords.length; i++) {
-      if (parentWords[i].english.toLowerCase() === token.toLowerCase()) {
+      if (isTypingMatch(token, parentWords[i].english)) {
         result.push(parentWords[i])
         startIdx = i + 1
         matched = true
@@ -494,7 +492,7 @@ export function LearnClient({
     const currentVal = wStates[activeIdx]?.value || ""
     const expected = words[activeIdx].english
 
-    if (currentVal.toLowerCase() === expected.toLowerCase()) {
+    if (isTypingMatch(currentVal, expected)) {
       playTick()
       setWordStates((prev) => {
         const next = [...prev]
@@ -596,7 +594,7 @@ export function LearnClient({
     const expected = chunks[activeIdx]?.text ?? ""
     const input = chunkInputRef.current.trim()
 
-    if (input.toLowerCase() === expected.toLowerCase()) {
+    if (isTypingMatch(input, expected)) {
       playTick()
       const newStatuses = [...chunkStatusesRef.current]
       newStatuses[activeIdx] = "done"

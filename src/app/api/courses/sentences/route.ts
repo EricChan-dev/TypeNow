@@ -3,12 +3,13 @@ import { db } from "@/lib/db"
 import { courses, lessons, sentences } from "@/lib/db/schema"
 import { and, eq, asc } from "drizzle-orm"
 import { getSession } from "@/lib/auth/session"
-
-const TOKEN_RE = /[a-zA-Z\d'-]+|[.,!?;:'"()…—]/g
+import { tokenizeEnglish } from "@/lib/typing-compare"
 
 /** 从英文文本生成基础 Word 数组（当 words 为 null 时的 fallback） */
 function textToWords(text: string) {
-  const tokens = text.match(TOKEN_RE) ?? []
+  // 必须用归一化后的分词：don’t 里的 U+2019 不在 TOKEN_RE 中，
+  // 直接切会变成 ["don","t"]，用户被迫分两格输入。
+  const tokens = tokenizeEnglish(text)
   return tokens.map((t) => ({
     english: t,
     chinese: null as string | null,
