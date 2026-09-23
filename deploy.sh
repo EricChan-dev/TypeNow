@@ -41,7 +41,30 @@ log "=== 开始部署 ==="
 
 log "拉取最新代码..."
 # --ff-only：服务器出现本地提交/分叉时必须显式失败，而不是静默生成合并提交
-git pull --ff-only origin main 2>&1 | tee -a "$LOG_FILE"
+#
+# 重试：本机到 github.com 的链路不稳定。2026-09-23 统计 deploy.log 的 101 次部署，
+# 35 次未完成，其中 12 次是拉取阶段的网络故障（Empty reply from server /
+# Failed to connect to github.com / Connection timed out / remote end hung up），
+# 且全部集中在近期（2026-06 起）。这类故障是瞬时的，隔一分钟重试即可成功；
+# 但 webhook 只在收到 push 时触发一次、没有补偿机制，所以不重试等于一次网络抖动
+# 就静默漏掉一次发布（2026-09-23 14:45 的 f105dde 就是这样漏掉的，靠人工补跑）。
+# 其余历史失败为 .git/objects 权限（7 次，已随属主修复解决）与 pnpm 无 TTY（2 次，已加 CI=true）。
+PULL_DONE=0
+for attempt in 1 2 3 4 5; do
+  # 放进 if 条件里，set -e / pipefail 不会因为本次失败直接终止脚本
+  if git pull --ff-only origin main 2>&1 | tee -a "$LOG_FILE"; then
+    PULL_DONE=1
+    break
+  fi
+  log "第 ${attempt} 次拉取失败，$((attempt * 15)) 秒后重试..."
+  sleep $((attempt * 15))
+done
+if [ "$PULL_DONE" != "1" ]; then
+  log "错误：连续 5 次拉取均失败，本次部署取消（未构建、未重启，线上维持原版本）"
+  exit 1
+fi
+# 记录本次实际部署的提交，便于事后核对线上构建对应哪个版本
+log "已同步到：$(git log -1 --format='%h %ci %s')"
 
 log "安装依赖..."
 # CI=true：非交互环境下 pnpm 会因缺少 TTY 中止清空 node_modules
