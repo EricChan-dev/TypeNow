@@ -126,8 +126,35 @@ export async function insertReviewItem(
   return id
 }
 
-/** 造一条已支付的支付订单，返回 { id, outTradeNo }。 */
+/**
+ * 造一条练习记录（用于钻石奖励、统计等需要「真的练过」的场景）。
+ *
+ * practice_records 没有 duration_seconds 列 —— 练习时长只记在
+ * diamond_logs.duration_seconds 上，别按直觉加列。
+ */
+export async function insertPractice(
+  userId: string,
+  sentenceId: string,
+  opts: { mistakes?: number; score?: number; isReview?: number; createdAt?: Date } = {}
+): Promise<string> {
+  const id = crypto.randomUUID()
+  await q(
+    `INSERT INTO practice_records (id, user_id, sentence_id, score, mistakes, is_review, created_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?)`,
+    [
+      id,
+      userId,
+      sentenceId,
+      opts.score ?? (opts.mistakes === 0 ? 10 : 6),
+      opts.mistakes ?? 0,
+      opts.isReview ?? 0,
+      opts.createdAt ?? new Date(),
+    ]
+  )
+  return id
+}
 
+/** 造一条已支付的支付订单，返回 { id, outTradeNo }。 */
 export async function insertPaidOrder(
   userId: string,
   plan: "monthly" | "yearly" | "partner",
