@@ -21,7 +21,9 @@
     "repair:duplicates": "tsx scripts/repair-duplicates.ts",
     "import-julebu-files": "tsx scripts/import-julebu-files.ts",
     "rescue:orphans": "tsx scripts/orphan-rescue-plan.ts",
-    "rescue:orphans:apply": "tsx scripts/orphan-rescue-plan.ts --apply"
+    "rescue:orphans:apply": "tsx scripts/orphan-rescue-plan.ts --apply",
+    "cleanup:residual": "tsx scripts/cleanup-residual.ts",
+    "cleanup:residual:apply": "tsx scripts/cleanup-residual.ts --apply"
   },
   "dependencies": {
     "@alicloud/dysmsapi20170525": "^4.5.1",
