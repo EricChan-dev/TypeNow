@@ -19,7 +19,9 @@
     "audit:content": "tsx scripts/audit-course-data.ts",
     "repair:content": "tsx scripts/repair-course-data.ts",
     "repair:duplicates": "tsx scripts/repair-duplicates.ts",
-    "import-julebu-files": "tsx scripts/import-julebu-files.ts"
+    "import-julebu-files": "tsx scripts/import-julebu-files.ts",
+    "rescue:orphans": "tsx scripts/orphan-rescue-plan.ts",
+    "rescue:orphans:apply": "tsx scripts/orphan-rescue-plan.ts --apply"
   },
   "dependencies": {
     "@alicloud/dysmsapi20170525": "^4.5.1",

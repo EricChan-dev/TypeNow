@@ -58,3 +58,4 @@ content-audit.json
 
 # 数据清理脚本导出的「已删除内容」安全网（不可逆删除前留底，本地留存即可）
 content-deleted/
+db-backup/

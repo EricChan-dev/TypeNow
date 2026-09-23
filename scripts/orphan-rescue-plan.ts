@@ -15,16 +15,22 @@
  *   非重名空壳（14 个）→ 就是这些教材本该拥有的课程行，relink 宿主
  *
  * 用法：
- *   npx tsx scripts/orphan-rescue-plan.ts            # 打印方案 + 逐条证据校验
+ *   npx tsx scripts/orphan-rescue-plan.ts                # 只读：打印方案 + 逐条证据校验
  *   npx tsx scripts/orphan-rescue-plan.ts --json out.json
+ *   npx tsx scripts/orphan-rescue-plan.ts --apply        # 执行 relink + 发布 + 删重名空壳
  *
- * 注意：本脚本只读。真正的 relink 需要另一份显式脚本，且宿主必须人工确认。
+ * --apply 会做三件事（单个事务，失败自动回滚）：
+ *   1. 把 14 门孤儿的课时 course_id 改成宿主课程 id
+ *   2. 把 14 个宿主课程设为 is_published = 1
+ *   3. 删除重名空壳课程行（排除作为宿主的那个）
+ *   回滚信息写到 content-deleted/orphan-relink-undo.json
  */
 
 import { createConnection, type Connection } from "mysql2/promise"
 import fs from "node:fs"
 
 const ORPH = `NOT EXISTS (SELECT 1 FROM courses c WHERE c.id = l.course_id)`
+const APPLY = process.argv.includes("--apply")
 
 function dbUrl(): string {
   const m = fs.readFileSync(".env.local", "utf8").match(/^DATABASE_URL=(.*)$/m)
@@ -176,16 +182,113 @@ async function main() {
   console.log(`无宿主 ${PLAN.length - mapped.length} 门 · 未使用空壳 ${liveShells.filter((s) => !PLAN.some((p) => p.hostPrefix === S8(s.id))).length} 个`)
   const unused = liveShells.filter((s) => !PLAN.some((p) => p.hostPrefix === S8(s.id)))
   for (const u of unused) console.log(`   未使用: ${u.id}  ${JSON.stringify(u.title)}`)
-  console.log("\n重名空壳（建议随课程清理删除）:")
-  for (const d of dupShells) console.log(`   ${d.id}  ${JSON.stringify(d.title)}`)
-  console.log("\n本脚本只读，未修改任何数据。relink 需人工确认后另行执行。")
+
+  // 重名空壳中、同时被指定为 relink 宿主的，不能删（删了这次抢救就白做）
+  const hostIds = new Set(mapped.map((p) => shellBy.get(p.hostPrefix!)?.id).filter(Boolean) as string[])
+  const dupToDelete = dupShells.filter((d) => !hostIds.has(d.id))
+  const dupKept = dupShells.filter((d) => hostIds.has(d.id))
+  console.log(`\n重名空壳 ${dupShells.length} 个：删除 ${dupToDelete.length} 个 · 保留 ${dupKept.length} 个（作为 relink 宿主）`)
+  for (const d of dupToDelete) console.log(`   删 ${d.id}  ${JSON.stringify(d.title)}`)
+  for (const d of dupKept) console.log(`   留 ${d.id}  ${JSON.stringify(d.title)}  ← relink 宿主`)
 
   if (outFile) {
-    fs.writeFileSync(outFile, JSON.stringify({ plan: report, unusedShells: unused, dupShells }, null, 2))
-    console.log(`已写出 ${outFile}`)
+    fs.writeFileSync(
+      outFile,
+      JSON.stringify({ plan: report, unusedShells: unused, dupShellsToDelete: dupToDelete, dupShellsKept: dupKept }, null, 2)
+    )
+    console.log(`\n已写出 ${outFile}`)
   }
+
+  if (!APPLY) {
+    console.log("\n当前为只读方案模式。执行写入请加 --apply。")
+    await c.end()
+    if (fail) process.exitCode = 1
+    return
+  }
+
+  if (fail) throw new Error(`校验失败 ${fail} 条，拒绝执行 --apply`)
+
+  // ---------- 写入 ----------
+  P("开始写入")
+  fs.mkdirSync("content-deleted", { recursive: true })
+  fs.writeFileSync(
+    "content-deleted/orphan-relink-undo.json",
+    JSON.stringify(
+      {
+        createdAt: new Date().toISOString(),
+        relink: mapped.map((p) => ({
+          lessonCourseIdFrom: orphBy.get(p.orphPrefix)!.course_id,
+          lessonCourseIdTo: shellBy.get(p.hostPrefix!)!.id,
+          hostTitle: shellBy.get(p.hostPrefix!)!.title,
+          nLessons: Number(orphBy.get(p.orphPrefix)!.n_lessons),
+        })),
+        deletedCourses: dupToDelete,
+      },
+      null,
+      2
+    )
+  )
+  console.log("   回滚信息 → content-deleted/orphan-relink-undo.json")
+
+  await c.beginTransaction()
+  try {
+    let lessonMoved = 0
+    for (const p of mapped) {
+      const from = orphBy.get(p.orphPrefix)!.course_id
+      const host = shellBy.get(p.hostPrefix!)!
+      // 写入前再验一次：宿主仍是真实课程、且当前 0 课时
+      const [hostCheck] = await rows<{ n: number }>(c, `
+        SELECT COUNT(*) AS n FROM courses c
+        WHERE c.id = ? AND NOT EXISTS (SELECT 1 FROM lessons l WHERE l.course_id = c.id)
+      `, [host.id])
+      if (Number(hostCheck.n) !== 1) throw new Error(`宿主 ${host.id} 已不是「存在且 0 课时」，中止`)
+
+      const [res] = await c.execute(`UPDATE lessons SET course_id = ? WHERE course_id = ?`, [host.id, from])
+      const moved = (res as { affectedRows: number }).affectedRows
+      lessonMoved += moved
+      await c.execute(`UPDATE courses SET is_published = 1 WHERE id = ?`, [host.id])
+      console.log(`   ✓ ${N(moved)} 课时 ${host.id} ← ${S8(from)}  ${JSON.stringify(host.title)}（已发布）`)
+    }
+
+    for (const d of dupToDelete) {
+      await c.execute(`DELETE FROM courses WHERE id = ?`, [d.id])
+    }
+    console.log(`   ✓ 删除重名空壳课程 ${dupToDelete.length} 个`)
+
+    await c.commit()
+    console.log(`   提交完成 · 迁移课时 ${N(lessonMoved)}`)
+  } catch (e) {
+    await c.rollback()
+    console.error("   已回滚：", e)
+    await c.end()
+    process.exit(1)
+  }
+
+  P("写入后校验")
+  const [orphLeft] = await rows<{ n: number }>(c, `
+    SELECT COUNT(*) AS n FROM lessons l WHERE ${ORPH}
+  `)
+  const [dangling] = await rows<{ n: number }>(c, `
+    SELECT COUNT(*) AS n FROM sentences s WHERE NOT EXISTS (SELECT 1 FROM lessons l WHERE l.id = s.lesson_id)
+  `)
+  const [emptyLive] = await rows<{ n: number }>(c, `
+    SELECT COUNT(*) AS n FROM lessons l WHERE EXISTS (SELECT 1 FROM courses c WHERE c.id = l.course_id)
+      AND NOT EXISTS (SELECT 1 FROM sentences s WHERE s.lesson_id = l.id)
+  `)
+  const [pubShells] = await rows<{ n: number }>(c, `
+    SELECT COUNT(*) AS n FROM courses c WHERE c.is_published = 1
+      AND NOT EXISTS (SELECT 1 FROM lessons l WHERE l.course_id = c.id)
+  `)
+  const [hostL] = await rows<{ n: number }>(c, `
+    SELECT COUNT(*) AS n FROM lessons l WHERE l.course_id IN (${mapped.map(() => "?").join(",")})
+  `, mapped.map((p) => shellBy.get(p.hostPrefix!)!.id))
+  console.log(`   剩余孤儿课时 ${N(orphLeft.n)}（应为 1）`)
+  console.log(`   断链句子 ${N(dangling.n)}（应为 0）`)
+  console.log(`   可达空课时 ${N(emptyLive.n)}（应为 0）`)
+  console.log(`   已发布却 0 课时的课程 ${N(pubShells.n)}（应为 0）`)
+  console.log(`   14 个宿主现有课时合计 ${N(hostL.n)}（应为 ${N(orphTotal)}）`)
+
   await c.end()
-  if (fail) process.exitCode = 1
 }
 
 main().catch((e) => {
