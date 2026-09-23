@@ -83,6 +83,24 @@ export interface QueryOrderResult {
   trade_state_desc: string
 }
 
+/**
+ * 微信支付 v3 的公共请求头。
+ *
+ * 必须显式覆盖 Accept-Language：Node 的 fetch（undici）默认会带
+ * `accept-language: *`，而微信支付的参数校验只接受 zh-CN / en-US，
+ * 会对 `/v3/certificates` 直接返回
+ *   406 {"code":"PARAM_ERROR","message":"传入了不支持的Accept-Language"}
+ * 拿不到平台证书 → 回调验签必然失败 → 每笔真实回调都被 401 顶回去。
+ *
+ * 线上证据（2026-09-23，typenow-error.log）：该证书请求累计 11 次 406。
+ */
+function wechatPayBaseHeaders(): Record<string, string> {
+  return {
+    Accept: "application/json",
+    "Accept-Language": "zh-CN",
+  }
+}
+
 async function wechatPayRequest(
   method: string,
   urlPath: string,
@@ -91,8 +109,8 @@ async function wechatPayRequest(
   const cfg = getConfig()
   const bodyStr = body ? JSON.stringify(body) : ""
   const headers: Record<string, string> = {
+    ...wechatPayBaseHeaders(),
     "Content-Type": "application/json",
-    Accept: "application/json",
     ...buildAuthHeader(method, urlPath, bodyStr),
   }
 
@@ -178,7 +196,7 @@ interface PlatformCert {
   }
 }
 
-interface CertEntry {
+export interface CertEntry {
   serialNo: string
   publicKey: string
   expiresAt: number
@@ -187,7 +205,8 @@ interface CertEntry {
 let certCache: CertEntry[] | null = null
 let certCacheExpiresAt = 0
 
-async function getWechatPayCerts(): Promise<CertEntry[]> {
+/** 拉取并缓存微信支付平台证书（导出以便单测断言请求头）。 */
+export async function getWechatPayCerts(): Promise<CertEntry[]> {
   // Return cached certs if still valid (cache for 6 hours)
   if (certCache && Date.now() < certCacheExpiresAt) {
     return certCache
@@ -201,7 +220,7 @@ async function getWechatPayCerts(): Promise<CertEntry[]> {
   const url = `${WECHAT_PAY_HOST}${urlPath}`
   const res = await fetch(url, {
     method: "GET",
-    headers: { Authorization, Accept: "application/json" },
+    headers: { ...wechatPayBaseHeaders(), Authorization },
   })
 
   if (!res.ok) {
@@ -228,6 +247,12 @@ async function getWechatPayCerts(): Promise<CertEntry[]> {
 
   certCacheExpiresAt = Date.now() + 6 * 60 * 60 * 1000 // 6 hours
   return certCache
+}
+
+/** 仅供测试：清空平台证书缓存，避免用例之间互相污染。 */
+export function resetWechatPayCertCache(): void {
+  certCache = null
+  certCacheExpiresAt = 0
 }
 
 /**
