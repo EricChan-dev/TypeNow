@@ -16,6 +16,11 @@
 # next.js
 /.next/
 /out/
+# 部署脚本的构建暂存目录与上一版产物（.next 原子替换用，非源码）。
+# 必须忽略：server 远端的 receive.denyCurrentBranch=updateInstead 会因为
+# 工作区出现未跟踪文件而拒绝推送。
+/.next-staging/
+/.next-prev/
 
 # production
 /build

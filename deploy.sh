@@ -73,13 +73,62 @@ log "安装依赖..."
 CI=true pnpm install --frozen-lockfile 2>&1 | tee -a "$LOG_FILE"
 
 log "构建项目..."
-pnpm run build 2>&1 | tee -a "$LOG_FILE"
+# ─────────────────────────────────────────────────────────────
+# 构建到暂存目录，成功后再替换 .next。
+#
+# 直接 `next build` 是就地覆写 .next 的：一旦构建中途失败（编译报错、OOM、
+# 或与另一个构建并发），.next 会残留一个写坏一半的产物。此时脚本虽然退出、
+# 没有重启，但旧进程仍在跑，用户首次请求某个尚未加载的 chunk 就会 404
+# ——失败从「发布没生效」升级成「线上报错」。
+#
+# 改为：构建到 .next-staging（由 TYPENOW_DIST_DIR 传给 next.config.ts），
+# 校验产物完整后才用两次 rename 换掉 .next。校验不通过就直接退出，
+# 线上 .next 一个字节都没动。
+#
+# 暂存目录用固定名而不是带 PID 的名字：next build 会往 tsconfig.json 的
+# include 里塞该目录的 types 路径（并顺手重排格式），带 PID 的名字会让
+# tsconfig.json 每次部署都变化，工作区变脏后 server 远端的
+# receive.denyCurrentBranch=updateInstead 会拒绝推送、git pull 也可能失败。
+# 固定名 + 已提交对应的 include 条目，next build 就不会再改写 tsconfig.json。
+# 同一时刻只可能有一个部署（上面有 flock），固定名不会冲突。
+#
+# 回滚：上一版会保留为 .next-prev，如需回退
+#   mv .next .next-broken && mv .next-prev .next && pm2 restart typenow
+# ─────────────────────────────────────────────────────────────
+rm -rf .next-staging
+STAGING_DIR=".next-staging"
+export TYPENOW_DIST_DIR="$STAGING_DIR"
 
+if ! pnpm run build 2>&1 | tee -a "$LOG_FILE"; then
+  log "错误：构建失败，本次部署取消。线上 .next 未被触碰，仍在运行原版本。"
+  rm -rf "$STAGING_DIR"
+  exit 1
+fi
+unset TYPENOW_DIST_DIR
+
+# BUILD_ID 与 server/ 是 next start 的必需产物，缺任意一个都说明构建没走完
+if [ ! -f "$STAGING_DIR/BUILD_ID" ] || [ ! -d "$STAGING_DIR/server" ]; then
+  log "错误：构建产物不完整（缺少 $STAGING_DIR/BUILD_ID 或 $STAGING_DIR/server），本次部署取消。线上 .next 未被触碰。"
+  rm -rf "$STAGING_DIR"
+  exit 1
+fi
 # 确认 pm2 确实认识这个进程，避免「重启了一个不存在的目标」却报告成功
 if ! pm2 describe typenow > /dev/null 2>&1; then
   log "错误：当前用户（$(whoami)）的 pm2 中不存在 typenow 进程，已中止部署"
+  rm -rf "$STAGING_DIR"
   exit 1
 fi
+
+log "替换构建产物：$STAGING_DIR → .next（上一版保留为 .next-prev）"
+# 两次 rename 之间 .next 有亚毫秒级的不存在窗口；相比原先长达数分钟的
+# 「就地覆写期间产物是坏的」，这只是理论窗口。
+rm -rf .next-prev
+# 写成 if 而不是 `[ -e .next ] && mv ...`：后者在 .next 不存在时返回 1，
+# 在 set -e 下会直接终止脚本
+if [ -e .next ]; then
+  mv .next .next-prev
+fi
+mv "$STAGING_DIR" .next
 
 log "重启 PM2..."
 pm2 restart typenow 2>&1 | tee -a "$LOG_FILE"

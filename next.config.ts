@@ -2,6 +2,11 @@ import { withSentryConfig } from "@sentry/nextjs"
 import type { NextConfig } from "next"
 
 const nextConfig: NextConfig = {
+  // 构建产物目录。默认 .next；部署脚本会把它指到一个暂存目录，构建成功后再
+  // 原子替换掉 .next（见 deploy.sh）。直接就地构建时，一旦构建中途失败，
+  // 线上 .next 会留下残缺产物，而旧进程仍在服务，用户请求尚未加载的 chunk 即 404。
+  // 运行时不设该变量，所以 `next start` 仍然读取 .next。
+  distDir: process.env.TYPENOW_DIST_DIR || ".next",
   images: {
     remotePatterns: [
       { protocol: "https", hostname: "yelvkghtsgonglegoslo.supabase.co" },
