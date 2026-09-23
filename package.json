@@ -23,7 +23,11 @@
     "rescue:orphans": "tsx scripts/orphan-rescue-plan.ts",
     "rescue:orphans:apply": "tsx scripts/orphan-rescue-plan.ts --apply",
     "cleanup:residual": "tsx scripts/cleanup-residual.ts",
-    "cleanup:residual:apply": "tsx scripts/cleanup-residual.ts --apply"
+    "cleanup:residual:apply": "tsx scripts/cleanup-residual.ts --apply",
+    "e2e:db:up": "bash scripts/e2e/db-up.sh",
+    "e2e:db:down": "docker rm -f typenow-test-mysql",
+    "test:e2e": "vitest run --config vitest.e2e.config.ts",
+    "test:all": "vitest run && vitest run --config vitest.e2e.config.ts"
   },
   "dependencies": {
     "@alicloud/dysmsapi20170525": "^4.5.1",

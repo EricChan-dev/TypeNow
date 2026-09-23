@@ -1,8 +1,9 @@
 import { NextResponse } from "next/server"
 import { db } from "@/lib/db"
-import { courses, lessons, sentences } from "@/lib/db/schema"
+import { courses, lessons, sentences, users } from "@/lib/db/schema"
 import { and, eq, asc } from "drizzle-orm"
 import { getSession } from "@/lib/auth/session"
+import { checkAndExpirePro } from "@/lib/subscription"
 import { tokenizeEnglish } from "@/lib/typing-compare"
 
 /** 从英文文本生成基础 Word 数组（当 words 为 null 时的 fallback） */
@@ -28,7 +29,21 @@ export async function GET(request: Request) {
     if (!lessonId) return NextResponse.json({ error: "缺少 lessonId 参数" }, { status: 400 })
     if (!db) return NextResponse.json({ sentences: [] })
 
-    // 公开接口：只返回已发布课程下的句子，避免未发布内容泄露
+    // 会员校验：句子正文就是付费内容本身。此前这里只校验登录，页面层
+    // (home/learn/[courseId]/page.tsx) 的跳转是唯一防线，任何免费账号直接 curl
+    // 这个接口就能把整库句子拖走，而且这里也不该区分「课时是否存在」。
+    const revoked = await checkAndExpirePro(session.userId)
+    const [viewer] = await db
+      .select({ isPro: users.isPro })
+      .from(users)
+      .where(eq(users.id, session.userId))
+      .limit(1)
+    const isPro = revoked ? false : !!viewer?.isPro
+    if (!isPro) {
+      return NextResponse.json({ error: "该内容需要开通会员", code: "PRO_REQUIRED" }, { status: 403 })
+    }
+
+    // 只返回已发布课程下的句子，避免未发布内容泄露
     const [lesson] = await db
       .select({ id: lessons.id })
       .from(lessons)

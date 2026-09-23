@@ -2,7 +2,7 @@ import { NextResponse } from "next/server"
 import { db } from "@/lib/db"
 import { partnerCommissions, withdrawalRequests, users } from "@/lib/db/schema"
 import { getSession } from "@/lib/auth/session"
-import { eq, and, inArray } from "drizzle-orm"
+import { eq, and, inArray, lte } from "drizzle-orm"
 import { randomUUID } from "crypto"
 import { wechatTransferBatch, isWeChatPayConfigured } from "@/lib/wechat-pay"
 
@@ -43,6 +43,21 @@ export async function POST(request: Request) {
   const outBatchNo = `WD-${Date.now().toString(36).toUpperCase()}-${randomUUID().replace(/-/g, "").substring(0, 6).toUpperCase()}`
   const requestId = randomUUID()
   const appId = process.env.WECHAT_APP_ID ?? process.env.NEXT_PUBLIC_WECHAT_APP_ID ?? ""
+
+  // ── Step 0: Thaw matured commissions ──────────────────────────────────────
+  // 佣金的「冷却转可提现」此前只发生在 dashboard / commissions 两个读接口里（写
+  // 在读路径上）。如果客户端不先打开这两页就直接提现，明明已经到期的佣金仍停在
+  // cooling，会被判成「可提现余额不足」。提现是资金动作，必须自己保证前提成立。
+  await db
+    .update(partnerCommissions)
+    .set({ status: "available" })
+    .where(
+      and(
+        eq(partnerCommissions.partnerId, session.userId),
+        eq(partnerCommissions.status, "cooling"),
+        lte(partnerCommissions.availableAt, new Date())
+      )
+    )
 
   // ── Step 1: Atomically claim commissions ──────────────────────────────────
   // FOR UPDATE locks the rows so concurrent withdrawals on the same partner

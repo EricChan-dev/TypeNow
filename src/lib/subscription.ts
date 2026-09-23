@@ -1,6 +1,6 @@
 import { db } from "@/lib/db"
 import { subscriptions, users, partnerCommissions, paymentOrders as paymentOrdersTable } from "@/lib/db/schema"
-import { eq, and, lte, desc, count as sqlCount } from "drizzle-orm"
+import { eq, and, lte, desc, ne, count as sqlCount } from "drizzle-orm"
 import { randomUUID } from "crypto"
 
 function getPlanDurationDays(plan: "monthly" | "yearly" | "partner"): number {
@@ -26,11 +26,19 @@ async function grantPartnerAccess(userId: string): Promise<void> {
 
   let inviteCode = existingUser?.inviteCode
   if (!inviteCode) {
-    let attempts = 0
-    do {
-      inviteCode = generateInviteCode()
-      attempts++
-    } while (attempts < 10)
+    // 生成到不冲突为止。此前是一个 `do { inviteCode = generateInviteCode() } while
+    // (attempts < 10)` 的空循环：从不查询数据库，只是重复赋值十次同一个新码。
+    // 一旦撞上 users.invite_code 唯一索引，整条开通链路会直接 500。
+    for (let attempt = 0; attempt < 12 && !inviteCode; attempt++) {
+      const candidate = generateInviteCode()
+      const [taken] = await db
+        .select({ id: users.id })
+        .from(users)
+        .where(eq(users.inviteCode, candidate))
+        .limit(1)
+      if (!taken) inviteCode = candidate
+    }
+    if (!inviteCode) throw new Error("生成邀请码失败，请稍后重试")
   }
 
   await db
@@ -100,10 +108,18 @@ async function triggerCommission(
 
   if (!partner || !partner.isPartner) return
 
+  // 「首购」只看真正结算过的佣金。被退款扣回的记录（clawed_back）等于从没
+  // 结算过：如果把它也算进去，被邀请人退款后重新购买会被判成续费，佣金从 50%
+  // 掉到 30%，合伙人替平台承担了退款成本。
   const [{ cnt }] = await db
     .select({ cnt: sqlCount() })
     .from(partnerCommissions)
-    .where(eq(partnerCommissions.referredUserId, userId))
+    .where(
+      and(
+        eq(partnerCommissions.referredUserId, userId),
+        ne(partnerCommissions.status, "clawed_back")
+      )
+    )
 
   const isFirst = Number(cnt) === 0
   const rate = isFirst ? 0.5 : 0.3
@@ -193,8 +209,14 @@ export async function activateSubscription(
   return { plan, startsAt, expiresAt }
 }
 
-export async function checkAndExpirePro(userId: string) {
-  if (!db) return
+/**
+ * 顺手把已过期的会员权益回收掉。
+ *
+ * 返回「本次是否真的回收了」：调用方若在调用前就读过 users 行，那份快照已经
+ * 过期，必须据此修正，否则会把 is_pro:true 回给一个刚被降级的用户。
+ */
+export async function checkAndExpirePro(userId: string): Promise<boolean> {
+  if (!db) return false
 
   const [user] = await db
     .select({ proExpires: users.proExpires })
@@ -218,7 +240,11 @@ export async function checkAndExpirePro(userId: string) {
       .update(users)
       .set({ isPro: 0, proExpires: null })
       .where(eq(users.id, userId))
+
+    return true
   }
+
+  return false
 }
 
 export async function getActiveSubscription(userId: string) {

@@ -23,6 +23,20 @@ async function resolveReferredBy(refCode: string | null): Promise<string | null>
   return partner?.id ?? null
 }
 
+/**
+ * 从二维码 scene 里取出邀请码。
+ *
+ * scene 的格式是 oa-qrcode 生成的 `<48位随机hex>_<邀请码>`；随机部分既用于
+ * 扫码登录的一次性令牌，也用于防猜测，所以邀请码只能放在后缀里。
+ * 没有下划线时说明这次扫码没有邀请码，按自然流量处理。
+ */
+function extractRefCode(sceneStr: string): string | null {
+  const sep = sceneStr.lastIndexOf("_")
+  if (sep < 0) return null
+  const candidate = sceneStr.slice(sep + 1).toUpperCase()
+  return /^[A-Z0-9]{4,12}$/.test(candidate) ? candidate : null
+}
+
 function getOAConfig() {
   return {
     token: process.env.WECHAT_OA_TOKEN,
@@ -166,7 +180,7 @@ async function handleEvent(event: Record<string, string>): Promise<void> {
 
     if (sceneStr) {
       console.log("[OA Event] Subscribe with scene:", sceneStr)
-      await processSceneLogin(openid, sceneStr, "subscribe")
+      await processSceneLogin(openid, sceneStr)
     } else {
       console.log("[OA Event] Subscribe without scene")
       // Still send a welcome message for direct follows
@@ -177,15 +191,11 @@ async function handleEvent(event: Record<string, string>): Promise<void> {
   // Handle SCAN event (user already subscribed, scans QR code)
   if (eventType === "SCAN" && eventKey) {
     console.log("[OA Event] SCAN with scene:", eventKey)
-    await processSceneLogin(openid, eventKey, "scan")
+    await processSceneLogin(openid, eventKey)
   }
 }
 
-async function processSceneLogin(
-  openid: string,
-  sceneStr: string,
-  eventType: "subscribe" | "scan",
-): Promise<void> {
+async function processSceneLogin(openid: string, sceneStr: string): Promise<void> {
   try {
     // Get user info from WeChat OA
     const oaUser = await getOAUserInfo(openid)
@@ -248,7 +258,7 @@ async function processSceneLogin(
       // Create new user
       const id = randomUUID()
       const trialExpiresAt = new Date(Date.now() + 3 * 24 * 60 * 60 * 1000)
-      const referredBy = await resolveReferredBy(sceneStr)
+      const referredBy = await resolveReferredBy(extractRefCode(sceneStr))
 
       await db.insert(users).values({
         id,

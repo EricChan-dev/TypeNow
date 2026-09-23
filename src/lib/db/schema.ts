@@ -376,6 +376,27 @@ export const partnerCommissions = mysqlTable(
   ]
 )
 
+// ─── Invite Rewards (legacy: 仅生产库残留，当前代码无读写) ──────────────────────
+// 这张表由早期 Supabase 迁移带过来，src/ 内已无任何引用。这里补上定义不是要启用它，
+// 而是让 schema.ts 与生产库完全一致：否则 `drizzle-kit push` 会把它当成本地多出的表
+// 并在 --force 下 DROP 掉。真要清理请单独评估，不要依赖 push 的默认行为。
+export const inviteRewards = mysqlTable(
+  "invite_rewards",
+  {
+    id: varchar("id", { length: 36 }).primaryKey().default(sql`(UUID())`),
+    inviterId: varchar("inviter_id", { length: 36 }).notNull(),
+    inviteeId: varchar("invitee_id", { length: 36 }).notNull(),
+    rewardType: mysqlEnum("reward_type", ["register", "activate", "first_purchase"]).notNull(),
+    rewardDays: int("reward_days").notNull(),
+    purchasePlan: mysqlEnum("purchase_plan", ["monthly", "yearly"]),
+    createdAt: datetime("created_at").default(sql`CURRENT_TIMESTAMP`),
+  },
+  (t) => [
+    uniqueIndex("uk_ir_invitee_type").on(t.inviteeId, t.rewardType),
+    index("idx_ir_inviter").on(t.inviterId),
+  ]
+)
+
 // ─── Withdrawal Requests ──────────────────────────────────────────────────────
 export const withdrawalRequests = mysqlTable(
   "withdrawal_requests",
@@ -584,6 +605,7 @@ export type PracticeRecord = typeof practiceRecords.$inferSelect
 export type PaymentOrder = typeof paymentOrders.$inferSelect
 export type Subscription = typeof subscriptions.$inferSelect
 export type PartnerCommission = typeof partnerCommissions.$inferSelect
+export type InviteReward = typeof inviteRewards.$inferSelect
 export type WithdrawalRequest = typeof withdrawalRequests.$inferSelect
 export type PartnerRiskFlag = typeof partnerRiskFlags.$inferSelect
 export type UserCourseProgress = typeof userCourseProgress.$inferSelect

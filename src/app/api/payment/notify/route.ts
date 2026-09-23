@@ -62,7 +62,14 @@ export async function POST(request: Request) {
       return NextResponse.json({ code: "FAIL", message: "Missing resource" }, { status: 400 })
     }
 
-    type PaymentResource = { out_trade_no: string; transaction_id: string; trade_state: string }
+    type PaymentResource = {
+      out_trade_no: string
+      transaction_id: string
+      trade_state: string
+      amount?: { total?: number; currency?: string }
+      mchid?: string
+      appid?: string
+    }
     const resource = decryptNotifyResource(
       rawResource.ciphertext,
       rawResource.nonce,
@@ -93,6 +100,16 @@ export async function POST(request: Request) {
 
     if (!existing) {
       return NextResponse.json({ code: "FAIL", message: "Order not found" }, { status: 404 })
+    }
+
+    // 金额交叉校验（防御性）：生产环境验签已经失败即拒，这里再挡一道「回调金额
+    // 与本地订单金额不一致」的配置/串单事故。字段缺失时不拦，兼容历史回调体。
+    const notifiedAmount = resource.amount?.total
+    if (typeof notifiedAmount === "number" && notifiedAmount !== existing.amount) {
+      console.error(
+        `[Notify] 金额不匹配，拒绝开通: out_trade_no=${outTradeNo} local=${existing.amount} wechat=${notifiedAmount}`
+      )
+      return NextResponse.json({ code: "FAIL", message: "Amount mismatch" }, { status: 400 })
     }
 
     // 原子占用订单：并发或重复回调只有一个能把 pending 翻成 paid，避免同一笔

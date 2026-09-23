@@ -15,15 +15,17 @@ export async function GET() {
   const user = await getCurrentUser()
   if (!user) return NextResponse.json({ user: null })
 
-  // Ensure pro status is current
-  await checkAndExpirePro(user.id)
+  // Ensure pro status is current. 上面的 user 是回收前的快照，必须以返回值修正，
+  // 否则刚过期的用户会拿到一次 is_pro:true / member_tier:"trial" 的错误响应。
+  const revoked = await checkAndExpirePro(user.id)
+  const isPro = revoked ? false : !!user.isPro
 
   const isAdmin = user.role === "admin" || (user.phone != null && getAdminPhones().includes(user.phone))
 
   let memberTier: "trial" | "monthly" | "yearly" | "partner" | "free" = "free"
   if (user.isPartner) {
     memberTier = "partner"
-  } else if (user.isPro) {
+  } else if (isPro) {
     const sub = await getActiveSubscription(user.id)
     memberTier = (sub?.plan as "monthly" | "yearly") ?? "trial"
   }
@@ -33,7 +35,7 @@ export async function GET() {
       id: user.id,
       name: user.name,
       avatar: user.avatar,
-      is_pro: !!user.isPro,
+      is_pro: isPro,
       is_partner: !!user.isPartner,
       level: user.level,
       member_tier: memberTier,

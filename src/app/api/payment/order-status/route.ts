@@ -6,6 +6,15 @@ import { eq, and } from "drizzle-orm"
 import { queryOrder } from "@/lib/wechat-pay"
 import { activateSubscription } from "@/lib/subscription"
 
+/** drizzle 的 mysql2 update 返回 [ResultSetHeader, ...] */
+function affectedRows(result: unknown): number {
+  if (Array.isArray(result)) {
+    const header = result[0] as { affectedRows?: number } | undefined
+    return Number(header?.affectedRows ?? 0)
+  }
+  return 0
+}
+
 export async function GET(request: Request) {
   try {
     if (!db) return NextResponse.json({ error: "服务未配置" }, { status: 500 })
@@ -29,13 +38,31 @@ export async function GET(request: Request) {
       try {
         const wxOrder = await queryOrder(outTradeNo)
         if (wxOrder.trade_state === "SUCCESS") {
-          await db
+          // 原子占用订单：与 /api/payment/notify 使用同一套条件更新。
+          // 此前这里是无条件 UPDATE，如果用户在支付页轮询的同时微信回调到达，
+          // 两条路径都会各自调用 activateSubscription，会员时长被开两次。
+          const updateResult = await db
             .update(paymentOrders)
             .set({ status: "paid", transactionId: wxOrder.transaction_id, paidAt: new Date() })
-            .where(eq(paymentOrders.outTradeNo, outTradeNo))
+            .where(and(eq(paymentOrders.id, order.id), eq(paymentOrders.status, "pending")))
 
-          await activateSubscription(session.userId, order.plan as "monthly" | "yearly" | "partner", order.id, order.amount)
-          return NextResponse.json({ status: "paid", plan: order.plan })
+          if (affectedRows(updateResult) > 0) {
+            await activateSubscription(
+              session.userId,
+              order.plan as "monthly" | "yearly" | "partner",
+              order.id,
+              order.amount
+            )
+            return NextResponse.json({ status: "paid", plan: order.plan })
+          }
+
+          // 抢单失败说明回调/另一次轮询已经处理过，回读真实状态再应答
+          const [fresh] = await db
+            .select({ status: paymentOrders.status, plan: paymentOrders.plan })
+            .from(paymentOrders)
+            .where(eq(paymentOrders.id, order.id))
+            .limit(1)
+          return NextResponse.json({ status: fresh?.status ?? "paid", plan: fresh?.plan ?? order.plan })
         }
       } catch {
         // WeChat query failed, rely on local status

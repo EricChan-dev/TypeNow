@@ -19,7 +19,9 @@ export async function GET() {
     })
     .from(subscriptions)
     .where(eq(subscriptions.userId, session.userId))
-    .orderBy(desc(subscriptions.createdAt))
+    // created_at 只精确到秒，同一秒内的多次开通会产生并列，MySQL 此时不保证顺序。
+    // 用 expires_at 作为稳定的二级排序：并列时到期更晚的那条（最新叠加的权益）在前。
+    .orderBy(desc(subscriptions.createdAt), desc(subscriptions.expiresAt))
     .limit(20)
 
   return NextResponse.json({
