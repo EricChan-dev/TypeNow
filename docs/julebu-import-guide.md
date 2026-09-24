@@ -160,6 +160,6 @@ const url = `https://api.julebu.co/trpc/${endpoint}?batch=1&input=${encodeURICom
 | `src/lib/db/schema.ts` | Drizzle schema（新增 2 列） |
 | `src/types/index.ts` | TypeScript 类型更新 |
 | `src/components/home/learn/CompletedSentence.tsx` | 前端组件（双音标 + 词性色标） |
-| `docs/julebu-import-plan.md` | 技术方案文档 |
+| `docs/archive/julebu-import-plan.md` | 技术方案文档 |
 | `docs/julebu-import-guide.md` | 本操作指南 |
 | `/tmp/julebu-crawl-all.mjs` | 批量爬虫（Puppeteer） |

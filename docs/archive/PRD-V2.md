@@ -1,5 +1,11 @@
 # TypeNow（码上英语）产品需求文档 V2.0
 
+> **📦 已归档**｜归档日期：2026-09-24
+> 本版 PRD 已被 [PRD_V3.md](../../PRD_V3.md) 取代。
+>
+> 本文档不再维护。当前有效文档请见 [docs/README.md](../README.md) 与
+> [PRD_V3.md](../../PRD_V3.md)。
+
 ---
 
 ## 产品信息
@@ -56,29 +62,29 @@
 
 | 页面 | 路由 | 文档 |
 |------|------|------|
-| 全局设计系统 | - | [00-global-design](docs/pages/00-global-design.md) |
-| 未登录首页 | `/` | [01-landing](docs/pages/01-landing.md) |
-| 登录页 | `/login` | [02-login](docs/pages/02-login.md) |
-| 已登录首页 | `/home` | [03-home-dashboard](docs/pages/03-home-dashboard.md) |
-| 打字练习 | `/practice` | [04-practice](docs/pages/04-practice.md) |
-| 练习结果 | `/practice/result` | [05-practice-result](docs/pages/05-practice-result.md) |
-| AI 出题练习 | `/strengthen/quiz` | [06-strengthen-quiz](docs/pages/06-strengthen-quiz.md) |
-| 场景对话 | `/strengthen/chat` | [07-strengthen-chat](docs/pages/07-strengthen-chat.md) |
-| 写作练习 | `/strengthen/write` | [08-strengthen-write](docs/pages/08-strengthen-write.md) |
-| 批改报告 | `/write/report` | [09-write-report](docs/pages/09-write-report.md) |
-| 个人主页 | `/profile` | [10-profile](docs/pages/10-profile.md) |
-| 学习历史 | `/profile/history` | [11-profile-history](docs/pages/11-profile-history.md) |
-| 设置页 | `/profile/settings` | [12-settings](docs/pages/12-settings.md) |
-| 定价页 | `/pricing` | [13-pricing](docs/pages/13-pricing.md) |
-| 分享卡片 | `/share/card` | [14-share-card](docs/pages/14-share-card.md) |
+| 全局设计系统 | - | [00-global-design](../pages/00-global-design.md) |
+| 未登录首页 | `/` | [01-landing](../pages/01-landing.md) |
+| 登录页 | `/login` | [02-login](../pages/02-login.md) |
+| 已登录首页 | `/home` | [03-home-dashboard](../pages/03-home-dashboard.md) |
+| 打字练习 | `/practice` | [04-practice](../pages/04-practice.md) |
+| 练习结果 | `/practice/result` | [05-practice-result](../pages/05-practice-result.md) |
+| AI 出题练习 | `/strengthen/quiz` | [06-strengthen-quiz](../pages/06-strengthen-quiz.md) |
+| 场景对话 | `/strengthen/chat` | [07-strengthen-chat](../pages/07-strengthen-chat.md) |
+| 写作练习 | `/strengthen/write` | [08-strengthen-write](../pages/08-strengthen-write.md) |
+| 批改报告 | `/write/report` | [09-write-report](../pages/09-write-report.md) |
+| 个人主页 | `/profile` | [10-profile](../pages/10-profile.md) |
+| 学习历史 | `/profile/history` | [11-profile-history](../pages/11-profile-history.md) |
+| 设置页 | `/profile/settings` | [12-settings](../pages/12-settings.md) |
+| 定价页 | `/pricing` | [13-pricing](../pages/13-pricing.md) |
+| 分享卡片 | `/share/card` | [14-share-card](../pages/14-share-card.md) |
 
 ### 📐 架构 & 策略
 
 | 文档 | 说明 |
 |------|------|
-| [技术架构](docs/architecture.md) | 技术选型 · 数据库 · AI Prompt · 成本 |
-| [策略文档](docs/strategy.md) | 市场 · 用户 · 定价 · 内容 · 获客 · 风险 · 迭代 |
-| [开发计划](docs/dev-plan.md) | 30天里程碑 · 每日任务 · 成功指标 |
+| [技术架构](../architecture.md) | 技术选型 · 数据库 · AI Prompt · 成本 |
+| [策略文档](../strategy.md) | 市场 · 用户 · 定价 · 内容 · 获客 · 风险 · 迭代 |
+| [开发计划](dev-plan.md) | 30天里程碑 · 每日任务 · 成功指标 |
 
 ---
 

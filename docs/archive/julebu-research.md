@@ -1,5 +1,11 @@
 # 句乐部竞品技术调研
 
+> **📦 已归档**｜归档日期：2026-09-24
+> 一次性竞品调研。结论已沉淀进 [practice-page-alignment-matrix.md](../practice-page-alignment-matrix.md)。
+>
+> 本文档不再维护。当前有效文档请见 [docs/README.md](../README.md) 与
+> [PRD_V3.md](../../PRD_V3.md)。
+
 ## 概述
 
 对 [句乐部 (julebu.co)](https://julebu.co) 进行了完整的技术调研，包括产品功能分析、数据模型逆向、API 端点梳理和句子级数据结构提取。
