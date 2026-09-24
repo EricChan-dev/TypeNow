@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server"
-import { verifyNotifySignature, decryptNotifyResource } from "@/lib/wechat-pay"
+import { verifyNotifySignature, decryptNotifyResource, matchesWechatPayMerchant } from "@/lib/wechat-pay"
 import { activateSubscription } from "@/lib/subscription"
 import { db } from "@/lib/db"
 import { paymentOrders, partnerCommissions, subscriptions, users } from "@/lib/db/schema"
@@ -19,9 +19,13 @@ import { eq, and, desc } from "drizzle-orm"
  * 安全约束（不要放宽）：
  *   1. 报文只能来自加密的 resource，不接受 body 顶层明文兜底；
  *   2. 验签不通过一律 401（未配置微信支付时，verifyNotifySignature 在生产
- *      环境返回 false，不会再 fail-open）；
- *   3. 订单状态用条件更新原子占用，重复/并发回调只会生效一次；
- *   4. 激活失败要回退为 pending，保证微信重试能真正补开会员。
+ *      环境返回 false，不会再 fail-open）；验签同时校验报文时间戳在 5 分钟
+ *      窗口内，防重放；
+ *   3. 验签同时支持「公钥模式」与「平台证书模式」：报文的 Wechatpay-Serial
+ *      以 PUB_KEY_ID_ 开头即公钥模式（本商户就是这种，平台证书接口对它 404），
+ *      必须用 WECHAT_PAY_PUBLIC_KEY/_PATH 配置的微信支付公钥验签；
+ *   4. 订单状态用条件更新原子占用，重复/并发回调只会生效一次；
+ *   5. 激活失败要回退为 pending，保证微信重试能真正补开会员。
  */
 
 /** drizzle 的 mysql2 update 返回 [ResultSetHeader, ...] */
@@ -82,6 +86,14 @@ export async function POST(request: Request) {
 
     if (!outTradeNo) {
       return NextResponse.json({ code: "FAIL", message: "Missing out_trade_no" }, { status: 400 })
+    }
+
+    // 商户/应用归属校验：报文是从本商户的公钥验过签的，但仍要挡住"同一套密钥
+    // 对接了多个商户号"或"用错 appid"时把别人的订单当自己的处理。
+    const merchantCheck = matchesWechatPayMerchant(resource)
+    if (!merchantCheck.ok) {
+      console.error(`[Notify] 拒绝：${merchantCheck.reason}`)
+      return NextResponse.json({ code: "FAIL", message: "Merchant mismatch" }, { status: 400 })
     }
 
     if (tradeState !== "SUCCESS") {

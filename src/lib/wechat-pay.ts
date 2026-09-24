@@ -1,4 +1,5 @@
 import { randomUUID, createSign, createVerify, createDecipheriv } from "crypto"
+import { readFileSync } from "fs"
 
 const WECHAT_PAY_HOST = "https://api.mch.weixin.qq.com"
 
@@ -11,6 +12,13 @@ function getConfig() {
     privateKey: process.env.WECHAT_PAY_PRIVATE_KEY || "",
     notifyUrl: process.env.WECHAT_PAY_NOTIFY_URL || "",
     sandbox: process.env.WECHAT_PAY_SANDBOX === "true",
+    // ── 微信支付公钥模式（详见 verifyWechatPaySignature 上方注释）──
+    // 公钥ID（PUB_KEY_ID_ 开头），商户平台「账户中心 → API 安全 → 微信支付公钥」可见
+    publicKeyId: process.env.WECHAT_PAY_PUBLIC_KEY_ID || "",
+    // 公钥本身：PEM 内容（.env 里换行写成 \n）或 base64 编码的 PEM
+    publicKey: process.env.WECHAT_PAY_PUBLIC_KEY || "",
+    // 或者放一个文件，给路径（推荐：文件放到仓库外，git pull 碰不到）
+    publicKeyPath: process.env.WECHAT_PAY_PUBLIC_KEY_PATH || "",
   }
 }
 
@@ -316,6 +324,183 @@ export function decryptNotifyResource(
   throw new Error("微信支付未配置，无法解密回调报文")
 }
 
+// ─── 微信支付公钥模式 ──────────────────────────────────────────────────────────
+
+/**
+ * 微信支付「公钥模式」的应答头 Wechatpay-Serial 以它开头。
+ *
+ * 两种模式互斥、由商户平台侧决定，代码必须同时支持：
+ *   - 平台证书模式（老）：serial 是十六进制平台证书序列号，需要
+ *     GET /v3/certificates 下载平台证书（再用 APIv3 密钥解密）。
+ *   - 公钥模式（新）：serial 是 PUB_KEY_ID_ 开头的公钥ID，**平台证书接口对这个
+ *     商户直接 404**：
+ *       {"code":"RESOURCE_NOT_EXISTS","message":"无可用的平台证书"}
+ *     所以绝不能再去下载证书，必须用商户平台下载的微信支付公钥验签。
+ *
+ * 这就是线上「每笔回调都被 401 顶回去、履约只能靠前端 3 秒轮询」的根因。
+ */
+export const WECHATPAY_PUBLIC_KEY_ID_PREFIX = "PUB_KEY_ID_"
+
+/** 报文时间戳允许的时钟偏移（秒）。微信官方建议 5 分钟。 */
+export const WECHATPAY_TIMESTAMP_TOLERANCE_SECONDS = 300
+
+function normalizePem(raw: string): string {
+  // .env 里换行只能写成 \n（dotenv 只在双引号值里展开）；这里再兜一层，
+  // 免得拿到 "-----BEGIN PUBLIC KEY-----\nMIIB..." 这种整行字符串。
+  return raw.includes("\\n") ? raw.replace(/\\n/g, "\n") : raw
+}
+
+let publicKeyCache: { source: string; pem: string } | null = null
+
+/** 仅供测试：清空公钥缓存，避免用例之间互相污染。 */
+export function resetWechatPayPublicKeyCache(): void {
+  publicKeyCache = null
+}
+
+/**
+ * 读取微信支付公钥。
+ * 优先 WECHAT_PAY_PUBLIC_KEY（PEM / base64），否则读 WECHAT_PAY_PUBLIC_KEY_PATH。
+ * 未配置返回 null，由调用方决定是拒绝还是继续——不在这里抛，方便上层给出可定位的日志。
+ */
+export function loadWechatPayPublicKey(): string | null {
+  const cfg = getConfig()
+  const source = cfg.publicKey || cfg.publicKeyPath
+  if (!source) return null
+  if (publicKeyCache && publicKeyCache.source === source) return publicKeyCache.pem
+
+  let pem: string
+  if (cfg.publicKey) {
+    pem = normalizePem(cfg.publicKey)
+  } else {
+    // 生产把公钥放在仓库外的文件里：发布是 git pull --ff-only，仓库内文件虽然被
+    // .gitignore 挡住，但放外面更不容易被误提交/误删。
+    pem = normalizePem(readFileSync(cfg.publicKeyPath, "utf-8"))
+  }
+  if (!pem.includes("-----BEGIN")) {
+    pem = Buffer.from(pem, "base64").toString("utf-8")
+  }
+  if (!pem.includes("-----BEGIN")) {
+    throw new Error("微信支付公钥内容非法：既不是 PEM，也不是 base64 编码的 PEM")
+  }
+  publicKeyCache = { source, pem }
+  return pem
+}
+
+function verifyWithPublicKeyMaterial(
+  publicKey: string,
+  message: string,
+  signature: string,
+): boolean {
+  try {
+    const verifier = createVerify("RSA-SHA256")
+    verifier.update(message)
+    return verifier.verify(publicKey, signature, "base64")
+  } catch (err) {
+    console.error("[WeChat Pay] 验签异常:", err)
+    return false
+  }
+}
+
+/**
+ * 校验一条微信支付签名的公共实现——**应答与回调的报文格式完全一致**：
+ *   message = timestamp + "\n" + nonce + "\n" + body + "\n"
+ *
+ * 两者共用同一份实现是有意的：公钥是否可用、报文格式是否正确，用任意一个真实
+ * 请求就能验证（例如 GET /v3/pay/transactions/out-trade-no/...），不必等到真的
+ * 有用户付款才能确认回调能不能验签。
+ */
+export async function verifyWechatPaySignature(params: {
+  timestamp: string
+  nonce: string
+  body: string
+  signature: string
+  serialNo: string
+}): Promise<boolean> {
+  const { timestamp, nonce, body, signature, serialNo } = params
+
+  if (!timestamp || !nonce || !signature || !serialNo) {
+    console.error(
+      `[WeChat Pay] 验签缺少必要字段：timestamp=${Boolean(timestamp)} nonce=${Boolean(nonce)} signature=${Boolean(signature)} serial=${Boolean(serialNo)}`
+    )
+    return false
+  }
+
+  // 时钟窗口：重放一份很久以前抓到的合法报文是唯一能绕过"验签"的攻击面。
+  // 微信每次请求都会重新签名，5 分钟足够覆盖网络与重试。
+  const ts = Number(timestamp)
+  if (!Number.isFinite(ts)) {
+    console.error(`[WeChat Pay] 报文时间戳非法：${timestamp}`)
+    return false
+  }
+  const skew = Math.abs(Math.floor(Date.now() / 1000) - ts)
+  if (skew > WECHATPAY_TIMESTAMP_TOLERANCE_SECONDS) {
+    console.error(
+      `[WeChat Pay] 报文时间戳超出 ${WECHATPAY_TIMESTAMP_TOLERANCE_SECONDS}s 窗口（相差 ${skew}s），拒绝`
+    )
+    return false
+  }
+
+  const message = `${timestamp}\n${nonce}\n${body}\n`
+
+  if (serialNo.startsWith(WECHATPAY_PUBLIC_KEY_ID_PREFIX)) {
+    // ── 公钥模式 ──
+    const cfg = getConfig()
+    let pem: string | null
+    try {
+      pem = loadWechatPayPublicKey()
+    } catch (err) {
+      console.error("[WeChat Pay] 读取微信支付公钥失败:", err)
+      return false
+    }
+    if (!pem) {
+      console.error(
+        `[WeChat Pay] 报文来自公钥模式（serial=${serialNo}），但未配置微信支付公钥。` +
+          `请设置 WECHAT_PAY_PUBLIC_KEY_ID 与 WECHAT_PAY_PUBLIC_KEY（或 WECHAT_PAY_PUBLIC_KEY_PATH），拒绝`
+      )
+      return false
+    }
+    // 公钥模式下微信只有一把公钥，serial 的作用是"该用公钥验签"而不是选钥匙。
+    // 配了 ID 就顺手核对；不一致只告警不拒绝——真正的安全边界是下面的密码学
+    // 验签，而密钥来自我们自己的环境变量，不匹配也伪造不出签名。
+    if (cfg.publicKeyId && cfg.publicKeyId !== serialNo) {
+      console.warn(
+        `[WeChat Pay] 公钥ID 不一致：报文=${serialNo} 配置=${cfg.publicKeyId}（仍按配置的公钥验签）`
+      )
+    }
+    return verifyWithPublicKeyMaterial(pem, message, signature)
+  }
+
+  // ── 平台证书模式 ──
+  const certs = await getWechatPayCerts()
+  const cert = certs.find((c) => c.serialNo === serialNo)
+  if (!cert) {
+    console.error(`[WeChat Pay] Certificate not found for serial: ${serialNo}`)
+    return false
+  }
+  return verifyWithPublicKeyMaterial(cert.publicKey, message, signature)
+}
+
+/**
+ * 校验回调 resource 里的 mchid / appid 是否属于本商户。
+ *
+ * 防御场景：同一套 APIv3 密钥或公钥对接了多个商户号、或用错了 appid 时，一笔
+ * 属于别人的回调会被当成本商户的订单处理（out_trade_no 恰好撞车就会误开会员）。
+ * 字段缺失时不拦（兼容历史报文），有值就必须一致。
+ */
+export function matchesWechatPayMerchant(resource: {
+  mchid?: string
+  appid?: string
+}): { ok: boolean; reason?: string } {
+  const cfg = getConfig()
+  if (cfg.mchId && resource.mchid && resource.mchid !== cfg.mchId) {
+    return { ok: false, reason: `mchid 不匹配（回调 ${resource.mchid} / 本商户 ${cfg.mchId}）` }
+  }
+  if (cfg.appId && resource.appid && resource.appid !== cfg.appId) {
+    return { ok: false, reason: `appid 不匹配（回调 ${resource.appid} / 本应用 ${cfg.appId}）` }
+  }
+  return { ok: true }
+}
+
 export async function verifyNotifySignature(
   timestamp: string,
   nonce: string,
@@ -332,19 +517,7 @@ export async function verifyNotifySignature(
   }
 
   try {
-    const certs = await getWechatPayCerts()
-    const cert = certs.find((c) => c.serialNo === serialNo)
-
-    if (!cert) {
-      console.error(`[WeChat Pay] Certificate not found for serial: ${serialNo}`)
-      return false
-    }
-
-    const message = `${timestamp}\n${nonce}\n${body}\n`
-    const verifier = createVerify("RSA-SHA256")
-    verifier.update(message)
-
-    return verifier.verify(cert.publicKey, signature, "base64")
+    return await verifyWechatPaySignature({ timestamp, nonce, body, signature, serialNo })
   } catch (err) {
     console.error("[WeChat Pay] Signature verification error:", err)
     return false
