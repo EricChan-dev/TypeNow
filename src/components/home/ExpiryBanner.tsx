@@ -2,7 +2,9 @@
 
 import { useState, useEffect, useRef } from "react"
 import Link from "next/link"
+import { usePathname } from "next/navigation"
 import { X } from "lucide-react"
+import { isImmersivePracticeRoute } from "@/lib/immersive-route"
 
 type MemberTier = "trial" | "monthly" | "yearly" | "partner" | "free"
 
@@ -24,6 +26,7 @@ function formatCountdown(ms: number): string {
 }
 
 export function ExpiryBanner({ memberTier, proExpires }: ExpiryBannerProps) {
+  const pathname = usePathname()
   const [dismissed, setDismissed] = useState(false)
   const [countdown, setCountdown] = useState("")
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
@@ -57,7 +60,8 @@ export function ExpiryBanner({ memberTier, proExpires }: ExpiryBannerProps) {
     }
   }, [shouldShow, expiresAt])
 
-  if (!shouldShow) return null
+  // 练习页是全屏沉浸界面，横幅会占掉一行、把正在打的句子往下顶，进来就退出渲染
+  if (!shouldShow || isImmersivePracticeRoute(pathname)) return null
 
   function handleDismiss() {
     sessionStorage.setItem(STORAGE_KEY, new Date().toDateString())

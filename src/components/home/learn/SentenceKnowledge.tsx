@@ -3,13 +3,13 @@
 import { useState, useEffect } from "react"
 import {
   Volume2, Loader2, MessageSquare, Globe, BookMarked,
-  PencilLine, Landmark, MessageCircle, Quote, Sparkles, Database,
+  PencilLine, Landmark, MessageCircle, Quote, Sparkles, RefreshCw,
 } from "lucide-react"
 import type { Sentence } from "@/types"
 import type { SentenceKnowledge as TKnowledge } from "@/types/course"
-import { getMockKnowledge } from "@/lib/mock-data/knowledge"
 import { globalSpeak } from "@/lib/hooks/useTTSSettings"
-import { dedupRequest } from "@/lib/dedup"
+import { dedupRequest, DedupTimeoutError } from "@/lib/dedup"
+import { describeKnowledgeFailure, type KnowledgeFailureView } from "@/lib/knowledge-failure"
 
 interface BlockShellProps {
   icon: React.ReactNode
@@ -37,42 +37,70 @@ interface SentenceKnowledgeProps {
 export function SentenceKnowledge({ sentence }: SentenceKnowledgeProps) {
   const [knowledge, setKnowledge] = useState<TKnowledge | null>(null)
   const [loading, setLoading] = useState(false)
-  const [isMock, setIsMock] = useState(false)
+  const [failure, setFailure] = useState<KnowledgeFailureView | null>(null)
+  // 递增即触发重新请求。用计数器而不是布尔量，是为了让「再次重试」也能生效。
+  const [reloadKey, setReloadKey] = useState(0)
 
   useEffect(() => {
     let cancelled = false
-    const controller = new AbortController()
 
     async function load() {
       setLoading(true)
-      setIsMock(false)
+      setFailure(null)
       try {
+        // 刻意不传 AbortController：
+        //   dedupRequest 共享的是同一个 Promise，而 AbortSignal 是**每个调用者各自**的。
+        //   两者天生冲突 —— 任何一次 cleanup（卸载、切句、StrictMode 的挂载→卸载→重挂载）
+        //   一旦 abort，就会把这唯一的在途请求打掉，而 dedup 表里仍留着那个注定失败的
+        //   Promise，于是下一个调用者立刻拿到同一个错误之上报「网络连接失败」。
+        //   实测在 StrictMode 下必然触发；重试按钮在请求进行中点击也会被同样地废掉。
+        //   改为只依赖 cancelled 标记忽略结果，请求本身让它跑完 —— 服务端有
+        //   sentence_knowledge_cache，多跑的这一次会命中缓存，代价极低。
         const json = await dedupRequest(`knowledge:${sentence.english}`, async () => {
           const res = await fetch("/api/knowledge/analyze", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ sentence: sentence.english }),
-            signal: controller.signal,
           })
-          if (!res.ok) throw new Error("API error")
+          if (!res.ok) {
+            // 必须读一次 body：服务端用 code 区分「未配置」与「临时故障」，
+            // 只凭状态码无法判断重试是否有意义。
+            // 读 body 自身也可能失败，故降级为 null 而不是继续抛。
+            const payload = await res.json().catch(() => null)
+            const err = new Error(`knowledge analyze failed: ${res.status}`) as Error & {
+              status?: number
+              payload?: unknown
+            }
+            err.status = res.status
+            err.payload = payload
+            throw err
+          }
           return res.json()
         })
         if (!cancelled) {
           setKnowledge(json.data as TKnowledge)
           setLoading(false)
         }
-      } catch {
-        if (!cancelled) {
-          setKnowledge(getMockKnowledge(sentence.id))
-          setIsMock(true)
-          setLoading(false)
-        }
+      } catch (e) {
+        if (cancelled) return
+        // 被中断的请求不是用户的故障，不该报给他看。
+        if (e instanceof DOMException && e.name === "AbortError") return
+        const err = e as { status?: number; payload?: unknown }
+        // 刻意不再回退到 getMockKnowledge()：那些是硬编码占位文案，
+        // 挂个角标也改变不了「把假内容当分析结果给用户看」的事实。
+        setKnowledge(null)
+        setFailure(
+          describeKnowledgeFailure(err.status ?? null, err.payload, {
+            timedOut: e instanceof DedupTimeoutError,
+          }),
+        )
+        setLoading(false)
       }
     }
 
     load()
-    return () => { cancelled = true; controller.abort() }
-  }, [sentence.id, sentence.english])
+    return () => { cancelled = true }
+  }, [sentence.id, sentence.english, reloadKey])
 
   if (loading) {
     return (
@@ -86,11 +114,32 @@ export function SentenceKnowledge({ sentence }: SentenceKnowledgeProps) {
     )
   }
 
+  if (failure) {
+    return (
+      <div className="flex flex-col items-center justify-center py-16 gap-3 text-center px-6">
+        <div className="rounded-full bg-foreground/[0.06] p-3">
+          <MessageSquare className="h-6 w-6 text-foreground/30" />
+        </div>
+        <p className="text-[15px] font-semibold text-foreground/80">{failure.title}</p>
+        <p className="text-[13px] text-foreground/45 leading-relaxed max-w-sm">{failure.detail}</p>
+        {failure.canRetry && (
+          <button
+            onClick={() => setReloadKey((k) => k + 1)}
+            className="mt-1 inline-flex items-center gap-1.5 rounded-full border border-foreground/15 bg-foreground/[0.05] px-3.5 py-1.5 text-[13px] font-medium text-foreground/70 hover:border-accent/40 hover:text-accent transition-all"
+          >
+            <RefreshCw className="h-3.5 w-3.5" />
+            重试
+          </button>
+        )}
+      </div>
+    )
+  }
+
   if (!knowledge) return null
 
   return (
     <div className="space-y-4">
-      {/* Header: original sentence + offline badge */}
+      {/* Header: original sentence */}
       <div className="flex items-center gap-3 px-1">
         <Sparkles className="h-4 w-4 text-accent shrink-0" />
         <p className="text-xl font-bold text-foreground leading-relaxed">{sentence.english}</p>
@@ -100,12 +149,6 @@ export function SentenceKnowledge({ sentence }: SentenceKnowledgeProps) {
         >
           <Volume2 className="h-4 w-4" />
         </button>
-        {isMock && (
-          <span className="inline-flex items-center gap-1 rounded-full border border-amber-500/30 bg-amber-500/[0.08] px-2 py-0.5 text-[10px] font-medium text-amber-400/70 shrink-0">
-            <Database className="h-3 w-3" />
-            缓存数据
-          </span>
-        )}
       </div>
 
       {/* Chinese + English explanation */}

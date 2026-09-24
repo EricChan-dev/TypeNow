@@ -9,9 +9,18 @@ interface OutlineModalProps {
   currentIndex: number
   onClose: () => void
   onJumpTo: (index: number) => void
+  /**
+   * 本次练习里已经做完的句子 id。
+   *
+   * 这个弹窗原先对每一句都直接渲染 `s.english` —— 也就是把整节课的答案
+   * 一次性摊在用户面前，「大纲」变成了「答案册」。练习页其它地方
+   * （语法树、句子解析）都设了剧透闸门，这里漏一个就等于全白设。
+   * 现在只对已完成（或当前正在做）的句子显示英文，其余显示中文题干。
+   */
+  revealedIds?: Set<string>
 }
 
-export function OutlineModal({ sentences, currentIndex, onClose, onJumpTo }: OutlineModalProps) {
+export function OutlineModal({ sentences, currentIndex, onClose, onJumpTo, revealedIds }: OutlineModalProps) {
   const [selectedIndex, setSelectedIndex] = useState(currentIndex)
 
   return (
@@ -31,7 +40,13 @@ export function OutlineModal({ sentences, currentIndex, onClose, onJumpTo }: Out
         {/* Body: sentence list only */}
         <div className="flex-1 flex min-h-0">
           <div className="flex-1 overflow-y-auto">
-            {sentences.map((s, i) => (
+            {sentences.map((s, i) => {
+              // 只认「做完过」的记录，不用 `i < currentIndex` 也不要放行当前句：
+              //   - 下标不可靠：跳着练、回头练、打乱之后 i 与进度已经对不上；
+              //   - 当前句的英文此刻在题面上是**藏着**的（只有中文题干和词格），
+              //     放行它等于让用户按一下 Ctrl+1 就看到正在做的这句答案。
+              const revealed = !!revealedIds?.has(s.id)
+              return (
               <div
                 key={s.id}
                 className={`flex items-center group border-b border-foreground/5 transition-colors ${
@@ -45,11 +60,17 @@ export function OutlineModal({ sentences, currentIndex, onClose, onJumpTo }: Out
                   className="flex-1 text-left px-5 py-3.5 min-w-0"
                 >
                   <span className="text-xs text-foreground/30 mr-2">{i + 1}.</span>
-                  <span className={`text-sm ${i === selectedIndex ? "text-foreground font-medium" : "text-foreground/60"}`}>
-                    {s.english}
+                  <span className={`text-sm ${i === selectedIndex ? "text-foreground font-medium" : revealed ? "text-foreground/60" : "text-foreground/40"}`}>
+                    {revealed ? s.english : s.chinese}
                   </span>
                   {i === currentIndex && (
                     <span className="ml-2 text-[10px] text-accent/60 font-medium">当前</span>
+                  )}
+                  {!revealed && i !== currentIndex && (
+                    <span className="ml-2 text-[10px] text-foreground/25 font-medium">未练</span>
+                  )}
+                  {revealed && i !== currentIndex && (
+                    <span className="ml-2 text-[10px] text-emerald-400/50 font-medium">已完成</span>
                   )}
                 </button>
                 <button
@@ -64,7 +85,8 @@ export function OutlineModal({ sentences, currentIndex, onClose, onJumpTo }: Out
                   <Play className="h-4 w-4" />
                 </button>
               </div>
-            ))}
+              )
+            })}
           </div>
         </div>
 

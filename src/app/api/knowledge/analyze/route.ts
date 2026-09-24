@@ -5,6 +5,7 @@ import { sentenceKnowledge } from "@/lib/db/schema"
 import { eq } from "drizzle-orm"
 import { getSession } from "@/lib/auth/session"
 import { checkRateLimit } from "@/lib/rate-limit"
+import { KNOWLEDGE_UNCONFIGURED_CODE } from "@/lib/knowledge-failure"
 
 // 每次 LLM 调用都是真金白银，必须给单用户额度上限：
 // 5 次/分钟防突发，20 次/小时作为实际成本上限。
@@ -100,7 +101,19 @@ export async function POST(request: Request) {
     if (cached) return NextResponse.json({ data: cached.data, cached: true })
   }
 
-  // 2. Cache miss — 只有真正要调用高价模型时才消耗额度（缓存命中不计费也不限流）
+  // 2. 未配置 AI key：直接说清是服务未配置，且不消耗用户额度。
+  //    这次请求注定失败；若先扣额度，用户在服务真正可用时反而会被限流。
+  //    缓存命中的分支已在上面返回，不需要 key，所以检查放在缓存之后。
+  //    必须回 503 + code 而不是笼统的 500：客户端要据此区分
+  //    「重试有用」和「重试永远不会成功」，避免诱导用户反复点重试。
+  if (!process.env.DEEPSEEK_API_KEY) {
+    return NextResponse.json(
+      { error: "AI 解析服务暂未配置", code: KNOWLEDGE_UNCONFIGURED_CODE },
+      { status: 503 },
+    )
+  }
+
+  // 3. Cache miss — 只有真正要调用高价模型时才消耗额度（缓存命中不计费也不限流）
   const minuteLimit = checkRateLimit(
     "knowledge-analyze-minute",
     session.userId,
@@ -127,11 +140,11 @@ export async function POST(request: Request) {
     )
   }
 
-  // 3. Call DeepSeek
+  // 4. Call DeepSeek
   try {
     const knowledge = await callDeepSeek(trimmed)
 
-    // 4. Store in cache (fire-and-forget)
+    // 5. Store in cache (fire-and-forget)
     if (db) {
       void db
         .insert(sentenceKnowledge)

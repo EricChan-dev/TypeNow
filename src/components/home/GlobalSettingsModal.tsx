@@ -1,8 +1,15 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useSyncExternalStore } from "react"
 import { X, Target, Volume2 } from "lucide-react"
 import { toast } from "sonner"
+import {
+  setSfxEnabled,
+  playTick,
+  subscribeSfxEnabled,
+  getSfxEnabledSnapshot,
+  getSfxEnabledServerSnapshot,
+} from "@/lib/sfx"
 
 interface Props {
   open: boolean
@@ -22,10 +29,23 @@ export function GlobalSettingsModal({ open, onClose, initialGoal = 50, onSaved }
   const [activeTab, setActiveTab] = useState<Tab>("checkin")
   const [goal, setGoal] = useState(initialGoal)
   const [saving, setSaving] = useState(false)
+  // localStorage 在 SSR 期不存在，用订阅式读取：服务端快照恒为默认开，
+  // 挂载后自动切到真实值，且与练习页里的同一个开关同步
+  const sfx = useSyncExternalStore(
+    subscribeSfxEnabled,
+    getSfxEnabledSnapshot,
+    getSfxEnabledServerSnapshot,
+  )
 
   useEffect(() => {
     if (open) setGoal(initialGoal)
   }, [open, initialGoal])
+
+  function toggleSfx() {
+    const next = !sfx
+    setSfxEnabled(next)
+    if (next) playTick()
+  }
 
   if (!open) return null
 
@@ -160,9 +180,30 @@ export function GlobalSettingsModal({ open, onClose, initialGoal = 50, onSaved }
                   <h3 className="font-semibold text-foreground mb-1">声音设置</h3>
                   <p className="text-sm text-muted-foreground">控制练习中的音效与朗读</p>
                 </div>
-                <div className="text-sm text-muted-foreground/60 text-center py-8">
-                  声音偏好设置即将开放
+                <div className="flex items-center justify-between gap-4 rounded-xl border border-border px-4 py-3">
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium text-foreground">击键音效</p>
+                    <p className="text-xs text-muted-foreground mt-0.5">练习中打字与判错的提示音</p>
+                  </div>
+                  <button
+                    role="switch"
+                    aria-checked={sfx}
+                    aria-label="击键音效"
+                    onClick={toggleSfx}
+                    className={`relative shrink-0 h-6 w-11 rounded-full transition-colors ${
+                      sfx ? "bg-accent" : "bg-foreground/20"
+                    }`}
+                  >
+                    <span
+                      className={`absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition-all ${
+                        sfx ? "left-[22px]" : "left-0.5"
+                      }`}
+                    />
+                  </button>
                 </div>
+                <p className="text-xs text-muted-foreground/60">
+                  朗读音色与语速请在练习页的「声音设置」里调整
+                </p>
               </div>
             )}
           </div>

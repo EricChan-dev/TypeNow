@@ -102,11 +102,21 @@ function speakWithBrowser(text: string, opts: { voice: string; rate: number; vol
   requestAnimationFrame(() => synth.speak(u))
 }
 
-export function globalSpeak(
+/**
+ * 朗读。返回**是否真的出声了**。
+ *
+ * 为什么要把这个布尔值暴露出来：浏览器自动播放策略会拦掉「页面加载后、用户还没
+ * 有任何操作」时的音频播放，而练习页的第一句恰恰就是在挂载时自动播的。旧实现把
+ * `audio.play()` 的失败整个吞掉（`.catch(() => {})`），结果是**第一句永远静音，
+ * 而且没有任何提示** —— 用户只会觉得「这软件发音时好时坏」。
+ *
+ * 现在如实返回 false，由调用方决定怎么交代（练习页给一个「点一下开启发音」的按钮）。
+ */
+export async function globalSpeak(
   text: string,
   overrides?: { voice?: string; youdaoVoice?: string; source?: TTSSource },
-) {
-  if (typeof window === "undefined" || !text) return
+): Promise<boolean> {
+  if (typeof window === "undefined" || !text) return false
   const s = load()
   const voice = overrides?.voice ?? s.voice
   const youdaoVoice = overrides?.youdaoVoice ?? s.youdaoVoice
@@ -116,33 +126,40 @@ export function globalSpeak(
 
   if (source === "browser") {
     browserFallback()
-    return
+    // speechSynthesis 不出声时不会抛错也不会给事件，没有可靠的探测手段。
+    // 谎报 false 会让所有系统语音用户都看到一个多余的按钮，所以按「成功」处理。
+    return true
   }
 
-  fetch("/api/youdao/tts", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      text,
-      voiceName: youdaoVoice,
-      speed: s.rate,
-      volume: s.volume,
-    }),
-  })
-    .then((res) => {
-      if (!res.ok) throw new Error(`HTTP ${res.status}`)
-      return res.blob()
+  try {
+    const res = await fetch("/api/youdao/tts", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        text,
+        voiceName: youdaoVoice,
+        speed: s.rate,
+        volume: s.volume,
+      }),
     })
-    .then((blob) => {
-      const audio = new Audio(URL.createObjectURL(blob))
-      audio.play().catch(() => { /* autoplay may be blocked */ })
-    })
-    .catch((err) => {
-      // 有道不可用（未配密钥 / 配额用尽 / 超时）时静默无声是最糟的结果：
-      // 打字应用宁可退回系统语音，也要让用户听到发音。降级必须留下痕迹。
-      console.warn("[TTS] 有道语音不可用，已降级到系统语音:", err)
-      browserFallback()
-    })
+    if (!res.ok) throw new Error(`HTTP ${res.status}`)
+    const blob = await res.blob()
+    const audio = new Audio(URL.createObjectURL(blob))
+    try {
+      await audio.play()
+      return true
+    } catch {
+      // 自动播放被拦。这**不是**「有道不可用」，所以不能顺手降级成系统语音 ——
+      // 系统语音被同一条策略管着，一样发不出声，降级只会让失败更难被看见。
+      return false
+    }
+  } catch (err) {
+    // 有道不可用（未配密钥 / 配额用尽 / 超时）时静默无声是最糟的结果：
+    // 打字应用宁可退回系统语音，也要让用户听到发音。降级必须留下痕迹。
+    console.warn("[TTS] 有道语音不可用，已降级到系统语音:", err)
+    browserFallback()
+    return true
+  }
 }
 
 // ---- Hook for settings UI ----

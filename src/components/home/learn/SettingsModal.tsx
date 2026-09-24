@@ -1,9 +1,16 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useSyncExternalStore } from "react"
 import { X, Volume2 } from "lucide-react"
 import { useTTSSettings, globalSpeak, YOUDAO_EN_VOICES } from "@/lib/hooks/useTTSSettings"
 import type { TTSSource } from "@/lib/hooks/useTTSSettings"
+import {
+  setSfxEnabled,
+  playTick,
+  subscribeSfxEnabled,
+  getSfxEnabledSnapshot,
+  getSfxEnabledServerSnapshot,
+} from "@/lib/sfx"
 
 interface SettingsModalProps {
   onClose: () => void
@@ -17,6 +24,20 @@ const SOURCES: { key: TTSSource; label: string }[] = [
 export function SettingsModal({ onClose }: SettingsModalProps) {
   const { settings, updateSettings, enVoices } = useTTSSettings()
   const [testText] = useState("Hello, this is a test voice.")
+  // 订阅式读取：SSR 首帧取默认开（与服务端一致），挂载后自动切到真实值，
+  // 且与全局设置里的同一个开关保持同步，不会各说各话
+  const sfx = useSyncExternalStore(
+    subscribeSfxEnabled,
+    getSfxEnabledSnapshot,
+    getSfxEnabledServerSnapshot,
+  )
+
+  function toggleSfx() {
+    const next = !sfx
+    setSfxEnabled(next)
+    // 打开时立刻响一声：让「开了」这件事有反馈，而不是下次按键才发现
+    if (next) playTick()
+  }
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm" onClick={onClose}>
@@ -34,6 +55,29 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
 
         {/* Body */}
         <div className="flex-1 overflow-y-auto px-5 py-5 space-y-6">
+          {/* 击键音效开关 —— 放在第一项：一节课要响上千次，想关的人第一眼就该看到 */}
+          <div className="flex items-center justify-between gap-4">
+            <div className="min-w-0">
+              <label className="text-sm font-medium text-foreground/80">击键音效</label>
+              <p className="text-xs text-foreground/40 mt-0.5">打字与判错的提示音（朗读单独设置）</p>
+            </div>
+            <button
+              role="switch"
+              aria-checked={sfx}
+              aria-label="击键音效"
+              onClick={toggleSfx}
+              className={`relative shrink-0 h-6 w-11 rounded-full transition-colors ${
+                sfx ? "bg-accent" : "bg-foreground/20"
+              }`}
+            >
+              <span
+                className={`absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition-all ${
+                  sfx ? "left-[22px]" : "left-0.5"
+                }`}
+              />
+            </button>
+          </div>
+
           {/* Source */}
           <div className="space-y-2">
             <label className="text-sm font-medium text-foreground/80">声音来源</label>

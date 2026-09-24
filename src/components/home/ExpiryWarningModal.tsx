@@ -2,7 +2,9 @@
 
 import { useState, useEffect } from "react"
 import Link from "next/link"
+import { usePathname } from "next/navigation"
 import { X } from "lucide-react"
+import { isImmersivePracticeRoute } from "@/lib/immersive-route"
 
 type MemberTier = "trial" | "monthly" | "yearly" | "partner" | "free"
 
@@ -40,10 +42,15 @@ const LOSS_ITEMS = [
 ]
 
 export function ExpiryWarningModal({ memberTier, proExpires }: Props) {
+  const pathname = usePathname()
   const [open, setOpen] = useState(false)
   const [msLeft, setMsLeft] = useState(0)
 
   useEffect(() => {
+    // 练习页是全屏沉浸界面，弹窗会直接盖住正在打的句子、顶掉正在进行的一次练习。
+    // 在这里直接不弹：不能只是渲染时隐藏，否则「本会话只提示一次」的标记不会写入，
+    // 用户稍后换个页面又会被弹一次，等于把打扰推后而不是取消。
+    if (isImmersivePracticeRoute(pathname)) return
     const threshold = WARN_MS[memberTier]
     if (!proExpires || !threshold) return
 
@@ -56,7 +63,7 @@ export function ExpiryWarningModal({ memberTier, proExpires }: Props) {
 
     setMsLeft(ms)
     setOpen(true)
-  }, [memberTier, proExpires])
+  }, [memberTier, proExpires, pathname])
 
   // Live minute-level countdown for all tiers
   useEffect(() => {
@@ -76,7 +83,7 @@ export function ExpiryWarningModal({ memberTier, proExpires }: Props) {
     setOpen(false)
   }
 
-  if (!open) return null
+  if (!open || isImmersivePracticeRoute(pathname)) return null
 
   const tierName = TIER_NAMES[memberTier] ?? "会员"
   const timeLabel = memberTier === "trial" ? "剩余时间：" : "距离到期："

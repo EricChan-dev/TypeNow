@@ -483,6 +483,36 @@ export const userCourseProgress = mysqlTable(
   ]
 )
 
+// ─── Practice Sessions (每课的「继续上次」恢复槽位) ───────────────────────────
+export const practiceSessions = mysqlTable(
+  "practice_sessions",
+  {
+    id: varchar("id", { length: 36 }).primaryKey().default(sql`(UUID())`),
+    userId: varchar("user_id", { length: 36 }).notNull(),
+    courseId: varchar("course_id", { length: 36 }).notNull(),
+    lessonId: varchar("lesson_id", { length: 36 }).notNull(),
+    // currentIndex 是「下一句要练的下标（0 基）」，刻意不是「已练句数」：
+    // user_course_progress.sentence_count 存的是 GREATEST(...) 单调递增的历史累计句数，
+    // 两个数含义不同；拿已练句数当恢复下标，一旦题目数变动就会指到越界位置，
+    // 前端读不到句子，表现为「点继续练习白屏」。
+    currentIndex: int("current_index").notNull().default(0),
+    state: varchar("state", { length: 16 }).notNull().default("active"),
+    // 只统计本次会话，用于结算页展示；跨会话的累计值走 user_course_progress。
+    sentenceCount: int("sentence_count").notNull().default(0),
+    mistakeCount: int("mistake_count").notNull().default(0),
+    elapsedSeconds: int("elapsed_seconds").notNull().default(0),
+    startedAt: datetime("started_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+    updatedAt: datetime("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+    completedAt: datetime("completed_at"),
+  },
+  (t) => [
+    // 每个 (user, lesson) 只保留一个恢复槽位：重练同一课要复用同一行而不是不断累积。
+    // 若允许多行，GET 时无法判定「上次」是哪一行，恢复位置会随查询计划漂移。
+    uniqueIndex("uk_practice_session").on(t.userId, t.lessonId),
+    index("idx_practice_session_user").on(t.userId, t.updatedAt),
+  ]
+)
+
 // ─── Word Dictionary Cache (shared across all users) ─────────────────────────
 export const wordDictionaryCache = mysqlTable(
   "word_dictionary_cache",
@@ -609,6 +639,7 @@ export type InviteReward = typeof inviteRewards.$inferSelect
 export type WithdrawalRequest = typeof withdrawalRequests.$inferSelect
 export type PartnerRiskFlag = typeof partnerRiskFlags.$inferSelect
 export type UserCourseProgress = typeof userCourseProgress.$inferSelect
+export type PracticeSession = typeof practiceSessions.$inferSelect
 export type DiamondLog = typeof diamondLogs.$inferSelect
 export type WordDictionaryCache = typeof wordDictionaryCache.$inferSelect
 export type WordbookItem = typeof wordbookItems.$inferSelect

@@ -4,6 +4,8 @@ import { useEffect, useRef, useState } from "react"
 import { usePathname } from "next/navigation"
 import { X, Send, Bot, Loader2, Gem } from "lucide-react"
 import { cn } from "@/lib/utils"
+import { isImmersivePracticeRoute } from "@/lib/immersive-route"
+import { subscribeOpenAiChat } from "@/lib/ai-chat"
 
 interface Message {
   role: "user" | "assistant"
@@ -69,9 +71,21 @@ export function AiChatWidget() {
     setOpen(false)
   }, [pathname])
 
-  // Hide on landing page and learn/practice pages（必须在所有 hooks 之后）
-  const hidden = pathname === "/" || pathname.startsWith("/home/learn/")
-  if (hidden || !loggedIn) return null
+  // 练习页里的「问小码」通过这条通道请求打开面板
+  useEffect(() => subscribeOpenAiChat(() => setOpen(true)), [])
+
+  /**
+   * 沉浸式练习页（练习 / 复习作答）不放浮窗按钮：
+   * 那是 fixed inset-0 的全屏界面，右下角的按钮正好压在题目区和快捷键提示上。
+   * 但仍然允许**通过请求把它打开**（Ctrl+/ → 讲解面板 → 问小码），
+   * 因为练习页恰恰是最需要这个老师的地方。
+   *
+   * 用 isImmersivePracticeRoute 而不是原来的 `pathname.startsWith("/home/learn/")`：
+   * 复习作答页同样是全屏界面，旧写法漏了它，浮窗一直盖在复习题上。
+   */
+  const immersive = isImmersivePracticeRoute(pathname)
+  // 落地页保持隐藏：那是营销页，浮窗会盖住定价卡片的 CTA
+  if (pathname === "/" || !loggedIn || (immersive && !open)) return null
 
   async function handleSend() {
     if (!input.trim() || sending) return

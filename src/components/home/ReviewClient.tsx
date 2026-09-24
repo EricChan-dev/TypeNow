@@ -5,10 +5,13 @@ import { animate } from "animejs"
 import { useRouter } from "next/navigation"
 import { X, CheckCircle2, RotateCcw, BookOpen } from "lucide-react"
 import { CompletedSentence } from "@/components/home/learn/CompletedSentence"
+import { TypedChars } from "@/components/home/TypedChars"
 import type { Word } from "@/types"
 import { cn } from "@/lib/utils"
 import { isTypingMatch, isTypingPrefix } from "@/lib/typing-compare"
 import { alignWordsWithEnglish } from "@/lib/word-align"
+import { classifyTypingKey, isEditableTarget } from "@/lib/typing-keys"
+import { playBuzz, playTick } from "@/lib/sfx"
 
 interface ReviewItem {
   reviewId: string
@@ -29,21 +32,6 @@ interface WordState {
 
 function getInputWords(words: Word[]): Word[] {
   return words.filter((w) => w.pos !== "标点")
-}
-
-function playBuzz() {
-  try {
-    const ctx = new AudioContext()
-    const osc = ctx.createOscillator()
-    const gain = ctx.createGain()
-    osc.connect(gain)
-    gain.connect(ctx.destination)
-    osc.frequency.value = 220
-    gain.gain.setValueAtTime(0.15, ctx.currentTime)
-    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.18)
-    osc.start()
-    osc.stop(ctx.currentTime + 0.18)
-  } catch {}
 }
 
 const GRADE_OPTIONS: { label: string; desc: string; grade: number; color: string }[] = [
@@ -67,6 +55,8 @@ export function ReviewClient() {
   const [errorCount, setErrorCount] = useState(0)
   const errorCountRef = useRef(errorCount)
   errorCountRef.current = errorCount
+  /** 本句已经记过错的词下标 —— 同一个词反复打错只算一次，错误数不随退格重打飙升。 */
+  const mistakeWordsRef = useRef<Set<number>>(new Set())
   const [done, setDone] = useState(false)
 
   const statusRef = useRef(status)
@@ -112,6 +102,7 @@ export function ReviewClient() {
     if (!sentence) return
     setStatus("input")
     setErrorCount(0)
+    mistakeWordsRef.current = new Set()
     setShakeWords(new Set())
     setActiveWordIndex(0)
     setWordStates(
@@ -154,13 +145,72 @@ export function ReviewClient() {
     }
   }, [])
 
-  const handleInput = useCallback((e: KeyboardEvent) => {
-    if (statusRef.current === "grading" || statusRef.current === "complete") {
-      if (e.key === "Enter" && statusRef.current === "grading") {
-        // Grade buttons are shown; Enter is handled by button focus
-      }
+  /** 当前词打完了：标 done，然后决定是「下一格」还是「进评分」。 */
+  const completeWord = useCallback((activeIdx: number, value: string, words: Word[]) => {
+    setWordStates((prev) => {
+      const ns = [...prev]
+      ns[activeIdx] = { value, status: "done" }
+      return ns
+    })
+    const isLast = activeIdx >= words.length - 1
+    if (!isLast) {
+      const nextIdx = activeIdx + 1
+      setActiveWordIndex(nextIdx)
+      setWordStates((prev) => {
+        const ns = [...prev]
+        ns[nextIdx] = { ...ns[nextIdx], status: "active" }
+        return ns
+      })
       return
     }
+    // 全句零错误 → 直接判定已掌握，不必再问一遍「掌握得怎么样」。
+    // 用 ref 判而不是 errorCountRef：后者要等这一轮渲染提交才会更新。
+    if (mistakeWordsRef.current.size === 0) {
+      submitGrade(5, true)
+      const next = currentIdxRef.current + 1
+      if (next >= itemsRef.current.length) setDone(true)
+      else { setCurrentIdx(next); setStatus("input") }
+      return
+    }
+    setStatus("grading")
+  }, [submitGrade])
+
+  /** 记一次错：出声、抖动、计数。计数按「词」去重，同一个词反复打错只算一次。 */
+  const flagWrong = useCallback((activeIdx: number) => {
+    playBuzz()
+    if (!mistakeWordsRef.current.has(activeIdx)) {
+      mistakeWordsRef.current.add(activeIdx)
+      setErrorCount((c) => c + 1)
+    }
+    setShakeWords((prev) => {
+      const s = new Set(prev)
+      s.add(activeIdx)
+      return s
+    })
+    setTimeout(() => {
+      setShakeWords((prev) => {
+        const s = new Set(prev)
+        s.delete(activeIdx)
+        return s
+      })
+    }, 500)
+  }, [])
+
+  const handleInput = useCallback((e: KeyboardEvent) => {
+    // 焦点在真实输入框里就放手（软键盘捕获框是唯一例外，手机全靠它带动键盘事件）。
+    // 原先没有任何焦点守卫，设置弹窗里的输入框会被这里的按键逻辑抢走。
+    const target = e.target as HTMLElement | null
+    if (isEditableTarget({
+      tagName: target?.tagName,
+      isContentEditable: target?.isContentEditable,
+      isSoftKeyboardInput: target === softKeyboardRef.current,
+    })) return
+
+    // 只有「逐词输入」阶段接管按键；评分阶段交给按钮（Enter 落在聚焦的按钮上）
+    if (statusRef.current !== "input") return
+
+    const action = classifyTypingKey(e)
+    if (action === "ignore") return
 
     const ws = wordStatesRef.current
     const activeIdx = activeWordIndexRef.current
@@ -173,80 +223,59 @@ export function ReviewClient() {
     const expected = words[activeIdx].english
     const currentVal = ws[activeIdx]?.value ?? ""
 
-    if (e.key === "Backspace") {
+    if (action === "backspace") {
       e.preventDefault()
       if (currentVal.length === 0) return
       const newVal = currentVal.slice(0, -1)
       setWordStates((prev) => {
         const next = [...prev]
-        next[activeIdx] = { value: newVal, status: newVal.length === 0 ? "active" : "error" }
+        // 状态必须跟着回退，否则删回正确前缀了还挂着红色
+        next[activeIdx] = { value: newVal, status: isTypingPrefix(newVal, expected) ? "active" : "error" }
         return next
       })
       return
     }
 
-    if (e.key.length !== 1 || e.ctrlKey || e.metaKey) return
+    // 空格 = 确认当前词，与练习页统一。
+    // 旧写法把空格当普通字符追加（`e.key.length === 1` 就收），于是「hel␣l」被
+    // normalizeForTyping 折叠空白后必然判错，用户按正常习惯打空格每一下都记一次错。
+    if (action === "confirm") {
+      e.preventDefault()
+      // 空着按空格什么都不做：不能算错，也不能前进
+      if (!currentVal) return
+      if (isTypingMatch(currentVal, expected)) {
+        completeWord(activeIdx, currentVal, words)
+      } else {
+        setWordStates((prev) => {
+          const ns = [...prev]
+          ns[activeIdx] = { value: currentVal, status: "error" }
+          return ns
+        })
+        flagWrong(activeIdx)
+      }
+      return
+    }
+
+    // 单字符输入（含标点/数字）：不再静默吞键，敲错立刻标红并可退格
     e.preventDefault()
+    playTick()
 
     const next = currentVal + e.key
     const correctSoFar = isTypingPrefix(next, expected)
     const fullMatch = isTypingMatch(next, expected)
 
     if (fullMatch) {
-      setWordStates((prev) => {
-        const ns = [...prev]
-        ns[activeIdx] = { value: next, status: "done" }
-        return ns
-      })
-      const isLast = activeIdx >= words.length - 1
-      if (isLast) {
-        // Auto-mastery: zero errors on this sentence
-        if (errorCountRef.current === 0) {
-          submitGrade(5, true)
-          const next = currentIdxRef.current + 1
-          if (next >= itemsRef.current.length) setDone(true)
-          else { setCurrentIdx(next); setStatus("input") }
-          return
-        }
-        setStatus("grading")
-      } else {
-        const nextIdx = activeIdx + 1
-        setActiveWordIndex(nextIdx)
-        setWordStates((prev) => {
-          const ns = [...prev]
-          ns[activeIdx] = { value: next, status: "done" }
-          ns[nextIdx] = { ...ns[nextIdx], status: "active" }
-          return ns
-        })
-      }
-    } else if (correctSoFar) {
-      setWordStates((prev) => {
-        const ns = [...prev]
-        ns[activeIdx] = { value: next, status: "active" }
-        return ns
-      })
-    } else {
-      playBuzz()
-      setErrorCount((c) => c + 1)
-      setWordStates((prev) => {
-        const ns = [...prev]
-        ns[activeIdx] = { value: next, status: "error" }
-        return ns
-      })
-      setShakeWords((prev) => {
-        const s = new Set(prev)
-        s.add(activeIdx)
-        return s
-      })
-      setTimeout(() => {
-        setShakeWords((prev) => {
-          const s = new Set(prev)
-          s.delete(activeIdx)
-          return s
-        })
-      }, 500)
+      completeWord(activeIdx, next, words)
+      return
     }
-  }, [])
+
+    setWordStates((prev) => {
+      const ns = [...prev]
+      ns[activeIdx] = { value: next, status: correctSoFar ? "active" : "error" }
+      return ns
+    })
+    if (!correctSoFar) flagWrong(activeIdx)
+  }, [completeWord, flagWrong])
 
   useEffect(() => {
     window.addEventListener("keydown", handleInput)
@@ -425,7 +454,7 @@ export function ReviewClient() {
               return (
                 <div
                   key={i}
-                  className={cn("grid grid-cols-1 place-items-center gap-[5px]", isShaking && "animate-shake")}
+                  className={cn("relative grid grid-cols-1 place-items-center gap-[5px]", isShaking && "animate-shake")}
                   onMouseEnter={(e) => {
                     if (!isPending) return
                     const ul = e.currentTarget.querySelector<HTMLElement>("[data-underline]")
@@ -442,7 +471,8 @@ export function ReviewClient() {
                     className={cn(
                       "col-start-1 row-start-1 grid place-items-center h-16 text-6xl font-medium transition-colors",
                       ws?.status === "done" ? "text-foreground"
-                        : ws?.status === "error" ? "text-red-500"
+                        // 错词不再整格染红：由 TypedChars 标出「错在第几个字母」
+                        : ws?.status === "error" ? "text-foreground"
                         : isActive ? "text-accent"
                         : "text-transparent"
                     )}
@@ -451,7 +481,7 @@ export function ReviewClient() {
                       {word.english}
                     </span>
                     <span className="col-start-1 row-start-1 whitespace-pre px-1">
-                      {ws?.value || ""}
+                      <TypedChars value={ws?.value || ""} expected={word.english} />
                     </span>
                   </div>
                   <div
@@ -465,6 +495,14 @@ export function ReviewClient() {
                     )}
                     style={{ clipPath: "polygon(0 0, 100% 0, calc(100% - 2px) 100%, 2px 100%)" }}
                   />
+                  {/* 打错了就把正确拼写摆出来：答案是默认不给看的，
+                      错词又不指出错在哪，用户只能退格硬猜。只在该词出错后显示，不提前剧透。
+                      绝对定位：单词行是 items-end 对齐的，新增一行会把出错那个词顶高。 */}
+                  {ws?.status === "error" && (
+                    <span className="pointer-events-none absolute left-1/2 top-full -translate-x-1/2 whitespace-nowrap px-1 text-xs font-medium text-emerald-400/80">
+                      {word.english}
+                    </span>
+                  )}
                 </div>
               )
             })}

@@ -455,6 +455,114 @@ async function main() {
   add("句子 sort_order 在同一课时内碰撞", n(order, "sentence_collision"), 0, "低")
   add("整节课 sort_order 全相同（完全没有顺序）", n(order, "all_same_order"), 0, "中")
 
+  // ── H. 功能依赖字段覆盖率 ─────────────────────────────────────────────────
+  // 这一组不是"错误"，而是功能的地基：字段缺失时对应功能整体不可用。
+  //
+  // dependency_analysis 必须区分「非空」与「可用」：
+  //   实测 174,876 行存的是 {"edges": [], "nodes": []} —— 分析跑过但没产出，
+  //   是空壳而非 NULL。只看 IS NOT NULL 会得到 95% 的虚高覆盖率，
+  //   实际能画出语法树的只有 57%。用 JSON_LENGTH($.nodes) > 0 才测得准。
+  //   （这也是本项最初被漏掉的原因：临时 SQL 用了 IS NOT NULL。）
+  const COV_SELECT = `
+      COUNT(*) AS total,
+      SUM(COALESCE(JSON_LENGTH(s.words), 0) > 0) AS words,
+      SUM(JSON_CONTAINS_PATH(s.words, 'one', '$[*].definition') = 1) AS definition,
+      SUM(COALESCE(JSON_LENGTH(s.chunks), 0) > 0) AS chunks,
+      SUM(s.dependency_analysis IS NOT NULL) AS dep_present,
+      SUM(s.dependency_analysis IS NOT NULL
+          AND COALESCE(JSON_LENGTH(JSON_EXTRACT(s.dependency_analysis, '$.nodes')), 0) > 0) AS dep_usable,
+      SUM(s.sentence_structure IS NOT NULL) AS struct_present,
+      SUM(s.sentence_structure IS NOT NULL
+          AND COALESCE(JSON_LENGTH(s.sentence_structure), 0) > 0) AS struct_usable`
+
+  const covAll = await one<Record<string, unknown>>(`SELECT ${COV_SELECT} FROM sentences s`)
+  const covR = await one<Record<string, unknown>>(`SELECT ${COV_SELECT} FROM sentences s ${REACH_JOIN}`)
+
+  const COV_ALL = n(covAll, "total")
+  const COV_REACH = n(covR, "total")
+  // 「画不出树」和「是空壳」是两件事，分母不同，不能混：
+  //   画不出树 = 所有可达句 - 可用句（把「压根没有分析记录」也算进去）
+  //   是空壳   = 有分析记录 - 可用句（分析跑过但没产出，是回填任务的目标集合）
+  // 早期版本把后者误算成「所有可达句 - 可用句」，把 NULL 也算成空壳，数值偏大。
+  const depUnusableAll = COV_ALL - n(covAll, "dep_usable")
+  const depUnusableReach = COV_REACH - n(covR, "dep_usable")
+  const depHollowAll = n(covAll, "dep_present") - n(covAll, "dep_usable")
+  const depHollowReach = n(covR, "dep_present") - n(covR, "dep_usable")
+
+  section("[H] 功能依赖字段覆盖率（缺失 = 对应功能整体不可用）")
+  add(
+    "逐词 words（逐词模式与点词详情的基础）",
+    n(covAll, "words"),
+    n(covR, "words"),
+    "低",
+    "缺失时退化为自动切词；有 fallback，不阻断",
+    COV_REACH,
+  )
+  add(
+    "逐词释义 words[].definition（点词详情释义）",
+    n(covAll, "definition"),
+    n(covR, "definition"),
+    "重要",
+    "实测为 0：点词详情拿不到中文释义，该功能目前是空壳",
+    COV_REACH,
+  )
+  add(
+    "分块 chunks（分块模式；阶段 3 的 i+1 编排前置）",
+    n(covAll, "chunks"),
+    n(covR, "chunks"),
+    "中",
+    "覆盖率极低，D5/D6 难度编排在补数前无法落地",
+    COV_REACH,
+  )
+  add(
+    "依存分析 dependency_analysis 非空（虚高口径）",
+    n(covAll, "dep_present"),
+    n(covR, "dep_present"),
+    undefined,
+    "此口径把空壳算作有值，仅用于对照 —— 真实可用看下一行",
+    COV_REACH,
+  )
+  add(
+    "依存分析 dependency_analysis 可用（nodes 非空）",
+    n(covAll, "dep_usable"),
+    n(covR, "dep_usable"),
+    "中",
+    "语法树 Ctrl+2 只在这个口径下能画出东西",
+    COV_REACH,
+  )
+  add(
+    "画不出语法树（无分析记录，或记录为空壳）",
+    depUnusableAll,
+    depUnusableReach,
+    "中",
+    "Ctrl+2 在这些句子上只会显示空状态；不是报错，但功能等于没有",
+    COV_REACH,
+  )
+  add(
+    "其中有分析记录但内容为空壳（可回填修复）",
+    depHollowAll,
+    depHollowReach,
+    "中",
+    "分析跑过却没产出，是回填任务应该瞄准的集合",
+    COV_REACH,
+  )
+  add(
+    "句子成分 sentence_structure 非空",
+    n(covAll, "struct_present"),
+    n(covR, "struct_present"),
+    "中",
+    "C5 句子成分标注的数据基础",
+    COV_REACH,
+  )
+  add(
+    "句子成分 sentence_structure 可用（数组非空）",
+    n(covAll, "struct_usable"),
+    n(covR, "struct_usable"),
+    "中",
+    undefined,
+    COV_REACH,
+  )
+
   // ── 输出 ──────────────────────────────────────────────────────────────────
   console.log(
     `\n基线: 课程 ${fmt(n(base, "pc"))} 已发布 / ${fmt(n(base, "c"))} · ` +
