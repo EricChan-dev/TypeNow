@@ -57,6 +57,8 @@ export function ReviewClient() {
   const [items, setItems] = useState<ReviewItem[]>([])
   const [currentIdx, setCurrentIdx] = useState(0)
   const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState(false)
+  const [reloadKey, setReloadKey] = useState(0)
   const [status, setStatus] = useState<"input" | "complete" | "grading">("input")
   const [wordStates, setWordStates] = useState<WordState[]>([])
   const [activeWordIndex, setActiveWordIndex] = useState(0)
@@ -79,13 +81,25 @@ export function ReviewClient() {
 
   useEffect(() => {
     fetch("/api/review/queue")
-      .then((r) => r.json())
+      .then((r) => {
+        if (!r.ok) throw new Error(`HTTP ${r.status}`)
+        return r.json()
+      })
       .then((json) => {
-        if (json.items) setItems(json.items)
+        // 请求失败绝不能伪装成「今日暂无待复习内容」：只在确实拿到数组时认为成功
+        if (Array.isArray(json?.items)) {
+          setItems(json.items)
+        } else {
+          setLoadError(true)
+        }
         setLoading(false)
       })
-      .catch(() => setLoading(false))
-  }, [])
+      .catch((e) => {
+        console.error("[Review] 复习队列加载失败:", e)
+        setLoadError(true)
+        setLoading(false)
+      })
+  }, [reloadKey])
 
   const sentence = items[currentIdx]
   // words 以 english 的分词为骨架重建（标点必然与翻译一致），库里的 words 只补音标/词性
@@ -246,6 +260,34 @@ export function ReviewClient() {
     )
   }
 
+  if (loadError) {
+    return (
+      <div className="fixed inset-0 bg-background flex flex-col items-center justify-center gap-5">
+        <BookOpen className="h-12 w-12 text-foreground/20" />
+        <p className="text-foreground/60 text-lg font-medium">复习队列加载失败</p>
+        <p className="text-foreground/30 text-sm">网络或服务异常，你的复习进度没有丢失</p>
+        <div className="mt-2 flex items-center gap-3">
+          <button
+            onClick={() => {
+              setLoadError(false)
+              setLoading(true)
+              setReloadKey((k) => k + 1)
+            }}
+            className="px-5 py-2 rounded-xl bg-accent text-primary-foreground text-sm font-semibold hover:bg-accent/90 transition-colors"
+          >
+            重新加载
+          </button>
+          <button
+            onClick={() => router.push("/home/review")}
+            className="px-5 py-2 rounded-xl border border-border text-foreground/70 text-sm font-semibold hover:bg-muted transition-colors"
+          >
+            返回主页
+          </button>
+        </div>
+      </div>
+    )
+  }
+
   if (items.length === 0) {
     return (
       <div className="fixed inset-0 bg-background flex flex-col items-center justify-center gap-5">
@@ -311,16 +353,20 @@ export function ReviewClient() {
         />
       </div>
 
-      {/* Main content */}
-      <div className="flex-1 flex flex-col items-center justify-center px-8 py-10 overflow-y-auto gap-8">
+      {/* Main content
+
+          同样不能用 justify-center 居中（见 LearnClient 里的说明）：在 overflow-y-auto
+          容器里会让超出部分滚不回来，长句的第一行会被永久裁掉。
+          用 mt-auto / mb-auto 替代：装得下就居中，装不下就顶对齐并完整滚动。 */}
+      <div className="flex-1 flex flex-col items-center px-8 py-10 overflow-y-auto gap-8">
         {/* Chinese hint */}
-        <p className="text-2xl font-semibold text-foreground/70 text-center max-w-2xl">
+        <p className="mt-auto text-2xl font-semibold text-foreground/70 text-center max-w-2xl">
           {sentence.chinese}
         </p>
 
         {status === "grading" ? (
           /* Grading view */
-          <div className="flex flex-col items-center gap-8 w-full max-w-2xl">
+          <div className="mb-auto flex flex-col items-center gap-8 w-full max-w-2xl">
             <CompletedSentence words={words} />
             <p className="text-base text-foreground/40">这道题掌握得怎么样？</p>
             <div className="flex gap-3 flex-wrap justify-center">
@@ -351,7 +397,7 @@ export function ReviewClient() {
           </div>
         ) : (
           /* Word-mode input */
-          <div className="flex flex-wrap justify-center items-end gap-x-4 gap-y-4 w-[88%] max-w-5xl">
+          <div className="mb-auto flex flex-wrap justify-center items-end gap-x-4 gap-y-4 w-[88%] max-w-5xl">
             {words.map((word, i) => {
               const isInput = word.pos !== "标点"
               const wsIdx = inputWords.indexOf(word)

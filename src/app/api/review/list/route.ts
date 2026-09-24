@@ -3,7 +3,7 @@ import { db } from "@/lib/db"
 import { reviewQueue, sentences, lessons, courses } from "@/lib/db/schema"
 import { and, eq, lte, sql } from "drizzle-orm"
 import { getSession } from "@/app/actions/auth"
-import { usablePromptSql } from "@/lib/sentence-quality"
+import { usableSentenceSql } from "@/lib/sentence-quality"
 
 export async function GET(request: Request) {
   const session = await getSession()
@@ -18,10 +18,10 @@ export async function GET(request: Request) {
 
   const now = new Date()
 
-  // 题干不可用的句子（chinese 无中文 / 与答案雷同）不进复习本。列表、列表总数、
-  // 以及三个计数徽标必须全部带上这个条件 —— 只过滤列表不过滤计数，就会出现
-  // 「徽标有 3 条待复习、点进去是空的」这种自相矛盾。
-  const usable = usablePromptSql(sentences.chinese, sentences.english)
+  // 不可用的句子（题干脏：chinese 无中文或与答案雷同；答案脏：english 空串或只有标点）
+  // 不进复习本。列表、列表总数、以及三个计数徽标必须全部带上这个条件 ——
+  // 只过滤列表不过滤计数，就会出现「徽标有 3 条待复习、点进去是空的」这种自相矛盾。
+  const usable = usableSentenceSql(sentences.chinese, sentences.english)
 
   const whereClause = (() => {
     if (filter === "due") return and(eq(reviewQueue.userId, session.userId), eq(reviewQueue.status, "pending"), lte(reviewQueue.nextReviewAt, now))

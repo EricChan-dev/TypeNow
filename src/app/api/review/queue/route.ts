@@ -3,7 +3,7 @@ import { db } from "@/lib/db"
 import { reviewQueue, sentences } from "@/lib/db/schema"
 import { and, eq, lte, sql } from "drizzle-orm"
 import { getSession } from "@/app/actions/auth"
-import { usablePromptSql } from "@/lib/sentence-quality"
+import { usableSentenceSql } from "@/lib/sentence-quality"
 import { alignWordsWithEnglish } from "@/lib/word-align"
 
 export async function GET() {
@@ -13,10 +13,11 @@ export async function GET() {
 
   const now = new Date()
 
-  // 题干不可用的句子（chinese 无中文 / 与答案雷同）不能进复习流：
-  // 用户看不到中文提示，题干本身就是答案。列表与下面的 total 必须用同一条件，
-  // 否则会出现「接口说有 3 条待复习，复习本点进去是空的」。
-  const usable = usablePromptSql(sentences.chinese, sentences.english)
+  // 不可用的句子不能进复习流：题干脏（chinese 无中文 / 与答案雷同）时用户看不到中文
+  // 提示、题干本身就是答案；答案脏（english 是空串或只有标点）时复习页一个输入格都
+  // 渲染不出来。列表与下面的 total 必须用同一条件，否则会出现
+  // 「接口说有 3 条待复习，复习本点进去是空的」。
+  const usable = usableSentenceSql(sentences.chinese, sentences.english)
 
   const rows = await db
     .select({

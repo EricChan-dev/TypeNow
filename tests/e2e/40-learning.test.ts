@@ -230,6 +230,37 @@ describe("句子列表 /api/courses/sentences", () => {
     // 题干不可用也要照常重建 words，否则练习页无格可敲
     expect(res.body.sentences[0].words.map((w) => w.english)).toEqual(["a"])
   })
+
+  it("答案不可用的句子绝不返回：整节课兜底也不行（线上 160 条，练习页 0 个输入框）", async () => {
+    // english 为空 / 纯标点时 words 是 []，confirmWord 与 submitAll 都直接 return，
+    // status 永远到不了 complete —— 句子永远不计入进度。这类题必须硬过滤。
+    await q(
+      `INSERT INTO sentences (id, chinese, english, lesson_id, sort_order, words, words_count) VALUES
+       ('55555555-5555-4555-8555-000000000021', '冬天来了', '', ?, 0, NULL, 0),
+       ('55555555-5555-4555-8555-000000000022', '冬天来了', '...', ?, 1, NULL, 0)`,
+      [FIXTURE.lessonEmpty, FIXTURE.lessonEmpty]
+    )
+
+    const empty = await ApiClient.asUser(FIXTURE.userPro).get<{
+      sentences: unknown[]
+    }>(`/api/courses/sentences?lessonId=${FIXTURE.lessonEmpty}`)
+
+    expect(empty.status).toBe(200)
+    // 即使整节课题干都"不可用"会触发兜底，答案检查也不会被放宽
+    expect(empty.body.sentences).toEqual([])
+
+    // 混在一节课里时只滤掉坏的那条，好的照常返回
+    await q(
+      `INSERT INTO sentences (id, chinese, english, lesson_id, sort_order, words, words_count) VALUES
+       ('55555555-5555-4555-8555-000000000023', '这不是中译英', '', ?, 2, NULL, 0)`,
+      [FIXTURE.lessonA2]
+    )
+    const mixed = await ApiClient.asUser(FIXTURE.userPro).get<{
+      sentences: Array<{ id: string }>
+    }>(`/api/courses/sentences?lessonId=${FIXTURE.lessonA2}`)
+
+    expect(mixed.body.sentences.map((s) => s.id)).toEqual([FIXTURE.sentA2Plain])
+  })
 })
 
 describe("练习打点 /api/practice/record", () => {

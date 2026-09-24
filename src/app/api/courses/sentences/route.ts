@@ -1,10 +1,10 @@
 import { NextResponse } from "next/server"
 import { db } from "@/lib/db"
 import { courses, lessons, sentences, users } from "@/lib/db/schema"
-import { and, eq, asc } from "drizzle-orm"
+import { and, eq, asc, type SQL } from "drizzle-orm"
 import { getSession } from "@/lib/auth/session"
 import { checkAndExpirePro } from "@/lib/subscription"
-import { usablePromptSql } from "@/lib/sentence-quality"
+import { typeableAnswerSql, usableSentenceSql } from "@/lib/sentence-quality"
 import { alignWordsWithEnglish } from "@/lib/word-align"
 
 export async function GET(request: Request) {
@@ -40,30 +40,30 @@ export async function GET(request: Request) {
       .limit(1)
     if (!lesson) return NextResponse.json({ error: "课时不存在或未发布" }, { status: 404 })
 
-    // 题干不可用的句子（chinese 无中文 / 与答案雷同）不进练习：用户看到的提示
-    // 就是答案本身。线上 1,674 条如此，正是「中译英模式里中文栏显示英文」的来源。
+    // 不可用的句子不进练习（线上题干脏 1,674 条 + 答案脏 160 条）：
+    //   题干脏 —— chinese 无中文 / 与答案雷同，用户看到的提示就是答案本身；
+    //   答案脏 —— english 是空串或只有标点，练习页渲染不出任何输入格，是个死画面。
     // （闭包里必须用下面这个已收窄的非空别名，直接用 db 会丢掉 null 检查。）
     const database = db
-    const forLesson = (usableOnly: boolean) =>
+    const forLesson = (where: SQL<unknown>) =>
       database
         .select()
         .from(sentences)
-        .where(
-          usableOnly
-            ? and(eq(sentences.lessonId, lessonId), usablePromptSql(sentences.chinese, sentences.english))
-            : eq(sentences.lessonId, lessonId)
-        )
+        .where(and(eq(sentences.lessonId, lessonId), where))
         .orderBy(asc(sentences.sortOrder))
 
-    let data = await forLesson(true)
+    let data = await forLesson(usableSentenceSql(sentences.chinese, sentences.english))
 
-    // 兜底：整节课的题干都「不可用」时，宁可保持原样也不要给用户一节空课。
+    // 兜底：整节课的题干都「不可用」时，只放宽题干这一条，看能不能凑出一节课来。
     // 线上确实存在这种课时，且它是**正常内容**，只是不符合「中文题干」这个假设：
-    //   26字母绘本版（幼儿启蒙英语）—— a/a b/b … z/z，字母本身就是题干；
-    //   第一课（学普通话）—— 题干是维语、english 反而是中文，方向压根不是中译英。
+    //   26字母绘本版（幼儿启蒙英语）—— a/a b/b … z/z，字母本身就是题干（答案可敲）。
     // 这种课时的 `a`/`a` 与用户抱怨的 `I`/`I` 在数据上无法区分（都是单字符且相等），
     // 所以只能按「整节课」兜底，而不是放宽行级判定。
-    if (data.length === 0) data = await forLesson(false)
+    // 注意：答案是空的那一条**不**放宽 —— 那种句子本来就没法练，放出来只会让用户
+    // 卡在一个没有任何输入格的句子上。宁可返回空，由前端给出「本课暂无可练习内容」。
+    if (data.length === 0) {
+      data = await forLesson(typeableAnswerSql(sentences.english))
+    }
 
     // words 一律以 english 的分词为骨架重建：库里导入的 words 普遍缺标点，
     // 直接下发会让练习页那行的标点与翻译对不上（线上 40% 的句子如此）。

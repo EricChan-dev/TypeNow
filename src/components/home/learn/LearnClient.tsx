@@ -1,7 +1,6 @@
 "use client"
 
 import { useState, useEffect, useRef, useCallback, useMemo } from "react"
-import { toast } from "sonner"
 import { animate } from "animejs"
 import Link from "next/link"
 import { ChevronLeft, ChevronRight, ArrowLeft, BookOpen, ShoppingBag, Pause, Play, RotateCcw, Shuffle, Maximize, Minimize, Keyboard, List, Settings, Eye, EyeOff } from "lucide-react"
@@ -174,6 +173,53 @@ interface ShortcutItem {
   disabled?: boolean
 }
 
+/**
+ * 「这课没得练 / 加载失败」的兜底画面。
+ *
+ * 存在的理由：练习页原来只用 `!sentence` 一个条件就返回「正在加载课程内容…」的开场
+ * 动画，于是接口报错（403/404/500，响应体里没有 sentences）和空课时都会**永远**停在
+ * 那个画面上——进度条走满、转圈不停、没有任何文字说明，用户只能刷新或退出。
+ */
+function LearnClientMessage({
+  title,
+  description,
+  courseId,
+  onRetry,
+}: {
+  title: string
+  description: string
+  courseId: string
+  onRetry?: () => void
+}) {
+  return (
+    <div className="h-full flex flex-col items-center justify-center gap-5 px-6 py-20 text-center">
+      <div className="w-14 h-14 rounded-2xl border border-border bg-muted flex items-center justify-center">
+        <BookOpen className="h-6 w-6 text-muted-foreground" />
+      </div>
+      <div className="space-y-1.5">
+        <p className="text-base font-semibold text-foreground">{title}</p>
+        <p className="text-sm text-muted-foreground max-w-md">{description}</p>
+      </div>
+      <div className="flex items-center gap-3 pt-1">
+        <Link
+          href={`/home/store/${courseId}`}
+          className="rounded-xl border border-border px-4 py-2 text-sm font-medium text-foreground hover:bg-muted transition-colors"
+        >
+          返回课程详情
+        </Link>
+        {onRetry && (
+          <button
+            onClick={onRetry}
+            className="rounded-xl bg-accent px-4 py-2 text-sm font-semibold text-white hover:bg-accent/90 transition-colors"
+          >
+            重新加载
+          </button>
+        )}
+      </div>
+    </div>
+  )
+}
+
 export function LearnClient({
   courseId,
   lessonId,
@@ -182,6 +228,8 @@ export function LearnClient({
   lessonId: string
 }) {
   const [sentences, setSentences] = useState<Sentence[]>([])
+  /** 加载态：以前只有「取到句子」和「没取到句子」两种，空课时与接口报错都表现为无限加载。 */
+  const [loadState, setLoadState] = useState<"loading" | "ready" | "error">("loading")
   const [currentIndex, setCurrentIndex] = useState(0)
   const [status, setStatus] = useState<SentenceStatus>("input")
   const [wordStates, setWordStates] = useState<WordState[]>([])
@@ -267,8 +315,20 @@ export function LearnClient({
   useEffect(() => {
     fetch(`/api/courses/sentences?lessonId=${lessonId}`)
       .then((r) => r.json())
-      .then((json) => { if (json.sentences) setSentences(expandSentences(json.sentences as Sentence[])) })
-      .catch((e) => { console.error(e); toast.error("加载课程内容失败，请刷新重试") })
+      .then((json) => {
+        // 必须区分「还在加载」「接口报错」「这课确实没有可练的句子」。
+        // 以前只判断 json.sentences 存不存在就 setSentences，于是：
+        //   接口 403/404/500（响应体里没有 sentences）→ 数组永远是空的 →
+        //   页面永远停在「正在加载课程内容…」，用户看不到任何原因；
+        //   空课时（线上真实存在，夹具里就有「空课时」）→ 同样是无限加载。
+        if (Array.isArray(json?.sentences)) {
+          setSentences(expandSentences(json.sentences as Sentence[]))
+          setLoadState("ready")
+        } else {
+          setLoadState("error")
+        }
+      })
+      .catch((e) => { console.error(e); setLoadState("error") })
   }, [lessonId])
 
   // Animate loading bar while waiting for sentences — minimum 2s show time
@@ -913,7 +973,25 @@ export function LearnClient({
     }).catch((e) => { console.error(e) })
   }, [isFinished, lessonId])
 
+  // 还在加载 → 保留原来的「正在加载课程内容…」开场画面。
+  // 已经加载完但一句可练的都没有（空课时，或整节课的题干/答案都不可用），
+  // 以及接口报错（403/404/500）——都必须给出明确交代，不能让它停在这个画面上。
   if (!sentence) {
+    const stillLoading = loadState === "loading"
+    if (!stillLoading) {
+      return (
+        <LearnClientMessage
+          title={loadState === "error" ? "课程内容加载失败" : "本课暂无可练习内容"}
+          description={
+            loadState === "error"
+              ? "网络或服务异常，请重试；若一直失败，请稍后再来。"
+              : "这节课暂时没有可以练习的句子。若你正在使用会员内容，可能是该课时的题目数据有问题，我们正在修复。"
+          }
+          courseId={courseId}
+          onRetry={loadState === "error" ? () => window.location.reload() : undefined}
+        />
+      )
+    }
     return (
       <div className="fixed inset-0 flex flex-col items-center justify-center overflow-hidden" style={{ background: "linear-gradient(135deg, #0f0a1a 0%, #1a1028 30%, #0d1525 60%, #0a0f1a 100%)" }}>
         {/* Animated background particles */}
@@ -1078,14 +1156,21 @@ export function LearnClient({
         </div>
       )}
 
-      {/* Main Content */}
+      {/* Main Content
+
+          ⚠️ 这里**不能**用 justify-center 来做垂直居中：它在 overflow-y-auto 的
+          滚动容器里会把超出部分推到滚动原点之上，而滚动条永远到不了负值，于是长句
+          的第一行被永久裁掉、滚不回来。headless Chrome 实测（604px 容器 / 内容
+          溢出 652px）：scrollTop=0 时第一个词格在容器上方 650px 处，不可达。
+          改用子元素 margin-block:auto（下面的 my-auto）：内容装得下就上下留白居中，
+          装不下就顶对齐并可完整滚动。短内容居中的视觉效果不变（实测上留白 230px）。 */}
       <div
         key={`${currentIndex}-${status}`}
-        className="flex-1 flex flex-col items-center justify-center px-3 sm:px-6 md:px-8 py-6 sm:py-10 md:py-12 overflow-y-auto animate-fadein"
+        className="flex-1 flex flex-col items-center px-3 sm:px-6 md:px-8 py-6 sm:py-10 md:py-12 overflow-y-auto animate-fadein"
       >
         {status === "complete" ? (
           /* Completed Sentence Display */
-          <div className="w-full max-w-5xl flex flex-col items-center gap-6 sm:gap-10 px-2">
+          <div className="my-auto w-full max-w-5xl flex flex-col items-center gap-6 sm:gap-10 px-2">
             <CompletedSentence words={sentence.words || []} />
 
             {/* Full Chinese translation */}
@@ -1116,7 +1201,7 @@ export function LearnClient({
           </div>
         ) : sentence.chunks && sentence.chunks.length > 0 ? (
           /* Chunk Mode Input */
-          <div className="w-full max-w-2xl space-y-6 sm:space-y-8 px-2">
+          <div className="my-auto w-full max-w-2xl space-y-6 sm:space-y-8 px-2">
             {/* Current chunk Chinese hint */}
             <p className="text-center text-xl sm:text-2xl font-medium text-foreground">
               {sentence.chunks[activeChunkIndex]?.chinese ?? sentence.chinese}
@@ -1171,7 +1256,7 @@ export function LearnClient({
           </div>
         ) : (
           /* Word Mode Input */
-          <div className="w-full max-w-4xl space-y-6 sm:space-y-8 px-2">
+          <div className="my-auto w-full max-w-4xl space-y-6 sm:space-y-8 px-2">
             <p className="text-center text-2xl sm:text-3xl md:text-4xl font-semibold text-foreground">
               {sentence.chinese}
             </p>
