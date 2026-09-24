@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useRef, useCallback } from "react"
+import { useState, useEffect, useRef, useCallback, type RefObject } from "react"
 import { animate } from "animejs"
 import { useRouter } from "next/navigation"
 import { X, CheckCircle2, RotateCcw, BookOpen } from "lucide-react"
@@ -59,6 +59,7 @@ export function ReviewClient() {
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState(false)
   const [reloadKey, setReloadKey] = useState(0)
+  const softKeyboardRef = useRef<HTMLInputElement>(null)
   const [status, setStatus] = useState<"input" | "complete" | "grading">("input")
   const [wordStates, setWordStates] = useState<WordState[]>([])
   const [activeWordIndex, setActiveWordIndex] = useState(0)
@@ -255,6 +256,7 @@ export function ReviewClient() {
   if (loading) {
     return (
       <div className="fixed inset-0 bg-background flex items-center justify-center">
+        <SoftKeyboardInput inputRef={softKeyboardRef} />
         <div className="text-foreground/40 text-sm">加载中…</div>
       </div>
     )
@@ -327,7 +329,12 @@ export function ReviewClient() {
   const progressPercent = ((currentIdx) / items.length) * 100
 
   return (
-    <div className="fixed inset-0 bg-background flex flex-col select-none">
+    <div
+      className="fixed inset-0 bg-background flex flex-col select-none"
+      onPointerDown={(e) => {
+        if (e.pointerType === "touch") softKeyboardRef.current?.focus()
+      }}
+    >
       {/* Header */}
       <div className="shrink-0 flex items-center justify-between px-5 py-3 border-b" style={{ borderColor: "var(--surface-border)" }}>
         <div className="flex items-center gap-3">
@@ -465,13 +472,35 @@ export function ReviewClient() {
         )}
       </div>
 
-      {/* Hidden input to capture keyboard on mobile */}
-      <input
-        className="opacity-0 absolute -bottom-10 left-0"
-        autoFocus
-        readOnly
-        aria-hidden
-      />
+      <SoftKeyboardInput inputRef={softKeyboardRef} />
     </div>
+  )
+}
+
+/**
+ * 移动端软键盘捕获框（与 LearnClient 里的同名组件一致）。
+ *
+ * 复习页同样只监听 document 的 keydown，页面上没有可见输入框。触摸设备必须有真实
+ * input 才能唤起软键盘，且**不能是 readOnly**——iOS 对 readOnly 的 input 不弹键盘，
+ * 这个组件的前身就是 readOnly，等于手机上完全敲不了字。
+ */
+function SoftKeyboardInput({
+  inputRef,
+}: {
+  inputRef: RefObject<HTMLInputElement | null>
+}) {
+  return (
+    <input
+      ref={inputRef}
+      className="fixed bottom-0 left-0 h-px w-px opacity-0 pointer-events-none"
+      value=""
+      onChange={() => {}}
+      tabIndex={-1}
+      aria-hidden
+      autoCapitalize="off"
+      autoCorrect="off"
+      autoComplete="off"
+      spellCheck={false}
+    />
   )
 }

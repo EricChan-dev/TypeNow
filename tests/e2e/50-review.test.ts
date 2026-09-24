@@ -379,3 +379,18 @@ describe("完成复习 /api/review/complete", () => {
     expect(res.body.status).toBe("pending")
   })
 })
+
+describe("复习页 SSR /home/review/session", () => {
+  it("渲染出可编辑的软键盘输入框（手机上敲字的前提，不能是 readOnly）", async () => {
+    // 复习页和练习页一样，只监听 document 的 keydown，没有可见输入框。
+    // 触摸设备必须靠真实 input 唤起软键盘；readOnly 的 input 在 iOS 上不弹键盘。
+    const res = await ApiClient.asUser(FIXTURE.userFree).get("/home/review/session")
+
+    expect(res.status).toBe(200)
+    const inputs = [...res.raw.matchAll(/<input\b[^>]*>/g)].map((m) => m[0])
+    const soft = inputs.filter((t) => t.includes("pointer-events-none"))
+
+    expect(soft.length).toBeGreaterThan(0)
+    expect(soft[0]).not.toMatch(/readonly/i)
+  })
+})

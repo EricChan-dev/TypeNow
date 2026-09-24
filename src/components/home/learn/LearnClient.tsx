@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useRef, useCallback, useMemo } from "react"
+import { useState, useEffect, useRef, useCallback, useMemo, type RefObject } from "react"
 import { animate } from "animejs"
 import Link from "next/link"
 import { ChevronLeft, ChevronRight, ArrowLeft, BookOpen, ShoppingBag, Pause, Play, RotateCcw, Shuffle, Maximize, Minimize, Keyboard, List, Settings, Eye, EyeOff } from "lucide-react"
@@ -174,6 +174,41 @@ interface ShortcutItem {
 }
 
 /**
+ * 移动端软键盘捕获框。
+ *
+ * 练习页的输入**完全**依赖 document 上的 keydown，页面上没有任何可见输入框；
+ * 而触摸设备没有物理键盘，一个 div 即使拿到了焦点也唤不起软键盘——于是整个练习页
+ * 在手机上根本敲不了字，可定价页却明确承诺「手机浏览器也能打开用、微信内直接访问同样支持」。
+ *
+ * 两个坑：
+ *   1. 必须是「可编辑」的 input。readOnly 的 input 在 iOS 上**不会**唤起软键盘
+ *      （ReviewClient 原来的移动端 input 就是 readOnly，等于没生效）；
+ *   2. 值恒为空，避免未处理的按键把字符堆进输入框里。
+ * 键盘事件依旧由 document 上的 keydown 统一处理，这里只负责把键盘叫出来。
+ * 由父级在 touch 的 pointerdown 上调用 focus()——必须在用户手势的调用栈里。
+ */
+function SoftKeyboardInput({
+  inputRef,
+}: {
+  inputRef: RefObject<HTMLInputElement | null>
+}) {
+  return (
+    <input
+      ref={inputRef}
+      className="fixed bottom-0 left-0 h-px w-px opacity-0 pointer-events-none"
+      value=""
+      onChange={() => {}}
+      tabIndex={-1}
+      aria-hidden
+      autoCapitalize="off"
+      autoCorrect="off"
+      autoComplete="off"
+      spellCheck={false}
+    />
+  )
+}
+
+/**
  * 「这课没得练 / 加载失败」的兜底画面。
  *
  * 存在的理由：练习页原来只用 `!sentence` 一个条件就返回「正在加载课程内容…」的开场
@@ -268,6 +303,8 @@ export function LearnClient({
   const timerRef = useRef(timer)
   timerRef.current = timer
   const containerRef = useRef<HTMLDivElement>(null)
+  // 手机上必须有真实 input 才能唤起软键盘（详见渲染处的注释）
+  const softKeyboardRef = useRef<HTMLInputElement>(null)
 
   const [courseTitle, setCourseTitle] = useState("课程学习")
 
@@ -994,6 +1031,7 @@ export function LearnClient({
     }
     return (
       <div className="fixed inset-0 flex flex-col items-center justify-center overflow-hidden" style={{ background: "linear-gradient(135deg, #0f0a1a 0%, #1a1028 30%, #0d1525 60%, #0a0f1a 100%)" }}>
+        <SoftKeyboardInput inputRef={softKeyboardRef} />
         {/* Animated background particles */}
         <div className="absolute inset-0 overflow-hidden pointer-events-none">
           <div className="absolute top-1/4 left-1/4 w-96 h-96 rounded-full bg-violet-500/10 blur-[120px] animate-pulse" />
@@ -1090,7 +1128,14 @@ export function LearnClient({
       tabIndex={0}
       className="h-full flex flex-col outline-none"
       style={{ minHeight: "100dvh" }}
+      onPointerDown={(e) => {
+        // 触摸设备上没有物理键盘：一个 div 即使拿到了焦点也唤不起软键盘，
+        // 于是整个练习页在手机上完全无法输入（定价页却承诺「手机浏览器也能用」）。
+        // 只在触摸时把焦点交给下面那个真实但不可见的 input，桌面端行为不变。
+        if (e.pointerType === "touch") softKeyboardRef.current?.focus()
+      }}
     >
+      <SoftKeyboardInput inputRef={softKeyboardRef} />
       {/* === Layer 1: Action Bar === */}
       <div className="flex items-center justify-between shrink-0 px-3 sm:px-5 py-2 sm:py-3">
         {/* Left: back + course title + progress */}

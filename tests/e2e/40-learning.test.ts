@@ -460,3 +460,21 @@ describe("学习进度 /api/user/progress", () => {
     expect(Number(course?.learner_count)).toBe(2)
   })
 })
+
+describe("练习页 SSR /home/learn/[courseId]", () => {
+  it("渲染出可编辑的软键盘输入框（手机端唯一的输入通道）", async () => {
+    // 练习页的输入完全依赖 document 上的 keydown，页面上没有可见输入框。
+    // 触摸设备没有物理键盘，必须靠一个真实（非 readOnly）的 input 唤起软键盘；
+    // 曾出现过 readOnly 的版本——iOS 对 readOnly 不弹键盘，等于手机上敲不了字。
+    const res = await ApiClient.asUser(FIXTURE.userPro).get(
+      `/home/learn/${FIXTURE.coursePublished}?lesson=${FIXTURE.lessonA1}`
+    )
+
+    expect(res.status).toBe(200)
+    const inputs = [...res.raw.matchAll(/<input\b[^>]*>/g)].map((m) => m[0])
+    const soft = inputs.filter((t) => t.includes("pointer-events-none"))
+
+    expect(soft.length).toBeGreaterThan(0)
+    expect(soft[0]).not.toMatch(/readonly/i)
+  })
+})

@@ -43,16 +43,26 @@ export function ReviewNotebook() {
   const [stats, setStats] = useState<Stats>({ dueCount: 0, doneCount: 0, allCount: 0 })
   const [loading, setLoading] = useState(true)
   const [resetting, setResetting] = useState<string | null>(null)
+  const [loadError, setLoadError] = useState(false)
 
   const load = useCallback(async (t: TabKey) => {
     setLoading(true)
+    setLoadError(false)
     try {
       const res = await fetch(`/api/review/list?status=${t}&pageSize=100`)
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
       const data = await res.json()
-      setItems(data.items ?? [])
+      if (!Array.isArray(data?.items)) throw new Error("unexpected payload")
+      setItems(data.items)
       setStats({ dueCount: data.dueCount ?? 0, doneCount: data.doneCount ?? 0, allCount: data.allCount ?? 0 })
-    } catch { /* silently handled — shows empty list */ } finally {
+    } catch (e) {
+      // 以前这里静默吞掉：请求失败会渲染出「共 0 句 + 开始复习不可点」的空复习本，
+      // 用户会以为自己积累的复习数据丢了。失败必须显式说出来。
+      console.error("[ReviewNotebook] 复习本加载失败:", e)
+      setLoadError(true)
+      setItems([])
+      setStats({ dueCount: 0, doneCount: 0, allCount: 0 })
+    } finally {
       setLoading(false)
     }
   }, [])
@@ -81,11 +91,12 @@ export function ReviewNotebook() {
           <h1 className="text-lg font-bold text-foreground/80">复习本</h1>
         </div>
         <div className="flex items-center gap-4 text-xs text-foreground/40">
-          <span>今日待复习 <span className="font-bold text-amber-400">{stats.dueCount}</span></span>
+          {/* 加载失败时不能显示 0：那是「你没有任何复习数据」的错误暗示 */}
+          <span>今日待复习 <span className="font-bold text-amber-400">{loadError ? "—" : stats.dueCount}</span></span>
           <span>·</span>
-          <span>已掌握 <span className="font-bold text-emerald-400">{stats.doneCount}</span></span>
+          <span>已掌握 <span className="font-bold text-emerald-400">{loadError ? "—" : stats.doneCount}</span></span>
           <span>·</span>
-          <span>共 <span className="font-bold text-foreground/60">{stats.allCount}</span> 句</span>
+          <span>共 <span className="font-bold text-foreground/60">{loadError ? "—" : stats.allCount}</span> 句</span>
         </div>
         <button
           onClick={() => router.push("/home/review/session")}
@@ -125,6 +136,16 @@ export function ReviewNotebook() {
       {loading ? (
         <div className="flex items-center justify-center py-20">
           <Loader2 className="h-5 w-5 text-violet-400 animate-spin" />
+        </div>
+      ) : loadError ? (
+        <div className="rounded-2xl border border-red-500/20 bg-red-500/5 p-4 flex items-center justify-between">
+          <span className="text-sm text-red-500/80">复习本加载失败，你的复习进度没有丢失</span>
+          <button
+            onClick={() => load(tab)}
+            className="text-sm font-medium text-red-500 hover:text-red-400 transition-colors"
+          >
+            点击重试
+          </button>
         </div>
       ) : items.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-20 gap-3">
