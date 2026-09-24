@@ -7,7 +7,8 @@ import { X, CheckCircle2, RotateCcw, BookOpen } from "lucide-react"
 import { CompletedSentence } from "@/components/home/learn/CompletedSentence"
 import type { Word } from "@/types"
 import { cn } from "@/lib/utils"
-import { isTypingMatch, isTypingPrefix, tokenizeEnglish } from "@/lib/typing-compare"
+import { isTypingMatch, isTypingPrefix } from "@/lib/typing-compare"
+import { alignWordsWithEnglish } from "@/lib/word-align"
 
 interface ReviewItem {
   reviewId: string
@@ -28,16 +29,6 @@ interface WordState {
 
 function getInputWords(words: Word[]): Word[] {
   return words.filter((w) => w.pos !== "标点")
-}
-
-function textToWords(text: string): Word[] {
-  const tokens = tokenizeEnglish(text)
-  return tokens.map((t) => ({
-    english: t,
-    chinese: null,
-    phonetic: null,
-    pos: /^[a-zA-Z\d'-]+$/.test(t) ? "词" : "标点",
-  }))
 }
 
 function playBuzz() {
@@ -97,9 +88,8 @@ export function ReviewClient() {
   }, [])
 
   const sentence = items[currentIdx]
-  const words: Word[] = sentence?.words && sentence.words.length > 0
-    ? sentence.words
-    : textToWords(sentence?.english ?? "")
+  // words 以 english 的分词为骨架重建（标点必然与翻译一致），库里的 words 只补音标/词性
+  const words: Word[] = alignWordsWithEnglish(sentence?.english, sentence?.words ?? null)
   const inputWords = getInputWords(words)
 
   // Reset word states when sentence changes
@@ -159,10 +149,9 @@ export function ReviewClient() {
 
     const ws = wordStatesRef.current
     const activeIdx = activeWordIndexRef.current
-    const words = getInputWords(itemsRef.current[currentIdxRef.current]?.words
-      && itemsRef.current[currentIdxRef.current].words!.length > 0
-        ? itemsRef.current[currentIdxRef.current].words!
-        : textToWords(itemsRef.current[currentIdxRef.current]?.english ?? ""))
+    // 必须与渲染用的是同一套对齐结果，否则输入格下标会和键盘处理错位
+    const cur = itemsRef.current[currentIdxRef.current]
+    const words = getInputWords(alignWordsWithEnglish(cur?.english, cur?.words ?? null))
 
     if (!words[activeIdx]) return
 
@@ -369,7 +358,6 @@ export function ReviewClient() {
               const ws = isInput && wsIdx >= 0 ? wordStates[wsIdx] : null
               const isActive = isInput && wsIdx === activeWordIndex
               const isShaking = shakeWords.has(wsIdx)
-              const underlineWidth = word.english.length * 38 + 20
 
               if (!isInput) {
                 return (
@@ -384,7 +372,7 @@ export function ReviewClient() {
               return (
                 <div
                   key={i}
-                  className={cn("flex flex-col items-center gap-[5px]", isShaking && "animate-shake")}
+                  className={cn("grid grid-cols-1 place-items-center gap-[5px]", isShaking && "animate-shake")}
                   onMouseEnter={(e) => {
                     if (!isPending) return
                     const ul = e.currentTarget.querySelector<HTMLElement>("[data-underline]")
@@ -396,31 +384,33 @@ export function ReviewClient() {
                     if (ul) animate(ul, { scaleX: 1, scaleY: 1, duration: 180, ease: "out(2)" })
                   }}
                 >
+                  {/* 宽度由不可见的期望单词撑开，不再按字数估（i/l 与 W/M 宽度差很大） */}
                   <div
                     className={cn(
-                      "flex items-center justify-center h-16 text-6xl font-medium transition-colors",
+                      "col-start-1 row-start-1 grid place-items-center h-16 text-6xl font-medium transition-colors",
                       ws?.status === "done" ? "text-foreground"
                         : ws?.status === "error" ? "text-red-500"
                         : isActive ? "text-accent"
                         : "text-transparent"
                     )}
-                    style={{ minWidth: underlineWidth }}
                   >
-                    {ws?.value || ""}
+                    <span aria-hidden className="invisible col-start-1 row-start-1 whitespace-pre px-1">
+                      {word.english}
+                    </span>
+                    <span className="col-start-1 row-start-1 whitespace-pre px-1">
+                      {ws?.value || ""}
+                    </span>
                   </div>
                   <div
                     data-underline={wsIdx}
                     className={cn(
-                      "h-[3px] transition-colors duration-150",
+                      "col-start-1 row-start-2 w-full h-[3px] transition-colors duration-150",
                       ws?.status === "error" ? "bg-red-500"
                         : ws?.status === "done" ? "bg-foreground/40"
                         : isActive ? "bg-accent shadow-[0_0_8px_var(--accent)]"
                         : "bg-foreground/20"
                     )}
-                    style={{
-                      width: underlineWidth,
-                      clipPath: "polygon(0 0, 100% 0, calc(100% - 2px) 100%, 2px 100%)",
-                    }}
+                    style={{ clipPath: "polygon(0 0, 100% 0, calc(100% - 2px) 100%, 2px 100%)" }}
                   />
                 </div>
               )

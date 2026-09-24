@@ -6,49 +6,19 @@ import { animate } from "animejs"
 import Link from "next/link"
 import { ChevronLeft, ChevronRight, ArrowLeft, BookOpen, ShoppingBag, Pause, Play, RotateCcw, Shuffle, Maximize, Minimize, Keyboard, List, Settings, Eye, EyeOff } from "lucide-react"
 import type { Sentence, Word } from "@/types"
-import { isTypingMatch, tokenizeEnglish } from "@/lib/typing-compare"
+import { isTypingMatch } from "@/lib/typing-compare"
 
-function textToWords(text: string): Word[] {
-  const tokens = tokenizeEnglish(text)
-  return tokens.map((t) => ({
-    english: t,
-    chinese: null,
-    phonetic: null,
-    pos: /^[a-zA-Z\d'-]+$/.test(t) ? "词" : "标点",
-  }))
-}
-
-// Look up each token in the parent sentence's words array to get real phonetics/POS
-function matchWordsFromParent(parentWords: Word[], chunkText: string): Word[] {
-  const tokens = tokenizeEnglish(chunkText)
-  const result: Word[] = []
-  let startIdx = 0
-  for (const token of tokens) {
-    let matched = false
-    for (let i = startIdx; i < parentWords.length; i++) {
-      if (isTypingMatch(token, parentWords[i].english)) {
-        result.push(parentWords[i])
-        startIdx = i + 1
-        matched = true
-        break
-      }
-    }
-    if (!matched) {
-      result.push({
-        english: token,
-        chinese: null,
-        phonetic: null,
-        pos: /^[.,!?;:]$/.test(token) ? "标点" : "词",
-      })
-    }
-  }
-  return result
-}
+import { alignWordsWithEnglish } from "@/lib/word-align"
 
 // Flatten DB sentences: if a sentence has chunks, emit one Sentence per chunk
 function expandSentences(raw: Sentence[]): Sentence[] {
   return raw.flatMap((s) => {
-    if (!s.chunks || s.chunks.length === 0) return [s]
+    if (!s.chunks || s.chunks.length === 0) {
+      // words 以 english 的分词为骨架重建：导入的 words 普遍缺标点，
+      // 直接用会让练习页那行的标点与翻译对不上。
+      const normalized: Sentence = { ...s, words: alignWordsWithEnglish(s.english, s.words) }
+      return [normalized]
+    }
     const parentWords = s.words ?? []
     return [...s.chunks]
       .sort((a, b) => a.order - b.order)
@@ -61,9 +31,7 @@ function expandSentences(raw: Sentence[]): Sentence[] {
         difficulty: s.difficulty ?? 1,
         tags: s.tags ?? [],
         lesson_id: s.lesson_id,
-        words: parentWords.length > 0
-          ? matchWordsFromParent(parentWords, chunk.text)
-          : textToWords(chunk.text),
+        words: alignWordsWithEnglish(chunk.text, parentWords),
         chunks: null,
       }))
   })
@@ -1224,14 +1192,12 @@ export function LearnClient({
                   )
                 }
 
-                // Responsive width: use ch units relative to font size
-                const wordLen = Math.max(word.english.length, 2)
                 const isPending = !ws || ws.status === "idle"
 
                 return (
                   <div
                     key={i}
-                    className={`flex flex-col items-center gap-[4px] sm:gap-[5px] ${isShaking ? "animate-shake" : ""}`}
+                    className={`grid grid-cols-1 place-items-center gap-[4px] sm:gap-[5px] ${isShaking ? "animate-shake" : ""}`}
                     onMouseEnter={(e) => {
                       if (!isPending) return
                       const ul = e.currentTarget.querySelector<HTMLElement>("[data-underline]")
@@ -1243,9 +1209,19 @@ export function LearnClient({
                       if (ul) animate(ul, { scaleX: 1, scaleY: 1, duration: 180, ease: "out(2)" })
                     }}
                   >
+                    {/*
+                      宽度由「期望单词」这把尺子决定，而不是按字数估算。
+                      旧写法 width: calc(Nch + 10px) 有两个坑：
+                        1. ch 是相对该元素自身字号算的，而下划线所在元素没有字号类，
+                           继承到 16px（1ch≈8px）；上面的单词却是 text-3xl…lg:text-6xl，
+                           于是 5 个字母的词文字宽 ~120px、下划线只有 ~50px。
+                        2. 按字数算对 i/l 与 W/M 这类宽度差异大的词必然不准。
+                      现在用不可见的期望单词 + 实际输入同格叠放：格子宽度 = 两者较宽者，
+                      下划线 w-full 跟着格子走，每个词各得其所。
+                    */}
                     <div
                       className={`
-                        flex items-center justify-center text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-medium transition-colors
+                        col-start-1 row-start-1 grid place-items-center text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-medium transition-colors
                         h-10 sm:h-12 md:h-14 lg:h-16
                         ${ws?.status === "done"
                           ? "text-foreground"
@@ -1256,13 +1232,17 @@ export function LearnClient({
                               : "text-transparent"
                         }
                       `}
-                      style={{ minWidth: `calc(${wordLen}ch + 10px)` }}
                     >
-                      {ws?.value || ""}
+                      <span aria-hidden className="invisible col-start-1 row-start-1 whitespace-pre px-1">
+                        {word.english}
+                      </span>
+                      <span className="col-start-1 row-start-1 whitespace-pre px-1">
+                        {ws?.value || ""}
+                      </span>
                     </div>
                     <div
                       data-underline={wsIdx}
-                      className={`h-[2px] sm:h-[3px] transition-colors duration-150 ${
+                      className={`col-start-1 row-start-2 w-full h-[2px] sm:h-[3px] transition-colors duration-150 ${
                         ws?.status === "error"
                           ? "bg-red-500"
                           : ws?.status === "done"
@@ -1271,10 +1251,7 @@ export function LearnClient({
                               ? "bg-accent shadow-[0_0_8px_var(--accent)]"
                               : "bg-foreground/20"
                       }`}
-                      style={{
-                        width: `calc(${wordLen}ch + 10px)`,
-                        clipPath: "polygon(0 0, 100% 0, calc(100% - 2px) 100%, 2px 100%)",
-                      }}
+                      style={{ clipPath: "polygon(0 0, 100% 0, calc(100% - 2px) 100%, 2px 100%)" }}
                     />
                   </div>
                 )

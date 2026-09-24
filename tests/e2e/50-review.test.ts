@@ -12,7 +12,7 @@
  */
 import { describe, it, expect, beforeEach } from "vitest"
 import { ApiClient } from "./helpers/api"
-import { FIXTURE, seedFixtures, one } from "./helpers/db"
+import { FIXTURE, seedFixtures, one, q } from "./helpers/db"
 import { insertReviewItem } from "./helpers/factories"
 
 const PAST = new Date(Date.now() - 60_000)
@@ -90,6 +90,30 @@ describe("复习列表 /api/review/list", () => {
     expect(row.chinese).toBe("我每天学习英语。")
     expect(row.courseId).toBe(FIXTURE.coursePublished)
     expect(row.courseTitle).toBe("测试课程·已发布")
+  })
+
+  it("题干不可用的句子不进复习本，且列表与角标口径一致（不能角标有、点进去没有）", async () => {
+    // 线上有 7 条这种复习项：chinese 就是答案本身，用户看不到任何中文提示。
+    // 关键在「一致」：列表过滤了而计数没过滤，就会出现「角标 2 条待复习、点进去只有 1 条」。
+    await q(
+      `INSERT INTO sentences (id, chinese, english, lesson_id, sort_order, words, words_count) VALUES
+       ('55555555-5555-4555-8555-000000000021', 'mark', 'mark', ?, 3, NULL, 0)`,
+      [FIXTURE.lessonA1]
+    )
+    await insertReviewItem(FIXTURE.userFree, FIXTURE.sentA1Plain, { nextReviewAt: PAST })
+    await insertReviewItem(FIXTURE.userFree, "55555555-5555-4555-8555-000000000021", {
+      nextReviewAt: PAST,
+    })
+
+    const res = await ApiClient.asUser(FIXTURE.userFree).get<{
+      items: Array<{ sentenceId: string }>
+      dueCount: number
+      allCount: number
+    }>("/api/review/list?status=due")
+
+    expect(res.body.items.map((i) => i.sentenceId)).toEqual([FIXTURE.sentA1Plain])
+    expect(Number(res.body.dueCount)).toBe(1)
+    expect(Number(res.body.allCount)).toBe(1)
   })
 
   it("只返回自己的复习项，pageSize 有上限", async () => {

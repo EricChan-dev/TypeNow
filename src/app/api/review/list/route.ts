@@ -3,6 +3,7 @@ import { db } from "@/lib/db"
 import { reviewQueue, sentences, lessons, courses } from "@/lib/db/schema"
 import { and, eq, lte, sql } from "drizzle-orm"
 import { getSession } from "@/app/actions/auth"
+import { usablePromptSql } from "@/lib/sentence-quality"
 
 export async function GET(request: Request) {
   const session = await getSession()
@@ -16,6 +17,11 @@ export async function GET(request: Request) {
   const offset = (page - 1) * pageSize
 
   const now = new Date()
+
+  // 题干不可用的句子（chinese 无中文 / 与答案雷同）不进复习本。列表、列表总数、
+  // 以及三个计数徽标必须全部带上这个条件 —— 只过滤列表不过滤计数，就会出现
+  // 「徽标有 3 条待复习、点进去是空的」这种自相矛盾。
+  const usable = usablePromptSql(sentences.chinese, sentences.english)
 
   const whereClause = (() => {
     if (filter === "due") return and(eq(reviewQueue.userId, session.userId), eq(reviewQueue.status, "pending"), lte(reviewQueue.nextReviewAt, now))
@@ -42,7 +48,7 @@ export async function GET(request: Request) {
     .innerJoin(sentences, eq(reviewQueue.sentenceId, sentences.id))
     .leftJoin(lessons, eq(sentences.lessonId, lessons.id))
     .leftJoin(courses, eq(lessons.courseId, courses.id))
-    .where(whereClause)
+    .where(and(whereClause, usable))
     .orderBy(sql`${reviewQueue.nextReviewAt} ASC`)
     .limit(pageSize)
     .offset(offset)
@@ -50,23 +56,27 @@ export async function GET(request: Request) {
   const [{ total }] = await db
     .select({ total: sql<number>`COUNT(*)` })
     .from(reviewQueue)
-    .where(whereClause)
+    .innerJoin(sentences, eq(reviewQueue.sentenceId, sentences.id))
+    .where(and(whereClause, usable))
 
   // Always include due count for badge
   const [{ dueCount }] = await db
     .select({ dueCount: sql<number>`COUNT(*)` })
     .from(reviewQueue)
-    .where(and(eq(reviewQueue.userId, session.userId), eq(reviewQueue.status, "pending"), lte(reviewQueue.nextReviewAt, now)))
+    .innerJoin(sentences, eq(reviewQueue.sentenceId, sentences.id))
+    .where(and(eq(reviewQueue.userId, session.userId), eq(reviewQueue.status, "pending"), lte(reviewQueue.nextReviewAt, now), usable))
 
   const [{ doneCount }] = await db
     .select({ doneCount: sql<number>`COUNT(*)` })
     .from(reviewQueue)
-    .where(and(eq(reviewQueue.userId, session.userId), eq(reviewQueue.status, "done")))
+    .innerJoin(sentences, eq(reviewQueue.sentenceId, sentences.id))
+    .where(and(eq(reviewQueue.userId, session.userId), eq(reviewQueue.status, "done"), usable))
 
   const [{ allCount }] = await db
     .select({ allCount: sql<number>`COUNT(*)` })
     .from(reviewQueue)
-    .where(eq(reviewQueue.userId, session.userId))
+    .innerJoin(sentences, eq(reviewQueue.sentenceId, sentences.id))
+    .where(and(eq(reviewQueue.userId, session.userId), usable))
 
   return NextResponse.json({
     items,

@@ -10,8 +10,8 @@ interface SettingsModalProps {
 }
 
 const SOURCES: { key: TTSSource; label: string }[] = [
-  { key: "browser", label: "浏览器" },
   { key: "youdao", label: "有道" },
+  { key: "browser", label: "浏览器" },
 ]
 
 export function SettingsModal({ onClose }: SettingsModalProps) {
@@ -76,7 +76,7 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
                       </div>
                       <button
                         className="p-1.5 rounded-full bg-foreground/10 hover:bg-foreground/20 transition-colors shrink-0"
-                        onClick={(e) => { e.stopPropagation(); globalSpeak(testText, { voice: v.name }) }}
+                        onClick={(e) => { e.stopPropagation(); globalSpeak(testText, { voice: v.name, source: "browser" }) }}
                         title="试听"
                       >
                         <Volume2 className="h-3.5 w-3.5 text-foreground/60" />
@@ -98,7 +98,7 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
                     </div>
                     <button
                       className="p-1.5 rounded-full bg-foreground/10 hover:bg-foreground/20 transition-colors shrink-0"
-                      onClick={(e) => { e.stopPropagation(); globalSpeak(testText, { youdaoVoice: v.name }) }}
+                      onClick={(e) => { e.stopPropagation(); globalSpeak(testText, { youdaoVoice: v.name, source: "youdao" }) }}
                       title="试听"
                     >
                       <Volume2 className="h-3.5 w-3.5 text-foreground/60" />

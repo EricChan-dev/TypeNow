@@ -171,13 +171,18 @@ describe("句子列表 /api/courses/sentences", () => {
     expect(curly?.words.map((w) => w.english)).toContain("don\u2019t")
 
     const plain = res.body.sentences.find((s) => s.id === FIXTURE.sentA1Plain)
+    // 夹具的 words 是 `words()` 造的，它把标点全删了（replace(/[.,!?;:]/g, " ")），
+    // 正是线上导入语料的真实形态。接口必须以 english 为骨架把句末句号补回来，
+    // 否则练习页那行会少一个标点格（线上 335,291 条带 words 的句子里有 40% 对不上）。
     expect(plain?.words.map((w) => w.english)).toEqual([
       "I",
       "study",
       "English",
       "every",
       "day",
+      ".",
     ])
+    expect(plain?.words.at(-1)?.pos).toBe("标点")
   })
 
   it("words 为 null 的句子现场分词兜底（不返回空数组）", async () => {
@@ -188,6 +193,42 @@ describe("句子列表 /api/courses/sentences", () => {
 
     const s = res.body.sentences.find((x) => x.id === FIXTURE.sentA2Plain)
     expect(s?.words.map((w) => w.english)).toEqual(["She", "is", "a", "teacher", "."])
+  })
+
+  it("题干不可用的句子不返回（中文=英文 / 中文里根本没有中文）", async () => {
+    // 线上 1,674 条这种句子，正是「中译英模式下中文栏显示英文」的来源
+    await q(
+      `INSERT INTO sentences (id, chinese, english, lesson_id, sort_order, words, words_count) VALUES
+       ('55555555-5555-4555-8555-000000000001', 'mark', 'mark', ?, 1, NULL, 0),
+       ('55555555-5555-4555-8555-000000000002', 'S3090', 'three o nine o', ?, 2, NULL, 0)`,
+      [FIXTURE.lessonA2, FIXTURE.lessonA2]
+    )
+    const res = await ApiClient.asUser(FIXTURE.userPro).get<{
+      sentences: Array<{ id: string; chinese: string }>
+    }>(`/api/courses/sentences?lessonId=${FIXTURE.lessonA2}`)
+
+    expect(res.status).toBe(200)
+    expect(res.body.sentences.map((s) => s.id)).toEqual([FIXTURE.sentA2Plain])
+  })
+
+  it("整节课题干都不可用时兜底原样返回，绝不返回空课（字母课 / 学普通话 就是这种）", async () => {
+    // 这两种课时是**正常内容**，只是不符合「中文题干」假设：
+    //   a/a b/b … 字母本身就是题干；维语题干 + 中文 english 压根不是中译英。
+    // 它们与用户抱怨的 I/I 在数据上无法区分，所以只能按整节课兜底。
+    await q(
+      `INSERT INTO sentences (id, chinese, english, lesson_id, sort_order, words, words_count) VALUES
+       ('55555555-5555-4555-8555-000000000011', 'a', 'a', ?, 0, NULL, 0),
+       ('55555555-5555-4555-8555-000000000012', 'b', 'b', ?, 1, NULL, 0)`,
+      [FIXTURE.lessonEmpty, FIXTURE.lessonEmpty]
+    )
+    const res = await ApiClient.asUser(FIXTURE.userPro).get<{
+      sentences: Array<{ id: string; chinese: string; words: Array<{ english: string }> }>
+    }>(`/api/courses/sentences?lessonId=${FIXTURE.lessonEmpty}`)
+
+    expect(res.status).toBe(200)
+    expect(res.body.sentences.map((s) => s.chinese)).toEqual(["a", "b"])
+    // 题干不可用也要照常重建 words，否则练习页无格可敲
+    expect(res.body.sentences[0].words.map((w) => w.english)).toEqual(["a"])
   })
 })
 

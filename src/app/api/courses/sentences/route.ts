@@ -4,20 +4,8 @@ import { courses, lessons, sentences, users } from "@/lib/db/schema"
 import { and, eq, asc } from "drizzle-orm"
 import { getSession } from "@/lib/auth/session"
 import { checkAndExpirePro } from "@/lib/subscription"
-import { tokenizeEnglish } from "@/lib/typing-compare"
-
-/** 从英文文本生成基础 Word 数组（当 words 为 null 时的 fallback） */
-function textToWords(text: string) {
-  // 必须用归一化后的分词：don’t 里的 U+2019 不在 TOKEN_RE 中，
-  // 直接切会变成 ["don","t"]，用户被迫分两格输入。
-  const tokens = tokenizeEnglish(text)
-  return tokens.map((t) => ({
-    english: t,
-    chinese: null as string | null,
-    phonetic: null as string | null,
-    pos: /^[a-zA-Z\d'-]+$/.test(t) ? "词" : "标点",
-  }))
-}
+import { usablePromptSql } from "@/lib/sentence-quality"
+import { alignWordsWithEnglish } from "@/lib/word-align"
 
 export async function GET(request: Request) {
   try {
@@ -52,13 +40,36 @@ export async function GET(request: Request) {
       .limit(1)
     if (!lesson) return NextResponse.json({ error: "课时不存在或未发布" }, { status: 404 })
 
-    const data = await db.select().from(sentences).where(eq(sentences.lessonId, lessonId)).orderBy(asc(sentences.sortOrder))
+    // 题干不可用的句子（chinese 无中文 / 与答案雷同）不进练习：用户看到的提示
+    // 就是答案本身。线上 1,674 条如此，正是「中译英模式里中文栏显示英文」的来源。
+    // （闭包里必须用下面这个已收窄的非空别名，直接用 db 会丢掉 null 检查。）
+    const database = db
+    const forLesson = (usableOnly: boolean) =>
+      database
+        .select()
+        .from(sentences)
+        .where(
+          usableOnly
+            ? and(eq(sentences.lessonId, lessonId), usablePromptSql(sentences.chinese, sentences.english))
+            : eq(sentences.lessonId, lessonId)
+        )
+        .orderBy(asc(sentences.sortOrder))
 
+    let data = await forLesson(true)
+
+    // 兜底：整节课的题干都「不可用」时，宁可保持原样也不要给用户一节空课。
+    // 线上确实存在这种课时，且它是**正常内容**，只是不符合「中文题干」这个假设：
+    //   26字母绘本版（幼儿启蒙英语）—— a/a b/b … z/z，字母本身就是题干；
+    //   第一课（学普通话）—— 题干是维语、english 反而是中文，方向压根不是中译英。
+    // 这种课时的 `a`/`a` 与用户抱怨的 `I`/`I` 在数据上无法区分（都是单字符且相等），
+    // 所以只能按「整节课」兜底，而不是放宽行级判定。
+    if (data.length === 0) data = await forLesson(false)
+
+    // words 一律以 english 的分词为骨架重建：库里导入的 words 普遍缺标点，
+    // 直接下发会让练习页那行的标点与翻译对不上（线上 40% 的句子如此）。
     const normalized = data.map((s) => ({
       ...s,
-      words: (s.words as Array<Record<string, unknown>> | null)?.length
-        ? s.words
-        : textToWords(s.english ?? ""),
+      words: alignWordsWithEnglish(s.english, s.words),
     }))
 
     return NextResponse.json({ sentences: normalized })
