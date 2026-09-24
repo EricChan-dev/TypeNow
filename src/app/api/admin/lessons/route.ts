@@ -3,6 +3,7 @@ import { NextResponse } from "next/server"
 import { db } from "@/lib/db"
 import { lessons } from "@/lib/db/schema"
 import { requireAdmin } from "@/lib/admin-auth"
+import { parsePagination } from "@/lib/pagination"
 import { eq, sql } from "drizzle-orm"
 
 export async function GET(request: Request) {
@@ -12,9 +13,8 @@ export async function GET(request: Request) {
 
   const { searchParams } = new URL(request.url)
   const courseId = searchParams.get("courseId")
-  const page = Number(searchParams.get("current") ?? "1")
-  const pageSize = Number(searchParams.get("pageSize") ?? "50")
-  const offset = (page - 1) * pageSize
+  // 课时按课内顺序排，保持 asc(sortOrder)；只收敛分页参数。
+  const { pageSize, offset } = parsePagination(searchParams, 50)
 
   const where = courseId ? eq(lessons.courseId, courseId) : undefined
 

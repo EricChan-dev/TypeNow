@@ -3,6 +3,7 @@ import { NextResponse } from "next/server"
 import { db } from "@/lib/db"
 import { sentences } from "@/lib/db/schema"
 import { requireAdmin } from "@/lib/admin-auth"
+import { parsePagination } from "@/lib/pagination"
 import { eq, like, and, sql, asc } from "drizzle-orm"
 
 export async function GET(request: Request) {
@@ -11,12 +12,11 @@ export async function GET(request: Request) {
   if (!db) return NextResponse.json({ error: "DB not configured" }, { status: 500 })
 
   const { searchParams } = new URL(request.url)
-  const page = Number(searchParams.get("current") ?? "1")
-  const pageSize = Number(searchParams.get("pageSize") ?? "20")
+  // 句子列表的排序是「课内顺序」，不能改成倒序——只收敛分页参数。
+  const { pageSize, offset } = parsePagination(searchParams)
   const search = searchParams.get("chinese") ?? searchParams.get("english") ?? ""
   const lessonId = searchParams.get("lessonId")
 
-  const offset = (page - 1) * pageSize
   const conditions = []
   if (search) conditions.push(like(sentences.chinese, `%${search}%`))
   if (lessonId) conditions.push(eq(sentences.lessonId, lessonId))

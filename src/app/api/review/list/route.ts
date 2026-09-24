@@ -4,6 +4,7 @@ import { reviewQueue, sentences, lessons, courses } from "@/lib/db/schema"
 import { and, eq, lte, sql } from "drizzle-orm"
 import { getSession } from "@/app/actions/auth"
 import { usableSentenceSql } from "@/lib/sentence-quality"
+import { parsePagination } from "@/lib/pagination"
 
 export async function GET(request: Request) {
   const session = await getSession()
@@ -12,9 +13,10 @@ export async function GET(request: Request) {
 
   const { searchParams } = new URL(request.url)
   const filter = searchParams.get("status") ?? "due" // "due" | "done" | "all"
-  const page = Math.max(1, parseInt(searchParams.get("page") ?? "1"))
-  const pageSize = Math.min(100, Math.max(1, parseInt(searchParams.get("pageSize") ?? "50")))
-  const offset = (page - 1) * pageSize
+  // 旧写法 Math.max(1, parseInt(...)) 对非数字会留下 NaN：Math.max(1, NaN) 仍是 NaN，
+  // 传到 SQL 就是 `LIMIT NULL`——MySQL 把它当作不加限制，等于绕过 pageSize 上限。
+  // 小数与负数本来就被 parseInt / Math.max 挡住了，这里主要是把 NaN 这条补上。
+  const { page, pageSize, offset } = parsePagination(searchParams, 50)
 
   const now = new Date()
 

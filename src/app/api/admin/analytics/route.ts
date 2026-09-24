@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import { db } from "@/lib/db"
 import { analyticsEvents } from "@/lib/db/schema"
 import { requireAdmin } from "@/lib/admin-auth"
+import { parsePagination } from "@/lib/pagination"
 import { sql, desc, gte, eq } from "drizzle-orm"
 
 export async function GET(request: Request) {
@@ -10,9 +11,7 @@ export async function GET(request: Request) {
   if (!db) return NextResponse.json({ error: "DB not configured" }, { status: 500 })
 
   const { searchParams } = new URL(request.url)
-  const page = Number(searchParams.get("current") ?? "1")
-  const pageSize = Number(searchParams.get("pageSize") ?? "50")
-  const offset = (page - 1) * pageSize
+  const { pageSize, offset } = parsePagination(searchParams, 50)
 
   const today = new Date()
   today.setHours(0, 0, 0, 0)

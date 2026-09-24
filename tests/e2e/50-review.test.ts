@@ -128,9 +128,13 @@ describe("复习列表 /api/review/list", () => {
   })
 
   it("非法分页参数不 500", async () => {
-    for (const qs of ["page=abc", "pageSize=abc", "page=-1", "pageSize=0"]) {
+    // 这里主要是防回归：旧写法用 parseInt + Math.max/Math.min，小数会被 parseInt
+    // 截断、0 和负数会被钳住，所以这些入参本来就没有把它打崩。
+    // 唯一残留的问题是 pageSize=abc → NaN 时 SQL 变成 LIMIT NULL（等于不加限制），
+    // 现在会被收敛回默认的 50 条。
+    for (const qs of ["page=abc", "pageSize=abc", "page=-1", "pageSize=0", "pageSize=2.5", "page=1.01"]) {
       const res = await ApiClient.asUser(FIXTURE.userFree).get(`/api/review/list?${qs}`)
-      expect(res.status).toBe(200)
+      expect(res.status, `?${qs} 应当正常返回而不是 500`).toBe(200)
     }
   })
 })

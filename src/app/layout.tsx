@@ -3,6 +3,7 @@ import { Inter, Geist_Mono } from "next/font/google"
 import { ThemeProvider } from "next-themes"
 import { Toaster } from "sonner"
 import { AiChatWidget } from "@/components/layout/AiChatWidget"
+import { DeploySkewGuard } from "@/components/layout/DeploySkewGuard"
 import "./globals.css"
 
 const inter = Inter({
@@ -40,6 +41,7 @@ export default function RootLayout({
           disableTransitionOnChange
         >
           {children}
+          <DeploySkewGuard />
           <AiChatWidget />
           <Toaster
             position="top-center"
