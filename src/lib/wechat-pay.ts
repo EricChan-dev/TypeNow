@@ -109,6 +109,31 @@ function wechatPayBaseHeaders(): Record<string, string> {
   }
 }
 
+/**
+ * 校验微信支付**应答**签名。
+ *
+ * 此前所有出站请求的应答都没有验签：谁能篡改到 api.mch.weixin.qq.com 的响应，
+ * 就能给出一份伪造的「下单成功 / 查单已支付 / 转账成功」报文。APIv3 应答头里的
+ * Wechatpay-Timestamp/Nonce/Signature/Serial 就是为此存在的，必须校验。
+ *
+ * 与回调共用同一份验签实现（报文格式完全一致），因此「应答能验通」等价于
+ * 「回调能验通」——scripts/wechat-pay-verify-check.ts 可以在生产上只读地证明它。
+ */
+export async function verifyWechatPayResponse(headers: Headers, body: string): Promise<void> {
+  const ok = await verifyWechatPaySignature({
+    timestamp: headers.get("Wechatpay-Timestamp") || "",
+    nonce: headers.get("Wechatpay-Nonce") || "",
+    body,
+    signature: headers.get("Wechatpay-Signature") || "",
+    serialNo: headers.get("Wechatpay-Serial") || "",
+  })
+  if (!ok) {
+    throw new Error(
+      `微信支付应答验签失败（serial=${headers.get("Wechatpay-Serial") || "缺失"}）`
+    )
+  }
+}
+
 async function wechatPayRequest(
   method: string,
   urlPath: string,
@@ -125,12 +150,20 @@ async function wechatPayRequest(
   const url = `${cfg.sandbox ? WECHAT_PAY_HOST + "/sandboxnew" : WECHAT_PAY_HOST}${urlPath}`
   const res = await fetch(url, { method, headers, body: bodyStr || undefined })
 
+  // 先取原文再验签：签名是对**原始字节**算的，JSON.parse 之后再序列化会破坏它
+  const text = await res.text()
+
   if (!res.ok) {
-    const errText = await res.text()
-    throw new Error(`WeChat Pay error ${res.status}: ${errText}`)
+    throw new Error(`WeChat Pay error ${res.status}: ${text}`)
   }
 
-  return res.json() as Promise<Record<string, unknown>>
+  // 生产环境必须验签。开发环境的模拟分支在上面已经提前 return，走不到这里；
+  // 沙箱环境（sandboxnew）不提供应答签名，故显式豁免，避免本地沙箱联调被卡死。
+  if (!cfg.sandbox) {
+    await verifyWechatPayResponse(res.headers, text)
+  }
+
+  return text ? (JSON.parse(text) as Record<string, unknown>) : {}
 }
 
 export async function createNativeOrder(

@@ -1,10 +1,11 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest"
-import { generateKeyPairSync } from "crypto"
+import { generateKeyPairSync, createSign } from "crypto"
 import {
   createNativeOrder,
   getWechatPayCerts,
   isWeChatPayConfigured,
   resetWechatPayCertCache,
+  resetWechatPayPublicKeyCache,
 } from "@/lib/wechat-pay"
 
 /**
@@ -24,6 +25,32 @@ const { privateKey } = generateKeyPairSync("rsa", {
   publicKeyEncoding: { type: "spki", format: "pem" },
 })
 
+/**
+ * 「微信侧」的密钥对：应答签名由微信的私钥产生，我们用配置的公钥验签。
+ * 应答现在也必须验签（见 verifyWechatPayResponse），所以假响应必须带签名头。
+ */
+const wechatPay = generateKeyPairSync("rsa", {
+  modulusLength: 2048,
+  privateKeyEncoding: { type: "pkcs8", format: "pem" },
+  publicKeyEncoding: { type: "spki", format: "pem" },
+})
+
+const PUBLIC_KEY_ID = "PUB_KEY_ID_0111122210052026053000182085000202"
+
+/** 按微信的格式给一段响应体签名 */
+function signResponse(body: string): Headers {
+  const timestamp = String(Math.floor(Date.now() / 1000))
+  const nonce = "stub-nonce"
+  const signer = createSign("RSA-SHA256")
+  signer.update(`${timestamp}\n${nonce}\n${body}\n`)
+  return new Headers({
+    "Wechatpay-Timestamp": timestamp,
+    "Wechatpay-Nonce": nonce,
+    "Wechatpay-Signature": signer.sign(wechatPay.privateKey, "base64"),
+    "Wechatpay-Serial": PUBLIC_KEY_ID,
+  })
+}
+
 const SAVED = { ...process.env }
 
 interface Captured {
@@ -40,11 +67,13 @@ function stubFetch(responder: (c: Captured) => { status: number; body: unknown }
     const c: Captured = { url, headers, method: init.method ?? "GET" }
     captured.push(c)
     const { status, body } = responder(c)
+    const text = JSON.stringify(body)
     return {
       ok: status >= 200 && status < 300,
       status,
+      headers: signResponse(text),
       json: async () => body,
-      text: async () => JSON.stringify(body),
+      text: async () => text,
     } as unknown as Response
   })
 }
@@ -52,6 +81,10 @@ function stubFetch(responder: (c: Captured) => { status: number; body: unknown }
 beforeEach(() => {
   captured = []
   resetWechatPayCertCache()
+  resetWechatPayPublicKeyCache()
+  process.env.WECHAT_PAY_PUBLIC_KEY_ID = PUBLIC_KEY_ID
+  process.env.WECHAT_PAY_PUBLIC_KEY = wechatPay.publicKey
+  delete process.env.WECHAT_PAY_PUBLIC_KEY_PATH
   process.env.WECHAT_PAY_MCH_ID = "1112221005"
   process.env.WECHAT_PAY_APP_ID = "wxd663bd3d07ae0eb5"
   process.env.WECHAT_PAY_API_V3_KEY = "0123456789abcdef0123456789abcdef"

@@ -362,3 +362,86 @@ describe("验签实现与微信规范一致", () => {
     ).resolves.toBe(true)
   })
 })
+
+describe("应答验签（出站请求的响应也必须验，此前完全不验）", () => {
+  /** 造一个"微信的响应"，可指定签名是否正确 / 是否带签名头 / 是否被篡改 */
+  async function stubResponse(opts: {
+    body: unknown
+    signWith?: string
+    omitHeaders?: boolean
+    tamperBody?: boolean
+  }) {
+    const { createNativeOrder } = await import("@/lib/wechat-pay")
+    const text = JSON.stringify(opts.body)
+    const timestamp = String(Math.floor(Date.now() / 1000))
+    const nonce = "resp-nonce"
+    const signer = createSign("RSA-SHA256")
+    signer.update(`${timestamp}\n${nonce}\n${text}\n`)
+    const signature = signer.sign(opts.signWith ?? wechat.privateKey, "base64")
+    const headers = opts.omitHeaders
+      ? new Headers()
+      : new Headers({
+          "Wechatpay-Timestamp": timestamp,
+          "Wechatpay-Nonce": nonce,
+          "Wechatpay-Signature": signature,
+          "Wechatpay-Serial": PUBLIC_KEY_ID,
+        })
+
+    vi.stubGlobal("fetch", async () => ({
+      ok: true,
+      status: 200,
+      headers,
+      text: async () =>
+        opts.tamperBody ? JSON.stringify({ code_url: "weixin://evil" }) : text,
+    }))
+
+    return createNativeOrder({
+      plan: "yearly",
+      outTradeNo: "TYPENOW-RESP-0001",
+      description: "年付会员",
+      amount: 19900,
+    })
+  }
+
+  const OK_BODY = { code_url: "weixin://wxpay/bizpayurl?pr=abc" }
+
+  it("签名正确 → 放行", async () => {
+    await expect(stubResponse({ body: OK_BODY })).resolves.toMatchObject({
+      code_url: "weixin://wxpay/bizpayurl?pr=abc",
+    })
+    vi.unstubAllGlobals()
+  })
+
+  it("签名由别人的私钥产生 → 抛错，不返回伪造的 code_url", async () => {
+    await expect(stubResponse({ body: OK_BODY, signWith: other.privateKey })).rejects.toThrow(
+      /应答验签失败/
+    )
+    vi.unstubAllGlobals()
+  })
+
+  it("响应体被篡改 → 抛错（签名是对原始字节算的）", async () => {
+    await expect(stubResponse({ body: OK_BODY, tamperBody: true })).rejects.toThrow(
+      /应答验签失败/
+    )
+    vi.unstubAllGlobals()
+  })
+
+  it("响应缺签名头 → 抛错，而不是当成可信响应", async () => {
+    await expect(stubResponse({ body: OK_BODY, omitHeaders: true })).rejects.toThrow(
+      /应答验签失败/
+    )
+    vi.unstubAllGlobals()
+  })
+
+  it("被验签拦下的响应不会泄漏给调用方（下单直接失败）", async () => {
+    let caught: Error | null = null
+    try {
+      await stubResponse({ body: OK_BODY, signWith: other.privateKey })
+    } catch (e) {
+      caught = e as Error
+    }
+    expect(caught).toBeInstanceOf(Error)
+    expect(caught?.message).not.toContain("weixin://")
+    vi.unstubAllGlobals()
+  })
+})
