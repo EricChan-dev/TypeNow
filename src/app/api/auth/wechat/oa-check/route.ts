@@ -56,7 +56,7 @@ export async function GET(request: NextRequest) {
       //
       // 这里没有 ref_code 可言（scene 里没有带邀请码），所以按「未受邀注册」处理：
       // 不自动送会员，由 /api/trial/claim 主动领取。
-      // 见 supabase/migrations/00012_trial_claim.sql
+      // 见 db/migrations/00012_trial_claim.sql
       const { randomUUID } = await import("crypto")
       const id = randomUUID()
       await db.insert(users).values({

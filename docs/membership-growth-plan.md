@@ -311,7 +311,7 @@
    首购奖励永远发不出去。已改为 `uk_task_ref_type (task_type, ref_id)`：
    同一被邀请人每种类型各一条，首购天然只能成功一次 ——
    「仅首购有效、续费不触发」由**数据库约束**保证，而不是靠代码里判空。
-   见 `supabase/migrations/00013_invite_purchase.sql`。
+   见 `db/migrations/00013_invite_purchase.sql`。
 
 2. **`reward_amount` 的含义固定为「记录归属人（邀请人）本人拿到的天数」**，
    与历史含义一致。因此 `invite_register` 恒为 0（邀请人在注册档拿不到天数），
@@ -326,7 +326,7 @@
 - **e2e**：9 文件 / **185 通过**（已在本机实跑，见下方基建修复）
 - **tsc**：无新增类型错误；改动文件 eslint 前后一致
 
-e2e 用的是 `drizzle-kit push` 从 `schema.ts` 生成的测试库（不走 `supabase/migrations/`），
+e2e 用的是 `drizzle-kit push` 从 `schema.ts` 生成的测试库（不走 `db/migrations/`），
 所以 schema 与迁移文件必须保持同步 —— 本轮已对齐。
 
 **顺带修掉的 e2e 基建 bug**：`scripts/e2e/db-up.sh:26` 写的是 `$CONTAINER（`，

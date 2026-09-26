@@ -8,7 +8,7 @@
  *      否则受邀用户会在自动拿到之后**再手动领一次**，等于发两份。
  *
  * claimTrial 本身依赖数据库（条件更新 + affectedRows），不在单测范围；
- * 它的幂等性由 SQL 的 WHERE 条件保证，见 supabase/migrations/00012_trial_claim.sql。
+ * 它的幂等性由 SQL 的 WHERE 条件保证，见 db/migrations/00012_trial_claim.sql。
  */
 import { describe, it, expect } from "vitest"
 import { TRIAL_DAYS, trialExpiryFrom, trialGrantFields } from "@/lib/trial"

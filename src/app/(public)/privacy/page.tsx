@@ -36,8 +36,8 @@ export default function PrivacyPage() {
 
         <h3 className="text-base font-medium mt-6 mb-2">1.3 第三方服务收集的信息</h3>
         <ul className="list-disc pl-5 space-y-2">
-          <li><strong>Supabase：</strong>我们使用 Supabase 作为后端数据服务，您的个人数据存储在 Supabase 服务器上。</li>
           <li><strong>微信开放平台：</strong>使用微信扫码登录时，微信会按其隐私政策处理相关数据。</li>
+          <li><strong>阿里云短信：</strong>发送手机验证码时，我们会向阿里云短信服务提供您的手机号。</li>
         </ul>
 
         <h2 className="text-lg font-semibold mt-8 mb-3">2. 信息的使用</h2>
@@ -52,7 +52,7 @@ export default function PrivacyPage() {
 
         <h2 className="text-lg font-semibold mt-8 mb-3">3. 信息的存储与保护</h2>
         <ul className="list-disc pl-5 space-y-2">
-          <li>您的个人信息存储在 Supabase 提供的云服务器上，服务器可能位于中国大陆以外的地区。</li>
+          <li>您的个人信息存储在我们自有的服务器上（阿里云，服务器位于中国大陆境内），不使用境外云数据库服务。</li>
           <li>我们采取业界通行的安全措施保护您的信息，包括但不限于数据加密传输（HTTPS）、访问权限控制和定期安全审计。</li>
           <li>我们承诺在服务终止后，在合理期限内删除或匿名化处理您的个人信息，除非法律另有要求。</li>
           <li>尽管我们采取了合理的安全措施，但请注意互联网不存在绝对的安全，您应妥善保管账号和验证信息。</li>
@@ -62,7 +62,7 @@ export default function PrivacyPage() {
         <p>我们不会将您的个人信息出售给任何第三方。我们仅在以下情况共享信息：</p>
         <ul className="list-disc pl-5 space-y-2">
           <li><strong>经您同意：</strong>在获得您的明确同意后，我们会向第三方共享您的信息。</li>
-          <li><strong>服务提供商：</strong>与为我们提供服务的第三方（如 Supabase、阿里云短信服务）共享必要的信息。</li>
+          <li><strong>服务提供商：</strong>与为我们提供服务的第三方（如阿里云短信服务、微信支付）共享必要的信息。</li>
           <li><strong>法律要求：</strong>根据法律法规、法院命令或政府机关的强制要求披露信息。</li>
           <li><strong>保护权益：</strong>为防止对他人人身或财产安全的威胁，或为保护我们的合法权益而必要的披露。</li>
         </ul>

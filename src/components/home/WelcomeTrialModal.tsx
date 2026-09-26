@@ -12,7 +12,7 @@ const STORAGE_KEY = "welcome_trial_offer_shown"
  * 新用户首页的体验会员领取入口。
  *
  * 这个组件原先写死「🎉 恭喜获得 3 天体验会员」，配合的是「注册无条件送 3 天」。
- * 现在注册不再自动送（未受邀用户没有会员，见 supabase/migrations/00012_trial_claim.sql），
+ * 现在注册不再自动送（未受邀用户没有会员，见 db/migrations/00012_trial_claim.sql），
  * 那句话就成了假话 —— 用户会被恭喜拿到一份并不存在的权益。
  * 因此改为如实的领取邀请：只在「还没领过」时出现，点一下真的去领。
  *

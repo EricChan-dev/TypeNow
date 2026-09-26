@@ -9,7 +9,6 @@ const nextConfig: NextConfig = {
   distDir: process.env.TYPENOW_DIST_DIR || ".next",
   images: {
     remotePatterns: [
-      { protocol: "https", hostname: "yelvkghtsgonglegoslo.supabase.co" },
       { protocol: "https", hostname: "thirdwx.qlogo.cn" },
       { protocol: "https", hostname: "wx.qlogo.cn" },
     ],

@@ -41,7 +41,8 @@ pnpm dev      # http://localhost:3000
 > Next 16 dev 会拦截 127.0.0.1 源的 `/_next/webpack-hmr`，hydration 永不完成——
 > 页面永远停在加载画面，而接口其实全部 200。这个现象极易误判为后端故障。
 
-数据库需要先手工执行 `supabase/migrations/*.sql`（**目录名是历史遗留，内容是 MySQL DDL**）。
+数据库需要先手工执行 `db/migrations/*.sql`（**迁移不会自动执行**）。
+结构来源、权威顺序与同步约束见 [db/README.md](db/README.md)。
 完整命令与踩坑清单见 [CLAUDE.md](CLAUDE.md)。
 
 ---

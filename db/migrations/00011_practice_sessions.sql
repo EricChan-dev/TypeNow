@@ -33,8 +33,7 @@ CREATE TABLE IF NOT EXISTS practice_sessions (
 
 -- 是否需要手动执行：需要。
 -- 依据：仓库里没有任何自动迁移执行器 —— package.json 无 migrate 脚本，
--- drizzle.config.ts 只配置了 generate/push 的输出目录（src/lib/db/migrations 尚不存在，
--- 且全库 schema 一直由 supabase/migrations/*.sql 维护），
+-- drizzle.config.ts 只配置了 generate/push 的输出目录（src/lib/db/migrations 尚不存在），
 -- .github/ 下没有 workflows，deploy.sh 也不含 SQL 步骤。
--- 现存 00010 的升级说明（docs/julebu-import-plan.md）同样写的是
--- `supabase db push` 或手动执行 SQL 文件。故本文件需部署时手动应用。
+-- 注意：e2e 测试库由 `drizzle-kit push` 从 src/lib/db/schema.ts 生成，不读本目录，
+-- 所以 schema.ts 与本文件必须同步修改（见 db/README.md）。

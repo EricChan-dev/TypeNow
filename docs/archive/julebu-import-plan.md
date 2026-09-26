@@ -32,7 +32,8 @@
 ## 二、已创建的文件
 
 ### 1. Schema 迁移
-- `supabase/migrations/00010_julebu_sentence_enrichment.sql`
+- ~~`00010_julebu_sentence_enrichment.sql`~~ —— 已执行并生效（两列在生产库中存在），
+  文件本身是 PG DDL，已于 2026-09-26 删除（见 `db/README.md`）
   - 新增 `dependency_analysis JSONB`
   - 新增 `sentence_structure JSONB`
 
@@ -89,8 +90,10 @@
 # 2. 设置环境变量
 export JULEBU_COOKIE='_clck=...; __Secure-julebu.session_token=...; ...'
 
-# 3. 运行迁移（Supabase/MySQL）
-# supabase db push 或手动执行 00010_julebu_sentence_enrichment.sql
+# 3. 运行迁移
+# 手动执行对应的 MySQL 迁移文件（仓库没有 `supabase db push` 这个命令，
+# 它属于 Supabase 时期；且原 00010 是 PostgreSQL DDL，已于 2026-09-26 删除，
+# 见 db/README.md）
 
 # 4. 安装 puppeteer（如果尚未安装）
 pnpm add -D puppeteer

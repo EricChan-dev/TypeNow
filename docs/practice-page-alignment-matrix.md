@@ -211,7 +211,7 @@ custom      | ✓        | ✓     | ✓              | ✓
 | C7 点词详情 | 完成/出错的词外面套 `WordDetailPopover` | 刻意只挂已答完的词：未答的词挂上等于悬停即看答案 |
 | C8 加入生词本 | `Ctrl+N` + 抽屉条目转正 | 无 |
 | C9 标记掌握 | `Ctrl+M`（标记 + 跳下一句）；完成页「已掌握 ✓」按钮复用同一实现但**不**跳转 | 无 |
-| E1-E5 会话持久化 | `supabase/migrations/00011_practice_sessions.sql`、`src/lib/practice-session.ts`（21 单测）、`GET/POST /api/practice/sessions`、LearnClient 进入恢复 + 完成上报 | 无（迁移已在 typenow 库应用） |
+| E1-E5 会话持久化 | `db/migrations/00011_practice_sessions.sql`、`src/lib/practice-session.ts`（21 单测）、`GET/POST /api/practice/sessions`、LearnClient 进入恢复 + 完成上报 | 无（迁移已在 typenow 库应用） |
 | F4 强制等待 | 仅修正注释 | **偏差**：实测该等待早已不阻塞（加载画面由 `if (!sentence)` 把关，2 秒只驱动装饰进度条），本阶段无行为改动 |
 | F5 首句播音 | `needsAudioGesture` + 「点击开启发音」按钮 | 无 |
 | 额外（C11 邻接） | `OutlineModal` 不再对每句渲染英文，未练句显示中文题干 + 「未练」标记 | 计划外补漏：原实现让 `Ctrl+1` 变成整课答案册 |

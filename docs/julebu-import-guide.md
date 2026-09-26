@@ -18,7 +18,9 @@
 
 `words` JSONB 字段的 `phonetic` 从 `string` 改为 `{uk, us}` 对象格式。
 
-Migration 文件: `supabase/migrations/00010_julebu_sentence_enrichment.sql`
+Migration：原 `00010_julebu_sentence_enrichment.sql` **已执行并生效**
+（`dependency_analysis` / `sentence_structure` 两列在生产库中已存在），
+但该文件本身是 PostgreSQL DDL，已于 2026-09-26 删除（见 `db/README.md`）。
 
 ## 快速开始
 
@@ -155,7 +157,7 @@ const url = `https://api.julebu.co/trpc/${endpoint}?batch=1&input=${encodeURICom
 
 | 文件 | 用途 |
 |------|------|
-| `supabase/migrations/00010_julebu_sentence_enrichment.sql` | Schema 迁移 SQL |
+| ~~`db/migrations/00010_julebu_sentence_enrichment.sql`~~ | Schema 迁移 SQL —— **已执行并生效，文件已于 2026-09-26 删除**（PG DDL，见 `db/README.md`） |
 | `scripts/import-julebu.ts` | 3-Phase 导入脚本（元数据 + 爬取 + 入库） |
 | `src/lib/db/schema.ts` | Drizzle schema（新增 2 列） |
 | `src/types/index.ts` | TypeScript 类型更新 |

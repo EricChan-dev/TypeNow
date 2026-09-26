@@ -39,7 +39,7 @@ export const users = mysqlTable(
      * 领取走条件更新 `WHERE trial_claimed_at IS NULL` + affectedRows 判定，
      * 保证并发/重复请求只成功一次。
      *
-     * 「按手机号一次性」的依据见 supabase/migrations/00012_trial_claim.sql：
+     * 「按手机号一次性」的依据见 db/migrations/00012_trial_claim.sql：
      * phone 与 wechat_openid 都是 UNIQUE，且注册是 find-or-create，
      * 所以「每账号一次」天然等于「每手机号一次」。
      */

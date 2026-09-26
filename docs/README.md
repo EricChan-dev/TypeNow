@@ -45,7 +45,7 @@ TypeNow/
 │   └── images/
 ├── src/                            # 应用代码
 ├── scripts/                        # 内容审计 / 导入 / 运维脚本
-└── supabase/migrations/            # MySQL DDL（目录名为历史遗留）
+└── db/                             # MySQL DDL：migrations/ + 线上结构快照（见 db/README.md）
 ```
 
 ---

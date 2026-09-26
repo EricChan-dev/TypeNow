@@ -102,7 +102,7 @@ export async function POST(request: NextRequest) {
     const defaultName = `用户${Math.floor(1000 + Math.random() * 9000)}`
     // 注册不再无条件送会员：未受邀用户保持非会员，练完每课免费 3 句后由
     // /api/trial/claim 主动领取；受邀用户注册即自动领取（对齐句乐部）。
-    // 为什么/安全性见 supabase/migrations/00012_trial_claim.sql。
+    // 为什么/安全性见 db/migrations/00012_trial_claim.sql。
     await db.insert(users).values({
       id,
       phone,

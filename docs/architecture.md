@@ -24,9 +24,10 @@
 | 部署 | 自建服务器 `typenow.cn`：pm2 + nginx | `deploy.sh`，GitHub webhook 触发 |
 | 测试 | Vitest（单测 + e2e） | 见「七、质量保障」 |
 
-> **注意**：项目里仍存在 `supabase/` 目录，但**只用来放 SQL 迁移文件，与 Supabase 无关**；
-> `src/lib/supabase/` 已不存在。`next.config.ts` 的 `images.remotePatterns` 里还留着一条
-> `*.supabase.co`，是早期头像地址的兼容白名单。
+> **注意**：项目已完成从 Supabase 的迁移。`src/lib/supabase/` 与 `supabase/` 目录都不存在
+> （SQL 迁移目录已更名为 `db/`）；`next.config.ts` 里那条 `*.supabase.co` 图片白名单也已移除。
+> 原 `supabase/migrations/00001`–`00008`、`00010` 其实是 PostgreSQL DDL，已于 2026-09-26
+> 删除，详见 `db/README.md`。
 
 ---
 
@@ -78,7 +79,7 @@ src/
 ├── lib/               # 纯逻辑与集成层（见下）
 ├── types/             # index.ts（运行时类型）+ course.ts（课程域类型）
 └── __tests__/         # vitest 单测（node 环境）
-supabase/migrations/   # MySQL DDL（目录名为历史遗留）
+db/migrations/   # MySQL DDL（目录名为历史遗留）
 scripts/               # 内容审计/导入/修复等一次性与运维脚本
 ```
 
@@ -118,7 +119,9 @@ scripts/               # 内容审计/导入/修复等一次性与运维脚本
 
 ### 迁移
 
-DDL 放在 `supabase/migrations/*.sql`，按序号递增（当前到 `00011_practice_sessions.sql`）。
+DDL 放在 `db/migrations/*.sql`，按序号递增（现存 `00009` / `00011` / `00012` / `00013`，
+编号不连续是因为中间的 PostgreSQL 遗留文件已被删除，见 `db/README.md`）。
+线上结构可用 `db/schema-snapshot.sql` 比对。
 
 **迁移是手工执行的**：仓库没有迁移执行器（`drizzle.config.ts` 的 `out` 指向不存在的
 目录），没有 CI 步骤，`deploy.sh` 也不含 SQL 环节。新增迁移后需在生产库手动执行 SQL 文件，
@@ -189,8 +192,9 @@ if (!db) return NextResponse.json({ error: "DB not configured" }, { status: 500 
 `src/app/admin/` 有**独立的鉴权流**（`/admin/login`），与会话体系无关；dev 模式下
 `isDevMode()` 直接跳过。
 
-> 遗留命名：`LoginForm.tsx` 里有个局部变量叫 `isSupabaseConfigured`，是迁移残留，
-> 不代表还存在 Supabase。
+> 登录页的开发态旁路已于 2026-09-26 移除：此前 `LoginForm.tsx` 用
+> `NEXT_PUBLIC_SUPABASE_URL` 是否存在来判断 `isDevMode`，一旦该变量被清理就会让
+> 线上切到「跳过发送验证码」，用户收不到短信。现在开发态只由服务端 `isDevMode()` 判定。
 
 ---
 

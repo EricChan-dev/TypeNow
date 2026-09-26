@@ -41,20 +41,28 @@ puppeteer 脚本（见「本地开发要点」）。
 
 ### Auth Pattern
 
-**本项目已完全从 Supabase 迁移到 MySQL，`src/lib/supabase/` 已不存在。** 认证方式：
+项目使用自建认证（MySQL + Drizzle），**没有 Supabase 依赖**：
 
 - **Server components / layouts / Server Actions**: `getUser()` / `isDbConfigured()` from `@/app/actions/auth`
 - **API routes**: `getSession()` from `@/lib/auth/session` → `SessionInfo | null`，含 `{ sessionId, userId, expiresAt }`
 - **统一守卫**：`if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })`
 - **数据库未配置**：`if (!db) return NextResponse.json({ error: "DB not configured" }, { status: 500 })`
 
-会话表为 `sessions`，验证码为 `verification_codes`。`LoginForm.tsx` 里仍有 `isSupabaseConfigured`
-这个**局部变量名**，是迁移遗留的命名，不代表还存在 Supabase。
+会话表为 `sessions`，验证码为 `verification_codes`。
+
+登录表单的**开发态判断只由服务端负责**：`LoginForm.tsx` 不做任何本地旁路，
+一律请求 `/api/auth/send-sms` 与 `/api/auth/verify-code`；这两个路由各自的
+`isDevMode()`（`NODE_ENV === "development" && !DATABASE_URL`）会返回开发态响应。
+
+> 这里曾经有个坑：客户端用 `NEXT_PUBLIC_SUPABASE_URL` 是否存在来判断开发态
+> （变量名 `isSupabaseConfigured`）。生产环境恰好还留着那个变量，所以线上
+> `isDevMode` 为 false 才没出事；一旦清理该变量，客户端会切到「跳过发送验证码」
+> 的旁路 —— 用户永远收不到短信。已于 2026-09-26 移除该旁路。
 
 ### Data Model
 
-Drizzle schema 在 `src/lib/db/schema.ts`；DDL 在 `supabase/migrations/*.sql`
-（**目录名是历史遗留**，里面是 MySQL DDL，与 Supabase 无关）。
+Drizzle schema 在 `src/lib/db/schema.ts`；增量 DDL 在 `db/migrations/*.sql`，
+线上结构快照在 `db/schema-snapshot.sql`。三者的权威顺序与同步约束见 **`db/README.md`**。
 
 核心表：
 
