@@ -1,9 +1,3 @@
-import { redirect } from "next/navigation"
-import { getSession } from "@/lib/auth/session"
-import { checkAndExpirePro } from "@/lib/subscription"
-import { db } from "@/lib/db"
-import { users } from "@/lib/db/schema"
-import { eq } from "drizzle-orm"
 import { LearnClient } from "@/components/home/learn/LearnClient"
 
 export default async function LearnPage({
@@ -25,21 +19,11 @@ export default async function LearnPage({
     )
   }
 
-  // Membership gate: require active pro to access learning
-  if (db) {
-    const session = await getSession()
-    if (session) {
-      await checkAndExpirePro(session.userId)
-      const [user] = await db
-        .select({ isPro: users.isPro })
-        .from(users)
-        .where(eq(users.id, session.userId))
-        .limit(1)
-      if (user && !user.isPro) {
-        redirect("/pricing?reason=learn")
-      }
-    }
-  }
-
+  // 这里**不再**把非会员重定向到 /pricing。
+  //
+  // 原先是「非会员一律 redirect('/pricing?reason=learn')」，用户连练习页都进不去，
+  // 等于在体验产品核心价值之前就先看到收费墙。现在改为放行，由
+  // /api/courses/sentences 只下发每课前 FREE_TRIAL_SENTENCES 句试学，
+  // 练完后在客户端展示付费引导。会员校验仍在服务端，不依赖页面层。
   return <LearnClient courseId={courseId} lessonId={lessonId} />
 }

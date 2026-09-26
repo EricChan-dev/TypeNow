@@ -6,6 +6,7 @@ import { getSession } from "@/lib/auth/session"
 import { checkAndExpirePro } from "@/lib/subscription"
 import { typeableAnswerSql, usableSentenceSql } from "@/lib/sentence-quality"
 import { alignWordsWithEnglish } from "@/lib/word-align"
+import { sliceForTrial } from "@/lib/free-trial"
 
 export async function GET(request: Request) {
   try {
@@ -20,6 +21,8 @@ export async function GET(request: Request) {
     // 会员校验：句子正文就是付费内容本身。此前这里只校验登录，页面层
     // (home/learn/[courseId]/page.tsx) 的跳转是唯一防线，任何免费账号直接 curl
     // 这个接口就能把整库句子拖走，而且这里也不该区分「课时是否存在」。
+    // 现在非会员不再被直接拒绝，而是只下发前 FREE_TRIAL_SENTENCES 句（见下方截断），
+    // 因此「整库拖走」这条防线仍然成立——只是放行了每课开头少量内容。
     const revoked = await checkAndExpirePro(session.userId)
     const [viewer] = await db
       .select({ isPro: users.isPro })
@@ -27,9 +30,6 @@ export async function GET(request: Request) {
       .where(eq(users.id, session.userId))
       .limit(1)
     const isPro = revoked ? false : !!viewer?.isPro
-    if (!isPro) {
-      return NextResponse.json({ error: "该内容需要开通会员", code: "PRO_REQUIRED" }, { status: 403 })
-    }
 
     // 只返回已发布课程下的句子，避免未发布内容泄露
     const [lesson] = await db
@@ -65,14 +65,18 @@ export async function GET(request: Request) {
       data = await forLesson(typeableAnswerSql(sentences.english))
     }
 
+    // 非会员只下发前 N 句试学（N = FREE_TRIAL_SENTENCES）。截断时把 limit/truncated
+    // 一并告知前端，由前端在练完这几句后展示付费引导，而不是让用户以为「本课就这 3 句」。
+    const { visible, trial } = sliceForTrial(data, isPro)
+
     // words 一律以 english 的分词为骨架重建：库里导入的 words 普遍缺标点，
     // 直接下发会让练习页那行的标点与翻译对不上（线上 40% 的句子如此）。
-    const normalized = data.map((s) => ({
+    const normalized = visible.map((s) => ({
       ...s,
       words: alignWordsWithEnglish(s.english, s.words),
     }))
 
-    return NextResponse.json({ sentences: normalized })
+    return NextResponse.json({ sentences: normalized, trial })
   } catch (e) {
     console.error("[courses/sentences]", e)
     return NextResponse.json({ error: "加载句子失败" }, { status: 500 })

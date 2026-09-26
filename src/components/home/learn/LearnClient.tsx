@@ -219,6 +219,12 @@ export function LearnClient({
   const [sentences, setSentences] = useState<Sentence[]>([])
   /** 加载态：以前只有「取到句子」和「没取到句子」两种，空课时与接口报错都表现为无限加载。 */
   const [loadState, setLoadState] = useState<"loading" | "ready" | "error">("loading")
+  /**
+   * 非会员试学状态。接口只下发每课前 FREE_TRIAL_SENTENCES 句，
+   * truncated 表示「本课还有更多句子被挡住了」——练完这几句不能再显示
+   * 「你已完成本课全部 N 个句子」，那是假话，要改为付费引导。
+   */
+  const [trial, setTrial] = useState<{ limit: number; truncated: boolean } | null>(null)
   const [currentIndex, setCurrentIndex] = useState(0)
   const [status, setStatus] = useState<SentenceStatus>("input")
   const [wordStates, setWordStates] = useState<WordState[]>([])
@@ -392,6 +398,7 @@ export function LearnClient({
         //   空课时（线上真实存在，夹具里就有「空课时」）→ 同样是无限加载。
         if (Array.isArray(json?.sentences)) {
           const expanded = expandSentences(json.sentences as Sentence[])
+          setTrial(json?.trial ?? null)
           // 记下完整句子表：「再练错句」会临时把 sentences 收窄成错句子集，
           // 不能因此丢掉整节课。
           fullSentencesRef.current = expanded
@@ -1813,8 +1820,8 @@ export function LearnClient({
         className="fixed inset-0 z-40 pointer-events-none overflow-hidden"
       />
 
-      {/* Chapter Completion Modal */}
-      {showCompletionModal && (
+      {/* Chapter Completion Modal — 试学截断时由下面的付费引导取代，避免谎称「已完成本课全部」 */}
+      {showCompletionModal && !trial?.truncated && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/90 backdrop-blur-md">
           <div className="relative w-full max-w-[420px] mx-4 rounded-3xl overflow-hidden border border-border bg-card shadow-2xl">
             {/* Top accent bar */}
@@ -1888,6 +1895,51 @@ export function LearnClient({
                     再来一次
                   </button>
                 </div>
+                <Link
+                  href={`/home/store/${courseId}`}
+                  className="w-full py-3 rounded-2xl text-center border border-foreground/12 text-foreground/60 text-sm font-semibold hover:bg-foreground/[0.05] transition-colors"
+                >
+                  返回课程
+                </Link>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 试学结束 → 付费引导。
+          非会员只拿到每课前 FREE_TRIAL_SENTENCES 句，练完必须给一条明确的转化路径，
+          而不是复用完成弹窗说「你已完成本课全部 N 个句子」——那会让用户以为课就这么短。 */}
+      {showCompletionModal && trial?.truncated && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/90 backdrop-blur-md">
+          <div className="relative w-full max-w-[420px] mx-4 rounded-3xl overflow-hidden border border-border bg-card shadow-2xl">
+            <div className="h-1 w-full" style={{ background: "linear-gradient(90deg, #7c3aed, #ec4899, #f59e0b)" }} />
+
+            <div className="px-8 pt-8 pb-8 flex flex-col items-center gap-6">
+              <div className="text-center">
+                <p className="text-2xl sm:text-3xl font-black text-foreground tracking-tight">试学结束</p>
+                <p className="text-foreground/40 text-xs sm:text-sm mt-2">
+                  你已免费学完本课前 {trial.limit} 句，这节课还有更多句子
+                </p>
+              </div>
+
+              <div className="w-full rounded-2xl border border-foreground/10 bg-foreground/[0.03] px-5 py-4 flex flex-col gap-2">
+                <p className="text-xs text-foreground/50">开通会员后可以</p>
+                <ul className="text-sm text-foreground/70 flex flex-col gap-1.5">
+                  <li>· 解锁本课及全部课程的完整句子</li>
+                  <li>· 使用 AI 智能拆句与语法解析</li>
+                  <li>· 自动安排复习，练过的不会白练</li>
+                </ul>
+              </div>
+
+              <div className="w-full flex flex-col gap-2.5">
+                <Link
+                  href="/pricing?reason=trial"
+                  className="w-full py-3 rounded-2xl text-center text-white text-sm font-semibold transition-opacity hover:opacity-90"
+                  style={{ background: "linear-gradient(135deg, #7c3aed, #ec4899)" }}
+                >
+                  开通会员，继续学完
+                </Link>
                 <Link
                   href={`/home/store/${courseId}`}
                   className="w-full py-3 rounded-2xl text-center border border-foreground/12 text-foreground/60 text-sm font-semibold hover:bg-foreground/[0.05] transition-colors"
