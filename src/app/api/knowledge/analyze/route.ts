@@ -6,6 +6,7 @@ import { eq } from "drizzle-orm"
 import { getSession } from "@/lib/auth/session"
 import { checkRateLimit } from "@/lib/rate-limit"
 import { KNOWLEDGE_UNCONFIGURED_CODE } from "@/lib/knowledge-failure"
+import { DEEPSEEK_MODEL, DEEPSEEK_THINKING } from "@/lib/llm"
 
 // 每次 LLM 调用都是真金白银，必须给单用户额度上限：
 // 5 次/分钟防突发，20 次/小时作为实际成本上限。
@@ -50,12 +51,13 @@ async function callDeepSeek(english: string) {
       Authorization: `Bearer ${apiKey}`,
     },
     body: JSON.stringify({
-      model: "deepseek-chat",
+      model: DEEPSEEK_MODEL,
       messages: [
         { role: "system", content: SYSTEM_PROMPT },
         { role: "user", content: english },
       ],
       temperature: 0.5,
+      thinking: DEEPSEEK_THINKING,
     }),
   })
 

@@ -3,6 +3,7 @@ import { getSession } from "@/lib/auth/session"
 import { db } from "@/lib/db"
 import { diamondLogs, users } from "@/lib/db/schema"
 import { eq, and, gte, sql } from "drizzle-orm"
+import { DEEPSEEK_MODEL, DEEPSEEK_THINKING } from "@/lib/llm"
 
 const COST = 5
 /** 单条消息（含历史）字符上限，防止超大提示词造成成本失控。 */
@@ -105,13 +106,14 @@ export async function POST(request: Request) {
       method: "POST",
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
       body: JSON.stringify({
-        model: "deepseek-chat",
+        model: DEEPSEEK_MODEL,
         messages: [
           { role: "system", content: SYSTEM_PROMPT },
           ...history,
           { role: "user", content: message },
         ],
         temperature: 0.7,
+        thinking: DEEPSEEK_THINKING,
       }),
     })
 

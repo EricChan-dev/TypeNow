@@ -1,3 +1,18 @@
+/**
+ * DeepSeek 模型与请求参数，三个调用点（llm.ts / api/chat / api/knowledge/analyze）共用。
+ *
+ * 为什么用 deepseek-flash 而不是 deepseek-chat：官方已宣布 deepseek-chat 与
+ * deepseek-reasoner 下线，目前虽仍被路由到 V4.1-Flash，但不该再依赖这个别名。
+ *
+ * 为什么必须显式关 thinking：V4.1-Flash 默认开启思考模式。实测同一句翻译请求，
+ * 默认开启时输出 134 token / 1.40s，关闭后 6 token / 0.58s（约 20 倍 token、2.4 倍延迟）。
+ * 更隐蔽的是思考模式下 temperature 会被**静默忽略**（不报错、不生效），
+ * 而本文件与 knowledge/analyze 都依赖 temperature 控制输出稳定性。
+ * 这里是翻译/句子解析/学习助手场景，都不需要思维链。
+ */
+export const DEEPSEEK_MODEL = "deepseek-flash"
+export const DEEPSEEK_THINKING = { type: "disabled" } as const
+
 interface LLMCallOptions {
   systemPrompt: string
   userMessage: string
@@ -18,12 +33,13 @@ export async function llmCall(options: LLMCallOptions): Promise<string> {
       Authorization: `Bearer ${apiKey}`,
     },
     body: JSON.stringify({
-      model: "deepseek-chat",
+      model: DEEPSEEK_MODEL,
       messages: [
         { role: "system", content: options.systemPrompt },
         { role: "user", content: options.userMessage },
       ],
       temperature: options.temperature ?? 0.7,
+      thinking: DEEPSEEK_THINKING,
     }),
   })
 
