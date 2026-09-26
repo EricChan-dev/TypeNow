@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation"
 import Link from "next/link"
 import { MessageCircle, Smartphone, QrCode, Loader2 } from "lucide-react"
 import { toast } from "sonner"
+import { trackLoginSuccess } from "@/lib/analytics"
 import QRCode from "qrcode"
 import { WeChatQRCode } from "@/components/auth/WeChatQRCode"
 
@@ -151,6 +152,7 @@ export function LoginForm() {
         return
       }
 
+      trackLoginSuccess("phone")
       toast.success("登录成功")
       router.push(redirectTo)
       router.refresh()

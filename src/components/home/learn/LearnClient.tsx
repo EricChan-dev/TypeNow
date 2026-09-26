@@ -63,6 +63,7 @@ import { baseSentenceId } from "@/lib/sentence-id"
 import { decideResume } from "@/lib/practice-session"
 import { toast } from "sonner"
 import { TRIAL_DAYS } from "@/lib/trial-days"
+import { trackLessonStart, trackPracticeComplete, trackPaywallShown, trackTrialClaimed } from "@/lib/analytics"
 
 function useDebounce<T extends (...args: never[]) => void>(fn: T, delay: number): T {
   const lastCall = useRef(0)
@@ -396,6 +397,9 @@ export function LearnClient({
   )
 
   useEffect(() => {
+    // 进入练习页 = 漏斗里「真的开始学」的那一步。这个 effect 在切换课时时会重跑，
+    // 正好对应「开始练另一课」，不需要额外去重。
+    trackLessonStart(courseId, lessonId)
     fetch(`/api/courses/sentences?lessonId=${lessonId}`)
       .then((r) => r.json())
       .then((json) => {
@@ -432,7 +436,9 @@ export function LearnClient({
         }
       })
       .catch((e) => { console.error(e); setLoadState("error") })
-  }, [lessonId])
+    // courseId 也是这个 effect 的输入（埋点要带上它），所以必须列进依赖，
+    // 否则换课程时不会重新上报 lesson_start。
+  }, [lessonId, courseId])
 
   /**
    * 领取体验会员（5 天）。
@@ -448,6 +454,9 @@ export function LearnClient({
     try {
       const res = await fetch("/api/trial/claim", { method: "POST" })
       if (res.ok) {
+        // 埋点必须在 reload 之前发出。track() 用的是 keepalive，
+        // 刷新不会掐断这次上报。
+        trackTrialClaimed(TRIAL_DAYS)
         toast.success(`已领取 ${TRIAL_DAYS} 天体验会员`)
         window.location.reload()
         return
@@ -459,6 +468,16 @@ export function LearnClient({
     }
     setClaimingTrial(false)
   }, [claimingTrial])
+
+  /**
+   * 付费墙曝光。试学墙是这次新加的转化节点，必须能看到「露出多少次、
+   * 其中可领取的占多少」——否则无法判断它到底拦住了人还是转化了人。
+   */
+  useEffect(() => {
+    if (showCompletionModal && trial?.truncated) {
+      trackPaywallShown(trialAvailable ? "trial_available" : "trial_end")
+    }
+  }, [showCompletionModal, trial?.truncated, trialAvailable])
 
   // 开场进度条的装饰动画。
   //
@@ -630,6 +649,23 @@ export function LearnClient({
     const penalty = errorCount * 30 + Math.floor(timer / 5)
     return Math.max(100, base - penalty)
   }, [sentences.length, errorCount, timer])
+
+  /**
+   * 练完一句的上报 —— 漏斗里最关键的转化点。
+   *
+   * 必须放在 `score` 声明**之后**：先前把它塞进上面那个 review/enqueue 的 effect 里，
+   * 那里在 score 之前就引用了它，触发 react-hooks/immutability 的
+   * 「Cannot access variable before it is declared」并让 React Compiler 直接跳过
+   * 整个组件（Compilation Skipped），是实打实的错误而不是风格问题。
+   *
+   * 数据库的 practice_records 是这一指标的权威口径；埋点额外回答
+   * 「进了练习页却一句没练完」那部分流失。
+   */
+  useEffect(() => {
+    if (status !== "complete") return
+    trackPracticeComplete(score, currentIndexRef.current + 1)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [status])
 
   // Initialize word/chunk states for current sentence
   useEffect(() => {

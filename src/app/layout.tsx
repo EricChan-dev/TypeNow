@@ -4,6 +4,7 @@ import { ThemeProvider } from "next-themes"
 import { Toaster } from "sonner"
 import { AiChatWidget } from "@/components/layout/AiChatWidget"
 import { DeploySkewGuard } from "@/components/layout/DeploySkewGuard"
+import { PageViewTracker } from "@/components/analytics/PageViewTracker"
 import "./globals.css"
 
 const inter = Inter({
@@ -41,6 +42,7 @@ export default function RootLayout({
           disableTransitionOnChange
         >
           {children}
+          <PageViewTracker />
           <DeploySkewGuard />
           <AiChatWidget />
           <Toaster

@@ -7,6 +7,7 @@ import { ChevronLeft, BookOpen, Users, Play, Check } from "lucide-react"
 import type { Course } from "@/types/course"
 import { COURSE_CATEGORIES } from "@/types/course"
 import { useAcquiredCourses } from "@/lib/hooks/useAcquiredCourses"
+import { trackCourseOpen } from "@/lib/analytics"
 import { cn } from "@/lib/utils"
 
 // ─── Category → color scheme ────────────────────────────────────────────────
@@ -86,6 +87,9 @@ export function CourseDetailClient({ courseId }: CourseDetailClientProps) {
 
   useEffect(() => {
     setLoading(true)
+    // 课程详情是「注册了但一直没开始学」的分界点：漏斗里注册之后的第一步。
+    // 放在这里而不是 store 列表页，因为点进具体课程才代表真的有学习意图。
+    trackCourseOpen(courseId)
     Promise.all([
       fetch(`/api/courses/${courseId}`).then((r) => r.json()),
       fetch(`/api/courses/${courseId}/lessons`).then((r) => r.json()),

@@ -3,18 +3,11 @@ import { db } from "@/lib/db"
 import { analyticsEvents } from "@/lib/db/schema"
 import { getSession } from "@/lib/auth/session"
 import { checkRateLimit, getClientIP } from "@/lib/rate-limit"
+import { isAllowedEvent } from "@/lib/analytics-events"
 
-// 埋点事件白名单：只接受 src/lib/analytics.ts 前端 helper 定义的事件名，
-// 防止任何人向 analytics_events 灌入任意 event_type。
-const ALLOWED_EVENTS = new Set([
-  "page_view",
-  "click",
-  "practice_complete",
-  "click_subscribe",
-  "subscribe_pay_success",
-  "login_success",
-  "theme_toggle",
-])
+// 埋点事件白名单来自 src/lib/analytics-events（与前端 helper、后台漏斗报表共用
+// 同一份清单），防止任何人向 analytics_events 灌入任意 event_type。
+// 曾经这里是手抄的一份副本，新增事件时要改三处，漏一处就静默丢数据。
 
 // 埋点载荷是极小的 JSON，超过任一上限即视为滥用。
 const MAX_BODY_BYTES = 8 * 1024
@@ -46,7 +39,7 @@ export async function POST(request: Request) {
     if (!event || typeof event !== "string") {
       return NextResponse.json({ error: "Missing event" }, { status: 400 })
     }
-    if (event.length > MAX_EVENT_LENGTH || !ALLOWED_EVENTS.has(event)) {
+    if (event.length > MAX_EVENT_LENGTH || !isAllowedEvent(event)) {
       return NextResponse.json({ error: "非法的事件名" }, { status: 400 })
     }
 

@@ -5,6 +5,7 @@ import Image from "next/image"
 import { X } from "lucide-react"
 import { toast } from "sonner"
 import { TRIAL_DAYS } from "@/lib/trial-days"
+import { trackTrialClaimed } from "@/lib/analytics"
 
 const STORAGE_KEY = "welcome_trial_offer_shown"
 
@@ -49,6 +50,7 @@ export function WelcomeTrialModal() {
     try {
       const res = await fetch("/api/trial/claim", { method: "POST" })
       if (res.ok) {
+        trackTrialClaimed(TRIAL_DAYS)
         toast.success(`已领取 ${TRIAL_DAYS} 天体验会员`)
         window.location.reload()
         return
