@@ -16,9 +16,14 @@ export { TRIAL_DAYS }
 
 const DAY_MS = 24 * 60 * 60 * 1000
 
-/** 从给定时刻起算的体验会员到期时间（纯函数，便于单测）。 */
-export function trialExpiryFrom(now: number = Date.now()): Date {
-  return new Date(now + TRIAL_DAYS * DAY_MS)
+/**
+ * 从给定时刻起算的体验会员到期时间（纯函数，便于单测）。
+ *
+ * days 可覆盖：受邀注册拿到的是 7 天（见 lib/invite-rules 的 INVITE_REGISTER_DAYS），
+ * 比主动领取的 5 天更长 —— 让「被朋友邀请」比「自己去领」更划算，才有动力用邀请链接。
+ */
+export function trialExpiryFrom(now: number = Date.now(), days: number = TRIAL_DAYS): Date {
+  return new Date(now + days * DAY_MS)
 }
 
 export type TrialGrantResult = "granted" | "already_claimed" | "db_unavailable"
@@ -65,11 +70,14 @@ export async function claimTrial(userId: string): Promise<TrialGrantResult> {
  * 受邀用户（referred_by 非空）注册即视为已领取——句乐部的做法是
  * 「通过他人邀请码或邀请链接进来注册的 → 注册成功后自动领取，最直接」。
  * 因此这条路径要同时写上 trial_claimed_at，否则受邀用户还能再手动领一次。
+ *
+ * 天数默认用受邀的 7 天（调用方传 INVITE_REGISTER_DAYS）；开发态夹具等
+ * 非受邀场景不传，走主动领取的 5 天。
  */
-export function trialGrantFields(now: Date = new Date()) {
+export function trialGrantFields(now: Date = new Date(), days: number = TRIAL_DAYS) {
   return {
     isPro: 1,
-    proExpires: trialExpiryFrom(now.getTime()),
+    proExpires: trialExpiryFrom(now.getTime(), days),
     trialClaimedAt: now,
   }
 }

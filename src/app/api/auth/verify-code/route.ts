@@ -7,6 +7,7 @@ import { createSession } from "@/lib/auth/session"
 import { checkRateLimit, getClientIP } from "@/lib/rate-limit"
 import { generateInviteCode } from "@/lib/subscription"
 import { trialGrantFields } from "@/lib/trial"
+import { INVITE_REGISTER_DAYS } from "@/lib/invite-rules"
 
 const PHONE_REGEX = /^1[3-9]\d{9}$/
 
@@ -108,7 +109,7 @@ export async function POST(request: NextRequest) {
       name: defaultName,
       referredBy,
       inviteCode: generateInviteCode(),
-      ...(referredBy ? trialGrantFields() : {}),
+      ...(referredBy ? trialGrantFields(new Date(), INVITE_REGISTER_DAYS) : {}),
     })
     const [newUser] = await db.select().from(users).where(eq(users.id, id)).limit(1)
     user = newUser

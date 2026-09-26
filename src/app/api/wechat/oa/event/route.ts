@@ -12,6 +12,7 @@ import {
 } from "@/lib/wechat"
 import { generateInviteCode } from "@/lib/subscription"
 import { trialGrantFields } from "@/lib/trial"
+import { INVITE_REGISTER_DAYS } from "@/lib/invite-rules"
 
 async function resolveReferredBy(refCode: string | null): Promise<string | null> {
   if (!refCode || !db) return null
@@ -270,7 +271,7 @@ async function processSceneLogin(openid: string, sceneStr: string): Promise<void
         inviteCode: generateInviteCode(),
         // 未受邀不送会员，由 /api/trial/claim 主动领取；受邀注册即自动领取。
         // 见 supabase/migrations/00012_trial_claim.sql
-        ...(referredBy ? trialGrantFields() : {}),
+        ...(referredBy ? trialGrantFields(new Date(), INVITE_REGISTER_DAYS) : {}),
       })
 
       if (referredBy) {

@@ -9,6 +9,8 @@ interface TaskStatus {
   checkIn: boolean
   share: boolean
   inviteTotal: number
+  /** 已付费的被邀请人数 —— 邀请人真正拿到天数的那一档 */
+  invitePaidTotal?: number
   inviteCode: string
   diamonds: number
 }
@@ -93,7 +95,9 @@ export function DailyTasks({ className, refreshKey }: { className?: string; refr
       color: "text-emerald-400",
       bgColor: "bg-emerald-500/10",
       label: "好友成功注册",
-      reward: `已邀请 ${status?.inviteTotal ?? 0} 人`,
+      // 把「已付费」一并显示：注册档不给邀请人发天数，天数是首购档才发的，
+      // 只显示注册人数会让用户以为邀请了却没拿到奖励。
+      reward: `已邀请 ${status?.inviteTotal ?? 0} 人 · 已付费 ${status?.invitePaidTotal ?? 0} 人`,
       done: false,
       action: null as null | (() => void),
     },

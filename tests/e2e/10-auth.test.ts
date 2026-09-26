@@ -340,7 +340,7 @@ describe("验证码登录/注册 /api/auth/verify-code", () => {
     expect(Number(days?.d)).toBeGreaterThan(95)
   })
 
-  it("带有效 ref_code 注册：绑定邀请人，并给邀请人 +3 天试用、记一条任务日志", async () => {
+  it("带有效 ref_code 注册：绑定邀请人，被邀请人得 7 天，邀请人不得天数（仅记账）", async () => {
     const partnerId = await insertUser({
       name: "邀请人",
       isPartner: 1,
@@ -377,32 +377,34 @@ describe("验证码登录/注册 /api/auth/verify-code", () => {
     expect(newUser?.is_pro).toBe(1)
     expect(newUser?.trial_claimed_at).not.toBeNull()
 
-    // 邀请人 +3 天（原来的 30 天 → 33 天）。
-    // 注意邀请人本身是合伙人：奖励天数与佣金是**并行**的两套，不互斥
-    // （对齐句乐部的「星火计划 + 邀请有礼」双轨），所以合伙人照拿天数。
+    // 注册档**不给邀请人**发天数：否则「拉一批不付费的好友」就能无限刷会员天数。
+    // 邀请人的收益全在首购档（见 /api/payment/notify 的 awardInvitePurchase）。
+    // 注意邀请人本身是合伙人，这里也一并验了「合伙人在注册档同样不发」。
     const afterHours = await one<{ d: number }>(
       "SELECT TIMESTAMPDIFF(HOUR, NOW(), pro_expires) AS d FROM users WHERE id = ?",
       [partnerId]
     )
-    expect(Number(afterHours?.d) - Number(beforeDays?.d)).toBeGreaterThanOrEqual(71)
-    expect(Number(afterHours?.d) - Number(beforeDays?.d)).toBeLessThanOrEqual(73)
+    expect(Number(afterHours?.d) - Number(beforeDays?.d)).toBeGreaterThanOrEqual(-1)
+    expect(Number(afterHours?.d) - Number(beforeDays?.d)).toBeLessThanOrEqual(0)
 
+    // 但邀请关系必须记账，否则「已邀请 N 人」统计不到这次邀请。
+    // rewardAmount 记 0 = 邀请人本次拿到的天数（列的含义是「记录归属人拿到的天数」）。
     const log = await one<{ task_type: string; reward_type: string; reward_amount: number; ref_id: string }>(
       "SELECT task_type, reward_type, reward_amount, ref_id FROM task_logs WHERE user_id = ?",
       [partnerId]
     )
     expect(log?.task_type).toBe("invite_register")
     expect(log?.reward_type).toBe("trial_days")
-    expect(Number(log?.reward_amount)).toBe(3)
+    expect(Number(log?.reward_amount)).toBe(0)
     expect(log?.ref_id).toBe(newUser?.id)
 
-    // 被邀请人自己额外拿 3 天（5 天体验会员 + 3 天邀请奖励 = 8 天 = 192 小时）
+    // 被邀请人拿受邀专属的 7 天体验会员（比自己去领的 5 天更多）
     const inviteeHours = await one<{ d: number }>(
       "SELECT TIMESTAMPDIFF(HOUR, NOW(), pro_expires) AS d FROM users WHERE id = ?",
       [newUser?.id]
     )
-    expect(Number(inviteeHours?.d)).toBeGreaterThan(168)
-    expect(Number(inviteeHours?.d)).toBeLessThanOrEqual(192)
+    expect(Number(inviteeHours?.d)).toBeGreaterThan(166)
+    expect(Number(inviteeHours?.d)).toBeLessThanOrEqual(168)
   })
 
   it("ref_code 不存在或格式不对：不绑定邀请人，也不报错", async () => {

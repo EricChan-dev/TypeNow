@@ -361,6 +361,56 @@ describe("支付回调 /api/payment/notify", () => {
     // 新佣金先进入冷却期，不能立刻提现
     expect(commission?.status).toBe("cooling")
   })
+
+  // 「邀请有礼」首购档：好友首次购买会员时，邀请人与被邀请人**双方**都获得天数。
+  // 与上面的佣金是并行两套（句乐部的「星火计划 + 邀请有礼」双轨），所以同一次支付
+  // 会同时产生佣金记录与天数奖励，互不冲突。
+  it("被邀请人首购成功后：双方各得天数，且续费不重复发", async () => {
+    const before = await one<{ d: Date }>(
+      "SELECT pro_expires AS d FROM users WHERE id = ?",
+      [FIXTURE.userPartner]
+    )
+
+    const { outTradeNo } = await insertPendingOrder(FIXTURE.userBuyer, "yearly", 19900)
+    await notify(successNotify(outTradeNo, "WX-TX-INVITE-BUY"))
+
+    const log = await one<{ task_type: string; reward_type: string; reward_amount: number; ref_id: string }>(
+      "SELECT task_type, reward_type, reward_amount, ref_id FROM task_logs WHERE user_id = ? AND task_type = 'invite_purchase'",
+      [FIXTURE.userPartner]
+    )
+    expect(log?.task_type).toBe("invite_purchase")
+    expect(log?.reward_type).toBe("trial_days")
+    // rewardAmount 记的是记录归属人（邀请人）拿到的天数
+    expect(Number(log?.reward_amount)).toBe(30)
+    expect(log?.ref_id).toBe(FIXTURE.userBuyer)
+
+    // 邀请人 +30 天（年卡）
+    const afterInviter = await one<{ d: Date }>(
+      "SELECT pro_expires AS d FROM users WHERE id = ?",
+      [FIXTURE.userPartner]
+    )
+    const inviterDeltaDays =
+      (new Date(afterInviter!.d).getTime() - new Date(before!.d).getTime()) / 86400_000
+    expect(Math.round(inviterDeltaDays)).toBe(30)
+
+    // 被邀请人 +20 天（年卡）。首购本身开通 365 天，叠加后约 385 天。
+    const invitee = await one<{ days: number }>(
+      "SELECT TIMESTAMPDIFF(DAY, NOW(), pro_expires) AS days FROM users WHERE id = ?",
+      [FIXTURE.userBuyer]
+    )
+    expect(Number(invitee?.days)).toBeGreaterThanOrEqual(383)
+    expect(Number(invitee?.days)).toBeLessThanOrEqual(385)
+
+    // 「仅首次购买有效，续费不触发」：再买一单，邀请人的到期时间一分不动。
+    const { outTradeNo: renewTradeNo } = await insertPendingOrder(FIXTURE.userBuyer, "yearly", 19900)
+    await notify(successNotify(renewTradeNo, "WX-TX-INVITE-RENEW"))
+
+    const afterRenew = await one<{ d: Date }>(
+      "SELECT pro_expires AS d FROM users WHERE id = ?",
+      [FIXTURE.userPartner]
+    )
+    expect(new Date(afterRenew!.d).getTime()).toBe(new Date(afterInviter!.d).getTime())
+  })
 })
 
 describe("订阅查询与取消", () => {

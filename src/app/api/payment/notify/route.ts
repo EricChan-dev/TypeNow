@@ -5,6 +5,7 @@ import { db } from "@/lib/db"
 import { paymentOrders, partnerCommissions, subscriptions, users } from "@/lib/db/schema"
 import { eq, and, desc } from "drizzle-orm"
 import { affectedRows } from "@/lib/db/affected-rows"
+import { awardInvitePurchase } from "@/lib/auth/invite"
 
 /**
  * WeChat Pay v3 callback notification handler.
@@ -143,6 +144,15 @@ export async function POST(request: Request) {
         })
       return NextResponse.json({ code: "FAIL", message: "Activation failed" }, { status: 500 })
     }
+
+    // 「邀请有礼」首购奖励：被邀请人首次购买时双方得会员天数。
+    //
+    // 放在激活成功之后、且不 await 失败会中断主流程的写法：奖励是附加权益，
+    // 发不出去也不该让微信重试整笔回调（会员已经开通了，重试只会走幂等分支）。
+    // 幂等由 task_logs 的唯一键 (invite_purchase, ref_id) 保证，续费不会重复发。
+    await awardInvitePurchase(existing.userId, existing.plan).catch((err) => {
+      console.error("[Notify] 邀请首购奖励发放失败:", err)
+    })
 
     return NextResponse.json({ code: "SUCCESS", message: "OK" })
   } catch (err) {

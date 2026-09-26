@@ -8,6 +8,7 @@ import { getUserById, getUserByWechatUnionid } from "@/lib/auth/user"
 import { encrypt } from "@/lib/crypto"
 import { generateInviteCode } from "@/lib/subscription"
 import { trialGrantFields } from "@/lib/trial"
+import { INVITE_REGISTER_DAYS } from "@/lib/invite-rules"
 import {
   exchangeCodeForAccessToken,
   getUserInfo,
@@ -191,7 +192,7 @@ async function upsertWeChatUser(
       inviteCode: generateInviteCode(),
       // 未受邀不送会员，由 /api/trial/claim 主动领取；受邀注册即自动领取。
       // 见 supabase/migrations/00012_trial_claim.sql
-      ...(referredBy ? trialGrantFields() : {}),
+      ...(referredBy ? trialGrantFields(new Date(), INVITE_REGISTER_DAYS) : {}),
     })
     const [newUser] = await db.select().from(users).where(eq(users.id, id)).limit(1)
     user = newUser

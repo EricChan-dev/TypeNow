@@ -573,14 +573,22 @@ export const userNotes = mysqlTable(
   (t) => [index("idx_user_notes_user").on(t.userId, t.updatedAt)]
 )
 
-// ─── Task Logs (daily share dedup + invite register reward) ──────────────────
+// ─── Task Logs (daily share dedup + 邀请有礼 次数/天数记录) ───────────────────
 export const taskLogs = mysqlTable(
   "task_logs",
   {
     id: varchar("id", { length: 36 }).primaryKey().default(sql`(UUID())`),
     userId: varchar("user_id", { length: 36 }).notNull(),
-    taskType: mysqlEnum("task_type", ["share_invite", "invite_register"]).notNull(),
+    taskType: mysqlEnum("task_type", ["share_invite", "invite_register", "invite_purchase"]).notNull(),
     rewardType: mysqlEnum("reward_type", ["diamond", "trial_days"]).notNull(),
+    /**
+     * 这条记录里 **userId（邀请人）本人** 获得的天数。
+     *
+     * 与历史含义保持一致（以前 invite_register 记的就是邀请人拿到的 3 天）。
+     * 因此 invite_register 恒为 0 —— 按句乐部的天数制，注册档只给**被邀请人**
+     * 7 天，邀请人的天数来自首购档。被邀请人拿到多少天体现在他自己的
+     * users.pro_expires 上，不记在邀请人的任务流水里。
+     */
     rewardAmount: int("reward_amount").notNull(),
     date: varchar("date", { length: 10 }).notNull(),
     refId: varchar("ref_id", { length: 36 }),
@@ -588,7 +596,17 @@ export const taskLogs = mysqlTable(
   },
   (t) => [
     uniqueIndex("uk_task_user_type_date").on(t.userId, t.taskType, t.date),
-    uniqueIndex("uk_invite_ref").on(t.refId),
+    /**
+     * 幂等键 = (类型, 被邀请人)。
+     *
+     * 原来是 `uk_invite_ref` 单独作用于 ref_id，那会让同一个被邀请人**只能有一条**
+     * 记录 —— 「注册」写过之后，「首购」就再也插不进去（撞唯一键），而首购奖励
+     * 正是「仅首购有效」要靠它兜住的那一条。
+     * 改成复合键后：① 同一被邀请人每种类型各一条，注册不会被重复计；
+     * ② 首购天然只会成功一次，续费再触发也插不进去 —— 这就是「仅首购」的实现。
+     * ③ share_invite 的 ref_id 为 NULL，MySQL 唯一索引允许多个 NULL，不受影响。
+     */
+    uniqueIndex("uk_task_ref_type").on(t.taskType, t.refId),
   ]
 )
 
