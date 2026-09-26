@@ -99,6 +99,24 @@ rm -rf .next-staging
 STAGING_DIR=".next-staging"
 export TYPENOW_DIST_DIR="$STAGING_DIR"
 
+# ─────────────────────────────────────────────────────────────
+# 构建前清掉上一次部署遗留的生成类型目录。
+#
+# 根因：tsconfig 同时 include 了 .next/types 与 .next-staging/types
+# （后者由 next build 自动追加）。而 .next/types 是**上一次成功部署**留下的产物，
+# 里面的 validator.ts 会 import 当时存在的每一个路由。只要本次改动删除或重命名了
+# 任何一个路由，旧 validator 就会引用一个已不存在的模块，构建的
+# `Running TypeScript ...` 阶段直接失败（2026-09-26 删除
+# /api/admin/analytics 时就撞上了）。
+#
+# 更麻烦的是它自锁：部署失败 → .next 不被替换 → 旧 .next/types 永远在 →
+# 之后每一次部署都会以完全相同的原因失败，必须人工登服务器处理。
+#
+# 这些生成类型只服务于构建期类型检查，运行时（next start）不读它们，
+# 所以构建前清掉即可；新的一份会由本次构建在 .next-staging/types 里重新生成。
+# ─────────────────────────────────────────────────────────────
+rm -rf .next/types .next/dev/types
+
 if ! pnpm run build 2>&1 | tee -a "$LOG_FILE"; then
   log "错误：构建失败，本次部署取消。线上 .next 未被触碰，仍在运行原版本。"
   rm -rf "$STAGING_DIR"
