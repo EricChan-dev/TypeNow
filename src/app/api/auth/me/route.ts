@@ -37,6 +37,11 @@ export async function GET() {
       avatar: user.avatar,
       is_pro: isPro,
       is_partner: !!user.isPartner,
+      /**
+       * 是否还能领取体验会员：当前不是会员、且从未领过（按手机号一次）。
+       * 前端据此决定给「免费领取体验会员」还是「开通会员」这两个不同的入口。
+       */
+      trial_available: !isPro && user.trialClaimedAt == null,
       level: user.level,
       member_tier: memberTier,
       role: isAdmin ? "admin" : (user.role ?? "user"),

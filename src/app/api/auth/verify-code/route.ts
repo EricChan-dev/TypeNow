@@ -6,6 +6,7 @@ import { eq, and, gt } from "drizzle-orm"
 import { createSession } from "@/lib/auth/session"
 import { checkRateLimit, getClientIP } from "@/lib/rate-limit"
 import { generateInviteCode } from "@/lib/subscription"
+import { trialGrantFields } from "@/lib/trial"
 
 const PHONE_REGEX = /^1[3-9]\d{9}$/
 
@@ -97,9 +98,18 @@ export async function POST(request: NextRequest) {
     const refCode = request.cookies.get("ref_code")?.value
     const referredBy = await resolveReferredBy(refCode)
     const id = randomUUID()
-    const trialExpiresAt = new Date(Date.now() + 3 * 24 * 60 * 60 * 1000)
     const defaultName = `用户${Math.floor(1000 + Math.random() * 9000)}`
-    await db.insert(users).values({ id, phone, name: defaultName, referredBy, isPro: 1, proExpires: trialExpiresAt, inviteCode: generateInviteCode() })
+    // 注册不再无条件送会员：未受邀用户保持非会员，练完每课免费 3 句后由
+    // /api/trial/claim 主动领取；受邀用户注册即自动领取（对齐句乐部）。
+    // 为什么/安全性见 supabase/migrations/00012_trial_claim.sql。
+    await db.insert(users).values({
+      id,
+      phone,
+      name: defaultName,
+      referredBy,
+      inviteCode: generateInviteCode(),
+      ...(referredBy ? trialGrantFields() : {}),
+    })
     const [newUser] = await db.select().from(users).where(eq(users.id, id)).limit(1)
     user = newUser
 

@@ -256,7 +256,7 @@ describe("验证码登录/注册 /api/auth/verify-code", () => {
     expect(res.body.error).toBe("验证码错误或已过期")
   })
 
-  it("新手机号首次登录：建号 + 3 天试用 + 分配邀请码 + 种下会话", async () => {
+  it("新手机号首次登录（无邀请）：建号 + 不自动送会员 + 分配邀请码 + 种下会话", async () => {
     const phone = "13800000404"
     await insertCode(phone, "444444")
 
@@ -273,32 +273,34 @@ describe("验证码登录/注册 /api/auth/verify-code", () => {
     const user = await one<{
       id: string
       is_pro: number
-      pro_expires: Date
+      pro_expires: Date | null
+      trial_claimed_at: Date | null
       invite_code: string | null
       referred_by: string | null
       name: string
-    }>("SELECT id, is_pro, pro_expires, invite_code, referred_by, name FROM users WHERE phone = ?", [
-      phone,
-    ])
+    }>(
+      "SELECT id, is_pro, pro_expires, trial_claimed_at, invite_code, referred_by, name FROM users WHERE phone = ?",
+      [phone]
+    )
     expect(user?.id).toBe(res.body.user.id)
-    expect(user?.is_pro).toBe(1)
     expect(user?.invite_code).toBeTruthy()
     expect(user?.referred_by).toBeNull()
     expect(user?.name).toMatch(/^用户\d{4}$/)
 
-    // 新用户 3 天试用
-    const trialDays = await one<{ d: number }>(
-      "SELECT TIMESTAMPDIFF(HOUR, NOW(), pro_expires) AS d FROM users WHERE phone = ?",
-      [phone]
-    )
-    expect(Number(trialDays?.d)).toBeGreaterThan(48)
-    expect(Number(trialDays?.d)).toBeLessThanOrEqual(72)
+    // 注册不再无条件送会员：未受邀用户既没有会员，也还没领过体验会员，
+    // 因此保留领取资格（由 /api/trial/claim 领取 5 天）。
+    expect(user?.is_pro).toBe(0)
+    expect(user?.pro_expires).toBeNull()
+    expect(user?.trial_claimed_at).toBeNull()
 
     // 会话真的种下了，并且能读到自己的身份
-    const me = await api.get<{ user: { id: string; is_pro: boolean } }>("/api/auth/me")
+    const me = await api.get<{ user: { id: string; is_pro: boolean; trial_available: boolean } }>(
+      "/api/auth/me"
+    )
     expect(me.status).toBe(200)
     expect(me.body.user.id).toBe(res.body.user.id)
-    expect(me.body.user.is_pro).toBe(true)
+    expect(me.body.user.is_pro).toBe(false)
+    expect(me.body.user.trial_available).toBe(true)
   })
 
   it("已存在的手机号：复用同一个账号，不动已有权益和邀请码", async () => {
@@ -363,14 +365,21 @@ describe("验证码登录/注册 /api/auth/verify-code", () => {
     )
     expect(res.status).toBe(200)
 
-    const newUser = await one<{ id: string; referred_by: string | null }>(
-      "SELECT id, referred_by FROM users WHERE phone = ?",
+    const newUser = await one<{ id: string; referred_by: string | null; trial_claimed_at: Date | null; is_pro: number }>(
+      "SELECT id, referred_by, trial_claimed_at, is_pro FROM users WHERE phone = ?",
       [phone]
     )
     expect(newUser?.id).toBe(res.body.user.id)
     expect(newUser?.referred_by).toBe(partnerId)
 
-    // 邀请人 +3 天（原来的 30 天 → 33 天）
+    // 受邀注册即自动领取体验会员：既是会员，又已标记「领过」——
+    // 后者是关键，否则他还能在试学墙上再手动领一次，等于发两份。
+    expect(newUser?.is_pro).toBe(1)
+    expect(newUser?.trial_claimed_at).not.toBeNull()
+
+    // 邀请人 +3 天（原来的 30 天 → 33 天）。
+    // 注意邀请人本身是合伙人：奖励天数与佣金是**并行**的两套，不互斥
+    // （对齐句乐部的「星火计划 + 邀请有礼」双轨），所以合伙人照拿天数。
     const afterHours = await one<{ d: number }>(
       "SELECT TIMESTAMPDIFF(HOUR, NOW(), pro_expires) AS d FROM users WHERE id = ?",
       [partnerId]
@@ -387,13 +396,13 @@ describe("验证码登录/注册 /api/auth/verify-code", () => {
     expect(Number(log?.reward_amount)).toBe(3)
     expect(log?.ref_id).toBe(newUser?.id)
 
-    // 被邀请人自己额外拿 3 天（3 天试用 + 3 天奖励 = 6 天）
+    // 被邀请人自己额外拿 3 天（5 天体验会员 + 3 天邀请奖励 = 8 天 = 192 小时）
     const inviteeHours = await one<{ d: number }>(
       "SELECT TIMESTAMPDIFF(HOUR, NOW(), pro_expires) AS d FROM users WHERE id = ?",
       [newUser?.id]
     )
-    expect(Number(inviteeHours?.d)).toBeGreaterThan(120)
-    expect(Number(inviteeHours?.d)).toBeLessThanOrEqual(144)
+    expect(Number(inviteeHours?.d)).toBeGreaterThan(168)
+    expect(Number(inviteeHours?.d)).toBeLessThanOrEqual(192)
   })
 
   it("ref_code 不存在或格式不对：不绑定邀请人，也不报错", async () => {
@@ -499,5 +508,83 @@ describe("会话与账号状态 /api/auth/me", () => {
     )
     expect(row?.is_pro).toBe(0)
     expect(row?.pro_expires).toBeNull()
+  })
+
+  /**
+   * 体验会员领取（/api/trial/claim）。
+   *
+   * 注册不再自动送会员之后，这里是新用户拿到会员的唯一入口，
+   * 因此它必须同时满足三件事：能领、只能领一次、且绝不覆盖已有的付费权益。
+   */
+  describe("体验会员领取", () => {
+    it("未领过的非会员可领取 5 天", async () => {
+      const userId = await insertUser({ name: "待领取", isPro: 0, proExpires: null })
+
+      const res = await ApiClient.asUser(userId).post<{ success: boolean; days: number }>(
+        "/api/trial/claim"
+      )
+      expect(res.status).toBe(200)
+      expect(res.body.success).toBe(true)
+      expect(res.body.days).toBe(5)
+
+      const row = await one<{ is_pro: number; hours: number; trial_claimed_at: Date | null }>(
+        "SELECT is_pro, TIMESTAMPDIFF(HOUR, NOW(), pro_expires) AS hours, trial_claimed_at FROM users WHERE id = ?",
+        [userId]
+      )
+      expect(row?.is_pro).toBe(1)
+      expect(row?.trial_claimed_at).not.toBeNull()
+      // 5 天 = 120 小时，留一点执行耗时余量
+      expect(Number(row?.hours)).toBeGreaterThan(118)
+      expect(Number(row?.hours)).toBeLessThanOrEqual(120)
+    })
+
+    it("已领过再领：409，且会员时长不被刷新", async () => {
+      const userId = await insertUser({ name: "已领取", isPro: 0, proExpires: null })
+      const api = ApiClient.asUser(userId)
+
+      expect((await api.post("/api/trial/claim")).status).toBe(200)
+      const first = await one<{ d: string }>(
+        "SELECT pro_expires AS d FROM users WHERE id = ?",
+        [userId]
+      )
+
+      const second = await api.post<{ code: string }>("/api/trial/claim")
+      expect(second.status).toBe(409)
+      expect(second.body.code).toBe("ALREADY_CLAIMED")
+
+      // 关键：第二次不能把到期时间往后推（否则可以靠反复调用无限续期）
+      const after = await one<{ d: string }>(
+        "SELECT pro_expires AS d FROM users WHERE id = ?",
+        [userId]
+      )
+      expect(new Date(after!.d).getTime()).toBe(new Date(first!.d).getTime())
+    })
+
+    it("当前是有效会员时不可领：409，且到期时间不被砍成 5 天", async () => {
+      // 这是最危险的一种误用：trial_claimed_at 是新列，存量付费会员全为 NULL，
+      // 若不拦，一次调用就会把年卡的 pro_expires 覆盖成「今天 + 5 天」。
+      const yearly = new Date(Date.now() + 300 * 86400_000)
+      const userId = await insertUser({
+        name: "年卡会员",
+        isPro: 1,
+        proExpires: yearly,
+        trialClaimedAt: null,
+      })
+
+      const res = await ApiClient.asUser(userId).post<{ code: string }>("/api/trial/claim")
+      expect(res.status).toBe(409)
+
+      const row = await one<{ days: number; trial_claimed_at: Date | null }>(
+        "SELECT TIMESTAMPDIFF(DAY, NOW(), pro_expires) AS days, trial_claimed_at FROM users WHERE id = ?",
+        [userId]
+      )
+      // 仍然是年卡，没有被砍成 5 天
+      expect(Number(row?.days)).toBeGreaterThan(295)
+    })
+
+    it("未登录不可领", async () => {
+      const res = await ApiClient.anonymous().post("/api/trial/claim")
+      expect(res.status).toBe(401)
+    })
   })
 })

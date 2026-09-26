@@ -11,6 +11,7 @@ import {
   sendOACustomerMessage,
 } from "@/lib/wechat"
 import { generateInviteCode } from "@/lib/subscription"
+import { trialGrantFields } from "@/lib/trial"
 
 async function resolveReferredBy(refCode: string | null): Promise<string | null> {
   if (!refCode || !db) return null
@@ -257,7 +258,6 @@ async function processSceneLogin(openid: string, sceneStr: string): Promise<void
     } else {
       // Create new user
       const id = randomUUID()
-      const trialExpiresAt = new Date(Date.now() + 3 * 24 * 60 * 60 * 1000)
       const referredBy = await resolveReferredBy(extractRefCode(sceneStr))
 
       await db.insert(users).values({
@@ -267,9 +267,10 @@ async function processSceneLogin(openid: string, sceneStr: string): Promise<void
         name: oaUser.nickname || `微信用户${Math.floor(1000 + Math.random() * 9000)}`,
         avatar: oaUser.headimgurl,
         referredBy,
-        isPro: 1,
-        proExpires: trialExpiresAt,
         inviteCode: generateInviteCode(),
+        // 未受邀不送会员，由 /api/trial/claim 主动领取；受邀注册即自动领取。
+        // 见 supabase/migrations/00012_trial_claim.sql
+        ...(referredBy ? trialGrantFields() : {}),
       })
 
       if (referredBy) {

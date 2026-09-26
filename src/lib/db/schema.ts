@@ -33,6 +33,17 @@ export const users = mysqlTable(
     totalScore: int("total_score").notNull().default(0),
     isPro: tinyint("is_pro").notNull().default(0),
     proExpires: datetime("pro_expires"),
+    /**
+     * 体验会员（注册试用）的领取时间。NULL = 尚未领取。
+     *
+     * 领取走条件更新 `WHERE trial_claimed_at IS NULL` + affectedRows 判定，
+     * 保证并发/重复请求只成功一次。
+     *
+     * 「按手机号一次性」的依据见 supabase/migrations/00012_trial_claim.sql：
+     * phone 与 wechat_openid 都是 UNIQUE，且注册是 find-or-create，
+     * 所以「每账号一次」天然等于「每手机号一次」。
+     */
+    trialClaimedAt: datetime("trial_claimed_at"),
     role: mysqlEnum("role", ["user", "admin"]).notNull().default("user"),
     inviteCode: varchar("invite_code", { length: 12 }).unique(),
     referredBy: varchar("referred_by", { length: 36 }),

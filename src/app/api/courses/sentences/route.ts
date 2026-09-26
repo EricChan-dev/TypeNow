@@ -25,11 +25,14 @@ export async function GET(request: Request) {
     // 因此「整库拖走」这条防线仍然成立——只是放行了每课开头少量内容。
     const revoked = await checkAndExpirePro(session.userId)
     const [viewer] = await db
-      .select({ isPro: users.isPro })
+      .select({ isPro: users.isPro, trialClaimedAt: users.trialClaimedAt })
       .from(users)
       .where(eq(users.id, session.userId))
       .limit(1)
     const isPro = revoked ? false : !!viewer?.isPro
+    // 还能领体验会员吗？非会员且从未领过。前端据此在试学墙上决定主按钮是
+    // 「免费领取体验会员」还是「开通会员」——省掉一次 /api/auth/me 往返。
+    const trialAvailable = !isPro && viewer?.trialClaimedAt == null
 
     // 只返回已发布课程下的句子，避免未发布内容泄露
     const [lesson] = await db
@@ -76,7 +79,7 @@ export async function GET(request: Request) {
       words: alignWordsWithEnglish(s.english, s.words),
     }))
 
-    return NextResponse.json({ sentences: normalized, trial })
+    return NextResponse.json({ sentences: normalized, trial, trialAvailable })
   } catch (e) {
     console.error("[courses/sentences]", e)
     return NextResponse.json({ error: "加载句子失败" }, { status: 500 })

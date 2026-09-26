@@ -61,6 +61,7 @@ export async function insertUser(
     name: string
     isPro: number
     proExpires: Date | null
+    trialClaimedAt: Date | null
     isPartner: number
     inviteCode: string | null
     referredBy: string | null
@@ -70,14 +71,15 @@ export async function insertUser(
 ): Promise<string> {
   const id = overrides.id ?? crypto.randomUUID()
   await q(
-    `INSERT INTO users (id, phone, name, is_pro, pro_expires, is_partner, invite_code, referred_by, wechat_openid, created_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    `INSERT INTO users (id, phone, name, is_pro, pro_expires, trial_claimed_at, is_partner, invite_code, referred_by, wechat_openid, created_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       id,
       overrides.phone === undefined ? nextPhone() : overrides.phone,
       overrides.name ?? "e2e 用户",
       overrides.isPro ?? 0,
       overrides.proExpires ?? null,
+      overrides.trialClaimedAt ?? null,
       overrides.isPartner ?? 0,
       overrides.inviteCode === undefined ? null : overrides.inviteCode,
       overrides.referredBy ?? null,

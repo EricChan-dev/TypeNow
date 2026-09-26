@@ -7,6 +7,7 @@ import { createSession } from "@/lib/auth/session"
 import { getUserById, getUserByWechatUnionid } from "@/lib/auth/user"
 import { encrypt } from "@/lib/crypto"
 import { generateInviteCode } from "@/lib/subscription"
+import { trialGrantFields } from "@/lib/trial"
 import {
   exchangeCodeForAccessToken,
   getUserInfo,
@@ -177,7 +178,6 @@ async function upsertWeChatUser(
       referredBy = partner?.id ?? null
     }
     const id = randomUUID()
-    const trialExpiresAt = new Date(Date.now() + 3 * 24 * 60 * 60 * 1000)
     await db.insert(users).values({
       id,
       wechatOpenid: wechatUser.openid,
@@ -185,12 +185,13 @@ async function upsertWeChatUser(
       name: wechatUser.nickname || `微信用户${Math.floor(1000 + Math.random() * 9000)}`,
       avatar: wechatUser.headimgurl,
       referredBy,
-      isPro: 1,
-      proExpires: trialExpiresAt,
       wechatAccessToken: tokenData.access_token,
       wechatRefreshToken: encrypt(tokenData.refresh_token),
       wechatTokenExpiresAt: tokenExpiresAt,
       inviteCode: generateInviteCode(),
+      // 未受邀不送会员，由 /api/trial/claim 主动领取；受邀注册即自动领取。
+      // 见 supabase/migrations/00012_trial_claim.sql
+      ...(referredBy ? trialGrantFields() : {}),
     })
     const [newUser] = await db.select().from(users).where(eq(users.id, id)).limit(1)
     user = newUser

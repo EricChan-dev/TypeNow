@@ -62,6 +62,7 @@ import { globalSpeak } from "@/lib/hooks/useTTSSettings"
 import { baseSentenceId } from "@/lib/sentence-id"
 import { decideResume } from "@/lib/practice-session"
 import { toast } from "sonner"
+import { TRIAL_DAYS } from "@/lib/trial-days"
 
 function useDebounce<T extends (...args: never[]) => void>(fn: T, delay: number): T {
   const lastCall = useRef(0)
@@ -225,6 +226,13 @@ export function LearnClient({
    * 「你已完成本课全部 N 个句子」，那是假话，要改为付费引导。
    */
   const [trial, setTrial] = useState<{ limit: number; truncated: boolean } | null>(null)
+  /**
+   * 是否还能领体验会员（非会员且从未领过）。为 true 时试学墙的主按钮是
+   * 「免费领取 5 天体验会员」，否则才是「开通会员」——两句引导的转化含义完全不同，
+   * 对着没领过的人直接要钱会白白损失一次免费体验带来的留存。
+   */
+  const [trialAvailable, setTrialAvailable] = useState(false)
+  const [claimingTrial, setClaimingTrial] = useState(false)
   const [currentIndex, setCurrentIndex] = useState(0)
   const [status, setStatus] = useState<SentenceStatus>("input")
   const [wordStates, setWordStates] = useState<WordState[]>([])
@@ -399,6 +407,7 @@ export function LearnClient({
         if (Array.isArray(json?.sentences)) {
           const expanded = expandSentences(json.sentences as Sentence[])
           setTrial(json?.trial ?? null)
+          setTrialAvailable(!!json?.trialAvailable)
           // 记下完整句子表：「再练错句」会临时把 sentences 收窄成错句子集，
           // 不能因此丢掉整节课。
           fullSentencesRef.current = expanded
@@ -424,6 +433,32 @@ export function LearnClient({
       })
       .catch((e) => { console.error(e); setLoadState("error") })
   }, [lessonId])
+
+  /**
+   * 领取体验会员（5 天）。
+   *
+   * 服务端是条件更新（trial_claimed_at IS NULL），天然幂等：重复点击、并发请求
+   * 只有一次成功，所以这里不需要防抖式的本地锁，`claimingTrial` 只用于按钮态。
+   * 成功后整页 reload —— 会员状态散落在开场画面、付费墙、进度等处的服务端数据里，
+   * 局部 setState 很容易漏掉某一处，刷新一次最省心也不会有不一致。
+   */
+  const claimTrialMembership = useCallback(async () => {
+    if (claimingTrial) return
+    setClaimingTrial(true)
+    try {
+      const res = await fetch("/api/trial/claim", { method: "POST" })
+      if (res.ok) {
+        toast.success(`已领取 ${TRIAL_DAYS} 天体验会员`)
+        window.location.reload()
+        return
+      }
+      const data = await res.json().catch(() => null)
+      toast.error(data?.error ?? "领取失败，请稍后再试")
+    } catch {
+      toast.error("网络异常，请稍后再试")
+    }
+    setClaimingTrial(false)
+  }, [claimingTrial])
 
   // 开场进度条的装饰动画。
   //
@@ -1917,14 +1952,20 @@ export function LearnClient({
 
             <div className="px-8 pt-8 pb-8 flex flex-col items-center gap-6">
               <div className="text-center">
-                <p className="text-2xl sm:text-3xl font-black text-foreground tracking-tight">试学结束</p>
+                <p className="text-2xl sm:text-3xl font-black text-foreground tracking-tight">
+                  {trialAvailable ? "免费体验完整课程" : "试学结束"}
+                </p>
                 <p className="text-foreground/40 text-xs sm:text-sm mt-2">
-                  你已免费学完本课前 {trial.limit} 句，这节课还有更多句子
+                  {trialAvailable
+                    ? `你已免费学完本课前 ${trial.limit} 句，领取体验会员即可解锁全部内容`
+                    : `你已免费学完本课前 ${trial.limit} 句，这节课还有更多句子`}
                 </p>
               </div>
 
               <div className="w-full rounded-2xl border border-foreground/10 bg-foreground/[0.03] px-5 py-4 flex flex-col gap-2">
-                <p className="text-xs text-foreground/50">开通会员后可以</p>
+                <p className="text-xs text-foreground/50">
+                  {trialAvailable ? "体验会员可以" : "开通会员后可以"}
+                </p>
                 <ul className="text-sm text-foreground/70 flex flex-col gap-1.5">
                   <li>· 解锁本课及全部课程的完整句子</li>
                   <li>· 使用 AI 智能拆句与语法解析</li>
@@ -1933,13 +1974,34 @@ export function LearnClient({
               </div>
 
               <div className="w-full flex flex-col gap-2.5">
-                <Link
-                  href="/pricing?reason=trial"
-                  className="w-full py-3 rounded-2xl text-center text-white text-sm font-semibold transition-opacity hover:opacity-90"
-                  style={{ background: "linear-gradient(135deg, #7c3aed, #ec4899)" }}
-                >
-                  开通会员，继续学完
-                </Link>
+                {trialAvailable ? (
+                  <>
+                    {/* 没领过体验会员的人先给免费入口：直接要钱会白白丢掉一次
+                        「先体验、再付费」的机会，而这正是句乐部验证过的路径。 */}
+                    <button
+                      onClick={claimTrialMembership}
+                      disabled={claimingTrial}
+                      className="w-full py-3 rounded-2xl text-center text-white text-sm font-semibold transition-opacity hover:opacity-90 disabled:opacity-50"
+                      style={{ background: "linear-gradient(135deg, #7c3aed, #ec4899)" }}
+                    >
+                      {claimingTrial ? "领取中…" : `免费领取 ${TRIAL_DAYS} 天体验会员`}
+                    </button>
+                    <Link
+                      href="/pricing?reason=trial"
+                      className="w-full py-3 rounded-2xl text-center border border-foreground/12 text-foreground/60 text-sm font-semibold hover:bg-foreground/[0.05] transition-colors"
+                    >
+                      直接开通会员
+                    </Link>
+                  </>
+                ) : (
+                  <Link
+                    href="/pricing?reason=trial"
+                    className="w-full py-3 rounded-2xl text-center text-white text-sm font-semibold transition-opacity hover:opacity-90"
+                    style={{ background: "linear-gradient(135deg, #7c3aed, #ec4899)" }}
+                  >
+                    开通会员，继续学完
+                  </Link>
+                )}
                 <Link
                   href={`/home/store/${courseId}`}
                   className="w-full py-3 rounded-2xl text-center border border-foreground/12 text-foreground/60 text-sm font-semibold hover:bg-foreground/[0.05] transition-colors"

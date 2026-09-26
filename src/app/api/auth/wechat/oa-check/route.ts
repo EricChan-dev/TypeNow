@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { db } from "@/lib/db"
+import { trialGrantFields } from "@/lib/trial"
 import { users } from "@/lib/db/schema"
 import { eq } from "drizzle-orm"
 import { createSession } from "@/lib/auth/session"
@@ -52,17 +53,18 @@ export async function GET(request: NextRequest) {
     } else {
       // User should have been created by the event handler, but just in case:
       // Create a minimal user
+      //
+      // 这里没有 ref_code 可言（scene 里没有带邀请码），所以按「未受邀注册」处理：
+      // 不自动送会员，由 /api/trial/claim 主动领取。
+      // 见 supabase/migrations/00012_trial_claim.sql
       const { randomUUID } = await import("crypto")
       const id = randomUUID()
-      const trialExpiresAt = new Date(Date.now() + 3 * 24 * 60 * 60 * 1000)
       await db.insert(users).values({
         id,
         wechatOpenid: sceneData.openid,
         wechatUnionid: sceneData.unionid || null,
         name: sceneData.nickname || `微信用户${Math.floor(1000 + Math.random() * 9000)}`,
         avatar: sceneData.avatar,
-        isPro: 1,
-        proExpires: trialExpiresAt,
       })
       await createSession(id)
     }
@@ -90,13 +92,15 @@ async function handleDevMode(scene: string): Promise<NextResponse> {
     if (!user) {
       const { randomUUID } = await import("crypto")
       const id = randomUUID()
-      const trialExpiresAt = new Date(Date.now() + 3 * 24 * 60 * 60 * 1000)
+      // 开发态夹具**保留**自动送会员：本地要验证会员功能（练习页、AI 讲解等），
+      // 每个 dev 账号都先去领一次体验会员会很烦。仍然写上 trial_claimed_at，
+      // 否则这个账号还能再领一次，与「每人一次」的口径不一致。
+      // 这与 CLAUDE.md 记录的其他开发态旁路（dev 登录 cookie）是同一类取舍。
       await db.insert(users).values({
         id,
         wechatOpenid: devOpenid,
         name: "公众号开发用户",
-        isPro: 1,
-        proExpires: trialExpiresAt,
+        ...trialGrantFields(),
       })
       const [newUser] = await db.select().from(users).where(eq(users.id, id)).limit(1)
       user = newUser
