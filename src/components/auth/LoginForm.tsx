@@ -41,7 +41,27 @@ export function LoginForm() {
   const router = useRouter()
   const searchParams = useSearchParams()
 
+  /**
+   * 默认登录方式按设备区分。
+   *
+   * 微信扫码登录的优势场景是**桌面**——手机一扫即完成。但在手机上，"扫码登录"
+   * 反而更麻烦（保存二维码 → 打开微信 → 扫一扫 → 从相册选），短信才是顺手的路径。
+   * 而我们的用户绝大多数来自微信、以手机为主，所以「一律默认扫码」会伤到主要人群。
+   *
+   * SSR 阶段不知道设备形态，因此初值仍是 phone（不会 hydration 报错），
+   * 挂载后若判定为桌面再切到微信；用户手动点过 tab 就不再覆盖他的选择。
+   */
   const [activeTab, setActiveTab] = useState<LoginTab>("phone")
+  const [tabPickedByUser, setTabPickedByUser] = useState(false)
+  useEffect(() => {
+    if (tabPickedByUser) return
+    // (hover: none) + (pointer: coarse) 是触屏主设备的通行判定
+    const isTouchPrimary =
+      typeof window !== "undefined" &&
+      window.matchMedia?.("(hover: none) and (pointer: coarse)").matches
+    if (!isTouchPrimary) setActiveTab("wechat")
+  }, [tabPickedByUser])
+
   const [phone, setPhone] = useState("")
   const [code, setCode] = useState("")
   const [cooldown, setCooldown] = useState(0)
@@ -49,7 +69,19 @@ export function LoginForm() {
   const [devQrDataUrl, setDevQrDataUrl] = useState<string | null>(null)
   const canvasRef = useRef<HTMLCanvasElement>(null)
 
-  const redirectTo = searchParams.get("redirect") || "/home"
+  /**
+   * 登录后的回跳目标。
+   *
+   * 只接受**站内路径**：`redirect` 来自 query string，是用户可控输入，
+   * 直接 `router.push()` 会形成开放重定向（`?redirect=//evil.com` 这类
+   * protocol-relative 写法最容易被忽略）。所以要求以单个 "/" 开头，
+   * 且不能是 "//" 开头。proxy.ts 在把未登录用户送去 /login 时会带上这个参数。
+   */
+  const rawRedirect = searchParams.get("redirect")
+  const redirectTo =
+    rawRedirect && rawRedirect.startsWith("/") && !rawRedirect.startsWith("//")
+      ? rawRedirect
+      : "/home"
 
   const isDevEnv = process.env.NODE_ENV === "development"
 
@@ -73,6 +105,7 @@ export function LoginForm() {
           "csrf_mismatch",
         ].includes(errorParam)
       ) {
+        setTabPickedByUser(true)
         setActiveTab("wechat")
       }
       const message = ERROR_MESSAGES[errorParam] || "登录失败，请重试"
@@ -169,7 +202,7 @@ export function LoginForm() {
       <div className="flex">
         <button
           type="button"
-          onClick={() => setActiveTab("wechat")}
+          onClick={() => { setTabPickedByUser(true); setActiveTab("wechat") }}
           className={`flex-1 flex items-center justify-center gap-1.5 py-3 text-sm font-medium border-b-2 transition-colors ${
             activeTab === "wechat"
               ? "text-[#1E40AF] border-[#1E40AF]"
@@ -181,7 +214,7 @@ export function LoginForm() {
         </button>
         <button
           type="button"
-          onClick={() => setActiveTab("phone")}
+          onClick={() => { setTabPickedByUser(true); setActiveTab("phone") }}
           className={`flex-1 flex items-center justify-center gap-1.5 py-3 text-sm font-medium border-b-2 transition-colors ${
             activeTab === "phone"
               ? "text-[#1E40AF] border-[#1E40AF]"

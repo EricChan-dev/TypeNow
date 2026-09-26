@@ -80,8 +80,19 @@ export async function proxy(request: NextRequest) {
   }
 
   if (isAdminRoute) {
-    if (!sessionUser) return NextResponse.redirect(new URL("/login", request.url))
-    if (!isAdmin(sessionUser)) return NextResponse.redirect(new URL("/", request.url))
+    // 带上回跳目标：登录后能直接回到用户本来想去的页面。
+    // 不带的话（原先就是）从 /admin/analytics 被踢去登录，登完只能落在主页，
+    // 用户得自己再点一次后台。
+    if (!sessionUser) {
+      const loginUrl = new URL("/login", request.url)
+      loginUrl.searchParams.set("redirect", pathname)
+      return NextResponse.redirect(loginUrl)
+    }
+    // 已登录但不是管理员：留在 /admin/login 并说明原因，而不是静默丢回首页
+    // （原先重定向到 "/"，用户只看到"点后台就跳回首页"，完全看不出问题在哪）。
+    if (!isAdmin(sessionUser)) {
+      return NextResponse.redirect(new URL("/admin/login", request.url))
+    }
   }
 
   return NextResponse.next()

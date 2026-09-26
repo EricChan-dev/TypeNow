@@ -71,7 +71,19 @@ export async function POST(request: NextRequest) {
   // Check if phone is already bound to another user BEFORE consuming code
   const existingUser = await getUserByPhone(phone)
   if (existingUser && existingUser.id !== session.userId) {
-    return NextResponse.json({ error: "该手机号已被其他账号绑定" }, { status: 409 })
+    // 这里**不**做账号合并：本接口的语义是「把手机号写到当前账号」。
+    // 但走到这个分支的人几乎都是同一种处境 —— 先用手机号注册过，后来又用微信登录，
+    // 于是同一人拥有两个账号。当前系统没有任何合并能力（22 张表按 user_id 挂载，
+    // 其中 8 个唯一约束在合并时会冲突），所以只能如实告知并给出人工出口，
+    // 而不是丢一句「已被绑定」让人反复重试。
+    return NextResponse.json(
+      {
+        error:
+          "该手机号已用于另一个账号。通常是因为你之前用手机号注册过、后来又用微信登录，产生了两个账号。系统暂不支持自助合并，请联系客服帮你合并。",
+        code: "PHONE_TAKEN",
+      },
+      { status: 409 },
+    )
   }
 
   if (existingUser?.id === session.userId) {

@@ -173,6 +173,12 @@ export function SettingsClient({ initialUser }: { initialUser: InitialUser }) {
   const [sendingCode, setSendingCode] = useState(false)
   const [codeCountdown, setCodeCountdown] = useState(0)
   const [binding, setBinding] = useState(false)
+  /**
+   * 手机号已被另一个账号占用时的提示。
+   * 用常住提示而不是 toast：toast 几秒就没了，而这条信息（"你有两个账号、需要联系客服"）
+   * 用户得看懂并照着做，闪一下就消失等于没说。
+   */
+  const [bindConflict, setBindConflict] = useState<string | null>(null)
 
   const fileInputRef = useRef<HTMLInputElement>(null)
   const pageRef = useRef<HTMLDivElement>(null)
@@ -323,6 +329,7 @@ export function SettingsClient({ initialUser }: { initialUser: InitialUser }) {
       return
     }
     setBinding(true)
+    setBindConflict(null)
     try {
       const res = await fetch("/api/auth/bind/phone", {
         method: "POST",
@@ -330,7 +337,15 @@ export function SettingsClient({ initialUser }: { initialUser: InitialUser }) {
         body: JSON.stringify({ phone: phoneValue, code: codeValue }),
       })
       const data = await res.json()
-      if (!res.ok) throw new Error(data.error ?? "绑定失败")
+      if (!res.ok) {
+        // PHONE_TAKEN：手机号已在另一个账号上（典型的"手机号注册过 + 微信也注册过"）。
+        // 这不是输错验证码那种可以重试的错误，所以留在页面上讲清楚，不要用 toast 一闪而过。
+        if (data.code === "PHONE_TAKEN") {
+          setBindConflict(data.error ?? "该手机号已用于另一个账号")
+          return
+        }
+        throw new Error(data.error ?? "绑定失败")
+      }
       toast.success("手机号绑定成功")
       setTimeout(() => router.refresh(), 800)
     } catch (err) {
@@ -528,6 +543,15 @@ export function SettingsClient({ initialUser }: { initialUser: InitialUser }) {
                 {binding ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
                 确认绑定
               </button>
+
+              {bindConflict && (
+                <div className="rounded-xl border border-amber-500/25 bg-amber-500/[0.07] px-3.5 py-3">
+                  <p className="text-[12px] font-semibold text-amber-400">手机号已被另一个账号使用</p>
+                  <p className="text-[11px] leading-relaxed text-muted-foreground mt-1">
+                    {bindConflict}
+                  </p>
+                </div>
+              )}
             </div>
           )}
 
