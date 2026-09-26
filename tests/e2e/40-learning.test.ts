@@ -141,12 +141,69 @@ describe("句子列表 /api/courses/sentences", () => {
     }
   })
 
-  it("非会员拿不到句子内容 → 403（课程 API 是唯一公开面，句子是付费内容）", async () => {
-    const res = await ApiClient.asUser(FIXTURE.userFree).get(
-      `/api/courses/sentences?lessonId=${FIXTURE.lessonA1}`
-    )
-    expect(res.status).toBe(403)
-    expect(res.body).not.toHaveProperty("sentences")
+  it("非会员只拿到每课前 3 句试学，而不是 403", async () => {
+    // 原先非会员在这里被直接 403，用户还没体验到核心价值就先撞收费墙。
+    // 现在改为放行每课前 3 句（对齐句乐部「每课程包可试学前几节」）。
+    const res = await ApiClient.asUser(FIXTURE.userFree).get<{
+      sentences: Array<{ id: string }>
+      trial: { limit: number; truncated: boolean } | null
+    }>(`/api/courses/sentences?lessonId=${FIXTURE.lessonA1}`)
+
+    expect(res.status).toBe(200)
+    // 内容泄露边界：句子是付费内容，非会员拿到的句数永远不超过 limit
+    expect(res.body.sentences.length).toBeLessThanOrEqual(3)
+    expect(res.body.trial).toEqual({ limit: 3, truncated: false })
+    // 且必须是最前面 3 句（按 sort_order），不能是任意子集
+    expect(res.body.sentences.map((s) => s.id)).toEqual([
+      FIXTURE.sentA1Plain,
+      FIXTURE.sentA1Curly,
+      FIXTURE.sentA1Dash,
+    ])
+  })
+
+  it("非会员遇到超过 3 句的课时：仍只给 3 句并标记 truncated；会员不受限", async () => {
+    // 夹具里没有超过 3 句的课时，这里补两句构造「还有更多」的场景。
+    // 必须插「可用句」（题干含中文、答案可输入），否则会被 usableSentenceSql 过滤掉。
+    const extra = [
+      { id: "e2e-trial-extra-1", chinese: "今天天气很好。", english: "The weather is nice today.", sortOrder: 3 },
+      { id: "e2e-trial-extra-2", chinese: "我喜欢读书。", english: "I like reading books.", sortOrder: 4 },
+    ]
+    for (const s of extra) {
+      const wordCount = s.english.split(/\s+/).filter(Boolean).length
+      await q(
+        `INSERT INTO sentences (id, chinese, english, lesson_id, sort_order, words, words_count)
+         VALUES (?, ?, ?, ?, ?, CAST(? AS JSON), ?)`,
+        [
+          s.id,
+          s.chinese,
+          s.english,
+          FIXTURE.lessonA1,
+          s.sortOrder,
+          JSON.stringify([{ english: s.english, chinese: null, phonetic: null, pos: "" }]),
+          wordCount,
+        ]
+      )
+    }
+
+    const free = await ApiClient.asUser(FIXTURE.userFree).get<{
+      sentences: Array<{ id: string }>
+      trial: { limit: number; truncated: boolean } | null
+    }>(`/api/courses/sentences?lessonId=${FIXTURE.lessonA1}`)
+
+    expect(free.status).toBe(200)
+    expect(free.body.sentences).toHaveLength(3)
+    // truncated 是前端展示付费引导的依据：不标出来用户会以为本课只有 3 句
+    expect(free.body.trial).toEqual({ limit: 3, truncated: true })
+
+    // 会员不受试学限制，能看到全部 5 句，且不带 trial
+    const pro = await ApiClient.asUser(FIXTURE.userPro).get<{
+      sentences: unknown[]
+      trial: unknown
+    }>(`/api/courses/sentences?lessonId=${FIXTURE.lessonA1}`)
+
+    expect(pro.status).toBe(200)
+    expect(pro.body.sentences).toHaveLength(5)
+    expect(pro.body.trial).toBeNull()
   })
 
   it("会员：句子按 sort_order 升序返回，并带上分词结果", async () => {

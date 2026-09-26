@@ -23,7 +23,7 @@ if docker ps --filter "name=^${CONTAINER}$" --format '{{.Names}}' | grep -q .; t
 else
   # 停掉可能存在的同端口残留容器（退出态）
   docker rm -f "$CONTAINER" >/dev/null 2>&1 || true
-  echo "启动容器 $CONTAINER（端口 $PORT）..."
+  echo "启动容器 ${CONTAINER}（端口 ${PORT}）..."
   docker run -d --name "$CONTAINER" \
     -e MYSQL_ROOT_PASSWORD="$PASSWORD" \
     -e MYSQL_DATABASE="$DB" \

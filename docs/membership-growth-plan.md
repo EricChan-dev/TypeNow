@@ -320,13 +320,23 @@
 **数值来源说明**：句乐部的具体天数只出现在帮助文档的**图片**里，无法读取。
 上表的 5/3 与 30/20 沿用此前方案的比例，属**待校准值**，不是抄来的数字。
 
-### 已知缺口
+### 验证情况
 
-**e2e 未实际执行**。本轮新增/改写的 e2e 用例（`10-auth` 的试用与邀请断言、
-`20-payment` 的首购奖励、`trial/claim` 4 条）在本机**无法运行** —— docker 不可用。
-需在有 docker 的环境执行 `pnpm e2e:db:up && pnpm test:e2e` 复核。
-注意 e2e 测试库由 `drizzle-kit push` 从 `schema.ts` 生成（不走 `supabase/migrations/`），
-所以两处必须保持同步 —— 本轮已对齐。
+- **单测**：30 文件 / 365 通过
+- **e2e**：9 文件 / **185 通过**（已在本机实跑，见下方基建修复）
+- **tsc**：无新增类型错误；改动文件 eslint 前后一致
+
+e2e 用的是 `drizzle-kit push` 从 `schema.ts` 生成的测试库（不走 `supabase/migrations/`），
+所以 schema 与迁移文件必须保持同步 —— 本轮已对齐。
+
+**顺带修掉的 e2e 基建 bug**：`scripts/e2e/db-up.sh:26` 写的是 `$CONTAINER（`，
+变量名紧跟全角括号且未加花括号，在 `set -u` 下 bash 会把 `CONTAINER（` 整个当成变量名，
+报 `unbound variable` —— 也就是说 **`pnpm e2e:db:up` 此前根本跑不起来**。
+已改为 `${CONTAINER}` / `${PORT}`。这是上游 `769c157` 引入的问题，不是本次改动造成的。
+
+另注：该脚本在**首次创建**容器时会误判就绪 —— 它的探活走 socket，会连上 MySQL 初始化
+期间的临时实例，随后临时实例关闭、`drizzle-kit push` 报 `PROTOCOL_CONNECTION_LOST`。
+重跑一次即可（容器已初始化完成）。属已知易用性问题，未在本次修改。
 
 ### 注册链路的实际情况
 
