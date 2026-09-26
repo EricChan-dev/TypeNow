@@ -3,6 +3,7 @@ import { getSession } from "@/lib/auth/session"
 import { db } from "@/lib/db"
 import { diamondLogs, users } from "@/lib/db/schema"
 import { eq, and, gte, sql } from "drizzle-orm"
+import { affectedRows } from "@/lib/db/affected-rows"
 import { DEEPSEEK_MODEL, DEEPSEEK_THINKING } from "@/lib/llm"
 
 const COST = 5
@@ -18,15 +19,6 @@ const SYSTEM_PROMPT = `你是 TypeNow 英语学习助手"小码"，专注帮助�
 与英语学习无关的话题礼貌拒绝并引导回正题。`
 
 type ChatMessage = { role: "user" | "assistant"; content: string }
-
-/** drizzle 的 mysql2 update 返回 [ResultSetHeader, ...] */
-function affectedRows(result: unknown): number {
-  if (Array.isArray(result)) {
-    const header = result[0] as { affectedRows?: number } | undefined
-    return Number(header?.affectedRows ?? 0)
-  }
-  return 0
-}
 
 export async function POST(request: Request) {
   const session = await getSession()

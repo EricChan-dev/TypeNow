@@ -4,6 +4,7 @@ import { activateSubscription } from "@/lib/subscription"
 import { db } from "@/lib/db"
 import { paymentOrders, partnerCommissions, subscriptions, users } from "@/lib/db/schema"
 import { eq, and, desc } from "drizzle-orm"
+import { affectedRows } from "@/lib/db/affected-rows"
 
 /**
  * WeChat Pay v3 callback notification handler.
@@ -27,15 +28,6 @@ import { eq, and, desc } from "drizzle-orm"
  *   4. 订单状态用条件更新原子占用，重复/并发回调只会生效一次；
  *   5. 激活失败要回退为 pending，保证微信重试能真正补开会员。
  */
-
-/** drizzle 的 mysql2 update 返回 [ResultSetHeader, ...] */
-function affectedRows(result: unknown): number {
-  if (Array.isArray(result)) {
-    const header = result[0] as { affectedRows?: number } | undefined
-    return Number(header?.affectedRows ?? 0)
-  }
-  return 0
-}
 
 export async function POST(request: Request) {
   try {

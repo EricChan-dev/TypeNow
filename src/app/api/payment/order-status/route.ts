@@ -5,15 +5,7 @@ import { getSession } from "@/lib/auth/session"
 import { eq, and } from "drizzle-orm"
 import { queryOrder } from "@/lib/wechat-pay"
 import { activateSubscription } from "@/lib/subscription"
-
-/** drizzle 的 mysql2 update 返回 [ResultSetHeader, ...] */
-function affectedRows(result: unknown): number {
-  if (Array.isArray(result)) {
-    const header = result[0] as { affectedRows?: number } | undefined
-    return Number(header?.affectedRows ?? 0)
-  }
-  return 0
-}
+import { affectedRows } from "@/lib/db/affected-rows"
 
 export async function GET(request: Request) {
   try {
