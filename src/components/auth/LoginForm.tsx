@@ -50,10 +50,6 @@ export function LoginForm() {
 
   const redirectTo = searchParams.get("redirect") || "/home"
 
-  const isSupabaseConfigured =
-    !!process.env.NEXT_PUBLIC_SUPABASE_URL?.startsWith("http")
-  const isDevMode = !isSupabaseConfigured
-
   const isDevEnv = process.env.NODE_ENV === "development"
 
   // Generate dev login QR code
@@ -96,13 +92,6 @@ export function LoginForm() {
 
     setLoading(true)
     try {
-      // Dev mode without Supabase: skip HTTP request
-      if (isDevMode) {
-        toast.success("验证码已发送（开发模式：输入 123456）")
-        startCooldown()
-        return
-      }
-
       const res = await fetch("/api/auth/send-sms", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -136,7 +125,7 @@ export function LoginForm() {
         })
       }, 1000)
     }
-  }, [phone, isDevMode])
+  }, [phone])
 
   const handleLogin = useCallback(async () => {
     const trimmedPhone = phone.trim()
@@ -149,18 +138,6 @@ export function LoginForm() {
 
     setLoading(true)
     try {
-      // Dev mode without Supabase: accept 123456
-      if (isDevMode) {
-        if (trimmedCode === "123456") {
-          toast.success("登录成功（开发模式）")
-          router.push(redirectTo)
-          router.refresh()
-          return
-        }
-        toast.error("验证码错误（开发模式请输入 123456）")
-        return
-      }
-
       const res = await fetch("/api/auth/verify-code", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -182,7 +159,7 @@ export function LoginForm() {
     } finally {
       setLoading(false)
     }
-  }, [phone, code, router, isDevMode])
+  }, [phone, code, router])
 
   return (
     <div className="flex flex-col gap-8">
