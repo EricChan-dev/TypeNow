@@ -116,12 +116,26 @@ function load(): TTSSettings {
 let currentAudio: HTMLAudioElement | null = null
 
 /**
+ * 朗读请求序号。**后发优先**：每次朗读领一个号，音频取回来时如果号已经不是最新的，
+ * 就说明期间又有人要念别的内容，这次直接丢弃。
+ *
+ * 为什么需要它：globalSpeak 是先 fetch 音频再播放的，取回来要几百毫秒。
+ * 并发两次调用时（进练习页会先后触发两次，见 LearnClient 的 resumeResolved），
+ * 先发的那次完全可能**后**取回音频 —— 没有这道判断，它就会把后发的那一句盖掉，
+ * 甚至两段一起出声。
+ */
+let speakSeq = 0
+
+/**
  * 停掉当前正在播放的朗读（有道音频与系统语音都停）。
  *
  * 导出的目的：调用方在离开练习页/切课时可以主动收声，而不必等下一次朗读
  * 才被"顺带"停掉。
  */
 export function stopSpeaking(): void {
+  // 推进序号：让还在路上的朗读请求回来时自动作废，不再补出一句
+  // （离开练习页时正是这种情况）
+  speakSeq++
   if (currentAudio) {
     try {
       currentAudio.pause()
@@ -137,7 +151,11 @@ export function stopSpeaking(): void {
 
 let cachedVoices: SpeechSynthesisVoice[] = []
 
-function speakWithBrowser(text: string, opts: { voice: string; rate: number; volume: number }) {
+function speakWithBrowser(
+  text: string,
+  opts: { voice: string; rate: number; volume: number },
+  seq: number,
+) {
   const synth = window.speechSynthesis
   const u = new SpeechSynthesisUtterance(text)
   u.lang = "en-GB"
@@ -149,7 +167,13 @@ function speakWithBrowser(text: string, opts: { voice: string; rate: number; vol
     const v = voices.find((x) => x.name === opts.voice)
     if (v) u.voice = v
   }
-  requestAnimationFrame(() => synth.speak(u))
+  // rAF 是为了避开 Chrome「cancel() 之后紧接着 speak() 会被吞掉」的怪癖。
+  // 但它也让这段话逃出了 stopSpeaking() 的 cancel —— 期间若有更新的朗读请求，
+  // 这里必须自己放弃，否则会把新的一句盖掉（同样是"两个人声"的来源之一）。
+  requestAnimationFrame(() => {
+    if (seq !== speakSeq) return
+    synth.speak(u)
+  })
 }
 
 /**
@@ -167,14 +191,15 @@ export async function globalSpeak(
   overrides?: { voice?: string; youdaoVoice?: string; source?: TTSSource },
 ): Promise<boolean> {
   if (typeof window === "undefined" || !text) return false
-  // 无论走哪条路径，先停掉上一段 —— 这是"两课同时念"的根治点
-  stopSpeaking()
+  const mySeq = ++speakSeq
   const s = load()
   const voice = overrides?.voice ?? s.voice
   const youdaoVoice = overrides?.youdaoVoice ?? s.youdaoVoice
   // 设置页试听要能试听「非当前来源」的发音人，所以 source 也允许覆盖。
   const source = overrides?.source ?? s.source
-  const browserFallback = () => speakWithBrowser(text, { voice, rate: s.rate, volume: s.volume })
+  // 停掉上一段 + 浏览器路径都带上本次序号
+  const browserFallback = () =>
+    speakWithBrowser(text, { voice, rate: s.rate, volume: s.volume }, mySeq)
 
   if (source === "browser") {
     browserFallback()
@@ -196,6 +221,19 @@ export async function globalSpeak(
     })
     if (!res.ok) throw new Error(`HTTP ${res.status}`)
     const blob = await res.blob()
+    // 期间又有人要念别的内容：这次丢弃。不加这道判断，先发后到的请求会把
+    // 后发的那一句盖掉（进练习页会先后触发两次朗读，见 LearnClient）
+    if (mySeq !== speakSeq) return false
+    /**
+     * **就在播放前**停掉上一段。
+     *
+     * 这一行原先在函数开头（fetch 之前），那是错的：两次并发调用会各自
+     * "先停、再取"，取回音频的先后顺序不确定 —— 先发的那次若后取回，
+     * 它会在没人停它的状态下直接 play，于是两段音频同时出声
+     * （用户报的"同时发音 greeting 和 good"就是它）。
+     * 只有紧挨着 play 之前停，才能保证同一时刻只有一段在响。
+     */
+    stopSpeaking()
     const audio = new Audio(URL.createObjectURL(blob))
     currentAudio = audio
     audio.onended = () => {
@@ -213,6 +251,7 @@ export async function globalSpeak(
   } catch (err) {
     // 有道不可用（未配密钥 / 配额用尽 / 超时）时静默无声是最糟的结果：
     // 打字应用宁可退回系统语音，也要让用户听到发音。降级必须留下痕迹。
+    if (mySeq !== speakSeq) return false
     console.warn("[TTS] 有道语音不可用，已降级到系统语音:", err)
     browserFallback()
     return true

@@ -239,6 +239,18 @@ export function LearnClient({
   /** 加载态：以前只有「取到句子」和「没取到句子」两种，空课时与接口报错都表现为无限加载。 */
   const [loadState, setLoadState] = useState<"loading" | "ready" | "error">("loading")
   /**
+   * 「恢复到第几句」是否已经定下来。
+   *
+   * 为什么需要它：进课时句子先加载好（此时 currentIndex 还是 0），随后
+   * /api/practice/sessions 才把上次练到的位置恢复回来 —— 于是自动朗读会被触发两次：
+   * 先念第 1 句，再念恢复后的那一句。用户听到的就是"greeting 和 good 同时念出来"
+   * （他确实学到了 good，而 greeting 是课程第一句）。
+   *
+   * 所以在恢复结论出来之前**不朗读**；结论落定后（无论恢复与否）再念一次，
+   * 而且只念正确的那个下标。
+   */
+  const [resumeResolved, setResumeResolved] = useState(false)
+  /**
    * 浏览器已阻止麦克风。为 true 时在页面上给一条**可操作**的指引 ——
    * 静默失败正是"根本没申请权限"这个感受的来源。
    */
@@ -452,6 +464,8 @@ export function LearnClient({
           fullSentencesRef.current = expanded
           setSentences(expanded)
           setLoadState("ready")
+          // 在恢复结论出来之前先不朗读（见 resumeResolved 的说明）
+          setResumeResolved(false)
 
           // 恢复上次练到的位置。
           // 「恢复到第几句」的判定全在 lib/practice-session（纯函数、有单测），
@@ -461,11 +475,15 @@ export function LearnClient({
             .then((r) => (r.ok ? r.json() : null))
             .then((res) => {
               const decision = decideResume(res?.session, expanded.length)
-              if (!decision.restored) return
-              setCurrentIndex(decision.index)
-              setResumeNotice(decision.index)
+              if (decision.restored) {
+                setCurrentIndex(decision.index)
+                setResumeNotice(decision.index)
+              }
             })
             .catch((e) => { console.error(e) })
+            // 无论恢复与否（含请求失败）都要放行朗读，
+            // 否则接口异常时整节课都不会自动发音 —— 那比念错一句更糟
+            .finally(() => setResumeResolved(true))
         } else {
           setLoadState("error")
         }
@@ -739,9 +757,14 @@ export function LearnClient({
     // 浏览器在用户还没交互过之前会拦掉自动播放，拦掉了也不报错、只是静音，
     // 于是首句（以及每次切句）都可能悄无声息。这里把结果接住，
     // 失败就亮出「点击开启发音」，让用户用一次点击把音频通道解锁。
-    globalSpeak(sentence.english).then((played) => {
-      if (!played) setNeedsAudioGesture(true)
-    }).catch((e) => { console.error(e) })
+    // 恢复位置还没定下来就先不念：否则会先念第 1 句、再念恢复后的那句，
+    // 两段声音叠在一起（resumeResolved 落定后这个 effect 会重跑一次，
+    // 那时才念，且只念正确的下标）
+    if (resumeResolved) {
+      globalSpeak(sentence.english).then((played) => {
+        if (!played) setNeedsAudioGesture(true)
+      }).catch((e) => { console.error(e) })
+    }
     // 回看：这一句之前敲过，直接把当时的输入恢复出来。
     // status 也一并恢复 —— 用户回看一句已完成的话，看到的就是"我打完了"的样子，
     // 而 replayingRef 保证那 5 个上报 effect 不会再跑一遍（见其声明处的说明）。
@@ -778,7 +801,9 @@ export function LearnClient({
       setActiveChunkIndex(0)
       setChunkStatuses([])
     }
-  }, [sentence?.id])
+    // resumeResolved 必须进依赖：它是"现在可以念了吗"的开关。
+    // 恢复结论落定时它从 false 变 true，这个 effect 需要再跑一次才会发音。
+  }, [sentence?.id, resumeResolved])
 
   /**
    * 做完一句就把它记进「已揭示」。
