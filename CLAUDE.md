@@ -158,6 +158,7 @@ Two type files:
 | 技术架构 | [docs/architecture.md](docs/architecture.md) |
 | 市场与定价策略 | [docs/strategy.md](docs/strategy.md) |
 | 已执行完毕的历史方案 | [docs/archive/](docs/archive/) |
+| 还没做的事 / 需要人工介入的事 | [docs/TODO.md](docs/TODO.md) |
 
 ## Available Skills
 
