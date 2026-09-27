@@ -102,11 +102,43 @@ function load(): TTSSettings {
 }
 
 // ---- Global speak (always reads fresh settings from localStorage) ----
+
+/**
+ * 当前正在播放的音频（全站唯一）。
+ *
+ * 为什么必须集中管理：原先每个调用点各自 `new Audio(...)`，谁也不管谁 ——
+ * 于是"练完一课退出、再进另一课"会把两课的第一句**同时**念出来（前一句的
+ * audio 没人停）。而按钮念、悬浮单词念、自动念三处音色不一致，根源也是它们
+ * 各自发请求、各自带着（或不带）音色参数。
+ *
+ * 现在所有播放都走这里面，播新的之前先把旧的停掉。
+ */
+let currentAudio: HTMLAudioElement | null = null
+
+/**
+ * 停掉当前正在播放的朗读（有道音频与系统语音都停）。
+ *
+ * 导出的目的：调用方在离开练习页/切课时可以主动收声，而不必等下一次朗读
+ * 才被"顺带"停掉。
+ */
+export function stopSpeaking(): void {
+  if (currentAudio) {
+    try {
+      currentAudio.pause()
+      // 清 src 是为了让浏览器立刻释放网络/解码资源，而不是等它自己播完
+      currentAudio.src = ""
+    } catch { /* ignore */ }
+    currentAudio = null
+  }
+  if (typeof window !== "undefined" && window.speechSynthesis) {
+    window.speechSynthesis.cancel()
+  }
+}
+
 let cachedVoices: SpeechSynthesisVoice[] = []
 
 function speakWithBrowser(text: string, opts: { voice: string; rate: number; volume: number }) {
   const synth = window.speechSynthesis
-  synth.cancel()
   const u = new SpeechSynthesisUtterance(text)
   u.lang = "en-GB"
   u.rate = opts.rate
@@ -135,6 +167,8 @@ export async function globalSpeak(
   overrides?: { voice?: string; youdaoVoice?: string; source?: TTSSource },
 ): Promise<boolean> {
   if (typeof window === "undefined" || !text) return false
+  // 无论走哪条路径，先停掉上一段 —— 这是"两课同时念"的根治点
+  stopSpeaking()
   const s = load()
   const voice = overrides?.voice ?? s.voice
   const youdaoVoice = overrides?.youdaoVoice ?? s.youdaoVoice
@@ -163,6 +197,11 @@ export async function globalSpeak(
     if (!res.ok) throw new Error(`HTTP ${res.status}`)
     const blob = await res.blob()
     const audio = new Audio(URL.createObjectURL(blob))
+    currentAudio = audio
+    audio.onended = () => {
+      URL.revokeObjectURL(audio.src)
+      if (currentAudio === audio) currentAudio = null
+    }
     try {
       await audio.play()
       return true

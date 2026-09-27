@@ -680,6 +680,29 @@ export const postLikes = mysqlTable(
   (t) => [uniqueIndex("uk_post_like").on(t.postId, t.userId)]
 )
 
+// ─── Acquired Courses ─────────────────────────────────────────────────────────
+/**
+ * 用户「获取」过的课程。
+ *
+ * 这份状态**必须**在服务端：它原先只存在浏览器 localStorage，
+ * 于是清一次浏览器数据就丢，而"我的课程"列表还按"已练习过"把课留在列表里 ——
+ * 结果是列表里有、点进去却显示「获取课程」（用户实际报过这个问题）。
+ */
+export const userAcquiredCourses = mysqlTable(
+  "user_acquired_courses",
+  {
+    id: varchar("id", { length: 36 }).primaryKey().default(sql`(UUID())`),
+    userId: varchar("user_id", { length: 36 }).notNull(),
+    courseId: varchar("course_id", { length: 36 }).notNull(),
+    createdAt: datetime("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  },
+  (t) => [
+    // 同一用户对同一门课只能有一条：接口走 upsert，唯一键兜底防重复
+    uniqueIndex("uk_user_course_acquired").on(t.userId, t.courseId),
+    index("idx_user_acquired_user").on(t.userId),
+  ]
+)
+
 // ─── User Feedback ────────────────────────────────────────────────────────────
 export const userFeedback = mysqlTable(
   "user_feedback",

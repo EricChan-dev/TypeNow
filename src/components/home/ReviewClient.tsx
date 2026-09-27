@@ -507,14 +507,8 @@ export function ReviewClient() {
                     )}
                     style={{ clipPath: "polygon(0 0, 100% 0, calc(100% - 2px) 100%, 2px 100%)" }}
                   />
-                  {/* 打错了就把正确拼写摆出来：答案是默认不给看的，
-                      错词又不指出错在哪，用户只能退格硬猜。只在该词出错后显示，不提前剧透。
-                      绝对定位：单词行是 items-end 对齐的，新增一行会把出错那个词顶高。 */}
-                  {ws?.status === "error" && (
-                    <span className="pointer-events-none absolute left-1/2 top-full -translate-x-1/2 whitespace-nowrap px-1 text-xs font-medium text-emerald-400/80">
-                      {word.english}
-                    </span>
-                  )}
+                  {/* 错词不显示正确拼写：靠红色下划线 + 逐字母标红定位，
+                      与练习页同一口径 */}
                 </div>
               )
             })}

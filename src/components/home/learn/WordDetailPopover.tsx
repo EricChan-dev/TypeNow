@@ -1,6 +1,7 @@
 "use client"
 
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react"
+import { globalSpeak } from "@/lib/hooks/useTTSSettings"
 import { Volume2, BookmarkPlus, BookmarkCheck, Loader2 } from "lucide-react"
 import { toast } from "sonner"
 
@@ -42,7 +43,6 @@ export function WordDetailPopover({ word, sentenceId, children }: Props) {
   const popoverRef = useRef<HTMLDivElement>(null)
   const enterTimer = useRef<NodeJS.Timeout | null>(null)
   const leaveTimer = useRef<NodeJS.Timeout | null>(null)
-  const audioRef = useRef<HTMLAudioElement | null>(null)
   const [open, setOpen] = useState(false)
   const [pos, setPos] = useState<{ top: number; left: number }>({ top: 0, left: 0 })
   /** 首次测量完成前先隐藏，避免看到浮层"跳"到正确位置的那一帧 */
@@ -190,26 +190,20 @@ export function WordDetailPopover({ word, sentenceId, children }: Props) {
 
   useEffect(() => () => clearTimers(), [clearTimers])
 
+  /**
+    * 朗读这个单词。
+    *
+    * 走全局的 globalSpeak，而不是自己 POST /api/youdao/tts ——
+    * 原来那条请求**不带 voiceName**，后端就回落到它自己的默认音色（youxiaomei），
+    * 于是"自动念整句"与"悬浮卡片念单词"是两个人的声音。
+    * 现在统一读用户的 TTS 设置，并且会先停掉正在播的那一段。
+    */
   async function speak() {
     if (!normalized || busySpeak) return
     setBusySpeak(true)
     try {
-      const res = await fetch("/api/youdao/tts", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ text: normalized }),
-      })
-      if (!res.ok) throw new Error("tts failed")
-      const buf = await res.arrayBuffer()
-      const blob = new Blob([buf], { type: "audio/mpeg" })
-      const url = URL.createObjectURL(blob)
-      if (audioRef.current) audioRef.current.pause()
-      const audio = new Audio(url)
-      audioRef.current = audio
-      audio.onended = () => URL.revokeObjectURL(url)
-      await audio.play()
-    } catch {
-      toast.error("朗读失败")
+      const ok = await globalSpeak(normalized)
+      if (!ok) toast.error("朗读失败")
     } finally {
       setBusySpeak(false)
     }

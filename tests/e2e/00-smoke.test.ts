@@ -1,7 +1,19 @@
-import { describe, it, expect } from "vitest"
+import { describe, it, expect, beforeEach } from "vitest"
 import { ApiClient } from "./helpers/api"
-import { FIXTURE, scalar } from "./helpers/db"
+import { FIXTURE, scalar, seedFixtures } from "./helpers/db"
 import { E2E_BASE_URL } from "./helpers/env"
+
+/**
+ * 这个套件**必须自己重建夹具**，不能依赖 globalSetup 那一次。
+ *
+ * 它是唯一一个曾经不写 beforeEach(seedFixtures) 的套件，于是断言的是"全局初始化
+ * 那一刻"的库状态。文件执行顺序一变（例如新增测试文件），它就会在别的套件
+ * 已经造过数据之后运行，把 `users = 5` 断言成 6 而失败 —— 一次与它自身
+ * 毫无关系的假红。加了自己这一份之后，顺序怎么变都成立。
+ */
+beforeEach(async () => {
+  await seedFixtures()
+})
 
 describe("e2e 基建自检", () => {
   it("测试库确实连的是 typenow_test（防止误伤生产库）", async () => {

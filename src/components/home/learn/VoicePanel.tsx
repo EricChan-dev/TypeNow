@@ -1,6 +1,7 @@
 "use client"
 
 import { useRef, useState } from "react"
+import { globalSpeak, stopSpeaking } from "@/lib/hooks/useTTSSettings"
 import { Volume2, Mic, MicOff, Loader2 } from "lucide-react"
 import { toast } from "sonner"
 import { cn } from "@/lib/utils"
@@ -29,31 +30,23 @@ export function VoicePanel({ english }: VoicePanelProps) {
   const [result, setResult] = useState<EvalResult | null>(null)
   const mediaRecorderRef = useRef<MediaRecorder | null>(null)
   const chunksRef = useRef<Blob[]>([])
-  const audioRef = useRef<HTMLAudioElement | null>(null)
 
   async function handleTTS() {
     if (playing) {
-      audioRef.current?.pause()
+      // 走统一的停止入口：音频现在由 globalSpeak 持有，这里 pause 自己的
+      // audioRef 是停不掉的（改了播放路径却没改停止路径 = 按钮点了没反应）
+      stopSpeaking()
       setPlaying(false)
       return
     }
     setPlaying(true)
     try {
-      const res = await fetch("/api/youdao/tts", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ text: english }),
-      })
-      if (!res.ok) { toast.error("朗读失败"); setPlaying(false); return }
-      const blob = await res.blob()
-      const url = URL.createObjectURL(blob)
-      const audio = new Audio(url)
-      audioRef.current = audio
-      audio.onended = () => { setPlaying(false); URL.revokeObjectURL(url) }
-      audio.onerror = () => { setPlaying(false); URL.revokeObjectURL(url) }
-      await audio.play()
-    } catch {
-      toast.error("朗读失败")
+      // 与整句自动朗读、悬浮卡片朗读走同一条路径：读同一份 TTS 设置、同一个音色，
+      // 并且会先把上一段停掉（原先这里也是自己 POST 且不带 voiceName，
+      // 后端回落到默认音色，于是三处声音不一样）
+      const ok = await globalSpeak(english)
+      if (!ok) toast.error("朗读失败")
+    } finally {
       setPlaying(false)
     }
   }

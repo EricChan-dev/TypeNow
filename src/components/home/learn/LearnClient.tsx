@@ -3,10 +3,11 @@
 import { useState, useEffect, useRef, useCallback, useMemo, useSyncExternalStore, Fragment, type RefObject } from "react"
 import { animate } from "animejs"
 import Link from "next/link"
-import { ChevronLeft, ChevronRight, ArrowLeft, BookOpen, ShoppingBag, Pause, Play, RotateCcw, Shuffle, Maximize, Minimize, Keyboard, List, Settings, Eye, EyeOff, Volume2 } from "lucide-react"
+import { ChevronLeft, ChevronRight, ArrowLeft, BookOpen, ShoppingBag, Pause, Play, RotateCcw, Shuffle, Maximize, Minimize, Keyboard, List, Settings, Eye, EyeOff, Volume2, MicOff } from "lucide-react"
 import type { Sentence, Word } from "@/types"
 import { isTypingMatch } from "@/lib/typing-compare"
 import { isModifierPressed, modifierKeyLabel } from "@/lib/platform"
+import { stopSpeaking } from "@/lib/hooks/useTTSSettings"
 import { classifyTypingKey, isEditableTarget } from "@/lib/typing-keys"
 import { TypedChars } from "@/components/home/TypedChars"
 import { findNextLesson } from "@/lib/course-nav"
@@ -238,6 +239,11 @@ export function LearnClient({
   const [sentences, setSentences] = useState<Sentence[]>([])
   /** 加载态：以前只有「取到句子」和「没取到句子」两种，空课时与接口报错都表现为无限加载。 */
   const [loadState, setLoadState] = useState<"loading" | "ready" | "error">("loading")
+  /**
+   * 浏览器已阻止麦克风。为 true 时在页面上给一条**可操作**的指引 ——
+   * 静默失败正是"根本没申请权限"这个感受的来源。
+   */
+  const [micBlocked, setMicBlocked] = useState(false)
   /**
    * 非会员试学状态。接口只下发每课前 FREE_TRIAL_SENTENCES 句，
    * truncated 表示「本课还有更多句子被挡住了」——练完这几句不能再显示
@@ -1330,7 +1336,16 @@ export function LearnClient({
   }, [])
 
   /**
-   * 进入练习时主动申请一次麦克风权限。
+   * 离开练习页时把正在播的朗读停掉。
+   *
+   * "练完一课退出、再进另一课会同时念两课的第一句"就是这里漏的：音频原先没有任何
+   * 归属与生命周期管理，退出时没人停它。globalSpeak 内部已经做到"播新的先停旧的"，
+   * 但那要等新一课开始朗读才生效 —— 中间那几秒上一课仍在念。
+   */
+  useEffect(() => stopSpeaking, [])
+
+  /**
+   * 进入练习时主动申请麦克风权限。
    *
    * 为什么必须提前要：跟读评分（VoicePanel）是在**用户点录音的那一刻**才调
    * getUserMedia 的。浏览器弹权限框、用户再去找「允许」需要好几秒，而录音已经
@@ -1345,20 +1360,63 @@ export function LearnClient({
    */
   useEffect(() => {
     if (typeof navigator === "undefined" || !navigator.mediaDevices?.getUserMedia) return
-    const ASKED_KEY = "typenow_mic_permission_asked"
-    try {
-      if (sessionStorage.getItem(ASKED_KEY)) return
-      sessionStorage.setItem(ASKED_KEY, "1")
-    } catch {
-      // 隐私模式下 sessionStorage 可能不可用：那就每次都问，
-      // 总好过因为存储异常而完全不申请权限
+    let cancelled = false
+
+    /**
+     * 按**权限状态**决定怎么做，而不是无脑调一次 getUserMedia。
+     *
+     * 上一版就是无脑调 + 一个 sessionStorage 标记，结果"没有获取权限"：
+     * 浏览器一旦记住了拒绝（用户之前可能在跟读里点过拒绝），getUserMedia 会
+     * **立刻**以 NotAllowedError 失败、**不再弹任何框**，而代码把错误吞掉了 ——
+     * 用户什么都看不到，只能感觉"根本没申请权限"。
+     *
+     * 现在：
+     *   granted → 什么都不用做
+     *   prompt  → 调 getUserMedia 触发授权框（这才是期待的"主动申请"）
+     *   denied  → 不调（调了只会静默失败），改为**显示可操作指引**，
+     *             告诉用户去地址栏的站点设置把麦克风改回允许
+     */
+    const request = async () => {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
+        // 立刻释放：只要权限，不要在整节课期间占着麦克风
+        // （否则地址栏一直亮着录制指示，用户会怀疑被偷听）
+        stream.getTracks().forEach((t) => t.stop())
+        if (!cancelled) setMicBlocked(false)
+      } catch {
+        if (!cancelled) setMicBlocked(true)
+      }
     }
-    navigator.mediaDevices
-      .getUserMedia({ audio: true })
-      .then((stream) => stream.getTracks().forEach((t) => t.stop()))
-      .catch(() => {
-        /* 用户拒绝或设备不可用：不打扰，跟读时再提示 */
-      })
+
+    const permissions = navigator.permissions as
+      | { query?: (d: { name: string }) => Promise<{ state: string }> }
+      | undefined
+    if (permissions?.query) {
+      permissions
+        .query({ name: "microphone" })
+        .then((status) => {
+          if (cancelled) return
+          if (status.state === "granted") {
+            setMicBlocked(false)
+            return
+          }
+          if (status.state === "denied") {
+            setMicBlocked(true)
+            return
+          }
+          void request()
+        })
+        .catch(() => {
+          // Safari 等不支持 microphone 这个 name：退回直接申请
+          if (!cancelled) void request()
+        })
+    } else {
+      void request()
+    }
+
+    return () => {
+      cancelled = true
+    }
   }, [])
 
   // Timer
@@ -1809,6 +1867,23 @@ export function LearnClient({
             点击开启发音
           </button>
         )}
+        {/*
+          麦克风被浏览器阻止时给出**可操作**的指引。
+          为什么必须有这条：被阻止后 getUserMedia 会立刻失败且不再弹框，
+          如果只把错误吞掉，用户的感受就是"根本没申请权限"——
+          而这正是它上一次的样子。
+        */}
+        {micBlocked && !isPaused && (
+          <span
+            // 用原生 title：这一页没有引入 antd 的 Tooltip（只有自制的 TooltipButton），
+            // 为了一个提示条去引整个组件不划算
+            title="浏览器已阻止本站使用麦克风。点地址栏左侧的图标 → 网站设置 → 把「麦克风」改为允许，然后刷新页面。"
+            className="inline-flex items-center gap-1 rounded-full border border-orange-500/40 bg-orange-500/10 px-2.5 py-1 text-[11px] sm:text-xs font-medium text-orange-300 cursor-help"
+          >
+            <MicOff className="h-3.5 w-3.5" />
+            麦克风被阻止 · 悬停看怎么开
+          </span>
+        )}
       </div>
 
       {/* Answer Preview (below timer, centered) */}
@@ -2012,18 +2087,13 @@ export function LearnClient({
                       }`}
                       style={{ clipPath: "polygon(0 0, 100% 0, calc(100% - 2px) 100%, 2px 100%)" }}
                     />
-                    {/* 打错了就把正确拼写摆出来。原先答案是默认不显示的，
-                        而错词又不指出错在哪 —— 用户只能退格硬猜，这是闭环里最断的一环。
-                        只在这一个词已经出错后才显示，不会提前剧透。
+                    {/* 错词**不**在下方给出正确拼写：错误反馈靠红色下划线
+                        + TypedChars 把错的那个字母标红，已经足够定位问题。
+                        直接把答案摆出来等于替用户做完了这一步，练不到东西。
 
-                        绝对定位而不是新增一行：单词行是 items-end 对齐的，
-                        多出一行会把出错那个词的文字整体顶高约 18px，
-                        每错一次整行就跳一下。浮在下方则完全不影响布局。 */}
-                    {ws?.status === "error" && (
-                      <span className="pointer-events-none absolute left-1/2 top-full -translate-x-1/2 whitespace-nowrap px-1 text-[10px] sm:text-xs font-medium text-emerald-400/80">
-                        {word.english}
-                      </span>
-                    )}
+                        （这一块曾经刻意做成"打错了就显示答案"，理由是"错词又不指出
+                        错在哪、用户只能退格硬猜"；现在逐字母标红已经解决了那个问题，
+                        所以撤掉答案提示。） */}
                   </div>
                 )
 
