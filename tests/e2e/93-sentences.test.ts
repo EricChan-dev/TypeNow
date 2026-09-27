@@ -256,3 +256,129 @@ describe("AI 接口配额", () => {
     expect(res.status).toBe(401)
   })
 })
+
+describe("课时内排序：必须提交完整列表（否则会写乱 sortOrder）", () => {
+  /**
+   * 这个守卫来自一个真实事故风险：reorder 按**数组下标**赋 sortOrder，
+   * 而课时详情页曾用 `pageSize=200` 拉句子、被服务端钳到 100 ——
+   * 于是拖一下就会给前 100 句写 0..99、其余保留 1..960，序号大面积重复。
+   * 线上有 753 个课时超过 100 句（136,092 句），最大 960 句。
+   */
+  async function lessonWithSentences(n: number): Promise<{ lessonId: string; ids: string[] }> {
+    const lessonId = crypto.randomUUID()
+    await q(
+      `INSERT INTO lessons (id, course_id, title, sort_order) VALUES (?, ?, '排序测试课时', 0)`,
+      [lessonId, FIXTURE.coursePublished],
+    )
+    const ids: string[] = []
+    for (let i = 0; i < n; i++) {
+      ids.push(await insertSentence(lessonId, i, `第 ${i} 句`, `sentence ${i}`))
+    }
+    return { lessonId, ids }
+  }
+
+  it("未登录 → 401", async () => {
+    const { lessonId, ids } = await lessonWithSentences(2)
+    const res = await ApiClient.anonymous().request(
+      "PUT",
+      `/api/admin/lessons/${lessonId}/sentences/reorder`,
+      { json: { orderedIds: ids } },
+    )
+    expect(res.status).toBe(401)
+  })
+
+  it("提交完整列表 → 按提交顺序重写 sortOrder", async () => {
+    const admin = ApiClient.asUser(await makeAdmin())
+    const { lessonId, ids } = await lessonWithSentences(3)
+    // 倒序提交
+    const reversed = [...ids].reverse()
+
+    const res = await admin.request("PUT", `/api/admin/lessons/${lessonId}/sentences/reorder`, {
+      json: { orderedIds: reversed },
+    })
+    expect(res.status).toBe(200)
+
+    const after = await admin.get<SentencesBody>(
+      `/api/admin/sentences?lessonId=${lessonId}&pageSize=50`,
+    )
+    expect(after.body.data.map((x) => x.id)).toEqual(reversed)
+    expect(after.body.data.map((x) => Number(x.sortOrder))).toEqual([0, 1, 2])
+  })
+
+  it("**只提交一部分 → 400 且不写库**（这正是会毁数据的那种调用）", async () => {
+    const admin = ApiClient.asUser(await makeAdmin())
+    const { lessonId, ids } = await lessonWithSentences(5)
+
+    // 只提交前 2 句 —— 修复前这会写入 sortOrder 0,1，其余 3 句保持 2,3,4，
+    // 表面看没问题；但真实场景是前 100 句写 0..99、其余 1..960，大量重复
+    const res = await admin.request("PUT", `/api/admin/lessons/${lessonId}/sentences/reorder`, {
+      json: { orderedIds: ids.slice(0, 2) },
+    })
+    expect(res.status).toBe(400)
+    expect((res.body as { code?: string }).code).toBe("incomplete_payload")
+
+    // 关键：库里必须一个字节都没改
+    const after = await admin.get<SentencesBody>(
+      `/api/admin/sentences?lessonId=${lessonId}&pageSize=50`,
+    )
+    expect(after.body.data.map((x) => Number(x.sortOrder))).toEqual([0, 1, 2, 3, 4])
+  })
+
+  it("提交不属于该课时的 id → 400（张冠李戴同样会写乱）", async () => {
+    const admin = ApiClient.asUser(await makeAdmin())
+    const a = await lessonWithSentences(2)
+    const b = await lessonWithSentences(2)
+
+    // 数量对得上，但内容是另一课时的句子
+    const res = await admin.request("PUT", `/api/admin/lessons/${a.lessonId}/sentences/reorder`, {
+      json: { orderedIds: b.ids },
+    })
+    expect(res.status).toBe(400)
+  })
+
+  it("含有重复 id → 400（重复会让集合比较失真）", async () => {
+    const admin = ApiClient.asUser(await makeAdmin())
+    const { lessonId, ids } = await lessonWithSentences(2)
+    const res = await admin.request("PUT", `/api/admin/lessons/${lessonId}/sentences/reorder`, {
+      json: { orderedIds: [ids[0], ids[0]] },
+    })
+    expect(res.status).toBe(400)
+  })
+
+  it("非数组 / 非字符串元素 → 400", async () => {
+    const admin = ApiClient.asUser(await makeAdmin())
+    const { lessonId } = await lessonWithSentences(1)
+    for (const bad of [undefined, null, "abc", [1, 2], [{}]]) {
+      const res = await admin.request("PUT", `/api/admin/lessons/${lessonId}/sentences/reorder`, {
+        json: { orderedIds: bad },
+      })
+      expect(res.status, `orderedIds=${JSON.stringify(bad)} 应被拒`).toBe(400)
+    }
+  })
+
+  it("大于 100 句的课时也能一次提交完整列表（前端分页拉全的前提）", async () => {
+    const admin = ApiClient.asUser(await makeAdmin())
+    // 一个 120 句的课时：正是被 pageSize=200→100 钳制影响的规模
+    const { lessonId, ids } = await lessonWithSentences(120)
+
+    // 第一页只有 100 句
+    const page1 = await admin.get<SentencesBody>(
+      `/api/admin/sentences?lessonId=${lessonId}&pageSize=100&current=1`,
+    )
+    expect(page1.body.data.length).toBe(100)
+    expect(page1.body.total).toBe(120)
+
+    // 提交完整的 120 个 id 应当成功
+    const res = await admin.request("PUT", `/api/admin/lessons/${lessonId}/sentences/reorder`, {
+      json: { orderedIds: [...ids].reverse() },
+    })
+    expect(res.status).toBe(200)
+
+    const after = await admin.get<SentencesBody>(
+      `/api/admin/sentences?lessonId=${lessonId}&pageSize=100&current=1`,
+    )
+    // 倒序后第一句应当是原来最后那一句
+    expect(after.body.data[0].id).toBe(ids[119])
+    expect(Number(after.body.data[0].sortOrder)).toBe(0)
+  })
+})

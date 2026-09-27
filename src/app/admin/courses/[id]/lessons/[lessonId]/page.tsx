@@ -37,6 +37,48 @@ interface Sentence {
   chunks: Chunk[] | null
 }
 
+/** 接口单页上限（服务端 MAX_PAGE_SIZE=100），超过会被静默钳到 100。 */
+const SENTENCE_PAGE_SIZE = 100
+/** 兜底：最多取 40 页（4000 句）。线上最大的一课 960 句，正常远到不了。 */
+const MAX_SENTENCE_PAGES = 40
+
+/**
+ * 取回一个课时的**全部**句子。
+ *
+ * 为什么必须分页拉全，而不能写 `pageSize=200` 了事：
+ * 服务端的 MAX_PAGE_SIZE 是 100（防止一次拉全表），所以 `pageSize=200` 会被
+ * **静默钳成 100**。而这一页的拖拽排序会把当前列表整体提交给
+ * /lessons/:id/sentences/reorder，那个接口按数组下标赋 sortOrder ——
+ * 半份列表提交上去会给 100 句写 0..99、其余保留 1..960，序号大面积重复，
+ * 课时顺序就乱了。线上有 753 个课时超过 100 句（136,092 句，占全表 29%）。
+ *
+ * realTotal 用于判断是否拉全：少于它说明触到了页数兜底，调用方需要显式告警，
+ * 而不是让人对着不完整的列表继续拖拽。
+ */
+async function fetchAllSentences(
+  lessonId: string,
+): Promise<{ rows: Sentence[]; total: number }> {
+  const rows: Sentence[] = []
+  let total = Number.POSITIVE_INFINITY
+
+  for (let current = 1; current <= MAX_SENTENCE_PAGES; current++) {
+    const res = await fetch(
+      `/api/admin/sentences?lessonId=${encodeURIComponent(lessonId)}` +
+        `&pageSize=${SENTENCE_PAGE_SIZE}&current=${current}`,
+    )
+    if (!res.ok) throw new Error(`HTTP ${res.status}`)
+    const json = (await res.json()) as { data?: Sentence[]; total?: number }
+    const page = json.data ?? []
+    rows.push(...page)
+    total = Number(json.total ?? rows.length)
+    if (page.length === 0 || rows.length >= total) break
+  }
+
+  // 服务端已按课内顺序返回，这里再排一次是为了防御接口行为变化
+  rows.sort((a, b) => a.sortOrder - b.sortOrder)
+  return { rows, total: Number.isFinite(total) ? total : rows.length }
+}
+
 function SortableItem({ id, children }: { id: string; children: (props: { dragHandle: React.ReactNode }) => React.ReactNode }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id })
   const style = {
@@ -62,6 +104,9 @@ export default function LessonDetailPage() {
   const { id: courseId, lessonId } = useParams<{ id: string; lessonId: string }>()
   const router = useRouter()
   const [sentences, setSentences] = useState<Sentence[]>([])
+  // 句子没拉全时禁用拖拽排序：reorder 接口按数组下标赋 sortOrder，
+  // 半份列表提交上去会把课时顺序写乱（服务端也会拒绝，这里是第一道防线）
+  const [reorderDisabled, setReorderDisabled] = useState(false)
   const [lessonTitle, setLessonTitle] = useState("")
   const [loading, setLoading] = useState(true)
   const [selectedId, setSelectedId] = useState<string | null>(null)
@@ -90,14 +135,23 @@ export default function LessonDetailPage() {
   const loadLesson = useCallback(async () => {
     setLoading(true)
     try {
-      const [lessonRes, sentencesRes] = await Promise.all([
+      const [lessonRes, sentencesResult] = await Promise.all([
         fetch(`/api/admin/lessons/${lessonId}`),
-        fetch(`/api/admin/sentences?lessonId=${lessonId}&pageSize=200`),
+        fetchAllSentences(lessonId),
       ])
-      const [lessonJson, sentencesJson] = await Promise.all([lessonRes.json(), sentencesRes.json()])
+      const lessonJson = await lessonRes.json()
       setLessonTitle(lessonJson.data?.title ?? "")
-      const rows: Sentence[] = (sentencesJson.data ?? []).sort((a: Sentence, b: Sentence) => a.sortOrder - b.sortOrder)
-      setSentences(rows)
+      setSentences(sentencesResult.rows)
+      // 拉全了才允许拖拽排序：半份列表提交上去会把课时顺序写乱
+      // （服务端 reorder 也会拒绝不完整的列表，这里是第一道防线）
+      const incomplete = sentencesResult.rows.length < sentencesResult.total
+      setReorderDisabled(incomplete)
+      if (incomplete) {
+        message.warning(
+          `该课时共 ${sentencesResult.total} 句，只载入 ${sentencesResult.rows.length} 句，` +
+            `已禁用拖拽排序以免顺序被写乱，请联系开发。`,
+        )
+      }
     } catch {
       message.error("加载失败")
     } finally {
@@ -359,7 +413,12 @@ export default function LessonDetailPage() {
             {sentences.length === 0 ? (
               <Empty description="暂无句子，点击右上角添加" image={Empty.PRESENTED_IMAGE_SIMPLE} />
             ) : (
-              <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+              <DndContext
+                // 空 sensors = 禁用拖拽（列表不完整时不允许改顺序）
+                sensors={reorderDisabled ? [] : sensors}
+                collisionDetection={closestCenter}
+                onDragEnd={handleDragEnd}
+              >
                 <SortableContext items={sentences.map((s) => s.id)} strategy={verticalListSortingStrategy}>
                   {sentences.map((s) => (
                     <SortableItem key={s.id} id={s.id}>
