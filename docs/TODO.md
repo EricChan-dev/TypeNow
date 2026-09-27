@@ -9,6 +9,62 @@
 
 ## 一、本次要进行（已与产品确认）
 
+### [x] 0. 注册来源归因（回答「新增用户从哪来」）
+
+起因：产品问「能分析出来新增的用户是从哪里来的吗，我还没对外推广过」——
+当时**数据答不了**：建号时既没有埋点事件，也没有存 referrer / UA / IP。
+
+存量分析结论（已用微信接口回填进库，详见 `scripts/backfill-signup-source.ts`）：
+
+- 25 个账号 = **3 个测试账号**（本地连生产库调试留下的：微信开发用户 / 开发测试用户，以及老板本人 CHENCYS）
+  + 1 个手机号 + 21 个微信
+- 微信侧来源：**20 个「扫描二维码」**、1 个「公众号搜索」、3 个已取关。
+  每个用户的 `subscribe_time` 与我们的 `created_at` 同刻 —— 账号是「扫码关注」那一刻
+  由关注事件建出来的（二维码只在 `/login` 生成，所以**他们都到过 /login**）
+- 真正练过的只有 4 个（含老板）：39 / 14 / 8 / 2 句；**19 个账号是「1 次会话 + 0 练习」**
+- 真实收入 **¥0.02**（两笔测试支付）；那 ¥798 是两笔**未支付**的 ¥399 订单叠加的假象
+- 邀请体系从未被外部使用（`referred_by` 全空）
+- 唯一一次外部引荐是 `google.com`（09-27 01:47，匿名未注册）
+
+已落地：
+
+| 位置 | 内容 |
+|---|---|
+| `db/migrations/00023_user_signup_source.sql` | `users.signup_channel` + `signup_source`(JSON) + 索引（**已先于代码在生产执行**） |
+| `src/lib/signup-source.ts` | 渠道与微信 `subscribe_scene` 词表、JSON 键白名单清洗、来源摘要 |
+| `src/lib/first-touch.ts` | 首触归因：外部 referrer / UTM / 落地页，90 天 cookie，**只记第一次** |
+| `src/lib/request-meta.ts` | IP / Referer / UA 提取的唯一实现（审计日志也改用这一份） |
+| `src/lib/analytics-server.ts` | 服务端埋点写入（**永不抛错**） |
+| `scripts/backfill-signup-source.ts` | 一次性回填（**必须在服务器上跑**：微信接口有 IP 白名单） |
+
+四条建号路径全部落归因：公众号扫码链（`wechat/oa/event` 写微信侧 scene，
+`auth/wechat/oa-check` 再用扫码者浏览器的请求头**合并**补齐 IP/UA/首触）、
+`auth/wechat/callback`（区分微信内授权 / 开放平台扫码）、`auth/verify-code`、`auth/dev-login`。
+
+两个容易再踩的坑：
+
+1. **注册时的 Referer 不是来源**。注册永远发生在 `/login`，那一刻的 Referer 是我们自己
+   （`https://typenow.cn/login`）或微信授权页。真正的来源只在落地页那一次请求里出现，
+   所以必须靠 first-touch cookie 传递（`requestReferrer` 只作为排查信息单独存）。
+2. **扫码链是两步**：关注事件先建号（只有微信侧字段），`oa-check` 才带着浏览器请求头到达。
+   第二步必须**合并**而不是覆盖，否则会把第一步的 `subscribe_scene` 抹掉。
+
+存量回填的口径：只填有证据的。23 行判得出渠道；**2 行（有 access_token 的）渠道留空，
+只记 scene** —— 有 token 说明他们至少用过一次 OAuth 回调登录，但那可能是后来的登录，
+建号究竟走哪条链路库里没有记录，**推测一个值比留空更有害**。
+
+### [x] 0b. 历史数据修正 ✅ 已执行
+
+- **回收 18 个过期体验会员的 `is_pro` 残留标记**：那 18 个「会员」全是注册时自动领的
+  3 天体验会员（`pro_expires = created_at + 整 3 天`），过期后标记没回收，让后台的
+  会员数虚高成 21。按 `checkAndExpirePro` 的同义执行（`is_pro=0` 且 `pro_expires=NULL`），
+  已回收 18 行 → 现在 `is_pro=1` 只剩 **3 人**（三个合伙人账号，2125 年到期）
+
+> ⚠️ 根因仍在：`checkAndExpirePro` 只被 `/api/auth/me`、`/api/subscription/status`、
+> `/api/courses/sentences` 三处调用，所以**再也不回来的用户标记会一直留着**。
+> 彻底修法是把报表口径改成 `is_pro=1 AND pro_expires > NOW()`（涉及仪表盘、
+> 用户列表、订阅页几处计数），还没做 —— 见第三节。
+
 ### [x] 1. 首页头像体积 ✅ 已修
 
 现状：`src/app/(public)/page.tsx` 的信任行用 4 个普通 `<img>` 显示头像，
@@ -157,6 +213,11 @@ feedback/[id]  PATCH             处理反馈（退回待处理会清空 handled
   （例如历史硬删留下的数据）。是否补外键需要单独评估（存量数据要先清理）。
 - **metabase 常驻**：`~/metabase/`（本机 JVM + 两条 LaunchAgent 隧道）。
   结论是自建埋点更合适，它是留着做临时探索的；不用了可以卸载。
+- **`is_pro` 与 `pro_expires` 可能不一致（统计口径问题）**：`checkAndExpirePro` 只在
+  三个接口被调用时才回收过期会员，所以**再也不回来的用户会一直挂着 `is_pro=1`**
+  （2026-09-28 实测 18 行，已手工回收）。要根治得把计数口径从 `is_pro=1` 改成
+  `is_pro=1 AND pro_expires > NOW()`，涉及仪表盘会员数、用户列表 `pro=1` 钻取、
+  订阅页统计等几处；或者加一条定时任务清理。**没做**。
 - **webhook 交付偶发丢失**：2026-09-28 发现 `f099e02` 那次 push **没有触发部署**
   （deploy.log 里没有对应的「开始部署」，最后手工跑 `deploy.sh` 补上）；而紧接着的
   `dc046b7` 又正常触发了。同一时段 `git push` 本身也不稳定（连接 443 失败），

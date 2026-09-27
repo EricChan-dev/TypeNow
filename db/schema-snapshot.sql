@@ -22,8 +22,8 @@
 --     只是因为线上又来了几条埋点）。留着它，每次重新生成的 diff 里都会混进这种噪音，
 --     真正的结构改动反而容易被看漏 —— 这份文件只该记录结构。
 --
--- 生成时间：2026-09-28
--- 对应迁移：00009 / 00011 ～ 00022 全部已应用（00022 新增 admin_audit_logs 于本日执行）
+-- 生成时间：2026-09-28（同日二次生成：00023 之后）
+-- 对应迁移：00009 / 00011 ～ 00023 全部已应用（00022 admin_audit_logs、00023 users.signup_* 于本日执行）
 -- ============================================================================
 
 
@@ -540,6 +540,8 @@ CREATE TABLE `users` (
   `wechat_refresh_token` text COLLATE utf8mb4_unicode_ci,
   `wechat_token_expires_at` datetime DEFAULT NULL,
   `trial_claimed_at` datetime DEFAULT NULL,
+  `signup_channel` varchar(30) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '注册渠道：wechat_oa_qr/wechat_oa_oauth/wechat_open_qr/phone/dev',
+  `signup_source` json DEFAULT NULL COMMENT '注册来源明细（白名单键，见 lib/signup-source.ts）',
   PRIMARY KEY (`id`),
   UNIQUE KEY `users_phone_unique` (`phone`),
   UNIQUE KEY `users_email_unique` (`email`),
@@ -548,7 +550,8 @@ CREATE TABLE `users` (
   UNIQUE KEY `users_invite_code_unique` (`invite_code`),
   UNIQUE KEY `idx_users_wechat_unionid` (`wechat_unionid`),
   KEY `idx_users_created_at` (`created_at`),
-  KEY `idx_users_trial_claimed_at` (`trial_claimed_at`)
+  KEY `idx_users_trial_claimed_at` (`trial_claimed_at`),
+  KEY `idx_users_signup_channel` (`signup_channel`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 DROP TABLE IF EXISTS `verification_codes`;
