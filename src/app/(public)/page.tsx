@@ -1,4 +1,5 @@
 import { Suspense } from "react"
+import Image from "next/image"
 import {
   Keyboard,
   Brain,
@@ -84,18 +85,33 @@ export default function LandingPage() {
         {/* Trust line */}
         <p className="mt-6 text-[13px] text-muted-foreground flex items-center gap-2">
           <span className="flex -space-x-1.5">
-            <span className="inline-flex items-center justify-center h-5 w-5 rounded-full ring-1 ring-background overflow-hidden">
-              <img src="/images/avatar1.jpeg" alt="" className="h-full w-full object-cover" />
-            </span>
-            <span className="inline-flex items-center justify-center h-5 w-5 rounded-full ring-1 ring-background overflow-hidden">
-              <img src="/images/avatar2.jpeg" alt="" className="h-full w-full object-cover" />
-            </span>
-            <span className="inline-flex items-center justify-center h-5 w-5 rounded-full ring-1 ring-background overflow-hidden">
-              <img src="/images/avatar3.jpeg" alt="" className="h-full w-full object-cover" />
-            </span>
-            <span className="inline-flex items-center justify-center h-5 w-5 rounded-full ring-1 ring-background overflow-hidden">
-              <img src="/images/avatar4.jpeg" alt="" className="h-full w-full object-cover" />
-            </span>
+            {/*
+              头像走 next/image，**刻意不加 priority**。
+
+              为什么必须改：这 4 张图源文件是 1000×1000、每张 80~112KB、合计 384KB，
+              而这里只显示 20×20 CSS px —— 像素量是需要的约 2500 倍。原先用普通 <img>，
+              移动网络首屏要白白拉这 384KB。交给 next/image 后由 Next 按 40×40（2 倍图）
+              下发 AVIF/WebP，每张降到几 KB。
+
+              不加 priority 的连带好处：React 19 会给服务端渲染的 <img> 自动加
+              `<link rel="preload" as="image">`，而 Chrome 会因"预加载后几秒内没被用掉"
+              报警告（那批 16 条警告里就有这 4 张）。next/image 不带 priority 时不发 preload，
+              警告一并消失。这些图本来就是装饰性的，不值得抢占首屏带宽。
+            */}
+            {["avatar1.jpeg", "avatar2.jpeg", "avatar3.jpeg", "avatar4.jpeg"].map((file) => (
+              <span
+                key={file}
+                className="inline-flex items-center justify-center h-5 w-5 rounded-full ring-1 ring-background overflow-hidden"
+              >
+                <Image
+                  src={`/images/${file}`}
+                  alt=""
+                  width={40}
+                  height={40}
+                  className="h-full w-full object-cover"
+                />
+              </span>
+            ))}
           </span>
           已服务 10,000+ 中国学习者
         </p>

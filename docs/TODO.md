@@ -9,7 +9,7 @@
 
 ## 一、本次要进行（已与产品确认）
 
-### [ ] 1. 首页头像体积
+### [x] 1. 首页头像体积 ✅ 已修
 
 现状：`src/app/(public)/page.tsx` 的信任行用 4 个普通 `<img>` 显示头像，
 但源文件是 **1000×1000 / 每张 80–112KB / 合计约 384KB**，实际显示尺寸只有 **20×20 CSS px**。
@@ -20,7 +20,16 @@
 Chrome 因此报 "preloaded but not used"（16 条同类警告的一部分）。
 改成 `next/image` 且**不加 `priority`** 之后 preload 不再发送，警告一并消失。
 
-做法：换成 `next/image`，给明确 `width/height`（40×40，2 倍图够用）。
+做法：已换成 `next/image`，`width/height = 40`，**不加 `priority`**。
+
+实测结果（`next start` + 抓真实响应）：
+
+| | 原始 | 优化后 |
+|---|---|---|
+| 4 张合计 | 393,216 B（384KB） | **7,632 B**（每张 1.4–2.7KB WebP） |
+
+同时首页 HTML 里的 `rel="preload" ... avatar` 数量从 4 变成 **0**，警告消失。
+顺带把该文件原本的 4 条 `@next/next/no-img-element` lint 报错一并清零。
 
 ### [ ] 2. `PUT /api/admin/users/[id]` 补校验
 
