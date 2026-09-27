@@ -3,6 +3,7 @@ import { db } from "@/lib/db"
 import { aliveSentence } from "@/lib/soft-delete"
 import { sentences } from "@/lib/db/schema"
 import { requireAdmin } from "@/lib/admin-auth"
+import { logAdminAction, sentenceAuditLabel } from "@/lib/admin-audit"
 import { checkAdminAiQuota, quotaExceededBody } from "@/lib/admin-ai-quota"
 import { and, eq } from "drizzle-orm"
 import { llmCall } from "@/lib/llm"
@@ -55,7 +56,7 @@ function extractJsonArray(raw: string): string {
   return raw
 }
 
-export async function POST(_: Request, { params }: { params: Promise<{ id: string }> }) {
+export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const auth = await requireAdmin()
   if (auth instanceof NextResponse) return auth
   // AI 调用会计费且这些接口没有其它成本闸门，先检查按账号的配额（见 lib/admin-ai-quota）
@@ -80,6 +81,16 @@ export async function POST(_: Request, { params }: { params: Promise<{ id: strin
   const chunks = JSON.parse(extractJsonArray(raw)) as Array<{ order: number; text: string; chinese: string }>
 
   await db.update(sentences).set({ chunks }).where(eq(sentences.id, id))
+
+  // AI 调用是**花钱**的动作，这次改动让"谁在什么时候对哪句话跑了拆分、花了多少配额"
+  // 第一次变得可查 —— 之前只能看到 chunks 被换掉了，不知道是谁换的。
+  await logAdminAction(auth, {
+    action: "split",
+    targetType: "sentence",
+    targetId: id,
+    targetLabel: sentenceAuditLabel(sentence.chinese),
+    detail: { chunkCount: Array.isArray(chunks) ? chunks.length : null },
+  }, request)
 
   return NextResponse.json({ data: { chunks } })
 }

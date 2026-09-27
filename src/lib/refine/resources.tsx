@@ -12,6 +12,7 @@ import {
   LineChartOutlined,
   ThunderboltOutlined,
   MessageOutlined,
+  SafetyCertificateOutlined,
 } from "@ant-design/icons"
 
 export const resources: IResourceItem[] = [
@@ -77,6 +78,12 @@ export const resources: IResourceItem[] = [
     name: "analytics",
     list: "/admin/analytics",
     meta: { label: "数据分析", icon: <BarChartOutlined /> },
+  },
+  {
+    name: "audit-logs",
+    list: "/admin/audit-logs",
+    // 只读：审计日志就是"不能被改的记录"，declaring create/edit 等于自毁前提
+    meta: { label: "操作审计", icon: <SafetyCertificateOutlined /> },
   },
   {
     name: "events",

@@ -5,6 +5,7 @@ import { aliveSentence, deletedSentence } from "@/lib/soft-delete"
 import { deletedCondition, deletedScope } from "@/lib/soft-delete-view"
 import { sentences } from "@/lib/db/schema"
 import { requireAdmin } from "@/lib/admin-auth"
+import { logAdminAction, sentenceAuditLabel } from "@/lib/admin-audit"
 import { parsePagination } from "@/lib/pagination"
 import { getCachedCount, invalidateCachedCount, STATS_KEYS } from "@/lib/stats-cache"
 import { eq, like, or, and, sql, asc, desc, type SQL } from "drizzle-orm"
@@ -148,5 +149,14 @@ export async function POST(request: Request) {
   // 立刻失效总数缓存，否则新句子在 TTL 内不计入列表/仪表盘的总数
   await invalidateCachedCount(STATS_KEYS.totalSentences)
   const [row] = await db.select().from(sentences).where(eq(sentences.id, id)).limit(1)
+  // 审计写在 invalidateCachedCount 之后：两者都是旁路，但缓存失效是业务的一部分，
+  // 不能被审计的任何问题连累（logAdminAction 本身不抛，这里只是顺序上分清主次）
+  await logAdminAction(auth, {
+    action: "create",
+    targetType: "sentence",
+    targetId: id,
+    targetLabel: sentenceAuditLabel(chinese),
+    detail: { chinese, english, lessonId, sortOrder },
+  }, request)
   return NextResponse.json({ data: row }, { status: 201 })
 }

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import { db } from "@/lib/db"
 import { sentences } from "@/lib/db/schema"
 import { requireAdmin } from "@/lib/admin-auth"
+import { logAdminAction } from "@/lib/admin-audit"
 import { invalidateCachedCount, STATS_KEYS } from "@/lib/stats-cache"
 
 interface SentenceInput {
@@ -46,6 +47,16 @@ export async function POST(request: Request) {
   await db.insert(sentences).values(rows)
   // 批量导入会显著改变句子总数，立刻失效缓存，否则仪表盘与列表会长时间显示旧数
   await invalidateCachedCount(STATS_KEYS.totalSentences)
+
+  // 教材→句子库的入口。**只记数量与目标课时，不记正文**（可能是几百句、上百 KB）：
+  // 审计要回答的是"这批句子是谁导进来的、导到哪一课"，逐句内容在 sentences 表里。
+  await logAdminAction(auth, {
+    action: "import",
+    targetType: "material",
+    targetId: lessonId ?? null,
+    targetLabel: lessonId ? `课时 ${lessonId}` : "未指定课时",
+    detail: { savedCount: rows.length, lessonId: lessonId ?? null },
+  }, request)
 
   return NextResponse.json({ data: { savedCount: rows.length } }, { status: 201 })
 }

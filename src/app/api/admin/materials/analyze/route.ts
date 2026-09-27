@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import { db } from "@/lib/db"
 import { materialImports } from "@/lib/db/schema"
 import { requireAdmin } from "@/lib/admin-auth"
+import { logAdminAction } from "@/lib/admin-audit"
 import { checkAdminAiQuota, quotaExceededBody } from "@/lib/admin-ai-quota"
 import { eq } from "drizzle-orm"
 import { llmCall } from "@/lib/llm"
@@ -120,7 +121,21 @@ export async function POST(request: Request) {
       .set({ status: "done", sentenceCount: allSentences.length })
       .where(eq(materialImports.id, importId))
 
-    return NextResponse.json({ data: allSentences })
+    // AI 调用会花钱：记下"谁解析了哪份教材、分了几片（=几次 LLM 调用）、产出多少句"。
+    // 这是事后核对配额与费用的唯一依据。
+    await logAdminAction(auth, {
+      action: "analyze",
+      targetType: "material",
+      targetId: importId,
+      targetLabel: record.filename,
+      detail: {
+        filename: record.filename,
+        llmCalls: textChunks.length,
+        charCount: record.rawText.length,
+        sentenceCount: allSentences.length,
+        status: "done",
+      },
+    }, request)
   } catch (err) {
     const msg = err instanceof Error ? err.message : "Unknown error"
     await db

@@ -27,7 +27,8 @@
 `user_feedback LEFT JOIN users` 才炸出来（见 `00021_unify_collation.sql`）。
 
 ⚠️ **e2e 抓不到这类问题**：它的库是 `drizzle-kit push` 一次性生成的，所有表排序规则
-天然一致。所以只能靠核对线上库：
+天然一致 —— 但一致在**服务器默认值**上，与生产用的 `utf8mb4_unicode_ci` 并不是同一个
+（见下面「`drizzle-kit push` 不会应用表级 COLLATE」）。所以只能靠核对线上库：
 
 ```sql
 SELECT table_collation, COUNT(*) AS tables
@@ -58,17 +59,49 @@ GROUP BY table_collation;
 git show <旧提交>:supabase/migrations/00001_initial_schema.sql
 ```
 
-## 现存 4 个迁移（均为 MySQL）
+## 现存迁移（均为 MySQL）
 
-| 文件 | 内容 |
-|---|---|
-| `00009_tasks_feed_feedback.sql` | `task_logs` / `posts` / `user_feedback` 等 |
-| `00011_practice_sessions.sql` | 练习会话恢复槽位 |
-| `00012_trial_claim.sql` | `users.trial_claimed_at`（体验会员一次性领取）+ 存量回填 |
-| `00013_invite_purchase.sql` | `task_logs.task_type` 追加 `invite_purchase`、幂等键改为 `(task_type, ref_id)` |
+| 文件 | 内容 | 执行顺序要求 |
+|---|---|---|
+| `00009_tasks_feed_feedback.sql` | `task_logs` / `posts` / `user_feedback` 等 | 先 DDL |
+| `00011_practice_sessions.sql` | 练习会话恢复槽位 | 先 DDL |
+| `00012_trial_claim.sql` | `users.trial_claimed_at`（体验会员一次性领取）+ 存量回填 | 先 DDL |
+| `00013_invite_purchase.sql` | `task_logs.task_type` 追加 `invite_purchase`、幂等键改为 `(task_type, ref_id)` | 先 DDL |
+| `00014_stats_time_indexes.sql` | 后台时间范围统计所需的索引 | 顺序无关 |
+| `00015_sentences_indexes.sql` | 句子列表页的两条索引（解决全表扫 + filesort） | 顺序无关（大表建索引，见文件头） |
+| `00016_soft_delete.sql` | 课程 / 课时 / 句子改为软删除 | **先 DDL**（代码依赖新列） |
+| `00017_missing_indexes.sql` | 补两条后台筛选缺失的索引 | 顺序无关 |
+| `00018_feedback_handling.sql` | 用户反馈的「处理流转」字段 | 先 DDL |
+| `00019_purge_word_dict_cache.sql` | 清空单词释义缓存（一次性数据修复） | ⚠️ **先部署代码**，否则旧代码会把缓存重新灌成坏数据 |
+| `00020_user_acquired_courses.sql` | 「获取课程」改为服务端记录 | **先 DDL**（代码依赖新表） |
+| `00021_unify_collation.sql` | 统一 4 张表的排序规则（修复后台反馈页 500） | 顺序无关 |
+| `00022_admin_audit_logs.sql` | 后台操作审计日志 | **先 DDL**（代码依赖新表） |
 
 编号不连续是正常的（中间的是被删掉的 PG 文件）。**不要为了连续而重排编号**：
 文档与提交信息里都按编号引用过这些文件。
+
+「执行顺序要求」一列不是形式主义：**代码依赖新列/新表时必须先执行 DDL**
+（否则部署后相关接口 500），而**数据修正类**（`00019`）必须反过来 ——
+先部署代码再清数据，否则还在跑旧代码的进程会把刚清掉的坏数据重新写回去。
+判断方法只有一句话：**这次变更里，新代码会不会读/写一个当前库里还不存在的结构？**
+
+### 迁移不会自动执行，也不会有提示
+
+仓库没有迁移执行器（无 npm 脚本 / 无 CI / `deploy.sh` 不含 SQL 步骤），
+所以**加了迁移而不去线上执行，代码会带着一个不存在的表/列上生产**。
+唯一的指望是写迁移的人在同一个工作流里把它执行掉 ——
+`docs/TODO.md` 的上线备忘里也记着这条。
+
+### `drizzle-kit push` 不会应用表级 COLLATE
+
+2026-09-28 实测：新建表的迁移里写了
+`ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`，
+但 e2e 测试库（由 `drizzle-kit push` 从 `schema.ts` 生成）建出来的仍是
+服务器默认的 `utf8mb4_0900_ai_ci`。也就是说**测试库与生产库的排序规则
+永远不一致，而且是静默的** —— e2e 里所有 JOIN 都正常，生产上却可能
+抛 `Illegal mix of collations`（00021 那次事故）。
+
+结论：判断排序规则只能查线上库（下面的 SQL），不要用测试库的结果推断生产。
 
 ## 重新生成结构快照
 

@@ -3,7 +3,7 @@
 > 活的文档：每完成一项就把状态改掉（`[ ]` → `[x]`）并补上提交号。
 > 已完成的实现细节看 git log 与 `db/migrations/`；这里只记**还没做的事**与**需要人工介入的事**。
 
-最后更新：2026-09-27
+最后更新：2026-09-28
 
 ---
 
@@ -31,9 +31,9 @@ Chrome 因此报 "preloaded but not used"（16 条同类警告的一部分）。
 同时首页 HTML 里的 `rel="preload" ... avatar` 数量从 4 变成 **0**，警告消失。
 顺带把该文件原本的 4 条 `@next/next/no-img-element` lint 报错一并清零。
 
-### [ ] 2. `PUT /api/admin/users/[id]` 补校验
+### [x] 2. `PUT /api/admin/users/[id]` 补校验 ✅ 已修
 
-现状：这个接口可以改 `role`，但：
+原状：这个接口可以改 `role`，但：
 
 - `isPro` / `level` **完全不校验**（任意类型/任意值都能写进去）
 - 没有"不能改自己"的保护（管理员可以把自己降权，直接失去后台）
@@ -43,31 +43,70 @@ Chrome 因此报 "preloaded but not used"（16 条同类警告的一部分）。
 前端目前没有入口（用户详情页只读），所以只有手工构造请求才到得了 —— 正因为如此，
 没有校验时它是一条**没人会注意到**的提权/自锁路径。
 
-### [ ] 3. 后台审计日志
+已加的守卫（`src/app/api/admin/users/[id]/route.ts`）：
+
+1. `role` ∈ `{user, admin}`；`isPro` ∈ `{0, 1, true, false}`（归一到 0/1）；
+   `level` 为 0~1000 的整数；`proExpires` 为可解析时间或 `null`（表示清空）
+2. 三个字段一个都没给 → 400。原先会把全 `undefined` 的 patch 交给 drizzle，
+   要么 500 要么静默什么都不做，两种都不是调用方想要的
+3. **禁止自我降权**：`id === session.userId` 且要取消 admin → 400
+4. **禁止降级最后一位管理员**：改的是 admin 且库里 admin 只剩 1 个 → 400
+5. `isPro = 1` 时**写完之后**必须存在 `proExpires`（本次给了用本次的，没给沿用库里的）。
+   因为 `checkAndExpirePro` 只在 `proExpires` 非空且已过期时才降级 ——
+   `isPro=1 + proExpires=NULL` 等于永久会员且永不回收。想永久就显式传一个很远的日期
+
+测试：`tests/e2e/89-user-admin-update.test.ts`（14 条，含 401 / 404 / 每类非法值 /
+自我降权 / 最后一位管理员 / 一致性 / 脱敏字段）。
+
+### [x] 3. 后台审计日志 ✅ 已做
 
 现状：**完全没有**。谁给谁发了会员、谁删了内容、谁改了角色，一律查不到。
 
 软删除缓解了"删错找不回"，但回答不了"是谁干的"。
 
-需要：新建 `admin_audit_logs` 表 + 统一写入助手，并在所有**会写业务数据**的
-后台接口落日志。实测有 12 个这样的接口：
+已落地的部分：
+
+| 位置 | 内容 |
+|---|---|
+| `db/migrations/00022_admin_audit_logs.sql` | 新表 `admin_audit_logs`（**需手工在生产执行**，先 DDL 后部署代码） |
+| `src/lib/admin-audit.ts` | 写入助手 `logAdminAction` + 脱敏/截断/差异计算（纯函数已被单测覆盖） |
+| `src/lib/admin-audit-labels.ts` | 动作/对象词表（**无 db 依赖**，页面与接口共用一份） |
+| `src/app/api/admin/audit-logs/route.ts` | 只读列表接口（按操作人/动作/对象/时间/关键词筛） |
+| `src/app/admin/audit-logs/page.tsx` | 「操作审计」页面（已挂进后台菜单） |
+| `tests/e2e/88-audit-logs.test.ts` | 18 条 e2e：留痕、筛选、拒绝不留痕、表不可用不影响业务 |
+
+实际落日志的接口是 **14 个**（原文写 12 个，是漏数了）：
 
 ```
-users/[id]                 改角色 / 会员 / 等级
-courses  POST              新建课程
-courses/[id]  PUT/PATCH/DELETE   编辑 / 恢复 / 软删除（级联）
-lessons  POST              新建课时
+users/[id]                       改角色 / 会员 / 等级
+courses  POST                    新建课程
+courses/[id]  PUT/PATCH/DELETE   编辑 / 恢复 / 软删除（级联，含影响面）
+lessons  POST                    新建课时
 lessons/[id]  PUT/PATCH/DELETE   编辑 / 恢复 / 软删除
-lessons/[id]/sentences/reorder   重排课时内句子顺序
-sentences  POST            新建句子
+lessons/[id]/sentences/reorder   重排课时内句子顺序（记课名与句数）
+sentences  POST                  新建句子
 sentences/[id]  PUT/PATCH/DELETE 编辑 / 恢复 / 软删除
-sentences/[id]/split       拆分句子
-materials/upload           上传教材
-materials/analyze          教材解析状态流转
-materials/save             批量导入句子
+sentences/[id]/split             AI 拆分（记 chunk 数）
+sentences/[id]/analyze           AI 解析（**仅未命中缓存时**记，命中不算付费动作）
+materials/upload                 上传教材
+materials/analyze                教材解析（记 LLM 调用次数）
+materials/save                   批量导入句子
+feedback/[id]  PATCH             处理反馈（退回待处理会清空 handled_by，只有审计留得住）
 ```
 
-再加一个可筛选的审计日志页面（按管理员 / 动作 / 对象类型 / 时间范围）。
+四条设计决定（改这块之前先读 `src/lib/admin-audit.ts` 的文件头）：
+
+1. **操作者与对象都存文本快照**（`admin_label` / `target_label`），不是只存 id。
+   日志要能在几个月后读懂，而那时用户可能已改名或删除。
+2. **绝不抛错**：审计是旁路，写不进去只 `console.error`。表不可用时后台照常能用
+   （e2e 里把表 rename 走验证过这条）。
+3. **只记成功的写操作**：被守卫拒绝的请求不留痕，否则日志会被"尝试但没成功"灌满。
+4. **写入侧脱敏**：`token`/`password`/`openid`/`secret` 一类键在落库前就被丢弃，
+   库里不存在这些值（不是靠页面不显示）。
+
+有意**不记**的东西：重排的完整句子顺序（一课最多 960 句、约 35KB，而拖动是自动
+保存的高频操作；且数组上限 50 会静默截断，一份被截断的顺序比没有更危险）、
+教材正文（可能是整本教材）、逐句内容。
 
 ---
 

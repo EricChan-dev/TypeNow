@@ -5,6 +5,7 @@ import { aliveCourse, deletedCourse } from "@/lib/soft-delete"
 import { deletedCondition, deletedScope } from "@/lib/soft-delete-view"
 import { courses } from "@/lib/db/schema"
 import { requireAdmin } from "@/lib/admin-auth"
+import { logAdminAction } from "@/lib/admin-audit"
 import { parsePagination } from "@/lib/pagination"
 import { desc, eq, or, like, sql, type SQL, and } from "drizzle-orm"
 
@@ -54,6 +55,14 @@ export async function POST(request: Request) {
     const id = randomUUID()
     await db.insert(courses).values({ id, title, description, coverUrl, source, sourceName, sourceAvatar, categoryKey, subCategoryKey, isPublished, createdBy: auth.userId })
     const [row] = await db.select().from(courses).where(eq(courses.id, id)).limit(1)
+    // 审计写在业务成功之后：被守卫拒绝或写失败的请求不该留痕（见 lib/admin-audit 文件头）
+    await logAdminAction(auth, {
+      action: "create",
+      targetType: "course",
+      targetId: id,
+      targetLabel: title,
+      detail: { title, source, sourceName, categoryKey, subCategoryKey, isPublished },
+    }, request)
     return NextResponse.json({ data: row }, { status: 201 })
   } catch (e) {
     console.error("[admin/courses POST]", e)

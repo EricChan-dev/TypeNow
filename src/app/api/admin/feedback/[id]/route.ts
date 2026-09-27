@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import { db } from "@/lib/db"
 import { userFeedback } from "@/lib/db/schema"
 import { requireAdmin } from "@/lib/admin-auth"
+import { logAdminAction } from "@/lib/admin-audit"
 import { isFeedbackStatus } from "@/lib/feedback"
 import { eq } from "drizzle-orm"
 
@@ -85,5 +86,19 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
 
   await database.update(userFeedback).set(patch).where(eq(userFeedback.id, id))
   const [row] = await database.select().from(userFeedback).where(eq(userFeedback.id, id)).limit(1)
+
+  // 处理反馈也是一次会改变状态的管理动作（原先只有 user_feedback.handled_by 一处痕迹，
+  // 而"退回待处理"会把它清空 —— 于是"谁把它退回去的"就查不到了，审计日志补上这一段）
+  await logAdminAction(auth, {
+    action: "handle",
+    targetType: "feedback",
+    targetId: id,
+    targetLabel: (row?.content ?? "").slice(0, 80) || null,
+    detail: {
+      status: nextStatus !== undefined ? { from: existing.status, to: nextStatus } : undefined,
+      noteChanged: typeof adminNote === "string",
+    },
+  }, request)
+
   return NextResponse.json({ data: row })
 }

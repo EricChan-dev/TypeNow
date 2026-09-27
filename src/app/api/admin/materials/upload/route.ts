@@ -3,6 +3,7 @@ import { NextResponse } from "next/server"
 import { db } from "@/lib/db"
 import { materialImports } from "@/lib/db/schema"
 import { requireAdmin } from "@/lib/admin-auth"
+import { logAdminAction } from "@/lib/admin-audit"
 import { eq } from "drizzle-orm"
 
 export async function POST(request: Request) {
@@ -64,5 +65,14 @@ export async function POST(request: Request) {
   })
 
   const [row] = await db.select().from(materialImports).where(eq(materialImports.id, id)).limit(1)
+  // 上传的教材正文（rawText）**不进日志**：它可能是整本教材，几十上百 KB，
+  // 记进去既撑爆日志又没有意义。审计只需要"谁在什么时候传了什么文件"。
+  await logAdminAction(auth, {
+    action: "upload",
+    targetType: "material",
+    targetId: id,
+    targetLabel: filename,
+    detail: { filename, fileType, lessonId: lessonId ?? null, charCount: rawText.length },
+  }, request)
   return NextResponse.json({ data: row }, { status: 201 })
 }

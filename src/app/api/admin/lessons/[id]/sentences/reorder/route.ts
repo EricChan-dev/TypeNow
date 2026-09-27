@@ -1,8 +1,9 @@
 import { NextResponse } from "next/server"
 import { db } from "@/lib/db"
 import { aliveSentence } from "@/lib/soft-delete"
-import { sentences } from "@/lib/db/schema"
+import { lessons, sentences } from "@/lib/db/schema"
 import { requireAdmin } from "@/lib/admin-auth"
+import { logAdminAction } from "@/lib/admin-audit"
 import { and, eq } from "drizzle-orm"
 
 /**
@@ -85,6 +86,26 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
       await tx.update(sentences).set({ sortOrder: index }).where(eq(sentences.id, ids[index]))
     }
   })
+
+  // 只记"谁在什么时候重排了哪一课的多少句"，**有意不记完整顺序**：
+  // 一课最多 960 句，一份 id 列表约 35KB，而拖动是自动保存的高频操作 ——
+  // 每次拖动都塞一行几十 KB 的日志，很快就没有人愿意打开这个页面了。
+  // （另外 lib/admin-audit 的数组上限是 50，写进去也会被静默截断，
+  //  一份被截断的"顺序"比没有更危险 —— 会让人以为可以照着恢复。）
+  // 重排后的顺序本身就在 sentences.sort_order 里，审计要回答的是"是谁干的"。
+  // 课时标题用 lessons 表查 —— 列表页显示的是标题，日志里放一串 UUID 等于没写。
+  const [lesson] = await database
+    .select({ title: lessons.title })
+    .from(lessons)
+    .where(eq(lessons.id, lessonId))
+    .limit(1)
+  await logAdminAction(auth, {
+    action: "reorder",
+    targetType: "lesson",
+    targetId: lessonId,
+    targetLabel: lesson?.title ?? lessonId,
+    detail: { count: ids.length },
+  }, request)
 
   return NextResponse.json({ data: { lessonId, count: ids.length } })
 }

@@ -5,6 +5,7 @@ import { aliveLesson, deletedLesson } from "@/lib/soft-delete"
 import { deletedCondition, deletedScope } from "@/lib/soft-delete-view"
 import { courses, lessons } from "@/lib/db/schema"
 import { requireAdmin } from "@/lib/admin-auth"
+import { logAdminAction } from "@/lib/admin-audit"
 import { parsePagination } from "@/lib/pagination"
 import { and, eq, or, like, sql, getTableColumns, type SQL } from "drizzle-orm"
 
@@ -55,5 +56,13 @@ export async function POST(request: Request) {
   const id = randomUUID()
   await db.insert(lessons).values({ id, courseId, title, summary, sortOrder })
   const [row] = await db.select().from(lessons).where(eq(lessons.id, id)).limit(1)
+  await logAdminAction(auth, {
+    action: "create",
+    targetType: "lesson",
+    targetId: id,
+    targetLabel: title,
+    // courseId 一定要记：课时的归属是"内容跑到别的课去了"这类事故的唯一线索
+    detail: { courseId, title, sortOrder },
+  }, request)
   return NextResponse.json({ data: row }, { status: 201 })
 }

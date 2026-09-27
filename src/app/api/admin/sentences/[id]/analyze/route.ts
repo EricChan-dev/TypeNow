@@ -4,6 +4,7 @@ import { db } from "@/lib/db"
 import { aliveSentence } from "@/lib/soft-delete"
 import { sentences, sentenceKnowledge } from "@/lib/db/schema"
 import { requireAdmin } from "@/lib/admin-auth"
+import { logAdminAction, sentenceAuditLabel } from "@/lib/admin-audit"
 import { checkAdminAiQuota, quotaExceededBody } from "@/lib/admin-ai-quota"
 import { and, eq } from "drizzle-orm"
 import { analyzeSentence } from "@/lib/llm"
@@ -47,6 +48,16 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     .insert(sentenceKnowledge)
     .values({ sentenceHash, sentenceText: english.trim(), data: analysis })
     .onDuplicateKeyUpdate({ set: { data: analysis } })
+
+  // 只在**真的调用了 AI** 时记日志（上面命中缓存就 return 了）：
+  // 命中缓存的重试不是一次付费动作，记进去只会让"谁花了钱"这个问题更难回答。
+  await logAdminAction(auth, {
+    action: "analyze",
+    targetType: "sentence",
+    targetId: id,
+    targetLabel: sentenceAuditLabel(sentence.chinese),
+    detail: { force, cached: false },
+  }, req)
 
   return NextResponse.json({ data: analysis, cached: false })
 }

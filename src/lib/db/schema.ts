@@ -740,6 +740,43 @@ export const userFeedback = mysqlTable(
   ]
 )
 
+// ─── Admin Audit Log ──────────────────────────────────────────────────────────
+/**
+ * 后台操作审计日志（完整理由见 db/migrations/00022_admin_audit_logs.sql）。
+ *
+ * 三条约束，改这张表之前先读一遍：
+ * 1. `adminLabel` / `targetLabel` 是**快照**，不是冗余 —— 审计要在几个月后仍可读，
+ *    而那时的用户可能已改名或删除，只留 id 等于留了一行无法解读的 UUID。
+ * 2. **不建外键**：日志必须比它记录的对象活得久，被删掉的对象正是最需要审计的。
+ * 3. `detail` 只写白名单字段，写入前统一脱敏（见 lib/admin-audit.ts）。
+ */
+export const adminAuditLogs = mysqlTable(
+  "admin_audit_logs",
+  {
+    id: varchar("id", { length: 36 }).primaryKey().default(sql`(UUID())`),
+    /** 操作者 id；dev 旁路下没有真实用户，为 NULL */
+    adminId: varchar("admin_id", { length: 36 }),
+    /** 操作者快照，例如 "张三(166****2010)" */
+    adminLabel: varchar("admin_label", { length: 191 }),
+    action: varchar("action", { length: 50 }).notNull(),
+    targetType: varchar("target_type", { length: 50 }).notNull(),
+    targetId: varchar("target_id", { length: 64 }),
+    /** 对象快照，例如句子中文前 80 字 / 课程名 */
+    targetLabel: varchar("target_label", { length: 191 }),
+    /** 变更摘要（白名单 + 脱敏），例如 {"level":{"from":1,"to":5}} */
+    detail: json("detail"),
+    ip: varchar("ip", { length: 64 }),
+    userAgent: varchar("user_agent", { length: 255 }),
+    createdAt: datetime("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  },
+  (t) => [
+    index("idx_audit_created").on(t.createdAt),
+    index("idx_audit_admin_created").on(t.adminId, t.createdAt),
+    index("idx_audit_target").on(t.targetType, t.targetId, t.createdAt),
+    index("idx_audit_action_created").on(t.action, t.createdAt),
+  ]
+)
+
 // ─── Type Exports ─────────────────────────────────────────────────────────────
 export type CheckIn = typeof checkIns.$inferSelect
 export type User = typeof users.$inferSelect
@@ -764,3 +801,4 @@ export type TaskLog = typeof taskLogs.$inferSelect
 export type Post = typeof posts.$inferSelect
 export type PostLike = typeof postLikes.$inferSelect
 export type UserFeedbackRow = typeof userFeedback.$inferSelect
+export type AdminAuditLog = typeof adminAuditLogs.$inferSelect

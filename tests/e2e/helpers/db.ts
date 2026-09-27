@@ -56,6 +56,9 @@ export async function closePool(): Promise<void> {
 
 /** 测试库全部业务表。顺序无关（先关外键检查），但显式列出以便夹具重置可审计。 */
 const TABLES = [
+  // 审计日志也要被清掉：夹具重置时若留着上一个用例的日志，
+  // "这次操作写了哪些条"就只能靠时间戳去猜
+  "admin_audit_logs",
   "analytics_events",
   "check_ins",
   "courses",
