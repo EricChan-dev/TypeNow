@@ -19,6 +19,16 @@ if (fs.existsSync(ENV_FILE)) {
 const PORT = process.env.WEBHOOK_PORT || 9000
 const SECRET = process.env.WEBHOOK_SECRET || ""
 const DEPLOY_CMD = "bash /home/admin/TypeNow/deploy.sh"
+/**
+ * exec 的输出缓冲上限。**必须显式给**，因为默认只有 1MB，而一次 Next 生产构建
+ * 的输出（路由表 + pnpm install + git 统计）轻易超过它。超限时 Node 会**杀掉子进程**
+ * 并回调一个错误，于是：
+ *   - 部署其实已经跑完（deploy.log 里有「部署完成」、pm2 也重启了），
+ *     但 webhook 日志里写的是「部署失败」；
+ *   - 真正的失败与这种假失败混在一起，无法区分（2026-09-28 排查时踩到）。
+ * 给到 64MB：正常输出只有几 MB，这个上限只为挡住失控输出。
+ */
+const MAX_DEPLOY_OUTPUT_BYTES = 64 * 1024 * 1024
 /** GitHub push payload 通常几十 KB，这里给足余量同时挡住无上限的 body。 */
 const MAX_BODY_BYTES = 1_000_000
 
@@ -123,12 +133,28 @@ const server = http.createServer((req, res) => {
       res.writeHead(200)
       res.end("deploy started")
 
-      exec(DEPLOY_CMD, (err, stdout, stderr) => {
+      const startedAt = Date.now()
+      exec(DEPLOY_CMD, { maxBuffer: MAX_DEPLOY_OUTPUT_BYTES }, (err, stdout, stderr) => {
+        const seconds = Math.round((Date.now() - startedAt) / 1000)
         if (err) {
-          console.error("[webhook] 部署失败:", err.message)
+          // 失败时**必须**把 stderr 与退出码打出来：原先只打 err.message，
+          // 排查时看不到任何有用信息（deploy.sh 自己会写 deploy.log，
+          // 但两份日志对不上时无法判断是构建失败还是这里误报）
+          console.error(`[webhook] 部署失败（耗时 ${seconds}s）:`, err.message)
+          console.error("[webhook] code =", err.code, "killed =", err.killed)
+          if (stderr) console.error("[webhook] stderr:\n", stderr)
+          if (err.killed) {
+            console.error(
+              "[webhook] 子进程被杀死。若 deploy.log 里有「部署完成」，说明是输出超过 " +
+                `maxBuffer(${MAX_DEPLOY_OUTPUT_BYTES}) 导致的**误报**，实际部署已成功。`,
+            )
+          }
           return
         }
-        console.log("[webhook] 部署输出:\n", stdout)
+        // 只打输出尾部：deploy.sh 已经把完整输出 tee 到 deploy.log，
+        // 这里再存一份会让 pm2 日志迅速膨胀且难以检索
+        const tail = stdout.trimEnd().split("\n").slice(-5).join("\n")
+        console.log(`[webhook] 部署成功（耗时 ${seconds}s），输出尾部:\n${tail}`)
         if (stderr) console.error("[webhook] stderr:\n", stderr)
       })
     } catch (e) {
