@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react"
 import { Alert, Card, Col, Row, Segmented, Spin, Statistic, Table, Tag, Typography } from "antd"
+import { RANGE_OPTIONS, DEFAULT_RANGE, type StatsRange } from "@/lib/admin-range"
 
 const { Title, Text } = Typography
 
@@ -15,6 +16,10 @@ interface FunnelStep {
 }
 
 interface FunnelData {
+  range: StatsRange
+  rangeLabel: string
+  cohortSize: number
+  cohortNote: string
   funnel: FunnelStep[]
   domain: {
     registered: number
@@ -51,9 +56,11 @@ export default function AnalyticsPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [trend, setTrend] = useState<"daily" | "events">("daily")
+  const [range, setRange] = useState<StatsRange>(DEFAULT_RANGE)
 
   useEffect(() => {
-    fetch("/api/admin/analytics/funnel")
+    setLoading(true)
+    fetch(`/api/admin/analytics/funnel?range=${range}`)
       .then((r) => {
         if (!r.ok) throw new Error(`HTTP ${r.status}`)
         return r.json()
@@ -61,7 +68,7 @@ export default function AnalyticsPage() {
       .then(setData)
       .catch((e) => setError(String(e?.message ?? e)))
       .finally(() => setLoading(false))
-  }, [])
+  }, [range])
 
   if (loading) {
     return (
@@ -102,10 +109,15 @@ export default function AnalyticsPage() {
 
   return (
     <div>
-      <Title level={3} style={{ marginBottom: 4 }}>
-        数据分析
-      </Title>
-      <Text type="secondary">
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 12 }}>
+        <Title level={3} style={{ margin: 0 }}>数据分析</Title>
+        <Segmented
+          value={range}
+          onChange={(v) => setRange(v as StatsRange)}
+          options={RANGE_OPTIONS.map((o) => ({ label: o.label, value: o.value }))}
+        />
+      </div>
+      <Text type="secondary" style={{ display: "block", marginTop: 4 }}>
         首启漏斗 · 注册 → 打开课程 → 进入练习 → 练完一句 → 领取体验 → 看定价 → 付费
       </Text>
 
@@ -176,9 +188,17 @@ export default function AnalyticsPage() {
 
         <Alert
           style={{ marginTop: 8 }}
+          type="warning"
+          showIcon
+          message="同期群口径"
+          description={data.cohortNote}
+        />
+
+        <Alert
+          style={{ marginTop: 8 }}
           type="info"
           showIcon
-          message="口径说明"
+          message="数据来源说明"
           description={
             <>
               绿色步骤取自数据库（注册 / 练完至少一句 / 付费），不受客户端上报影响；

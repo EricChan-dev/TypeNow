@@ -1,43 +1,195 @@
 "use client"
 
-import { useEffect, useState } from "react"
-import { Descriptions, Card, Tag, Spin, Typography } from "antd"
+import { useCallback, useEffect, useState } from "react"
+import { Card, Descriptions, Spin, Table, Tag, Typography } from "antd"
 import { useParams } from "next/navigation"
+import Link from "next/link"
 
-const { Title } = Typography
+const { Title, Text } = Typography
 
+interface UserStats {
+  practiceCount: number
+  eventCount: number
+  paidOrderCount: number
+  revenueFen: number
+  activeSubscriptions: number
+  firstEventAt: string | null
+  lastEventAt: string | null
+}
+
+interface EventRow {
+  id: number
+  eventType: string
+  pageUrl: string | null
+  sessionId: string | null
+  properties: Record<string, unknown> | null
+  createdAt: string
+}
+
+/** 事件名的中文说明。埋点是自由字符串，不翻译的话运营看不懂。 */
+const EVENT_LABELS: Record<string, string> = {
+  page_view: "浏览页面",
+  click: "点击",
+  theme_toggle: "切换主题",
+  login_success: "登录成功",
+  course_open: "打开课程",
+  lesson_start: "进入练习",
+  practice_complete: "练完一句",
+  paywall_shown: "看到付费墙",
+  trial_claimed: "领取体验会员",
+  click_subscribe: "点击购买",
+  subscribe_pay_success: "支付成功",
+}
+
+const EVENT_COLORS: Record<string, string> = {
+  login_success: "green",
+  course_open: "blue",
+  lesson_start: "blue",
+  practice_complete: "purple",
+  trial_claimed: "gold",
+  paywall_shown: "orange",
+  click_subscribe: "orange",
+  subscribe_pay_success: "green",
+}
+
+/**
+ * 用户详情。
+ *
+ * 除了基础资料，重点是「这个人到底干了什么」：
+ *   - 关键指标（练习句数 / 埋点数 / 已付订单 / 收入 / 首次与最后一次埋点时间）
+ *   - 埋点时间线（倒序，可按事件类型过滤）
+ *
+ * firstEventAt / lastEventAt 是判断"注册完就没来过"最快的两个数：
+ * 两者都为空 = 注册后一次都没上报过。
+ */
 export default function UserShow() {
   const params = useParams()
   const id = params?.id as string
   const [loading, setLoading] = useState(true)
   const [record, setRecord] = useState<Record<string, unknown> | null>(null)
+  const [stats, setStats] = useState<UserStats | null>(null)
+  const [events, setEvents] = useState<EventRow[]>([])
+  const [eventFilter, setEventFilter] = useState<string>("")
+
+  const loadEvents = useCallback(
+    async (event: string) => {
+      const url = `/api/admin/users/${id}/events?pageSize=30${event ? `&event=${encodeURIComponent(event)}` : ""}`
+      const res = await fetch(url)
+      if (res.ok) setEvents(((await res.json()).data ?? []) as EventRow[])
+    },
+    [id]
+  )
 
   useEffect(() => {
     if (!id) return
     fetch(`/api/admin/users/${id}`)
       .then((r) => r.json())
-      .then((data) => setRecord(data.data ?? null))
+      .then((data) => {
+        setRecord(data.data ?? null)
+        setStats((data.data?.stats ?? null) as UserStats | null)
+      })
       .catch(() => setRecord(null))
       .finally(() => setLoading(false))
   }, [id])
 
+  useEffect(() => {
+    if (id) loadEvents(eventFilter)
+  }, [id, eventFilter, loadEvents])
+
   if (loading) return <Spin size="large" style={{ display: "block", margin: "100px auto" }} />
   if (!record) return <Title level={4}>用户不存在</Title>
 
+  const eventColumns = [
+    {
+      title: "事件",
+      dataIndex: "eventType",
+      key: "eventType",
+      width: 130,
+      render: (t: string) => (
+        <Tag color={EVENT_COLORS[t] ?? "default"}>{EVENT_LABELS[t] ?? t}</Tag>
+      ),
+    },
+    {
+      title: "页面",
+      dataIndex: "pageUrl",
+      key: "pageUrl",
+      width: 200,
+      ellipsis: true,
+      render: (u: string | null) => u || "—",
+    },
+    {
+      title: "属性",
+      dataIndex: "properties",
+      key: "properties",
+      ellipsis: true,
+      render: (p: Record<string, unknown> | null) => {
+        if (!p || Object.keys(p).length === 0) return <Text type="secondary">—</Text>
+        const s = JSON.stringify(p)
+        return <Text code style={{ fontSize: 12 }}>{s.length > 90 ? s.slice(0, 90) + "…" : s}</Text>
+      },
+    },
+    {
+      title: "时间",
+      dataIndex: "createdAt",
+      key: "createdAt",
+      width: 170,
+      render: (d: string) => (d ? new Date(d).toLocaleString("zh-CN") : "—"),
+    },
+  ]
+
   return (
     <div>
-      <Title level={4} style={{ marginBottom: 24 }}>用户详情</Title>
-      <Card>
+      <Title level={4} style={{ marginBottom: 16 }}>用户详情</Title>
+
+      {/* 关键指标 */}
+      <Card size="small" style={{ marginBottom: 16 }}>
+        <Text type="secondary">行为概览</Text>
+        <Descriptions column={4} size="small" style={{ marginTop: 8 }}>
+          <Descriptions.Item label="练习句数">{stats?.practiceCount ?? 0}</Descriptions.Item>
+          <Descriptions.Item label="埋点记录">{stats?.eventCount ?? 0}</Descriptions.Item>
+          <Descriptions.Item label="已付订单">{stats?.paidOrderCount ?? 0}</Descriptions.Item>
+          <Descriptions.Item label="累计支付">
+            ¥{((stats?.revenueFen ?? 0) / 100).toFixed(2)}
+          </Descriptions.Item>
+          <Descriptions.Item label="有效订阅">{stats?.activeSubscriptions ?? 0}</Descriptions.Item>
+          <Descriptions.Item label="首次埋点">
+            {stats?.firstEventAt ? new Date(stats.firstEventAt).toLocaleString("zh-CN") : "从未上报"}
+          </Descriptions.Item>
+          <Descriptions.Item label="最后埋点">
+            {stats?.lastEventAt ? new Date(stats.lastEventAt).toLocaleString("zh-CN") : "从未上报"}
+          </Descriptions.Item>
+          <Descriptions.Item label="订单">
+            <Link href={`/admin/payments?q=${encodeURIComponent(String(record.name ?? ""))}`}>
+              按姓名查订单
+            </Link>
+          </Descriptions.Item>
+        </Descriptions>
+      </Card>
+
+      {/* 基础资料 */}
+      <Card style={{ marginBottom: 16 }}>
         <Descriptions bordered column={2}>
           <Descriptions.Item label="昵称">{(record.name as string) || "-"}</Descriptions.Item>
-          <Descriptions.Item label="手机">{(record.phone as string) || "-"}</Descriptions.Item>
+          <Descriptions.Item label="手机">
+            {(record.phoneMasked as string) || "（未绑定）"}
+          </Descriptions.Item>
           <Descriptions.Item label="等级">{(record.level as number) || 1}</Descriptions.Item>
           <Descriptions.Item label="总分">{(record.totalScore as number) || 0}</Descriptions.Item>
+          <Descriptions.Item label="钻石">{(record.diamonds as number) || 0}</Descriptions.Item>
+          <Descriptions.Item label="邀请码">{(record.inviteCode as string) || "-"}</Descriptions.Item>
           <Descriptions.Item label="会员状态">
             {record.isPro ? <Tag color="blue">PRO</Tag> : <Tag>免费用户</Tag>}
           </Descriptions.Item>
           <Descriptions.Item label="会员到期">
             {record.proExpires ? new Date(record.proExpires as string).toLocaleString("zh-CN") : "-"}
+          </Descriptions.Item>
+          <Descriptions.Item label="体验会员领取">
+            {record.trialClaimedAt
+              ? new Date(record.trialClaimedAt as string).toLocaleString("zh-CN")
+              : "未领取"}
+          </Descriptions.Item>
+          <Descriptions.Item label="微信绑定">
+            {record.wechatOpenid ? <Tag color="green">已绑定</Tag> : <Tag>未绑定</Tag>}
           </Descriptions.Item>
           <Descriptions.Item label="角色">
             {record.role === "admin" ? <Tag color="purple">管理员</Tag> : <Tag>用户</Tag>}
@@ -46,6 +198,29 @@ export default function UserShow() {
             {record.createdAt ? new Date(record.createdAt as string).toLocaleString("zh-CN") : "-"}
           </Descriptions.Item>
         </Descriptions>
+      </Card>
+
+      {/* 埋点时间线 */}
+      <Card
+        title={`埋点记录${eventFilter ? ` · 仅「${EVENT_LABELS[eventFilter] ?? eventFilter}」` : ""}`}
+        extra={
+          eventFilter ? (
+            <a onClick={() => setEventFilter("")}>清除筛选</a>
+          ) : null
+        }
+      >
+        <Table
+          columns={eventColumns}
+          dataSource={events}
+          rowKey="id"
+          size="small"
+          pagination={{ pageSize: 30 }}
+          locale={{ emptyText: "该用户还没有埋点记录" }}
+          onRow={(r) => ({
+            onClick: () => setEventFilter(r.eventType),
+            style: { cursor: "pointer" },
+          })}
+        />
       </Card>
     </div>
   )

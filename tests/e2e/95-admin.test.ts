@@ -253,3 +253,78 @@ describe("支付订单与用户列表可追溯到人", () => {
     }
   })
 })
+
+describe("用户埋点记录 /api/admin/users/[id]/events", () => {
+  it("未登录 / 非管理员 → 401", async () => {
+    const url = `/api/admin/users/${FIXTURE.userFree}/events`
+    expect((await ApiClient.anonymous().get(url)).status).toBe(401)
+    expect((await ApiClient.asUser(FIXTURE.userFree).get(url)).status).toBe(401)
+  })
+
+  it("只返回该用户自己的埋点，且带出 properties 与 pageUrl", async () => {
+    const api = ApiClient.asUser(await makeAdmin())
+    const mine = await insertUser({ name: "e2e 有埋点" })
+    const other = await insertUser({ name: "e2e 无关用户" })
+
+    // 直接插库：模拟两个用户各自的埋点
+    await q(
+      `INSERT INTO analytics_events (event_type, user_id, properties, page_url, session_id)
+       VALUES ('course_open', ?, CAST(? AS JSON), '/home/store', 's-mine')`,
+      [mine, JSON.stringify({ courseId: "c1" })]
+    )
+    await q(
+      `INSERT INTO analytics_events (event_type, user_id, properties, page_url, session_id)
+       VALUES ('page_view', ?, CAST(? AS JSON), '/home', 's-other')`,
+      [other, JSON.stringify({})]
+    )
+
+    const res = await api.get<{ data: Array<Record<string, unknown>>; total: number }>(
+      `/api/admin/users/${mine}/events`
+    )
+    expect(res.status).toBe(200)
+    expect(res.body.total).toBe(1)
+    expect(res.body.data).toHaveLength(1)
+    const row = res.body.data[0]
+    expect(row.eventType).toBe("course_open")
+    expect(row.pageUrl).toBe("/home/store")
+    expect(row.properties).toEqual({ courseId: "c1" })
+  })
+
+  it("可按事件类型过滤（从漏斗某一步跳过来看明细）", async () => {
+    const api = ApiClient.asUser(await makeAdmin())
+    const uid = await insertUser({ name: "e2e 多事件" })
+    for (const t of ["course_open", "lesson_start", "lesson_start"]) {
+      await q(
+        `INSERT INTO analytics_events (event_type, user_id, properties, page_url, session_id)
+         VALUES (?, ?, CAST('{}' AS JSON), '/x', 's')`,
+        [t, uid]
+      )
+    }
+    const all = await api.get<{ total: number }>(`/api/admin/users/${uid}/events`)
+    expect(all.body.total).toBe(3)
+
+    const filtered = await api.get<{ data: Array<{ eventType: string }>; total: number }>(
+      `/api/admin/users/${uid}/events?event=lesson_start`
+    )
+    expect(filtered.body.total).toBe(2)
+    expect(filtered.body.data.every((r) => r.eventType === "lesson_start")).toBe(true)
+  })
+})
+
+describe("用户详情带出行为概览", () => {
+  it("返回统计与脱敏手机号（不返回完整手机号）", async () => {
+    const api = ApiClient.asUser(await makeAdmin())
+    const uid = await insertUser({ name: "e2e 详情", phone: "13800000777" })
+    await insertPaidOrder(uid, "yearly", 19900)
+
+    const res = await api.get<{ data: Record<string, unknown> & { stats: Record<string, unknown> } }>(
+      `/api/admin/users/${uid}`
+    )
+    expect(res.status).toBe(200)
+    expect(res.body.data.phone).toBeUndefined()          // 完整号码不外发
+    expect(res.body.data.phoneMasked).toBe("138****0777") // 脱敏形式
+    const stats = res.body.data.stats
+    expect(Number(stats.paidOrderCount)).toBe(1)
+    expect(Number(stats.revenueFen)).toBe(19900)
+  })
+})

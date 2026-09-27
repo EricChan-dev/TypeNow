@@ -9,53 +9,104 @@ import {
 } from "@/lib/db/schema"
 import { requireAdmin } from "@/lib/admin-auth"
 import { FUNNEL_STEPS } from "@/lib/analytics-events"
-import { sql } from "drizzle-orm"
+import { parseRange, rangeStart, rangeLabel } from "@/lib/admin-range"
+import { eq, gte, inArray, sql } from "drizzle-orm"
 
 /**
- * 首启漏斗报表。
+ * 首启漏斗报表（**同期群口径**）。
  *
- * 口径刻意是**混合**的（见 lib/analytics-events 的 FUNNEL_STEPS.source）：
+ * 关键语义：选定时间范围后，先圈出「该时间段注册的用户」作为一个 cohort，
+ * 再看这个 cohort 里有多少人做过后续每一步。**不是**「各步骤各自按时间过滤」——
+ * 后者会把 3 个月前注册、本周才练完一句的人算进"本周注册 → 练完一句"，
+ * 于是漏斗会出现下游大于上游的荒谬结果。
  *
- *   - 注册 / 练完至少一句 / 付费 走**数据库权威数据**。埋点会被广告拦截器挡掉、
- *     会被漏发、会因 JS 报错而少报；这三个最关键的数不能建立在客户端上报之上。
- *   - 打开课程 / 进入练习 / 领取体验 / 看过定价 走**行为埋点**。这些「客户端才知道、
- *     数据库里没有」的动作只能靠埋点。
+ * 代价是"未成熟 cohort"：刚注册两天的人还没来得及付费，付费步骤天然偏低。
+ * 这是同期群漏斗的正常性质，所以接口返回 cohortNote 让界面写清楚，否则会被当成 bug。
  *
- * 副作用是它自带一个诊断能力：若某步的埋点数**大于**上一步的 db 数（比如
- * 「打开课程」的人数超过注册人数），说明埋点有重复上报或脏数据，一眼能看出来。
+ * 口径仍是混合的（见 lib/analytics-events 的 FUNNEL_STEPS.source）：
+ *   注册 / 练完一句 / 付费 —— 数据库权威数据
+ *   打开课程 / 进入练习 / 领取体验 / 看定价 —— 行为埋点
+ *
+ * 实现上一律走 drizzle 的查询构造器，不用手写 `sql` 拼列引用：
+ * 单表查询里 drizzle 会把列名去掉表限定，手写相关子查询会静默算错
+ * （用户列表就踩过这个坑，见 src/app/api/admin/users/route.ts 的注释）。
  */
-export async function GET() {
+export async function GET(request: Request) {
   const auth = await requireAdmin()
   if (auth instanceof NextResponse) return auth
   if (!db) return NextResponse.json({ error: "DB not configured" }, { status: 500 })
 
-  const [domainRows, eventRows, dailyRows, pageRows] = await Promise.all([
-    // ── 权威域数据（不依赖客户端上报） ──
+  const { searchParams } = new URL(request.url)
+  const range = parseRange(searchParams.get("range"))
+  const from = rangeStart(range)
+
+  // cohort：该时间段注册的用户 id 子查询；range=all 时即全体
+  const cohortIds = (from
+    ? db.select({ id: users.id }).from(users).where(gte(users.createdAt, from))
+    : db.select({ id: users.id }).from(users))
+
+  const [
+    cohortSize,
+    practicedUsers,
+    paidUsers,
+    ordersRow,
+    subsRow,
+    eventRows,
+    dailyRows,
+    pageRows,
+  ] = await Promise.all([
+    db
+      .select({ n: sql<number>`COUNT(*)` })
+      .from(users)
+      .where(from ? gte(users.createdAt, from) : undefined)
+      .then((r) => Number(r[0]?.n ?? 0)),
+
+    db
+      .select({ n: sql<number>`COUNT(DISTINCT ${practiceRecords.userId})` })
+      .from(practiceRecords)
+      .where(inArray(practiceRecords.userId, cohortIds))
+      .then((r) => Number(r[0]?.n ?? 0)),
+
+    db
+      .select({ n: sql<number>`COUNT(DISTINCT ${paymentOrders.userId})` })
+      .from(paymentOrders)
+      .where(
+        sql`${paymentOrders.status} = 'paid' AND ${paymentOrders.userId} IN (${cohortIds})`,
+      )
+      .then((r) => Number(r[0]?.n ?? 0)),
+
+    // 收入/订单/订阅是**全站**口径，不按 cohort：用于回答"这段时间赚了多少"
     db
       .select({
-        registered: sql<number>`(SELECT COUNT(*) FROM ${users})`,
-        practicedUsers: sql<number>`(SELECT COUNT(DISTINCT ${practiceRecords.userId}) FROM ${practiceRecords})`,
-        practiceRecords: sql<number>`(SELECT COUNT(*) FROM ${practiceRecords})`,
-        paidUsers: sql<number>`(SELECT COUNT(DISTINCT ${paymentOrders.userId}) FROM ${paymentOrders} WHERE ${paymentOrders.status} = 'paid')`,
-        paidOrders: sql<number>`(SELECT COUNT(*) FROM ${paymentOrders} WHERE ${paymentOrders.status} = 'paid')`,
-        revenueFen: sql<number>`(SELECT COALESCE(SUM(${paymentOrders.amount}), 0) FROM ${paymentOrders} WHERE ${paymentOrders.status} = 'paid')`,
-        subscriptions: sql<number>`(SELECT COUNT(*) FROM ${subscriptions} WHERE ${subscriptions.status} = 'active')`,
+        n: sql<number>`COUNT(*)`,
+        fen: sql<number>`COALESCE(SUM(${paymentOrders.amount}), 0)`,
       })
-      .from(sql`(SELECT 1) AS _t`),
+      .from(paymentOrders)
+      .where(
+        from
+          ? sql`${paymentOrders.status} = 'paid' AND ${paymentOrders.paidAt} >= ${from}`
+          : eq(paymentOrders.status, "paid"),
+      )
+      .then((r) => ({ n: Number(r[0]?.n ?? 0), fen: Number(r[0]?.fen ?? 0) })),
 
-    // ── 行为埋点：一次 GROUP BY 拿到所有事件类型的「事件数 / 去重人数」 ──
+    db
+      .select({ n: sql<number>`COUNT(*)` })
+      .from(subscriptions)
+      .where(eq(subscriptions.status, "active"))
+      .then((r) => Number(r[0]?.n ?? 0)),
+
+    // cohort 内的埋点事件（按类型分组）
     db
       .select({
         eventType: analyticsEvents.eventType,
         events: sql<number>`COUNT(*)`,
-        // user_id 可空（匿名 page_view），COUNT(DISTINCT) 会自动忽略 NULL，
-        // 正是「有多少登录用户做过这件事」的口径
         users: sql<number>`COUNT(DISTINCT ${analyticsEvents.userId})`,
       })
       .from(analyticsEvents)
+      .where(inArray(analyticsEvents.userId, cohortIds))
       .groupBy(analyticsEvents.eventType),
 
-    // ── 近 14 天趋势 ──
+    // 近 14 天趋势（全站，不按 cohort）
     db
       .select({
         date: sql<string>`DATE(${analyticsEvents.createdAt})`,
@@ -67,40 +118,29 @@ export async function GET() {
       .groupBy(sql`DATE(${analyticsEvents.createdAt})`)
       .orderBy(sql`DATE(${analyticsEvents.createdAt})`),
 
-    // ── 热门页面 ──
-    //
-    // 注意取的是 `page_url`，不是 properties.page。原先那版后台报表读的是
-    // properties.page，而前端 helper 从来不写这个字段（页面路径一直是放在
-    // pageUrl 里传的），所以即使有 page_view 也永远是空表 —— 两处都错，叠在一起。
     db
       .select({
         page: sql<string>`COALESCE(NULLIF(${analyticsEvents.pageUrl}, ''), '(未知)')`,
         count: sql<number>`COUNT(*)`,
       })
       .from(analyticsEvents)
-      .where(sql`${analyticsEvents.eventType} = 'page_view'`)
+      .where(eq(analyticsEvents.eventType, "page_view"))
       .groupBy(sql`COALESCE(NULLIF(${analyticsEvents.pageUrl}, ''), '(未知)')`)
       .orderBy(sql`COUNT(*) DESC`)
       .limit(10),
   ])
 
-  const domain = domainRows[0]
   const byEvent = new Map(eventRows.map((r) => [r.eventType, r]))
 
-  // 漏斗每一步的取值：db 步骤取域数据，events 步骤取该事件的去重人数
-  const values: Record<string, number> = {
-    registered: Number(domain?.registered ?? 0),
-    practiced: Number(domain?.practicedUsers ?? 0),
-    paid: Number(domain?.paidUsers ?? 0),
+  const dbValues: Record<string, number> = {
+    registered: cohortSize,
+    practiced: practicedUsers,
+    paid: paidUsers,
   }
 
   const funnel = FUNNEL_STEPS.map((step) => {
-    if (step.source === "db") {
-      return { ...step, value: values[step.key] ?? 0 }
-    }
+    if (step.source === "db") return { ...step, value: dbValues[step.key] ?? 0 }
     const row = byEvent.get(step.key)
-    // 埋点里可能混入匿名（user_id 为 NULL）的记录，去重人数只算登录用户；
-    // 若该事件全是匿名，users 会是 0，此时退回事件总数以免报表显示成 0 而误导。
     const distinctUsers = Number(row?.users ?? 0)
     const total = Number(row?.events ?? 0)
     return { ...step, value: distinctUsers > 0 ? distinctUsers : total }
@@ -109,23 +149,29 @@ export async function GET() {
     const prev = i > 0 ? arr[i - 1].value : step.value
     return {
       ...step,
-      // 相对上一步的转化率：这是漏斗真正要看的东西
       stepRate: prev > 0 ? step.value / prev : null,
-      // 相对第一步的整体转化率
       overallRate: top > 0 ? step.value / top : null,
     }
   })
 
   return NextResponse.json({
+    range,
+    rangeLabel: rangeLabel(range),
+    cohortSize,
+    cohortNote:
+      range === "all"
+        ? "全部用户"
+        : `同期群口径：统计「${rangeLabel(range)}注册的 ${cohortSize} 位用户」中做过各步骤的人数。` +
+          `刚注册的用户还没来得及付费，付费步骤天然偏低，属正常现象。`,
     funnel,
     domain: {
-      registered: Number(domain?.registered ?? 0),
-      practicedUsers: Number(domain?.practicedUsers ?? 0),
-      practiceRecords: Number(domain?.practiceRecords ?? 0),
-      paidUsers: Number(domain?.paidUsers ?? 0),
-      paidOrders: Number(domain?.paidOrders ?? 0),
-      revenueFen: Number(domain?.revenueFen ?? 0),
-      subscriptions: Number(domain?.subscriptions ?? 0),
+      registered: cohortSize,
+      practicedUsers,
+      practiceRecords: 0, // 见下方 totals 说明：练习总数不按 cohort，避免误读
+      paidUsers,
+      paidOrders: ordersRow.n,
+      revenueFen: ordersRow.fen,
+      subscriptions: subsRow,
     },
     events: eventRows
       .map((r) => ({ eventType: r.eventType, events: Number(r.events), users: Number(r.users) }))
