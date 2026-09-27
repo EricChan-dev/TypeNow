@@ -201,7 +201,16 @@ export const sentences = mysqlTable(
     }>>(),
     createdAt: datetime("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
   },
-  (t) => [index("idx_sentences_lesson_id").on(t.lessonId)]
+  (t) => [
+    index("idx_sentences_lesson_id").on(t.lessonId),
+    // 句子列表的两条索引，见 db/migrations/00015_sentences_indexes.sql。
+    // sort_order 是**课内顺序**（全表只有 0..960，不是全局序号），所以正确的
+    // 访问路径是"先定位课时，再按课内顺序读"，索引也必须按这个顺序建 ——
+    // 全局按 sort_order 排序会把 16,891 个课时的"第 0 句"混在一起。
+    index("idx_sentences_lesson_sort").on(t.lessonId, t.sortOrder),
+    // 不选课时时按"最近添加"浏览用的顺序（唯一在全局意义上有效的顺序）
+    index("idx_sentences_created_at").on(t.createdAt),
+  ]
 )
 
 // ─── Practice Records ─────────────────────────────────────────────────────────

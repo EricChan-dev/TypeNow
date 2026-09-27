@@ -1,0 +1,258 @@
+/**
+ * 链路：句子列表的范围化浏览与搜索 + AI 接口配额
+ *
+ * 句子列表此前是"全局按 sort_order 排序的 46 万行表"，有两个独立的问题：
+ *
+ *   1. **语义错**：sort_order 是课内顺序（全表只有 0..960，单课最多 960 句），
+ *      全局按它排会把 16,891 个课时的第 1 句混在一起 ——
+ *      实测 `ORDER BY sort_order LIMIT 10` 取到 10 个不同课时。
+ *   2. **性能差**：没有可用索引，EXPLAIN 是 type=ALL + Using filesort，
+ *      另有一条每次都要跑的 COUNT(*)。
+ *
+ * 所以这里断言的是"给了课时范围 → 只在课内、按课内顺序、total 精确"，
+ * 以及"没给范围时不许做全库模糊搜索"。后者是刻意的拒绝，不是缺陷：
+ * 前导通配符 LIKE 在 46 万行 / 2.9GB 上要全表扫（实测 1.3~25 秒）。
+ */
+import { describe, it, expect, beforeEach } from "vitest"
+import { ApiClient } from "./helpers/api"
+import { FIXTURE, seedFixtures, q } from "./helpers/db"
+import { insertUser } from "./helpers/factories"
+
+async function makeAdmin(): Promise<string> {
+  const id = await insertUser({ name: "e2e 句子管理员" })
+  await q("UPDATE users SET role = 'admin' WHERE id = ?", [id])
+  return id
+}
+
+interface SentencesBody {
+  data: Array<{
+    id: string
+    lessonId: string | null
+    sortOrder: number | null
+    chinese: string | null
+    english: string | null
+  }>
+  total: number
+  orderedBy?: "sortOrder" | "createdAt"
+  totalIsCached?: boolean
+}
+
+/** 往某个课时里插一句指定 sort_order 的句子，便于断言课内顺序。 */
+async function insertSentence(
+  lessonId: string,
+  sortOrder: number,
+  chinese: string,
+  english: string,
+): Promise<string> {
+  const id = crypto.randomUUID()
+  await q(
+    `INSERT INTO sentences (id, chinese, english, lesson_id, sort_order, created_at)
+     VALUES (?, ?, ?, ?, ?, NOW())`,
+    [id, chinese, english, lessonId, sortOrder],
+  )
+  return id
+}
+
+beforeEach(async () => {
+  await seedFixtures()
+})
+
+describe("句子列表：按课时范围浏览", () => {
+  it("未登录 → 401；非管理员 → 401", async () => {
+    expect((await ApiClient.anonymous().get("/api/admin/sentences")).status).toBe(401)
+    expect((await ApiClient.asUser(FIXTURE.userFree).get("/api/admin/sentences")).status).toBe(401)
+  })
+
+  it("给了 lessonId：只返回该课时的句子", async () => {
+    const admin = ApiClient.asUser(await makeAdmin())
+    await insertSentence(FIXTURE.lessonA1, 1, "第一句", "First one")
+    await insertSentence(FIXTURE.lessonA1, 2, "第二句", "Second one")
+    await insertSentence(FIXTURE.lessonB1, 1, "别的课时的句子", "Another lesson")
+
+    const res = await admin.get<SentencesBody>(
+      `/api/admin/sentences?lessonId=${FIXTURE.lessonA1}&pageSize=100`,
+    )
+    expect(res.status).toBe(200)
+    expect(res.body.data.every((s) => s.lessonId === FIXTURE.lessonA1)).toBe(true)
+    expect(res.body.data.some((s) => s.chinese === "别的课时的句子")).toBe(false)
+  })
+
+  it("给了 lessonId：按**课内** sort_order 升序（这是这次修的核心）", async () => {
+    const admin = ApiClient.asUser(await makeAdmin())
+    // 故意乱序插入：如果接口仍按全局 sort_order 排，跨课时的行会混进来
+    await insertSentence(FIXTURE.lessonA1, 3, "甲三", "A3")
+    await insertSentence(FIXTURE.lessonA1, 1, "甲一", "A1")
+    await insertSentence(FIXTURE.lessonA1, 2, "甲二", "A2")
+
+    const res = await admin.get<SentencesBody>(
+      `/api/admin/sentences?lessonId=${FIXTURE.lessonA1}&pageSize=100`,
+    )
+    const orders = res.body.data
+      .filter((s) => s.chinese?.startsWith("甲"))
+      .map((s) => Number(s.sortOrder))
+    expect(orders).toEqual([1, 2, 3])
+    expect(res.body.orderedBy).toBe("sortOrder")
+  })
+
+  it("给了 lessonId：total 是该课时的精确条数（不是全库 46 万）", async () => {
+    const admin = ApiClient.asUser(await makeAdmin())
+    // 夹具本身往 lessonA1 里放了 3 句，所以用**增量**断言，不写死绝对值
+    // （写死会让这条测试在夹具变化时莫名其妙地红）
+    const before = await admin.get<SentencesBody>(
+      `/api/admin/sentences?lessonId=${FIXTURE.lessonA1}&pageSize=1`,
+    )
+    const baseTotal = before.body.total
+
+    await insertSentence(FIXTURE.lessonA1, 1, "一", "one")
+    await insertSentence(FIXTURE.lessonA1, 2, "二", "two")
+    // 另一课时插一句，用来证明 total 不会被别的课时污染
+    await insertSentence(FIXTURE.lessonB1, 1, "三", "three")
+
+    const res = await admin.get<SentencesBody>(
+      `/api/admin/sentences?lessonId=${FIXTURE.lessonA1}&pageSize=100`,
+    )
+    expect(res.body.total).toBe(baseTotal + 2)
+    // 有范围时 total 是精确计数的，不该标成缓存值
+    expect(res.body.totalIsCached).toBe(false)
+  })
+
+  it("没给 lessonId：按添加时间倒序，并回显 orderedBy=createdAt", async () => {
+    const admin = ApiClient.asUser(await makeAdmin())
+    const res = await admin.get<SentencesBody>("/api/admin/sentences?pageSize=5")
+    expect(res.status).toBe(200)
+    expect(res.body.orderedBy).toBe("createdAt")
+    // 无范围时 total 走 stats-cache（与仪表盘「句子库」同一个数）
+    expect(res.body.totalIsCached).toBe(true)
+    expect(typeof res.body.total).toBe("number")
+  })
+
+  it("没给 lessonId：不再按 sort_order 排（那会把各课时的第 1 句混在一起）", async () => {
+    const admin = await makeAdmin()
+    // 造两句：A 课时 sort_order 很大但刚插入，B 课时 sort_order 很小但很旧。
+    // 按 sort_order 排会把 B 排前面；按 created_at 倒序应把 A（刚插的）排前面。
+    await q(
+      `INSERT INTO sentences (id, chinese, english, lesson_id, sort_order, created_at)
+       VALUES (UUID(), '旧的但序号小', 'old', ?, 1, DATE_SUB(NOW(), INTERVAL 1 DAY))`,
+      [FIXTURE.lessonB1],
+    )
+    await insertSentence(FIXTURE.lessonA1, 900, "新的但序号大", "new")
+
+    const res = await ApiClient.asUser(admin).get<SentencesBody>(
+      "/api/admin/sentences?pageSize=50",
+    )
+    const chineses = res.body.data.map((x) => x.chinese)
+    const newIdx = chineses.indexOf("新的但序号大")
+    const oldIdx = chineses.indexOf("旧的但序号小")
+    // 关键断言是这两行的**相对顺序**：旧的那句 sort_order 更小，
+    // 若接口还按 sort_order 排它会排在前面。夹具自身的句子可能插在中间，
+    // 所以不能写死 data[0]（同秒插入的夹具行会与之并列，顺序不稳定）
+    expect(newIdx).toBeGreaterThanOrEqual(0)
+    expect(oldIdx).toBeGreaterThanOrEqual(0)
+    expect(newIdx).toBeLessThan(oldIdx)
+  })
+})
+
+describe("句子列表：搜索必须带课时范围", () => {
+  it("只给 q 不给 lessonId → 400 且说明原因（不是让使用者等 25 秒）", async () => {
+    const admin = ApiClient.asUser(await makeAdmin())
+    const res = await admin.get<{ error: string; code?: string }>(
+      "/api/admin/sentences?q=hello&pageSize=20",
+    )
+    expect(res.status).toBe(400)
+    expect(res.body.code).toBe("scope_required")
+    // 错误信息必须能指导下一步动作，而不是只说"失败"
+    expect(res.body.error).toMatch(/课时/)
+  })
+
+  it("同时给 q 和 lessonId → 在该课时内搜索中文", async () => {
+    const admin = ApiClient.asUser(await makeAdmin())
+    await insertSentence(FIXTURE.lessonA1, 1, "独一无二的中文串", "unique match")
+    await insertSentence(FIXTURE.lessonA1, 2, "普通句子", "ordinary")
+    await insertSentence(FIXTURE.lessonB1, 1, "独一无二的中文串", "unique match in other lesson")
+
+    const res = await admin.get<SentencesBody>(
+      `/api/admin/sentences?lessonId=${FIXTURE.lessonA1}&q=${encodeURIComponent("独一无二")}&pageSize=50`,
+    )
+    expect(res.status).toBe(200)
+    // 只命中本课时那条，另一课时里的同名句子不能出现
+    expect(res.body.total).toBe(1)
+    expect(res.body.data[0].lessonId).toBe(FIXTURE.lessonA1)
+  })
+
+  it("同时给 q 和 lessonId → 也能搜英文", async () => {
+    const admin = ApiClient.asUser(await makeAdmin())
+    await insertSentence(FIXTURE.lessonA1, 1, "中文", "pineapple express")
+
+    const res = await admin.get<SentencesBody>(
+      `/api/admin/sentences?lessonId=${FIXTURE.lessonA1}&q=pineapple&pageSize=50`,
+    )
+    expect(res.body.total).toBe(1)
+  })
+
+  it("搜不到时返回空数组而不是报错", async () => {
+    const admin = ApiClient.asUser(await makeAdmin())
+    await insertSentence(FIXTURE.lessonA1, 1, "中文", "english")
+    const res = await admin.get<SentencesBody>(
+      `/api/admin/sentences?lessonId=${FIXTURE.lessonA1}&q=zzz-nothing-matches&pageSize=50`,
+    )
+    expect(res.status).toBe(200)
+    expect(res.body.total).toBe(0)
+    expect(res.body.data).toEqual([])
+  })
+})
+
+describe("句子总数缓存：写入后失效", () => {
+  it("新增句子后，无范围列表的 total 立刻包含它（不被 10 分钟 TTL 拖住）", async () => {
+    const admin = ApiClient.asUser(await makeAdmin())
+
+    // 先读一次，把缓存写下来
+    const before = await admin.get<SentencesBody>("/api/admin/sentences?pageSize=5")
+    const baseTotal = before.body.total
+
+    // 再新增一句（POST 会失效缓存）
+    const lessonId = FIXTURE.lessonA1
+    const created = await admin.post("/api/admin/sentences", {
+      chinese: "缓存要失效",
+      english: "cache must be invalidated",
+      lessonId,
+      sortOrder: 99,
+    })
+    expect([200, 201]).toContain(created.status)
+
+    const after = await admin.get<SentencesBody>("/api/admin/sentences?pageSize=5")
+    // 如果忘了失效缓存，这里仍然等于 baseTotal —— 使用者会以为"保存没生效"
+    expect(after.body.total).toBe(baseTotal + 1)
+  })
+})
+
+describe("AI 接口配额", () => {
+  /**
+   * 只断言"鉴权先于配额、且未超限时不会被拦"。真正的配额耗尽要发 60 次请求，
+   * 而且这些接口会真的调用 LLM —— 在本机 e2e 里外部服务是被屏蔽的，
+   * 所以配额的计数逻辑由单测（admin-ai-quota.test.ts）覆盖，
+   * 这里只确认接线正确：未登录仍然 401，而不是 429。
+   */
+  const AI_ENDPOINTS: Array<[string, string]> = [
+    ["POST", "/api/admin/materials/analyze"],
+    ["POST", "/api/admin/ai/extract-sentences"],
+    ["POST", `/api/admin/sentences/${FIXTURE.sentA1Plain}/analyze`],
+    ["POST", `/api/admin/sentences/${FIXTURE.sentA1Plain}/split`],
+    ["POST", `/api/admin/courses/${FIXTURE.coursePublished}/ai-generate`],
+  ]
+
+  for (const [method, path] of AI_ENDPOINTS) {
+    it(`${path} 未登录 → 401（鉴权在配额之前，不能先回 429 泄露接口存在）`, async () => {
+      const res = await ApiClient.anonymous().request(method, path, { json: {} })
+      expect(res.status).toBe(401)
+    })
+  }
+
+  it("非管理员 → 401", async () => {
+    const res = await ApiClient.asUser(FIXTURE.userFree).request(
+      "POST",
+      `/api/admin/sentences/${FIXTURE.sentA1Plain}/split`,
+      { json: {} },
+    )
+    expect(res.status).toBe(401)
+  })
+})

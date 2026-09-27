@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import { db } from "@/lib/db"
 import { sentences } from "@/lib/db/schema"
 import { requireAdmin } from "@/lib/admin-auth"
+import { checkAdminAiQuota, quotaExceededBody } from "@/lib/admin-ai-quota"
 import { eq } from "drizzle-orm"
 import { llmCall } from "@/lib/llm"
 
@@ -56,6 +57,11 @@ function extractJsonArray(raw: string): string {
 export async function POST(_: Request, { params }: { params: Promise<{ id: string }> }) {
   const auth = await requireAdmin()
   if (auth instanceof NextResponse) return auth
+  // AI 调用会计费且这些接口没有其它成本闸门，先检查按账号的配额（见 lib/admin-ai-quota）
+  const quota = checkAdminAiQuota("sentence-split", auth.userId)
+  if (!quota.allowed) {
+    return NextResponse.json(quotaExceededBody(quota), { status: 429 })
+  }
   if (!db) return NextResponse.json({ error: "DB not configured" }, { status: 500 })
 
   const { id } = await params

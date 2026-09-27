@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import { db } from "@/lib/db"
 import { sentences } from "@/lib/db/schema"
 import { requireAdmin } from "@/lib/admin-auth"
+import { invalidateCachedCount, STATS_KEYS } from "@/lib/stats-cache"
 
 interface SentenceInput {
   english: string
@@ -43,6 +44,8 @@ export async function POST(request: Request) {
   }))
 
   await db.insert(sentences).values(rows)
+  // 批量导入会显著改变句子总数，立刻失效缓存，否则仪表盘与列表会长时间显示旧数
+  await invalidateCachedCount(STATS_KEYS.totalSentences)
 
   return NextResponse.json({ data: { savedCount: rows.length } }, { status: 201 })
 }

@@ -3,6 +3,7 @@ import { db } from "@/lib/db"
 import { sentences } from "@/lib/db/schema"
 import { requireAdmin } from "@/lib/admin-auth"
 import { eq } from "drizzle-orm"
+import { invalidateCachedCount, STATS_KEYS } from "@/lib/stats-cache"
 
 export async function GET(_: Request, { params }: { params: Promise<{ id: string }> }) {
   const auth = await requireAdmin()
@@ -35,5 +36,7 @@ export async function DELETE(_: Request, { params }: { params: Promise<{ id: str
 
   const { id } = await params
   await db.delete(sentences).where(eq(sentences.id, id))
+  // 删句子会改变总数，立刻失效缓存（否则列表/仪表盘 10 分钟内仍显示旧数）
+  await invalidateCachedCount(STATS_KEYS.totalSentences)
   return NextResponse.json({ data: { id } })
 }

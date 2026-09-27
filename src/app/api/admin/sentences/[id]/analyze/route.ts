@@ -3,12 +3,18 @@ import { createHash } from "crypto"
 import { db } from "@/lib/db"
 import { sentences, sentenceKnowledge } from "@/lib/db/schema"
 import { requireAdmin } from "@/lib/admin-auth"
+import { checkAdminAiQuota, quotaExceededBody } from "@/lib/admin-ai-quota"
 import { eq } from "drizzle-orm"
 import { analyzeSentence } from "@/lib/llm"
 
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const auth = await requireAdmin()
   if (auth instanceof NextResponse) return auth
+  // AI 调用会计费且这些接口没有其它成本闸门，先检查按账号的配额（见 lib/admin-ai-quota）
+  const quota = checkAdminAiQuota("sentence-analyze", auth.userId)
+  if (!quota.allowed) {
+    return NextResponse.json(quotaExceededBody(quota), { status: 429 })
+  }
   if (!db) return NextResponse.json({ error: "DB not configured" }, { status: 500 })
 
   const { id } = await params

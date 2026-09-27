@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server"
 import { requireAdmin } from "@/lib/admin-auth"
+import { checkAdminAiQuota, quotaExceededBody } from "@/lib/admin-ai-quota"
 import { llmCall } from "@/lib/llm"
 import { extractTextFromFile } from "@/lib/file-parser"
 
@@ -22,6 +23,11 @@ function buildPrompt(lessonCount: string, sentencesPerLesson: string): string {
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const auth = await requireAdmin()
   if (auth instanceof NextResponse) return auth
+  // AI 调用会计费且这些接口没有其它成本闸门，先检查按账号的配额（见 lib/admin-ai-quota）
+  const quota = checkAdminAiQuota("course-ai-generate", auth.userId)
+  if (!quota.allowed) {
+    return NextResponse.json(quotaExceededBody(quota), { status: 429 })
+  }
 
   await params // ensure params resolved (unused but required pattern)
 

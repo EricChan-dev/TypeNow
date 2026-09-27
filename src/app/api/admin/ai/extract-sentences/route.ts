@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server"
 import { requireAdmin } from "@/lib/admin-auth"
+import { checkAdminAiQuota, quotaExceededBody } from "@/lib/admin-ai-quota"
 import { llmCall } from "@/lib/llm"
 import { extractTextFromFile } from "@/lib/file-parser"
 
@@ -17,6 +18,11 @@ const SYSTEM_PROMPT = `你是英语教学内容处理专家。请从下面的文
 export async function POST(req: Request) {
   const auth = await requireAdmin()
   if (auth instanceof NextResponse) return auth
+  // AI 调用会计费且这些接口没有其它成本闸门，先检查按账号的配额（见 lib/admin-ai-quota）
+  const quota = checkAdminAiQuota("ai-extract-sentences", auth.userId)
+  if (!quota.allowed) {
+    return NextResponse.json(quotaExceededBody(quota), { status: 429 })
+  }
 
   let text: string
 
