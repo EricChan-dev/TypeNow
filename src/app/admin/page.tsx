@@ -1,6 +1,6 @@
 "use client"
 
-import { Card, Col, Row, Segmented, Statistic, Table, Tag, Typography } from "antd"
+import { Card, Col, Row, Segmented, Table, Tag, Typography } from "antd"
 import {
   UserOutlined,
   DollarOutlined,
@@ -11,8 +11,9 @@ import {
 import Link from "next/link"
 import { useState } from "react"
 import EChart from "@/components/admin/EChart"
+import MetricCard from "@/components/admin/MetricCard"
 import { multiLineOption } from "@/lib/admin-chart-options"
-import { eventsUrl } from "@/lib/admin-links"
+import { eventsUrl, listUrl } from "@/lib/admin-links"
 import { useAdminFetch } from "@/lib/admin-fetch"
 import { RANGE_OPTIONS, DEFAULT_RANGE, type StatsRange } from "@/lib/admin-range"
 
@@ -51,47 +52,6 @@ interface OrderRow {
   outTradeNo: string
   paidAt: string | null
   createdAt: string
-}
-
-/**
- * 可点击的指标卡。
- *
- * 「可查指标背后的埋点详情」在仪表盘上的落点：每个行为指标都要能一步走到
- * 构成它的明细。没有 drills 的指标（比如练习句数，后台没有逐条列表页）
- * 就渲染成普通卡片，**不做**假链接 —— 点了没反应比没有链接更消耗信任。
- */
-function MetricCard({
-  title,
-  value,
-  prefix,
-  valueStyle,
-  loading,
-  href,
-  drillHint,
-}: {
-  title: string
-  value: string | number
-  prefix?: React.ReactNode
-  valueStyle?: React.CSSProperties
-  loading?: boolean
-  href?: string
-  drillHint?: string
-}) {
-  const card = (
-    <Card loading={loading} hoverable={Boolean(href)}>
-      <Statistic title={title} value={value} prefix={prefix} valueStyle={valueStyle} />
-      {href && drillHint ? (
-        <div style={{ fontSize: 12, color: "#1677ff", marginTop: 4 }}>{drillHint} →</div>
-      ) : null}
-    </Card>
-  )
-  return href ? (
-    <Link href={href} style={{ display: "block" }}>
-      {card}
-    </Link>
-  ) : (
-    card
-  )
 }
 
 export default function AdminDashboard() {
@@ -158,9 +118,11 @@ export default function AdminDashboard() {
         />
       </div>
 
-      {/* ── 行为指标：随上方时间范围变化，且每个都能钻到明细 ── */}
+      {/* ── 行为指标：随上方时间范围变化，且**每一个都**能点进明细 ──
+          链接一律带上当前 range：不带的话落点是全量列表，条数比卡片上的数字多，
+          看起来就像仪表盘算错了。 */}
       <Text type="secondary" style={{ display: "block", margin: "16px 0 8px" }}>
-        <ThunderboltOutlined /> 行为指标 · {data?.rangeLabel ?? "—"} · 点卡片可看明细
+        <ThunderboltOutlined /> 行为指标 · {data?.rangeLabel ?? "—"} · 点卡片看构成这些数的记录
       </Text>
       <Row gutter={[16, 16]}>
         <Col xs={12} lg={6}>
@@ -169,8 +131,8 @@ export default function AdminDashboard() {
             value={a?.newUsers ?? 0}
             prefix={<UserOutlined />}
             loading={loading}
-            href="/admin/users"
-            drillHint="用户列表"
+            href={listUrl("/admin/users", [{ field: "range", value: range }])}
+            drillHint="这段时间注册的用户"
           />
         </Col>
         <Col xs={12} lg={6}>
@@ -178,12 +140,21 @@ export default function AdminDashboard() {
             title="活跃用户（有练习）"
             value={a?.activeUsers ?? 0}
             loading={loading}
-            href="/admin/users"
-            drillHint="用户列表"
+            href={listUrl("/admin/users", [
+              { field: "range", value: range },
+              { field: "active", value: 1 },
+            ])}
+            drillHint="这段时间练过的用户"
           />
         </Col>
         <Col xs={12} lg={6}>
-          <MetricCard title="练习句数" value={a?.practiceRecords ?? 0} loading={loading} />
+          <MetricCard
+            title="练习句数"
+            value={a?.practiceRecords ?? 0}
+            loading={loading}
+            href={listUrl("/admin/practice", [{ field: "range", value: range }])}
+            drillHint="逐条练习记录"
+          />
         </Col>
         <Col xs={12} lg={6}>
           <MetricCard
@@ -200,8 +171,12 @@ export default function AdminDashboard() {
             value={a?.paidOrders ?? 0}
             prefix={<DollarOutlined />}
             loading={loading}
-            href="/admin/payments"
-            drillHint="支付订单"
+            // status=paid：指标只统计已支付订单，不带状态条数会对不上
+            href={listUrl("/admin/payments", [
+              { field: "range", value: range },
+              { field: "status", value: "paid" },
+            ])}
+            drillHint="已支付订单"
           />
         </Col>
         <Col xs={12} lg={6}>
@@ -211,8 +186,11 @@ export default function AdminDashboard() {
             prefix="¥"
             valueStyle={{ color: "#22C55E" }}
             loading={loading}
-            href="/admin/payments"
-            drillHint="支付订单"
+            href={listUrl("/admin/payments", [
+              { field: "range", value: range },
+              { field: "status", value: "paid" },
+            ])}
+            drillHint="已支付订单"
           />
         </Col>
         <Col xs={12} lg={6}>
@@ -220,12 +198,18 @@ export default function AdminDashboard() {
             title="领取体验会员"
             value={a?.trialClaims ?? 0}
             loading={loading}
-            href={eventsUrl({ event: "trial_claimed", range })}
-            drillHint="埋点明细"
+            // 领取记录就是 users.trial_claimed_at（没有独立表，见 00012 迁移），
+            // 所以落点是"这段时间领过的用户"而不是某张事件表
+            href={listUrl("/admin/users", [
+              { field: "range", value: range },
+              { field: "trial", value: 1 },
+            ])}
+            drillHint="这段时间领取的用户"
           />
         </Col>
       </Row>
 
+      {/* 行为趋势：卡片回答"多少"，这张图回答"什么时候、在涨还是在跌" */}
       <Card
         size="small"
         title={`行为趋势（${data?.rangeLabel ?? "—"}）`}
@@ -249,31 +233,58 @@ export default function AdminDashboard() {
         />
       </Card>
 
-      {/* ── 内容总量：不随时间筛选 ── */}
+      {/* ── 内容总量：不随时间筛选，但每一项都要能点到它自己的列表 ── */}
       <Text type="secondary" style={{ display: "block", margin: "24px 0 8px" }}>
-        <FileTextOutlined /> 内容总量 · 全部（不受上方时间范围影响）
+        <FileTextOutlined /> 内容与存量 · 全部（不受上方时间范围影响）
       </Text>
       <Row gutter={[16, 16]}>
         <Col xs={12} lg={6}>
-          <Card loading={loading}>
-            <Statistic title="用户总数" value={t?.users ?? 0} />
-          </Card>
+          <MetricCard
+            title="用户总数"
+            value={t?.users ?? 0}
+            loading={loading}
+            href="/admin/users"
+            drillHint="全部用户"
+          />
         </Col>
         <Col xs={12} lg={6}>
-          <Card loading={loading}>
-            <Statistic title="活跃订阅" value={t?.activeSubscriptions ?? 0} prefix={<CrownOutlined />} valueStyle={{ color: "#6366F1" }} />
-          </Card>
+          <MetricCard
+            title="活跃订阅"
+            value={t?.activeSubscriptions ?? 0}
+            prefix={<CrownOutlined />}
+            valueStyle={{ color: "#6366F1" }}
+            loading={loading}
+            // 与接口同口径（status=active），否则列表条数和这个数对不上
+            href={listUrl("/admin/subscriptions", [{ field: "status", value: "active" }])}
+            drillHint="生效中的订阅"
+          />
         </Col>
         <Col xs={12} lg={6}>
-          <Card loading={loading}>
-            <Statistic title="课程 / 课时" value={t ? `${t.courses ?? "—"} / ${t.lessons ?? "—"}` : "—"} />
-          </Card>
+          <MetricCard
+            title="课程"
+            value={t?.courses ?? "—"}
+            loading={loading}
+            href="/admin/courses"
+            drillHint="课程管理"
+          />
         </Col>
         <Col xs={12} lg={6}>
-          <Card loading={loading}>
-            {/* 句子库走 10 分钟缓存：46 万行的 COUNT(*) 实测 104~356ms，不该每次打开后台都跑 */}
-            <Statistic title="句子库（缓存 10 分钟）" value={t?.sentences ?? "—"} />
-          </Card>
+          <MetricCard
+            title="课时"
+            value={t?.lessons ?? "—"}
+            loading={loading}
+            href="/admin/lessons"
+            drillHint="课时管理"
+          />
+        </Col>
+        <Col xs={12} lg={6}>
+          <MetricCard
+            title="句子库（缓存 10 分钟）"
+            value={t?.sentences ?? "—"}
+            loading={loading}
+            href="/admin/sentences"
+            drillHint="句子管理"
+          />
         </Col>
       </Row>
 

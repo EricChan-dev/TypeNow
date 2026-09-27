@@ -66,6 +66,22 @@ const CONTRACT: Record<string, { page: string; fields: string[] }> = {
     page: "/admin/sentences",
     fields: ["chinese", "english", "category", "difficulty"],
   },
+  // 练习记录页是仪表盘「练习句数」的落点（闭环），字段名同样是页面 dataIndex
+  "practice-records": {
+    page: "/admin/practice",
+    fields: [
+      "createdAt",
+      "userId",
+      "userName",
+      "userPhone",
+      "chinese",
+      "english",
+      "score",
+      "mistakes",
+      "isReview",
+      "userInput",
+    ],
+  },
 }
 
 const RESOURCES = Object.keys(CONTRACT)

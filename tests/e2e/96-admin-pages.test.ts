@@ -28,6 +28,7 @@ const ADMIN_PAGES = [
   "/admin/lessons",
   "/admin/sentences",
   "/admin/materials",
+  "/admin/practice",
   "/admin/users",
   "/admin/payments",
   "/admin/subscriptions",

@@ -10,6 +10,7 @@ import {
   UnorderedListOutlined,
   UploadOutlined,
   LineChartOutlined,
+  ThunderboltOutlined,
 } from "@ant-design/icons"
 
 export const resources: IResourceItem[] = [
@@ -49,6 +50,12 @@ export const resources: IResourceItem[] = [
     list: "/admin/users",
     show: "/admin/users/:id",
     meta: { label: "用户管理", icon: <UserOutlined /> },
+  },
+  {
+    name: "practice-records",
+    list: "/admin/practice",
+    // 只读：练习记录是用户行为的历史事实，后台不应该能改
+    meta: { label: "练习记录", icon: <ThunderboltOutlined /> },
   },
   {
     name: "payment-orders",

@@ -3,6 +3,8 @@
 import { List, useTable, ShowButton } from "@refinedev/antd"
 import { Input, Space, Table, Tag } from "antd"
 import Link from "next/link"
+import DrilldownBanner from "@/components/admin/DrilldownBanner"
+import { drilldownBadges, withFilter, withoutDrilldown } from "@/lib/admin-drilldown"
 
 /**
  * 用户管理列表。
@@ -12,13 +14,20 @@ import Link from "next/link"
  * 这些原先都要点进详情才能看到，导致列表页无法一眼分辨"真在用的用户"和"注册完就没来过的"。
  */
 export default function UsersList() {
-  const { tableProps, setFilters } = useTable({
+  const { tableProps, filters, setFilters } = useTable({
     pagination: { pageSize: 20 },
     syncWithLocation: true,
   })
 
   return (
     <List>
+      {/* 从仪表盘钻进来时说明口径：不说的话用户只看到"人数比指标多"，
+          会以为仪表盘算错了 */}
+      <DrilldownBanner
+        badges={drilldownBadges(filters as never)}
+        onClear={() => setFilters(withoutDrilldown(filters as never), "replace")}
+      />
+
       <div style={{ marginBottom: 16 }}>
         <Space>
           <Input.Search
@@ -26,7 +35,8 @@ export default function UsersList() {
             placeholder="搜索昵称 / 手机号"
             style={{ width: 320 }}
             onSearch={(value) =>
-              setFilters([{ field: "q", operator: "eq", value }], "replace")
+              // 只替换 q，保留钻取条件 —— 直接 setFilters([q]) 会把时间范围清掉
+              setFilters(withFilter(filters as never, "q", value.trim()), "replace")
             }
           />
         </Space>

@@ -2,12 +2,13 @@
 
 import { useState } from "react"
 import Link from "next/link"
-import { Alert, Card, Col, Row, Segmented, Space, Spin, Statistic, Tag, Typography } from "antd"
+import { Alert, Card, Col, Row, Segmented, Space, Spin, Tag, Typography } from "antd"
 import { LineChartOutlined } from "@ant-design/icons"
 import EChart from "@/components/admin/EChart"
+import MetricCard from "@/components/admin/MetricCard"
 import { funnelRateOption } from "@/lib/admin-chart-options"
 import { RANGE_OPTIONS, DEFAULT_RANGE, type StatsRange } from "@/lib/admin-range"
-import { eventsUrl } from "@/lib/admin-links"
+import { eventsUrl, listUrl } from "@/lib/admin-links"
 import { useAdminFetch } from "@/lib/admin-fetch"
 
 const { Title, Text } = Typography
@@ -62,9 +63,15 @@ function stepHref(step: FunnelStep, range: StatsRange): string | null {
     case "pricing_view":
       return eventsUrl({ event: step.key, range })
     case "registered":
-      return "/admin/users"
+      // 同期群口径的第一步是"这段时间注册的人"，落点必须同样按注册时间筛
+      return listUrl("/admin/users", [{ field: "range", value: range }])
+    case "practiced":
+      return listUrl("/admin/practice", [{ field: "range", value: range }])
     case "paid":
-      return "/admin/payments"
+      return listUrl("/admin/payments", [
+        { field: "range", value: range },
+        { field: "status", value: "paid" },
+      ])
     default:
       return null
   }
@@ -131,37 +138,54 @@ export default function AnalyticsPage() {
         首启漏斗 · 注册 → 打开课程 → 进入练习 → 练完一句 → 领取体验 → 看定价 → 付费
       </Text>
 
-      {/* 关键指标：全部走数据库权威口径 */}
+      {/* 关键指标：全部走数据库权威口径，且每一项都能点进构成它的记录。
+          这是「指标 → 埋点详情」闭环在漏斗页的一半 —— 另一半是下面每一步的「看明细」。 */}
       <Row gutter={[16, 16]} style={{ marginTop: 20 }}>
         <Col xs={12} md={6}>
-          <Card size="small">
-            <Statistic title={`注册用户（${data.rangeLabel}）`} value={data.domain.registered} />
-          </Card>
+          <MetricCard
+            title={`注册用户（${data.rangeLabel}）`}
+            value={data.domain.registered}
+            href={listUrl("/admin/users", [{ field: "range", value: range }])}
+            drillHint="这段时间注册的用户"
+          />
         </Col>
         <Col xs={12} md={6}>
-          <Card size="small">
-            <Statistic
-              title="练过至少一句"
-              value={data.domain.practicedUsers}
-              suffix={`/ ${data.domain.registered}`}
-            />
-          </Card>
+          <MetricCard
+            title="练过至少一句"
+            value={data.domain.practicedUsers}
+            href={listUrl("/admin/users", [
+              { field: "range", value: range },
+              { field: "active", value: 1 },
+            ])}
+            drillHint="这段时间练过的用户"
+          />
         </Col>
         <Col xs={12} md={6}>
-          <Card size="small">
-            <Statistic title="付费用户" value={data.domain.paidUsers} />
-          </Card>
+          <MetricCard
+            title="付费用户"
+            value={data.domain.paidUsers}
+            href={listUrl("/admin/payments", [
+              { field: "range", value: range },
+              { field: "status", value: "paid" },
+            ])}
+            drillHint="已支付订单"
+          />
         </Col>
         <Col xs={12} md={6}>
-          <Card size="small">
-            <Statistic
-              title="累计收入"
-              value={(data.domain.revenueFen / 100).toFixed(2)}
-              prefix="¥"
-            />
-          </Card>
+          <MetricCard
+            title="累计收入"
+            value={(data.domain.revenueFen / 100).toFixed(2)}
+            prefix="¥"
+            valueStyle={{ color: "#22C55E" }}
+            href={listUrl("/admin/payments", [
+              { field: "range", value: range },
+              { field: "status", value: "paid" },
+            ])}
+            drillHint="已支付订单"
+          />
         </Col>
       </Row>
+
       <Text type="secondary" style={{ display: "block", marginTop: 8, fontSize: 12 }}>
         注册 / 练过至少一句 / 付费 三个数取自数据库，不受客户端埋点是否被拦截影响。
         付费口径含测试单（历史上有两笔 1 分钱测试订单）。

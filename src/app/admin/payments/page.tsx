@@ -3,6 +3,8 @@
 import { List, useTable } from "@refinedev/antd"
 import { Input, Space, Table, Tag } from "antd"
 import Link from "next/link"
+import DrilldownBanner from "@/components/admin/DrilldownBanner"
+import { drilldownBadges, withFilter, withoutDrilldown } from "@/lib/admin-drilldown"
 
 /**
  * 支付订单列表。
@@ -15,13 +17,18 @@ import Link from "next/link"
  * query 参数名发出去，所以这里 field 必须与后端读的参数名一致（q）。
  */
 export default function PaymentsList() {
-  const { tableProps, setFilters } = useTable({
+  const { tableProps, filters, setFilters } = useTable({
     pagination: { pageSize: 20 },
     syncWithLocation: true,
   })
 
   return (
     <List>
+      <DrilldownBanner
+        badges={drilldownBadges(filters as never)}
+        onClear={() => setFilters(withoutDrilldown(filters as never), "replace")}
+      />
+
       <div style={{ marginBottom: 16 }}>
         <Space>
           <Input.Search
@@ -29,7 +36,8 @@ export default function PaymentsList() {
             placeholder="搜索订单号 / 用户姓名 / 手机号"
             style={{ width: 320 }}
             onSearch={(value) =>
-              setFilters([{ field: "q", operator: "eq", value }], "replace")
+              // 只替换 q，保留钻取条件（从仪表盘带进来的时间范围/状态）
+              setFilters(withFilter(filters as never, "q", value.trim()), "replace")
             }
           />
         </Space>
