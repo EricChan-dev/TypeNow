@@ -46,8 +46,9 @@ CREATE TABLE `analytics_events` (
   `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`),
   KEY `idx_ae_type_time` (`event_type`,`created_at`),
-  KEY `idx_ae_user` (`user_id`)
-) ENGINE=InnoDB AUTO_INCREMENT=134 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+  KEY `idx_ae_user` (`user_id`),
+  KEY `idx_ae_created_at` (`created_at`)
+) ENGINE=InnoDB AUTO_INCREMENT=153 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 DROP TABLE IF EXISTS `check_ins`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
@@ -201,7 +202,8 @@ CREATE TABLE `payment_orders` (
   UNIQUE KEY `payment_orders_out_trade_no_unique` (`out_trade_no`),
   UNIQUE KEY `idx_payment_orders_out_trade_no` (`out_trade_no`),
   KEY `idx_payment_orders_user_id` (`user_id`),
-  KEY `idx_payment_orders_status` (`status`)
+  KEY `idx_payment_orders_status` (`status`),
+  KEY `idx_payment_orders_status_paid_at` (`status`,`paid_at`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 DROP TABLE IF EXISTS `post_likes`;
@@ -245,7 +247,8 @@ CREATE TABLE `practice_records` (
   `is_review` tinyint NOT NULL DEFAULT '0',
   `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`),
-  KEY `idx_practice_records_user_id` (`user_id`)
+  KEY `idx_practice_records_user_id` (`user_id`),
+  KEY `idx_practice_records_created_at` (`created_at`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 DROP TABLE IF EXISTS `practice_sessions`;
@@ -322,7 +325,9 @@ CREATE TABLE `sentences` (
   `dependency_analysis` json DEFAULT NULL,
   `sentence_structure` json DEFAULT NULL,
   PRIMARY KEY (`id`),
-  KEY `idx_sentences_lesson_id` (`lesson_id`)
+  KEY `idx_sentences_lesson_id` (`lesson_id`),
+  KEY `idx_sentences_lesson_sort` (`lesson_id`,`sort_order`),
+  KEY `idx_sentences_created_at` (`created_at`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 DROP TABLE IF EXISTS `sessions`;
@@ -377,7 +382,8 @@ CREATE TABLE `subscriptions` (
   `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`),
   KEY `idx_subscriptions_user_id` (`user_id`),
-  KEY `idx_subscriptions_expires` (`expires_at`)
+  KEY `idx_subscriptions_expires` (`expires_at`),
+  KEY `idx_subscriptions_created_at` (`created_at`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 DROP TABLE IF EXISTS `task_logs`;
@@ -487,7 +493,8 @@ CREATE TABLE `users` (
   UNIQUE KEY `users_wechat_openid_unique` (`wechat_openid`),
   UNIQUE KEY `idx_users_wechat_openid` (`wechat_openid`),
   UNIQUE KEY `users_invite_code_unique` (`invite_code`),
-  UNIQUE KEY `idx_users_wechat_unionid` (`wechat_unionid`)
+  UNIQUE KEY `idx_users_wechat_unionid` (`wechat_unionid`),
+  KEY `idx_users_created_at` (`created_at`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 DROP TABLE IF EXISTS `verification_codes`;
