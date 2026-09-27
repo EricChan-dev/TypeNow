@@ -17,6 +17,8 @@ import { getCachedCount, STATS_KEYS } from "@/lib/stats-cache"
 import { userFeedback } from "@/lib/db/schema"
 import { OPEN_FEEDBACK_STATUSES } from "@/lib/feedback"
 import { and, gte, eq, inArray, sql } from "drizzle-orm"
+// 会员/订阅的"此刻是否生效"只有一份口径，见 lib/subscription
+import { activeSubscriptionSql } from "@/lib/subscription"
 
 /**
  * 后台仪表盘统计。
@@ -128,10 +130,13 @@ export async function GET(request: Request) {
       .from(users)
       .then((r) => Number(r[0]?.n ?? 0)),
 
+    // 「活跃订阅」= 此刻仍然生效，而不是"状态字段写着 active"。
+    // 到期未清理的行会一直留在 active 上（见 lib/subscription 的说明），
+    // 而这张卡片的文案是「生效中的订阅」——那里写着什么就得算什么。
     db
       .select({ n: sql<number>`COUNT(*)` })
       .from(subscriptions)
-      .where(eq(subscriptions.status, "active"))
+      .where(activeSubscriptionSql())
       .then((r) => Number(r[0]?.n ?? 0)),
 
     // ── 每日趋势（供图表）──

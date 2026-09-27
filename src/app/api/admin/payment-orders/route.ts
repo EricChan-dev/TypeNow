@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import { db } from "@/lib/db"
 import { paymentOrders, users } from "@/lib/db/schema"
 import { requireAdmin } from "@/lib/admin-auth"
+import { activeProSql } from "@/lib/subscription"
 import { parsePagination } from "@/lib/pagination"
 import { parseRange, rangeStart, rangeLabel } from "@/lib/admin-range"
 import { desc, eq, and, gte, or, like, sql, type SQL } from "drizzle-orm"
@@ -78,7 +79,7 @@ export async function GET(request: Request) {
         createdAt: paymentOrders.createdAt,
         userName: users.name,
         userPhone: users.phone,
-        userIsPro: users.isPro,
+        userIsPro: activeProSql(),
       })
       .from(paymentOrders)
       .leftJoin(users, eq(paymentOrders.userId, users.id))

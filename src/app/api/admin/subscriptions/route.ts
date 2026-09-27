@@ -4,6 +4,7 @@ import { subscriptions, users } from "@/lib/db/schema"
 import { requireAdmin } from "@/lib/admin-auth"
 import { parsePagination } from "@/lib/pagination"
 import { parseRange, rangeStart, rangeLabel } from "@/lib/admin-range"
+import { activeSubscriptionSql, isSubscriptionActive } from "@/lib/subscription"
 import { desc, eq, and, gte, or, like, sql, type SQL } from "drizzle-orm"
 
 /**
@@ -19,9 +20,10 @@ import { desc, eq, and, gte, or, like, sql, type SQL } from "drizzle-orm"
  *   status=active —— 仪表盘那个数只统计生效中的订阅，不带这个条件条数会对不上
  *   range         —— 按**创建时间**筛（"这段时间新增了多少订阅"）
  *
- * 注意 status 是精确匹配：`active` 表示"状态字段是 active"，**不**等于
- * "此刻还在有效期内"。到期未清理的行仍会留在 active 上，所以这里回显的
- * 口径与仪表盘一致（两处都读 status），不会出现两个页面数字不同的情况。
+ * ⚠️ `status=active` 表示**此刻仍然生效**（`status='active'` 且未到期），
+ * 与仪表盘「活跃订阅」卡片共用 lib/subscription 的 activeSubscriptionSql()。
+ * 此前两处都直接读 status 列，于是"到期但没被回收"的行会被算成活跃订阅 ——
+ * 而回收只发生在 checkAndExpirePro 被调用时，再也不回来的用户永远不会被回收。
  */
 /** 与 schema 的 subscriptions.status 枚举一一对应。 */
 type SubStatus = "active" | "cancelled" | "expired"
@@ -51,7 +53,13 @@ export async function GET(request: Request) {
     if (matched) conditions.push(matched)
   }
   if (from) conditions.push(gte(subscriptions.createdAt, from))
-  if (status) conditions.push(eq(subscriptions.status, status))
+  // status=active 的语义是**此刻仍然生效**，而不是"状态列写着 active"：
+  // 到期未清理的行会一直挂着 active，仪表盘「活跃订阅」卡片与这里的
+  // 钻取必须算同一个数（有 e2e 钉着这条不变量）。
+  // 需要看"状态列恰好是 active"的行（含到期的）时不带 status 筛选即可 ——
+  // 列表里会把它们标成「已过期(未清理)」，不会凭空消失。
+  if (status === "active") conditions.push(activeSubscriptionSql())
+  else if (status) conditions.push(eq(subscriptions.status, status))
   const where: SQL | undefined = conditions.length > 0 ? and(...conditions) : undefined
 
   const [rows, [{ total }]] = await Promise.all([
@@ -83,7 +91,12 @@ export async function GET(request: Request) {
   ])
 
   return NextResponse.json({
-    data: rows,
+    // effectiveStatus：给列表显示用。status=active 但已过期的行标出来，
+    // 否则它们在"生效中"筛选下消失、在别处又与普通 active 无法区分
+    data: rows.map((r) => ({
+      ...r,
+      effectiveStatus: isSubscriptionActive(r) ? "active" : r.status === "active" ? "expired_stale" : r.status,
+    })),
     total: Number(total),
     appliedRange: range,
     appliedRangeLabel: range ? rangeLabel(range) : null,

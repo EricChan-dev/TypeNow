@@ -59,20 +59,25 @@ export default function SubscriptionsList() {
             p === "monthly" ? "月度会员" : p === "yearly" ? "年度会员" : "合伙人"
           }
         />
+        {/* 用接口算好的 effectiveStatus：status 列写着 active 但已经到期的行
+            标成「已过期(未清理)」。只看 status 会把它们显示成"有效"，
+            而仪表盘「活跃订阅」又不算它们 —— 同一行在两个地方两种说法 */}
         <Table.Column
-          dataIndex="status"
+          dataIndex="effectiveStatus"
           title="状态"
-          width={100}
+          width={130}
           render={(s: string) => {
             const colors: Record<string, string> = {
               active: "green",
               cancelled: "orange",
               expired: "default",
+              expired_stale: "red",
             }
             const labels: Record<string, string> = {
               active: "有效",
               cancelled: "已取消",
               expired: "已过期",
+              expired_stale: "已过期(未清理)",
             }
             return <Tag color={colors[s] || "default"}>{labels[s] || s}</Tag>
           }}

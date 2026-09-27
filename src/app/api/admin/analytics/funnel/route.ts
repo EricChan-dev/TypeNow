@@ -8,6 +8,7 @@ import {
   users,
 } from "@/lib/db/schema"
 import { requireAdmin } from "@/lib/admin-auth"
+import { activeSubscriptionSql } from "@/lib/subscription"
 import { FUNNEL_STEPS } from "@/lib/analytics-events"
 import { parseRange, rangeStart, rangeLabel } from "@/lib/admin-range"
 import { eq, gte, inArray, sql } from "drizzle-orm"
@@ -89,10 +90,11 @@ export async function GET(request: Request) {
       )
       .then((r) => ({ n: Number(r[0]?.n ?? 0), fen: Number(r[0]?.fen ?? 0) })),
 
+    // 与仪表盘「活跃订阅」同口径：到期未回收的行不算生效（见 lib/subscription）
     db
       .select({ n: sql<number>`COUNT(*)` })
       .from(subscriptions)
-      .where(eq(subscriptions.status, "active"))
+      .where(activeSubscriptionSql())
       .then((r) => Number(r[0]?.n ?? 0)),
 
     // cohort 内的埋点事件（按类型分组）

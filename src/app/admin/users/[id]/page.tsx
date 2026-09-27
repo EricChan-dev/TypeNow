@@ -160,7 +160,13 @@ export default function UserShow() {
           <Descriptions.Item label="钻石">{(record.diamonds as number) || 0}</Descriptions.Item>
           <Descriptions.Item label="邀请码">{(record.inviteCode as string) || "-"}</Descriptions.Item>
           <Descriptions.Item label="会员状态">
-            {record.isPro ? <Tag color="blue">PRO</Tag> : <Tag>免费用户</Tag>}
+            {record.isPro ? (
+              <Tag color="blue">PRO</Tag>
+            ) : record.isProFlagged ? (
+              <Tag color="default">已过期（标记未回收）</Tag>
+            ) : (
+              <Tag>免费用户</Tag>
+            )}
           </Descriptions.Item>
           <Descriptions.Item label="会员到期">
             {record.proExpires ? new Date(record.proExpires as string).toLocaleString("zh-CN") : "-"}

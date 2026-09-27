@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import { db } from "@/lib/db"
 import { analyticsEvents, users } from "@/lib/db/schema"
 import { requireAdmin } from "@/lib/admin-auth"
+import { activeProSql } from "@/lib/subscription"
 import { parsePagination } from "@/lib/pagination"
 import { buildEventWhere, parseEventFilter } from "@/lib/admin-event-filter"
 import { maskPhone } from "@/lib/mask"
@@ -41,7 +42,7 @@ export async function GET(request: Request) {
         createdAt: analyticsEvents.createdAt,
         userName: users.name,
         userPhone: users.phone,
-        userIsPro: users.isPro,
+        userIsPro: activeProSql(),
       })
       .from(analyticsEvents)
       // LEFT JOIN：匿名事件 userId 为 NULL，INNER JOIN 会静默丢掉它们

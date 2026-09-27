@@ -69,11 +69,22 @@ export default function UsersList() {
           width={70}
           render={(w: boolean) => (w ? <Tag color="green">已绑</Tag> : <Tag>—</Tag>)}
         />
+        {/* isPro 是接口按"此刻是否真的还是会员"算好的（见 lib/subscription）：
+            直接读标记会把过期未回收的体验会员显示成 PRO。
+            标记还在、但已经过期的行标出来 —— 那说明回收没跑到这个用户身上 */}
         <Table.Column
           dataIndex="isPro"
           title="会员"
-          width={80}
-          render={(p: boolean) => (p ? <Tag color="blue">PRO</Tag> : <Tag>免费</Tag>)}
+          width={110}
+          render={(p: boolean, r: { isProFlagged?: boolean }) =>
+            p ? (
+              <Tag color="blue">PRO</Tag>
+            ) : r.isProFlagged ? (
+              <Tag color="default">已过期</Tag>
+            ) : (
+              <Tag>免费</Tag>
+            )
+          }
         />
         <Table.Column
           dataIndex="isPartner"

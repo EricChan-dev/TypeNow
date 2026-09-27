@@ -1,6 +1,6 @@
 import { db } from "@/lib/db"
 import { subscriptions, users, partnerCommissions, paymentOrders as paymentOrdersTable } from "@/lib/db/schema"
-import { eq, and, lte, desc, ne, count as sqlCount } from "drizzle-orm"
+import { eq, and, lte, desc, ne, sql, count as sqlCount, type SQL } from "drizzle-orm"
 import { randomUUID } from "crypto"
 
 function getPlanDurationDays(plan: "monthly" | "yearly" | "partner"): number {
@@ -245,6 +245,65 @@ export async function checkAndExpirePro(userId: string): Promise<boolean> {
   }
 
   return false
+}
+
+/**
+ * 「此刻真的还是会员」的统一口径。
+ *
+ * 为什么需要它：`users.is_pro` 是一个**标记**，不是事实 —— 它只在
+ * `checkAndExpirePro` 被调用的那一刻才被回收，而后者只挂在三个接口上
+ * （`/api/auth/me`、`/api/subscription/status`、`/api/courses/sentences`）。
+ * 于是**再也不回来的用户会一直挂着 `is_pro=1`**：2026-09-28 实测线上有 18 行
+ * （全是注册时领的 3 天体验会员，早已过期），把后台的会员数从真实的 3 抬到 21。
+ *
+ * 所以凡是**统计、筛选、展示**会员身份的地方，都必须按下面的口径算，
+ * 而不是直接读标记。它们与 checkAndExpirePro 同义（那条规则是权威）：
+ * **只有 pro_expires 非空且已过期才算失效**；`pro_expires IS NULL` 表示不设到期，
+ * 仍算会员（历史遗留的"永久会员"就是这种形态）。
+ *
+ * 反过来，**权限判定**仍然可以继续读标记 + 先调 checkAndExpirePro
+ * （那条路径会当场把自己修正过来），不要为了统一而改动鉴权逻辑。
+ */
+export function activeProSql(): SQL<boolean> {
+  return sql<boolean>`(${users.isPro} = 1 AND (${users.proExpires} IS NULL OR ${users.proExpires} > NOW()))`
+}
+
+/** 同上的纯函数版本：用于把已取回的行走一遍（例如接口返回前的映射、单测）。 */
+export function isProActive(
+  user: { isPro?: number | boolean | null; proExpires?: Date | string | null } | null | undefined,
+  now: Date = new Date(),
+): boolean {
+  if (!user) return false
+  if (!user.isPro) return false
+  if (user.proExpires === null || user.proExpires === undefined) return true
+  const expires = user.proExpires instanceof Date ? user.proExpires : new Date(user.proExpires)
+  if (Number.isNaN(expires.getTime())) return false
+  return expires.getTime() > now.getTime()
+}
+
+/**
+ * 「此刻仍然生效」的订阅口径，与 activeProSql 同一类问题的另一面：
+ * `subscriptions.status='active'` 同样只在 checkAndExpirePro 被调用时才回收，
+ * 所以到期未清理的行会一直留在 active 上。
+ *
+ * 仪表盘「活跃订阅」与订阅列表的 `status=active` **必须**共用这一份 ——
+ * 否则卡片上的数字与点进去的列表条数对不上（这条不变量有 e2e 钉着）。
+ */
+export function activeSubscriptionSql(): SQL<boolean> {
+  return sql<boolean>`(${subscriptions.status} = 'active' AND (${subscriptions.expiresAt} IS NULL OR ${subscriptions.expiresAt} > NOW()))`
+}
+
+/** 同上的纯函数版本。 */
+export function isSubscriptionActive(
+  sub: { status?: string | null; expiresAt?: Date | string | null } | null | undefined,
+  now: Date = new Date(),
+): boolean {
+  if (!sub) return false
+  if (sub.status !== "active") return false
+  if (sub.expiresAt === null || sub.expiresAt === undefined) return true
+  const expires = sub.expiresAt instanceof Date ? sub.expiresAt : new Date(sub.expiresAt)
+  if (Number.isNaN(expires.getTime())) return false
+  return expires.getTime() > now.getTime()
 }
 
 export async function getActiveSubscription(userId: string) {

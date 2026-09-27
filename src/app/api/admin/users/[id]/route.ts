@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import { db } from "@/lib/db"
 import { analyticsEvents, paymentOrders, practiceRecords, subscriptions, users } from "@/lib/db/schema"
 import { requireAdmin } from "@/lib/admin-auth"
+import { activeSubscriptionSql, isProActive } from "@/lib/subscription"
 import { describeAuditActor, diffAuditFields, logAdminAction } from "@/lib/admin-audit"
 import { and, eq, sql } from "drizzle-orm"
 
@@ -47,10 +48,11 @@ export async function GET(_: Request, { params }: { params: Promise<{ id: string
       .from(paymentOrders)
       .where(and(eq(paymentOrders.userId, id), eq(paymentOrders.status, "paid")))
       .then((r) => ({ n: Number(r[0]?.n ?? 0), fen: Number(r[0]?.fen ?? 0) })),
+    // 「有效订阅」这块统计同理：到期未回收的行不算生效（见 lib/subscription）
     db
       .select({ n: sql<number>`COUNT(*)` })
       .from(subscriptions)
-      .where(and(eq(subscriptions.userId, id), eq(subscriptions.status, "active")))
+      .where(and(eq(subscriptions.userId, id), activeSubscriptionSql()))
       .then((r) => Number(r[0]?.n ?? 0)),
     // 埋点时间跨度：判断"注册后到底有没有来过"
     db
@@ -76,6 +78,10 @@ export async function GET(_: Request, { params }: { params: Promise<{ id: string
   return NextResponse.json({
     data: {
       ...safeRow,
+      // 详情页显示的是"此刻是否还是会员"，不是标记本身；
+      // 原始标记一并给前端，用来提示"已过期但标记没回收"（见 lib/subscription）
+      isProFlagged: row.isPro === 1,
+      isPro: isProActive(row),
       phoneMasked: maskPhone(phone),
       stats: {
         practiceCount,

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import { db } from "@/lib/db"
 import { analyticsEvents, users } from "@/lib/db/schema"
 import { requireAdmin } from "@/lib/admin-auth"
+import { activeProSql } from "@/lib/subscription"
 import { maskPhone } from "@/lib/mask"
 import { and, asc, desc, eq, gt, lt, sql } from "drizzle-orm"
 
@@ -44,7 +45,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
       createdAt: analyticsEvents.createdAt,
       userName: users.name,
       userPhone: users.phone,
-      userIsPro: users.isPro,
+      userIsPro: activeProSql(),
       userCreatedAt: users.createdAt,
       userReferredBy: users.referredBy,
     })

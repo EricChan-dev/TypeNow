@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import { db } from "@/lib/db"
 import { userFeedback, users } from "@/lib/db/schema"
 import { requireAdmin } from "@/lib/admin-auth"
+import { activeProSql } from "@/lib/subscription"
 import { parsePagination } from "@/lib/pagination"
 import { parseRange, rangeStart, rangeLabel } from "@/lib/admin-range"
 import { deletedScope } from "@/lib/soft-delete-view"
@@ -96,7 +97,7 @@ export async function GET(request: Request) {
         createdAt: userFeedback.createdAt,
         userName: users.name,
         userPhone: users.phone,
-        userIsPro: users.isPro,
+        userIsPro: activeProSql(),
       })
       .from(userFeedback)
       // LEFT JOIN：用户若被删（历史数据），反馈本身不该跟着消失

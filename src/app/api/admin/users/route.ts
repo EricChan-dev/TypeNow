@@ -8,6 +8,7 @@ import { parseRange, rangeStart, rangeLabel } from "@/lib/admin-range"
 // 让后端算而不是前端算：同一个摘要函数将来详情页、导出的 CSV 都要用，
 // 各算一遍就会出现三个页面三种说法。
 import { describeSignupSource } from "@/lib/signup-source"
+import { activeProSql, isProActive } from "@/lib/subscription"
 import { desc, eq, and, gte, inArray, isNotNull, or, like, sql, type SQL } from "drizzle-orm"
 
 /**
@@ -80,7 +81,9 @@ export async function GET(request: Request) {
     conditions.push(from ? gte(users.trialClaimedAt, from) : isNotNull(users.trialClaimedAt))
   }
 
-  if (proOnly) conditions.push(eq(users.isPro, 1))
+  // 「会员」= 此刻仍然是会员，不是"标记写着 1"。过期未回收的标记会把
+  // 这些数字全部抬高（线上实测 21 → 真实 3），口径见 lib/subscription
+  if (proOnly) conditions.push(activeProSql())
 
   if (active) {
     // 「这个时间范围内练过」= 练习记录的时间落在窗口内，而不是用户的注册时间
@@ -111,6 +114,8 @@ export async function GET(request: Request) {
         // 注册来源：列表页要能一眼看出"这个人从哪来的"
         signupChannel: users.signupChannel,
         signupSource: users.signupSource,
+        // 原始标记：用来提示"标记还没回收"（见下面的映射）
+        isProFlagged: users.isPro,
         createdAt: users.createdAt,
       })
       .from(users)
@@ -161,6 +166,10 @@ export async function GET(request: Request) {
   return NextResponse.json({
     data: pageUsers.map((u) => ({
       ...u,
+      // isPro 一律返回**此刻是否真的还是会员**：直接回标记会让过期的体验会员
+      // 在列表里显示成 PRO（线上 18 行就是这样）
+      isPro: isProActive(u),
+      isProFlagged: u.isProFlagged === 1,
       hasWechat: u.wechatOpenid != null,
       // 不把 openid 原文发给前端
       wechatOpenid: undefined,
