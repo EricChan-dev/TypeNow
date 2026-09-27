@@ -84,8 +84,13 @@ export function AiChatWidget() {
    * 复习作答页同样是全屏界面，旧写法漏了它，浮窗一直盖在复习题上。
    */
   const immersive = isImmersivePracticeRoute(pathname)
+  /**
+   * 后台也不显示。`/admin` 是内部工具，而小码是对学员的助手（提问还会消耗钻石），
+   * 在后台既没用又碍事；管理员恰好是登录状态，所以在原来的判断下它一定会冒出来。
+   */
+  const isAdminRoute = pathname?.startsWith("/admin") ?? false
   // 落地页保持隐藏：那是营销页，浮窗会盖住定价卡片的 CTA
-  if (pathname === "/" || !loggedIn || (immersive && !open)) return null
+  if (pathname === "/" || isAdminRoute || !loggedIn || (immersive && !open)) return null
 
   async function handleSend() {
     if (!input.trim() || sending) return

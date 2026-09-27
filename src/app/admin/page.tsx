@@ -1,127 +1,215 @@
 "use client"
 
-import { Card, Col, Row, Statistic, Table, Typography } from "antd"
+import { Card, Col, Row, Segmented, Statistic, Table, Tag, Typography } from "antd"
 import {
   UserOutlined,
   DollarOutlined,
   CrownOutlined,
   FileTextOutlined,
+  ThunderboltOutlined,
 } from "@ant-design/icons"
-import { useEffect, useState } from "react"
+import Link from "next/link"
+import { useCallback, useEffect, useState } from "react"
+import { RANGE_OPTIONS, DEFAULT_RANGE, type StatsRange } from "@/lib/admin-range"
 
-const { Title } = Typography
+const { Title, Text } = Typography
+
+interface DashboardData {
+  range: StatsRange
+  rangeLabel: string
+  activity: {
+    newUsers: number
+    activeUsers: number
+    practiceRecords: number
+    events: number
+    paidOrders: number
+    revenueFen: number
+    trialClaims: number
+  }
+  totals: {
+    users: number
+    activeSubscriptions: number
+    sentences: number | null
+    courses: number | null
+    lessons: number | null
+  }
+  daily: Array<{ date: string; newUsers: number; practice: number; events: number; revenueFen: number }>
+}
+
+interface OrderRow {
+  id: string
+  userId: string
+  userName: string | null
+  userPhone: string | null
+  plan: string
+  amount: number
+  status: string
+  outTradeNo: string
+  paidAt: string | null
+  createdAt: string
+}
 
 export default function AdminDashboard() {
-  const [stats, setStats] = useState({
-    totalUsers: 0,
-    activeSubs: 0,
-    totalRevenue: 0,
-    totalSentences: 0,
-    recentPayments: [] as Array<Record<string, unknown>>,
-  })
+  const [range, setRange] = useState<StatsRange>(DEFAULT_RANGE)
+  const [data, setData] = useState<DashboardData | null>(null)
+  const [orders, setOrders] = useState<OrderRow[]>([])
   const [loading, setLoading] = useState(true)
 
-  useEffect(() => {
-    async function fetchStats() {
-      /**
-       * 单个接口失败不能拖垮整个仪表盘。
-       *
-       * 原先四个请求的 .json() 一起 Promise.all：只要有一个返回非 JSON
-       * （例如接口不存在时 Next 返回 404 HTML），.json() 就抛错，
-       * catch 把整页统计一起吞掉 —— 一个坏接口表现为"仪表盘完全打不开"。
-       * 2026-09-26 就是这么发生的：/api/admin/subscriptions 整个缺失。
-       * 现在逐个请求独立兜底，坏掉的那项显示 0，其余照常。
-       */
-      const safeJson = async <T,>(url: string, fallback: T): Promise<T> => {
-        try {
-          const res = await fetch(url)
-          if (!res.ok) return fallback
-          const text = await res.text()
-          try {
-            return JSON.parse(text) as T
-          } catch {
-            return fallback
-          }
-        } catch {
-          return fallback
-        }
-      }
-
-      const [usersData, subsData, sentencesData, paymentsData] = await Promise.all([
-        safeJson<{ total?: number }>("/api/admin/users?pageSize=1", {}),
-        safeJson<{ total?: number }>("/api/admin/subscriptions?pageSize=1", {}),
-        safeJson<{ total?: number }>("/api/admin/sentences?pageSize=1", {}),
-        safeJson<{ data?: Array<Record<string, unknown>> }>("/api/admin/payment-orders?pageSize=10", {}),
+  const load = useCallback(async (r: StatsRange) => {
+    setLoading(true)
+    try {
+      // 单个接口失败不拖垮整页（此前一个 404 让整页 Promise.all 抛错）
+      const [dashRes, orderRes] = await Promise.all([
+        fetch(`/api/admin/dashboard?range=${r}`),
+        fetch("/api/admin/payment-orders?pageSize=10"),
       ])
-
-      const payments: Array<Record<string, unknown>> = paymentsData.data ?? []
-      const totalRev = payments
-        .filter((p) => p.status === "paid")
-        .reduce((sum, p) => sum + ((p.amount as number) || 0), 0)
-
-      setStats({
-        totalUsers: usersData.total ?? 0,
-        activeSubs: subsData.total ?? 0,
-        totalRevenue: totalRev / 100,
-        totalSentences: sentencesData.total ?? 0,
-        recentPayments: payments,
-      })
+      if (dashRes.ok) setData((await dashRes.json()) as DashboardData)
+      if (orderRes.ok) setOrders(((await orderRes.json()).data ?? []) as OrderRow[])
+    } finally {
       setLoading(false)
     }
-    fetchStats()
   }, [])
 
-  const paymentColumns = [
-    { title: "用户ID", dataIndex: "user_id", key: "user_id", ellipsis: true },
-    { title: "方案", dataIndex: "plan", key: "plan" },
+  useEffect(() => {
+    load(range)
+  }, [range, load])
+
+  const a = data?.activity
+  const t = data?.totals
+
+  const orderColumns = [
+    {
+      title: "用户",
+      key: "user",
+      render: (_: unknown, r: OrderRow) => (
+        <Link href={`/admin/users/${r.userId}`} style={{ color: "#1677ff" }}>
+          {r.userName || "（无名）"}
+          {r.userPhone ? ` · ${r.userPhone.slice(0, 3)}****${r.userPhone.slice(-4)}` : ""}
+        </Link>
+      ),
+    },
+    { title: "方案", dataIndex: "plan", key: "plan", width: 90 },
     {
       title: "金额",
       dataIndex: "amount",
       key: "amount",
-      render: (a: number) => `¥${(a / 100).toFixed(2)}`,
+      width: 100,
+      render: (v: number) => `¥${(v / 100).toFixed(2)}`,
     },
     {
-      title: "时间",
-      dataIndex: "paid_at",
-      key: "paid_at",
-      render: (d: string) => (d ? new Date(d).toLocaleString("zh-CN") : "-"),
+      title: "状态",
+      dataIndex: "status",
+      key: "status",
+      width: 90,
+      render: (s: string) => (
+        <Tag color={s === "paid" ? "green" : s === "pending" ? "orange" : "default"}>
+          {s === "paid" ? "已支付" : s === "pending" ? "待支付" : s}
+        </Tag>
+      ),
+    },
+    {
+      title: "支付时间",
+      dataIndex: "paidAt",
+      key: "paidAt",
+      width: 170,
+      render: (d: string | null) => (d ? new Date(d).toLocaleString("zh-CN") : "—"),
     },
   ]
 
   return (
     <div>
-      <Title level={3} style={{ marginBottom: 24 }}>管理仪表盘</Title>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 12 }}>
+        <Title level={3} style={{ margin: 0 }}>管理仪表盘</Title>
+        <Segmented
+          value={range}
+          onChange={(v) => setRange(v as StatsRange)}
+          options={RANGE_OPTIONS.map((o) => ({ label: o.label, value: o.value }))}
+        />
+      </div>
 
+      {/* ── 行为指标：随上方时间范围变化 ── */}
+      <Text type="secondary" style={{ display: "block", margin: "16px 0 8px" }}>
+        <ThunderboltOutlined /> 行为指标 · {data?.rangeLabel ?? "—"}
+      </Text>
       <Row gutter={[16, 16]}>
-        <Col xs={24} sm={12} lg={6}>
+        <Col xs={12} lg={6}>
           <Card loading={loading}>
-            <Statistic title="注册用户" value={stats.totalUsers} prefix={<UserOutlined />} />
+            <Statistic title="新增用户" value={a?.newUsers ?? 0} prefix={<UserOutlined />} />
           </Card>
         </Col>
-        <Col xs={24} sm={12} lg={6}>
+        <Col xs={12} lg={6}>
           <Card loading={loading}>
-            <Statistic title="活跃订阅" value={stats.activeSubs} prefix={<CrownOutlined />} valueStyle={{ color: "#6366F1" }} />
+            <Statistic title="活跃用户（有练习）" value={a?.activeUsers ?? 0} />
           </Card>
         </Col>
-        <Col xs={24} sm={12} lg={6}>
+        <Col xs={12} lg={6}>
           <Card loading={loading}>
-            <Statistic title="总收入" value={stats.totalRevenue} prefix={<DollarOutlined />} precision={2} valueStyle={{ color: "#22C55E" }} />
+            <Statistic title="练习句数" value={a?.practiceRecords ?? 0} />
           </Card>
         </Col>
-        <Col xs={24} sm={12} lg={6}>
+        <Col xs={12} lg={6}>
           <Card loading={loading}>
-            <Statistic title="句子库" value={stats.totalSentences} prefix={<FileTextOutlined />} />
+            <Statistic title="埋点事件" value={a?.events ?? 0} />
+          </Card>
+        </Col>
+        <Col xs={12} lg={6}>
+          <Card loading={loading}>
+            <Statistic title="付费订单" value={a?.paidOrders ?? 0} prefix={<DollarOutlined />} />
+          </Card>
+        </Col>
+        <Col xs={12} lg={6}>
+          <Card loading={loading}>
+            <Statistic
+              title="收入"
+              value={((a?.revenueFen ?? 0) / 100).toFixed(2)}
+              prefix="¥"
+              valueStyle={{ color: "#22C55E" }}
+            />
+          </Card>
+        </Col>
+        <Col xs={12} lg={6}>
+          <Card loading={loading}>
+            <Statistic title="领取体验会员" value={a?.trialClaims ?? 0} />
+          </Card>
+        </Col>
+      </Row>
+
+      {/* ── 内容总量：不随时间筛选 ── */}
+      <Text type="secondary" style={{ display: "block", margin: "24px 0 8px" }}>
+        <FileTextOutlined /> 内容总量 · 全部（不受上方时间范围影响）
+      </Text>
+      <Row gutter={[16, 16]}>
+        <Col xs={12} lg={6}>
+          <Card loading={loading}>
+            <Statistic title="用户总数" value={t?.users ?? 0} />
+          </Card>
+        </Col>
+        <Col xs={12} lg={6}>
+          <Card loading={loading}>
+            <Statistic title="活跃订阅" value={t?.activeSubscriptions ?? 0} prefix={<CrownOutlined />} valueStyle={{ color: "#6366F1" }} />
+          </Card>
+        </Col>
+        <Col xs={12} lg={6}>
+          <Card loading={loading}>
+            <Statistic title="课程 / 课时" value={t ? `${t.courses ?? "—"} / ${t.lessons ?? "—"}` : "—"} />
+          </Card>
+        </Col>
+        <Col xs={12} lg={6}>
+          <Card loading={loading}>
+            {/* 句子库走 10 分钟缓存：46 万行的 COUNT(*) 实测 104~356ms，不该每次打开后台都跑 */}
+            <Statistic title="句子库（缓存 10 分钟）" value={t?.sentences ?? "—"} />
           </Card>
         </Col>
       </Row>
 
       <Card title="最近支付" style={{ marginTop: 24 }}>
         <Table
-          columns={paymentColumns}
-          dataSource={stats.recentPayments}
-          rowKey={(r) => r.id as string}
+          columns={orderColumns}
+          dataSource={orders}
+          rowKey="id"
           pagination={false}
           size="small"
+          locale={{ emptyText: "暂无订单" }}
         />
       </Card>
     </div>

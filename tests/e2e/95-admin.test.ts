@@ -162,24 +162,94 @@ describe("后台列表接口：页面绑定字段必须存在", () => {
   })
 })
 
-describe("仪表盘依赖的四个接口", () => {
-  it("仪表盘用到的请求全部可用（任一 404 会让整页 Promise.all 崩掉）", async () => {
-    const api = ApiClient.asUser(await makeAdmin())
-    await insertPaidOrder(FIXTURE.userFree, "monthly", 2900)
-    await insertSubscription(FIXTURE.userFree, "monthly")
+describe("仪表盘统计 /api/admin/dashboard", () => {
+  it("未登录 / 非管理员 → 401", async () => {
+    expect((await ApiClient.anonymous().get("/api/admin/dashboard")).status).toBe(401)
+    expect((await ApiClient.asUser(FIXTURE.userFree).get("/api/admin/dashboard")).status).toBe(401)
+  })
 
-    // 与 src/app/admin/page.tsx 的请求保持一致
-    const urls = [
-      "/api/admin/users?pageSize=1",
-      "/api/admin/subscriptions?pageSize=1",
-      "/api/admin/sentences?pageSize=1",
-      "/api/admin/payment-orders?pageSize=10",
-    ]
-    for (const url of urls) {
-      const res = await api.get<ListBody>(url)
-      expect(res.status, `仪表盘依赖 ${url}`).toBe(200)
-      // 关键：必须是 JSON。404 时 Next 返回 HTML，.json() 会抛错并打挂整个仪表盘
-      expect(Array.isArray(res.body?.data), `${url} 必须返回 JSON 且含 data`).toBe(true)
+  it("四个时间范围都可用，且返回 activity / totals / daily 三段", async () => {
+    const api = ApiClient.asUser(await makeAdmin())
+    for (const range of ["week", "month", "quarter", "all"]) {
+      const res = await api.get<{
+        range: string
+        activity: Record<string, number>
+        totals: Record<string, number | null>
+        daily: unknown[]
+      }>(`/api/admin/dashboard?range=${range}`)
+      expect(res.status, `range=${range}`).toBe(200)
+      expect(res.body.range).toBe(range)
+      expect(typeof res.body.activity.newUsers).toBe("number")
+      expect(typeof res.body.activity.practiceRecords).toBe("number")
+      expect(typeof res.body.totals.users).toBe("number")
+      expect(Array.isArray(res.body.daily)).toBe(true)
+    }
+  })
+
+  it("非法 range 回落到默认而不是 500", async () => {
+    const api = ApiClient.asUser(await makeAdmin())
+    for (const bad of ["7d", "WEEK", "year", ""]) {
+      const res = await api.get<{ range: string }>(`/api/admin/dashboard?range=${bad}`)
+      expect(res.status).toBe(200)
+      expect(res.body.range).toBe("week") // DEFAULT_RANGE
+    }
+  })
+
+  it("内容总量不随时间范围变化（句子库走缓存，不是每次全表 COUNT）", async () => {
+    const api = ApiClient.asUser(await makeAdmin())
+    const week = await api.get<{ totals: { users: number } }>("/api/admin/dashboard?range=week")
+    const all = await api.get<{ totals: { users: number } }>("/api/admin/dashboard?range=all")
+    expect(week.body.totals.users).toBe(all.body.totals.users)
+  })
+})
+
+describe("支付订单与用户列表可追溯到人", () => {
+  it("订单带出下单人信息，且支持按手机号搜索", async () => {
+    const api = ApiClient.asUser(await makeAdmin())
+    const buyerId = await insertUser({ name: "e2e 买家", phone: "13800000999" })
+    await insertPaidOrder(buyerId, "yearly", 19900)
+
+    const all = await api.get<{ data: Array<Record<string, unknown>> }>(
+      "/api/admin/payment-orders?pageSize=20"
+    )
+    const row = all.body.data.find((r) => r.userId === buyerId)
+    expect(row, "应能查到刚插入的订单").toBeDefined()
+    expect(row?.userName).toBe("e2e 买家")
+    expect(row?.userPhone).toBe("13800000999")
+
+    const searched = await api.get<{ data: Array<Record<string, unknown>>; total: number }>(
+      "/api/admin/payment-orders?q=13800000999"
+    )
+    expect(searched.body.data.some((r) => r.userId === buyerId)).toBe(true)
+  })
+
+  it("用户列表带出练习数 / 埋点数 / 已付订单数（列表页据此分辨真用户）", async () => {
+    const api = ApiClient.asUser(await makeAdmin())
+    const uid = await insertUser({ name: "e2e 带数据用户" })
+    await insertPaidOrder(uid, "monthly", 2900)
+
+    const res = await api.get<{ data: Array<Record<string, unknown>> }>(
+      "/api/admin/users?pageSize=50"
+    )
+    const row = res.body.data.find((r) => r.id === uid)
+    expect(row).toBeDefined()
+    for (const f of ["practiceCount", "eventCount", "paidOrderCount", "hasWechat"]) {
+      expect(
+        Object.prototype.hasOwnProperty.call(row as object, f),
+        `用户列表缺字段「${f}」`,
+      ).toBe(true)
+    }
+    expect(Number(row?.paidOrderCount)).toBe(1)
+  })
+
+  it("用户搜索按姓名与手机号都能命中", async () => {
+    const api = ApiClient.asUser(await makeAdmin())
+    const uid = await insertUser({ name: "唯一昵称ZZZ", phone: "13800000888" })
+    for (const q of ["唯一昵称ZZZ", "13800000888"]) {
+      const res = await api.get<{ data: Array<Record<string, unknown>> }>(
+        `/api/admin/users?q=${encodeURIComponent(q)}`
+      )
+      expect(res.body.data.some((r) => r.id === uid), `搜索 ${q} 应命中`).toBe(true)
     }
   })
 })

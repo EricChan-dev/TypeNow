@@ -1,23 +1,18 @@
 import { NextResponse } from "next/server"
 import { db } from "@/lib/db"
-import { subscriptions } from "@/lib/db/schema"
+import { subscriptions, users } from "@/lib/db/schema"
 import { requireAdmin } from "@/lib/admin-auth"
 import { parsePagination } from "@/lib/pagination"
-import { desc, sql } from "drizzle-orm"
+import { desc, eq, or, like, sql, type SQL } from "drizzle-orm"
 
 /**
  * 后台「订阅管理」列表。
  *
- * 这个接口此前**根本不存在**，但两处都在调它：
- *   - /admin/subscriptions 页面（refine useTable → GET /api/admin/subscriptions）
- *   - /admin 仪表盘（Promise.all 里的一个）
- * 后果不只是订阅页空表：仪表盘把四个请求的 .json() 一起 Promise.all，
- * 404 返回的是 HTML，.json() 直接抛错 → 整个仪表盘都加载不出来。
+ * 这个接口此前**根本不存在**，但订阅页与 /admin 仪表盘都在调它；
+ * 404 返回 HTML 会让仪表盘的 Promise.all 整体抛错（详见 commit 说明）。
  *
- * 返回**驼峰**字段（Drizzle 的 JS 属性名）。这是后台列表接口的事实约定：
- * courses / sentences / lessons / users / payment-orders 全都返回驼峰，
- * 页面绑定的 dataIndex 也必须用驼峰 —— 底下那几个页面前缀用了下划线写法，
- * 表现为对应列为空白（见本文件的配套修复）。
+ * 与支付订单一致，这里也 JOIN users 带出订阅人信息，并支持 `q` 搜索，
+ * 让「这条订阅是谁的」可以直接看到、并跳转到用户详情。
  */
 export async function GET(request: Request) {
   const auth = await requireAdmin()
@@ -26,17 +21,39 @@ export async function GET(request: Request) {
 
   const { searchParams } = new URL(request.url)
   const { pageSize, offset } = parsePagination(searchParams)
+  const q = (searchParams.get("q") ?? "").trim().slice(0, 64)
+
+  const where: SQL | undefined = q
+    ? or(like(users.name, `%${q}%`), like(users.phone, `%${q}%`))
+    : undefined
 
   const [rows, [{ total }]] = await Promise.all([
-    // 最新的订阅排在最前，与支付订单列表一致
     db
-      .select()
+      .select({
+        id: subscriptions.id,
+        userId: subscriptions.userId,
+        plan: subscriptions.plan,
+        status: subscriptions.status,
+        paymentOrderId: subscriptions.paymentOrderId,
+        startsAt: subscriptions.startsAt,
+        expiresAt: subscriptions.expiresAt,
+        cancelledAt: subscriptions.cancelledAt,
+        createdAt: subscriptions.createdAt,
+        userName: users.name,
+        userPhone: users.phone,
+      })
       .from(subscriptions)
+      .leftJoin(users, eq(subscriptions.userId, users.id))
+      .where(where)
       .orderBy(desc(subscriptions.createdAt))
       .limit(pageSize)
       .offset(offset),
-    db.select({ total: sql<number>`count(*)` }).from(subscriptions),
+    db
+      .select({ total: sql<number>`count(*)` })
+      .from(subscriptions)
+      .leftJoin(users, eq(subscriptions.userId, users.id))
+      .where(where),
   ])
 
-  return NextResponse.json({ data: rows, total })
+  return NextResponse.json({ data: rows, total: Number(total) })
 }

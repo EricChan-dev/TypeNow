@@ -1,25 +1,66 @@
 "use client"
 
 import { List, useTable, ShowButton } from "@refinedev/antd"
-import { Table, Tag, Space, Input } from "antd"
+import { Input, Space, Table, Tag } from "antd"
+import Link from "next/link"
 
+/**
+ * 用户管理列表。
+ *
+ * 列比原先丰富得多：除昵称/手机/会员/角色/注册时间外，把「这个人都干了什么」
+ * 直接铺在列表里 —— 练习句数、埋点数、付费订单数、微信绑定、是否合伙人。
+ * 这些原先都要点进详情才能看到，导致列表页无法一眼分辨"真在用的用户"和"注册完就没来过的"。
+ */
 export default function UsersList() {
-  const { tableProps, searchFormProps } = useTable({
+  const { tableProps, setFilters } = useTable({
     pagination: { pageSize: 20 },
+    syncWithLocation: true,
   })
 
   return (
     <List>
-      <Table {...tableProps} rowKey="id">
-        <Table.Column dataIndex="name" title="昵称" ellipsis />
-        <Table.Column dataIndex="phone" title="手机" width={140} />
+      <div style={{ marginBottom: 16 }}>
+        <Space>
+          <Input.Search
+            allowClear
+            placeholder="搜索昵称 / 手机号"
+            style={{ width: 320 }}
+            onSearch={(value) =>
+              setFilters([{ field: "q", operator: "eq", value }], "replace")
+            }
+          />
+        </Space>
+      </div>
+
+      <Table {...tableProps} rowKey="id" scroll={{ x: 1100 }}>
+        <Table.Column
+          dataIndex="name"
+          title="昵称"
+          ellipsis
+          render={(n: string | null, r: { id: string }) => (
+            <Link href={`/admin/users/${r.id}`} style={{ color: "#1677ff" }}>
+              {n || "（无名）"}
+            </Link>
+          )}
+        />
+        <Table.Column dataIndex="phone" title="手机" width={130} />
+        <Table.Column
+          dataIndex="hasWechat"
+          title="微信"
+          width={70}
+          render={(w: boolean) => (w ? <Tag color="green">已绑</Tag> : <Tag>—</Tag>)}
+        />
         <Table.Column
           dataIndex="isPro"
           title="会员"
           width={80}
-          render={(p: boolean) =>
-            p ? <Tag color="blue">PRO</Tag> : <Tag>免费</Tag>
-          }
+          render={(p: boolean) => (p ? <Tag color="blue">PRO</Tag> : <Tag>免费</Tag>)}
+        />
+        <Table.Column
+          dataIndex="isPartner"
+          title="合伙人"
+          width={80}
+          render={(p: boolean) => (p ? <Tag color="gold">是</Tag> : <Tag>—</Tag>)}
         />
         <Table.Column
           dataIndex="role"
@@ -30,17 +71,42 @@ export default function UsersList() {
           }
         />
         <Table.Column
-          dataIndex="createdAt"
-          title="注册时间"
-          width={180}
-          render={(d: string) =>
-            d ? new Date(d).toLocaleString("zh-CN") : "-"
+          dataIndex="practiceCount"
+          title="练习句数"
+          width={100}
+          sorter={(a: { practiceCount: number }, b: { practiceCount: number }) =>
+            a.practiceCount - b.practiceCount
+          }
+        />
+        <Table.Column dataIndex="eventCount" title="埋点数" width={90} />
+        <Table.Column dataIndex="paidOrderCount" title="已付订单" width={90} />
+        <Table.Column dataIndex="diamonds" title="钻石" width={80} />
+        <Table.Column
+          dataIndex="referredBy"
+          title="邀请人"
+          width={100}
+          ellipsis
+          render={(v: string | null) =>
+            v ? (
+              <Link href={`/admin/users/${v}`} style={{ color: "#1677ff" }}>
+                查看
+              </Link>
+            ) : (
+              "—"
+            )
           }
         />
         <Table.Column
+          dataIndex="createdAt"
+          title="注册时间"
+          width={170}
+          render={(d: string) => (d ? new Date(d).toLocaleString("zh-CN") : "-")}
+        />
+        <Table.Column
           title="操作"
-          width={80}
-          render={(_, record: { id: string }) => (
+          width={70}
+          fixed="right"
+          render={(_: unknown, record: { id: string }) => (
             <Space>
               <ShowButton recordItemId={record.id} hideText size="small" />
             </Space>

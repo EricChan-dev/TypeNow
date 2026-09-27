@@ -1,20 +1,54 @@
 "use client"
 
 import { List, useTable } from "@refinedev/antd"
-import { Table, Tag } from "antd"
+import { Input, Space, Table, Tag } from "antd"
+import Link from "next/link"
 
+/**
+ * 订阅管理列表。
+ *
+ * 与支付订单一致：带出订阅人（可点击进用户详情）+ 姓名/手机号搜索。
+ * 这个页面此前整体打不开 —— 对应的 /api/admin/subscriptions 接口根本不存在。
+ */
 export default function SubscriptionsList() {
-  const { tableProps } = useTable({ pagination: { pageSize: 20 } })
+  const { tableProps, setFilters } = useTable({
+    pagination: { pageSize: 20 },
+    syncWithLocation: true,
+  })
 
   return (
     <List>
+      <div style={{ marginBottom: 16 }}>
+        <Space>
+          <Input.Search
+            allowClear
+            placeholder="搜索用户姓名 / 手机号"
+            style={{ width: 320 }}
+            onSearch={(value) =>
+              setFilters([{ field: "q", operator: "eq", value }], "replace")
+            }
+          />
+        </Space>
+      </div>
+
       <Table {...tableProps} rowKey="id">
+        <Table.Column
+          title="用户"
+          key="user"
+          width={200}
+          render={(_: unknown, r: { userId: string; userName?: string | null; userPhone?: string | null }) => (
+            <Link href={`/admin/users/${r.userId}`} style={{ color: "#1677ff" }}>
+              {r.userName || "（无名）"}
+              {r.userPhone ? ` · ${r.userPhone.slice(0, 3)}****${r.userPhone.slice(-4)}` : ""}
+            </Link>
+          )}
+        />
         <Table.Column
           dataIndex="plan"
           title="方案"
           width={100}
           render={(p: string) =>
-            p === "monthly" ? "月度会员" : "年度会员"
+            p === "monthly" ? "月度会员" : p === "yearly" ? "年度会员" : "合伙人"
           }
         />
         <Table.Column
@@ -39,25 +73,19 @@ export default function SubscriptionsList() {
           dataIndex="startsAt"
           title="开始时间"
           width={180}
-          render={(d: string) =>
-            d ? new Date(d).toLocaleString("zh-CN") : "-"
-          }
+          render={(d: string) => (d ? new Date(d).toLocaleString("zh-CN") : "-")}
         />
         <Table.Column
           dataIndex="expiresAt"
           title="到期时间"
           width={180}
-          render={(d: string) =>
-            d ? new Date(d).toLocaleString("zh-CN") : "-"
-          }
+          render={(d: string) => (d ? new Date(d).toLocaleString("zh-CN") : "-")}
         />
         <Table.Column
           dataIndex="createdAt"
           title="创建时间"
           width={180}
-          render={(d: string) =>
-            d ? new Date(d).toLocaleString("zh-CN") : "-"
-          }
+          render={(d: string) => (d ? new Date(d).toLocaleString("zh-CN") : "-")}
         />
       </Table>
     </List>

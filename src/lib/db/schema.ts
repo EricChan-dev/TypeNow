@@ -57,6 +57,7 @@ export const users = mysqlTable(
   (t) => [
     uniqueIndex("idx_users_wechat_openid").on(t.wechatOpenid),
     uniqueIndex("idx_users_wechat_unionid").on(t.wechatUnionid),
+    index("idx_users_created_at").on(t.createdAt),
   ]
 )
 
@@ -216,7 +217,9 @@ export const practiceRecords = mysqlTable(
     isReview: tinyint("is_review").notNull().default(0),
     createdAt: datetime("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
   },
-  (t) => [index("idx_practice_records_user_id").on(t.userId)]
+  (t) => [index("idx_practice_records_user_id").on(t.userId),
+    // 时间范围统计（后台「近一周/一月/一季」）要按 created_at 过滤
+    index("idx_practice_records_created_at").on(t.createdAt)]
 )
 
 // ─── Review Queue ─────────────────────────────────────────────────────────────
@@ -284,6 +287,7 @@ export const paymentOrders = mysqlTable(
     index("idx_payment_orders_user_id").on(t.userId),
     uniqueIndex("idx_payment_orders_out_trade_no").on(t.outTradeNo),
     index("idx_payment_orders_status").on(t.status),
+    index("idx_payment_orders_status_paid_at").on(t.status, t.paidAt),
   ]
 )
 
@@ -306,6 +310,7 @@ export const subscriptions = mysqlTable(
   (t) => [
     index("idx_subscriptions_user_id").on(t.userId),
     index("idx_subscriptions_expires").on(t.expiresAt),
+    index("idx_subscriptions_created_at").on(t.createdAt),
   ]
 )
 
@@ -331,6 +336,8 @@ export const analyticsEvents = mysqlTable(
   (t) => [
     index("idx_ae_type_time").on(t.eventType, t.createdAt),
     index("idx_ae_user").on(t.userId),
+    // 全局时间范围（不带 event_type）用不上上面的复合索引，单独补一个
+    index("idx_ae_created_at").on(t.createdAt),
   ]
 )
 
