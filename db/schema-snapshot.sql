@@ -17,9 +17,13 @@
 -- 生成方式（只读，不会改库）：
 --   在服务器上以 .env.local 里的 DATABASE_URL 执行
 --     mysqldump --no-data --skip-comments --single-transaction --routines --triggers typenow
+--   然后把 ` AUTO_INCREMENT=<数字>` 去掉（本文件已做）：
+--     自增计数器是**数据**不是结构，每次导出都会变（analytics_events 从 259 变成 266
+--     只是因为线上又来了几条埋点）。留着它，每次重新生成的 diff 里都会混进这种噪音，
+--     真正的结构改动反而容易被看漏 —— 这份文件只该记录结构。
 --
--- 生成时间：2026-09-26
--- 对应迁移：00009 / 00011 / 00012 / 00013 均已应用（00012、00013 于本日执行）
+-- 生成时间：2026-09-28
+-- 对应迁移：00009 / 00011 ～ 00022 全部已应用（00022 新增 admin_audit_logs 于本日执行）
 -- ============================================================================
 
 
@@ -33,6 +37,28 @@
 /*!40014 SET @OLD_FOREIGN_KEY_CHECKS=@@FOREIGN_KEY_CHECKS, FOREIGN_KEY_CHECKS=0 */;
 /*!40101 SET @OLD_SQL_MODE=@@SQL_MODE, SQL_MODE='NO_AUTO_VALUE_ON_ZERO' */;
 /*!40111 SET @OLD_SQL_NOTES=@@SQL_NOTES, SQL_NOTES=0 */;
+DROP TABLE IF EXISTS `admin_audit_logs`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `admin_audit_logs` (
+  `id` char(36) COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT (uuid()),
+  `admin_id` varchar(36) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `admin_label` varchar(191) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `action` varchar(50) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `target_type` varchar(50) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `target_id` varchar(64) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `target_label` varchar(191) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `detail` json DEFAULT NULL,
+  `ip` varchar(64) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `user_agent` varchar(255) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  KEY `idx_audit_created` (`created_at`),
+  KEY `idx_audit_admin_created` (`admin_id`,`created_at`),
+  KEY `idx_audit_target` (`target_type`,`target_id`,`created_at`),
+  KEY `idx_audit_action_created` (`action`,`created_at`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
 DROP TABLE IF EXISTS `analytics_events`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
@@ -48,7 +74,7 @@ CREATE TABLE `analytics_events` (
   KEY `idx_ae_type_time` (`event_type`,`created_at`),
   KEY `idx_ae_user` (`user_id`),
   KEY `idx_ae_created_at` (`created_at`)
-) ENGINE=InnoDB AUTO_INCREMENT=259 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 DROP TABLE IF EXISTS `check_ins`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;

@@ -68,7 +68,7 @@ Chrome 因此报 "preloaded but not used"（16 条同类警告的一部分）。
 
 | 位置 | 内容 |
 |---|---|
-| `db/migrations/00022_admin_audit_logs.sql` | 新表 `admin_audit_logs`（**需手工在生产执行**，先 DDL 后部署代码） |
+| `db/migrations/00022_admin_audit_logs.sql` | 新表 `admin_audit_logs`（**已于 2026-09-28 在生产执行**，34 张表排序规则统一为 `utf8mb4_unicode_ci`） |
 | `src/lib/admin-audit.ts` | 写入助手 `logAdminAction` + 脱敏/截断/差异计算（纯函数已被单测覆盖） |
 | `src/lib/admin-audit-labels.ts` | 动作/对象词表（**无 db 依赖**，页面与接口共用一份） |
 | `src/app/api/admin/audit-logs/route.ts` | 只读列表接口（按操作人/动作/对象/时间/关键词筛） |
@@ -107,6 +107,20 @@ feedback/[id]  PATCH             处理反馈（退回待处理会清空 handled
 有意**不记**的东西：重排的完整句子顺序（一课最多 960 句、约 35KB，而拖动是自动
 保存的高频操作；且数组上限 50 会静默截断，一份被截断的顺序比没有更危险）、
 教材正文（可能是整本教材）、逐句内容。
+
+上线校验（2026-09-28，均在 `typenow.cn` 上实测）：
+
+- 迁移后 34/34 张表为 `utf8mb4_unicode_ci`，`admin_audit_logs` 的 4 条索引齐全
+- 未带 cookie 访问 `/api/admin/audit-logs` → **401**（不是 500，说明路由与表都正常），
+  `/admin/audit-logs` → 307（proxy 鉴权）
+- 用一次**等值**写入（把某用户的 `level` 写回原值，不动数据）走通了真实链路：
+  审计行落库、操作人快照为 `CHENCYS`、IP 记录正常；`detail.level` 为 NULL ——
+  正是"只记真的变了的字段"该有的表现。探针行与会话事后已删除，数据未被改动
+
+顺带修的：`db/schema-snapshot.sql` 原头部停留在「00009/00011–00013 已应用」，
+但正文其实已经包含 `00016`/`00018`/`00020` 的列 —— 已重新生成并更正。
+生成时多了一步：**去掉 ` AUTO_INCREMENT=<数字>`**（它是数据不是结构，每次导出都变，
+留着会让真正的结构改动淹没在噪音里）。
 
 ---
 
