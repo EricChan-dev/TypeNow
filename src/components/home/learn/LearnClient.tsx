@@ -59,7 +59,6 @@ import { SentenceFeedback, type FeedbackVariant } from "@/components/home/learn/
 import { VoicePanel } from "@/components/home/learn/VoicePanel"
 import { SentenceTreeModal } from "@/components/home/learn/DependencyTree"
 import { SentenceExplainModal } from "@/components/home/learn/SentenceExplainModal"
-import { WordDetailPopover } from "@/components/home/learn/WordDetailPopover"
 import { globalSpeak } from "@/lib/hooks/useTTSSettings"
 import { baseSentenceId } from "@/lib/sentence-id"
 import { decideResume } from "@/lib/practice-session"
@@ -2097,21 +2096,30 @@ export function LearnClient({
                   </div>
                 )
 
-                // key 挂在最外层，所以这里用 Fragment 承接，
-                // 不能额外套一层 div：flex 行里的每个词格就是一个 flex item，
-                // 多一层盒子会让 items-end 的对齐基准下沉。
-                if (ws?.status !== "done" && ws?.status !== "error") {
-                  return <Fragment key={i}>{cell}</Fragment>
-                }
-                return (
-                  <WordDetailPopover
-                    key={i}
-                    word={word.english}
-                    sentenceId={baseSentenceId(sentence.id)}
-                  >
-                    {cell}
-                  </WordDetailPopover>
-                )
+                /*
+                  ── 输入阶段**不挂**单词详情浮层 ──────────────────────────────
+                
+                  浮层里是中文释义、音标和发音。原先的规则是"这个词打完(done)或
+                  打错(error)就挂上"，于是：
+                    · 刚敲错一个词、鼠标一抖悬停上去 → 答案直接递到眼前，
+                      打错反而比打对更早拿到答案，完全反了；
+                    · 打对的词也会被挂上 —— 整句还没写完就把某个词的中文摊开，
+                      对后面同义/同词根的词就是提示。
+                
+                  为什么是"整个去掉"而不是"改成 status === 'complete' 才挂"：
+                  这块 JSX 本身只在 `status !== "complete"` 的分支里渲染
+                  （见上面 `status === "complete" ? <CompletedSentence/> : ...`），
+                  在这里判断句子是否完成恒为假，写了也是死代码。
+                
+                  练完之后的悬浮查看由 CompletedSentence 提供 —— 它对每个词都挂了
+                  浮层，也正是"练完顺手看一眼"的时机（与词性、中文释义、句子解析
+                  同一个时点开放）。
+                
+                  key 挂在最外层，所以这里用 Fragment 承接，不能额外套一层 div：
+                  flex 行里的每个词格就是一个 flex item，多一层盒子会让 items-end
+                  的对齐基准下沉。
+                */
+                return <Fragment key={i}>{cell}</Fragment>
               })}
             </div>
 
