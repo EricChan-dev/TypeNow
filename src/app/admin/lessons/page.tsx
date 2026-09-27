@@ -1,13 +1,27 @@
 "use client"
 
 import { List, CreateButton, useTable, EditButton, DeleteButton } from "@refinedev/antd"
-import { Table, Space } from "antd"
+import { Input, Table, Space } from "antd"
 
 export default function LessonsList() {
-  const { tableProps } = useTable({ pagination: { pageSize: 50 } })
+  const { tableProps, setFilters } = useTable({
+    pagination: { pageSize: 50 },
+    syncWithLocation: true,
+  })
 
   return (
     <List headerButtons={<CreateButton>新增课时</CreateButton>}>
+      <div style={{ marginBottom: 16 }}>
+        <Input.Search
+          allowClear
+          placeholder="搜索课时名称 / 简介"
+          style={{ width: 320 }}
+          onSearch={(value) =>
+            setFilters([{ field: "q", operator: "eq", value }], "replace")
+          }
+        />
+      </div>
+
       <Table {...tableProps} rowKey="id">
         <Table.Column dataIndex="title" title="课时名称" ellipsis />
         <Table.Column dataIndex="courseId" title="课程ID" width={200} ellipsis />

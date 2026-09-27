@@ -43,7 +43,11 @@ function getCategoryLabel(key: string | null) {
 export default function CoursesList() {
   const router = useRouter()
   const { message: msg } = App.useApp()
-  const { tableProps, tableQuery } = useTable({ pagination: { pageSize: 20 } })
+  // q 走 refine 的 filters 通道，服务端在 /api/admin/courses 里按标题/简介/来源检索
+  const { tableProps, tableQuery, setFilters } = useTable({
+    pagination: { pageSize: 20 },
+    syncWithLocation: true,
+  })
 
   const [editModal, setEditModal] = useState<{ open: boolean; course?: CourseRow }>({ open: false })
   const [editForm] = Form.useForm()
@@ -130,6 +134,17 @@ export default function CoursesList() {
 
   return (
     <List headerButtons={<CreateButton>新增课程</CreateButton>}>
+      <div style={{ marginBottom: 16 }}>
+        <Input.Search
+          allowClear
+          placeholder="搜索课程标题 / 简介 / 来源"
+          style={{ width: 320 }}
+          onSearch={(value) =>
+            setFilters([{ field: "q", operator: "eq", value }], "replace")
+          }
+        />
+      </div>
+
       <Table
         {...tableProps}
         rowKey="id"

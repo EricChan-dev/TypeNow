@@ -4,7 +4,7 @@ import { db } from "@/lib/db"
 import { courses } from "@/lib/db/schema"
 import { requireAdmin } from "@/lib/admin-auth"
 import { parsePagination } from "@/lib/pagination"
-import { desc, eq, sql } from "drizzle-orm"
+import { desc, eq, or, like, sql, type SQL } from "drizzle-orm"
 
 export async function GET(request: Request) {
   const auth = await requireAdmin()
@@ -13,15 +13,21 @@ export async function GET(request: Request) {
 
   const { searchParams } = new URL(request.url)
   const { pageSize, offset } = parsePagination(searchParams)
+  const q = (searchParams.get("q") ?? "").trim().slice(0, 64)
+
+  const where: SQL | undefined = q
+    ? or(like(courses.title, `%${q}%`), like(courses.sourceName, `%${q}%`))
+    : undefined
 
   const [rows, [{ total }]] = await Promise.all([
     db
       .select()
       .from(courses)
+      .where(where)
       .orderBy(desc(courses.createdAt))
       .limit(pageSize)
       .offset(offset),
-    db.select({ total: sql<number>`count(*)` }).from(courses),
+    db.select({ total: sql<number>`count(*)` }).from(courses).where(where),
   ])
 
   return NextResponse.json({ data: rows, total })

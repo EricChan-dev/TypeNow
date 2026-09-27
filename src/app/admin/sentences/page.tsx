@@ -1,13 +1,27 @@
 "use client"
 
 import { List, CreateButton, useTable, EditButton, DeleteButton } from "@refinedev/antd"
-import { Table, Space, Tag } from "antd"
+import { Input, Table, Space, Tag } from "antd"
 
 export default function SentencesList() {
-  const { tableProps } = useTable({ pagination: { pageSize: 20 } })
+  const { tableProps, setFilters } = useTable({
+    pagination: { pageSize: 20 },
+    syncWithLocation: true,
+  })
 
   return (
     <List headerButtons={<CreateButton>新增句子</CreateButton>}>
+      <div style={{ marginBottom: 16 }}>
+        <Input.Search
+          allowClear
+          placeholder="搜索中文或英文"
+          style={{ width: 320 }}
+          onSearch={(value) =>
+            setFilters([{ field: "q", operator: "eq", value }], "replace")
+          }
+        />
+      </div>
+
       <Table {...tableProps} rowKey="id">
         <Table.Column dataIndex="chinese" title="中文" ellipsis />
         <Table.Column dataIndex="english" title="英文" ellipsis />

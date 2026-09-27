@@ -4,7 +4,7 @@ import { db } from "@/lib/db"
 import { lessons } from "@/lib/db/schema"
 import { requireAdmin } from "@/lib/admin-auth"
 import { parsePagination } from "@/lib/pagination"
-import { eq, sql } from "drizzle-orm"
+import { and, eq, or, like, sql, type SQL } from "drizzle-orm"
 
 export async function GET(request: Request) {
   const auth = await requireAdmin()
@@ -16,7 +16,13 @@ export async function GET(request: Request) {
   // 课时按课内顺序排，保持 asc(sortOrder)；只收敛分页参数。
   const { pageSize, offset } = parsePagination(searchParams, 50)
 
-  const where = courseId ? eq(lessons.courseId, courseId) : undefined
+  const q = (searchParams.get("q") ?? "").trim().slice(0, 64)
+
+  const conds: SQL[] = []
+  if (courseId) conds.push(eq(lessons.courseId, courseId))
+  if (q) conds.push(or(like(lessons.title, `%${q}%`), like(lessons.summary, `%${q}%`))!)
+  const where: SQL | undefined =
+    conds.length === 0 ? undefined : conds.length === 1 ? conds[0] : and(...conds)
 
   const [rows, [{ total }]] = await Promise.all([
     db.select().from(lessons).where(where).limit(pageSize).offset(offset).orderBy(lessons.sortOrder),
