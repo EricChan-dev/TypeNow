@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server"
 import { db } from "@/lib/db"
+import { aliveCourse, aliveLesson, aliveSentence } from "@/lib/soft-delete"
 import { courses, lessons, sentences, users } from "@/lib/db/schema"
 import { and, eq, asc, type SQL } from "drizzle-orm"
 import { getSession } from "@/lib/auth/session"
@@ -39,7 +40,8 @@ export async function GET(request: Request) {
       .select({ id: lessons.id })
       .from(lessons)
       .innerJoin(courses, eq(lessons.courseId, courses.id))
-      .where(and(eq(lessons.id, lessonId), eq(courses.isPublished, 1)))
+      // 已软删除的课程/课时不再下发内容（见 lib/soft-delete）
+      .where(and(eq(lessons.id, lessonId), eq(courses.isPublished, 1), aliveCourse, aliveLesson))
       .limit(1)
     if (!lesson) return NextResponse.json({ error: "课时不存在或未发布" }, { status: 404 })
 
@@ -52,7 +54,7 @@ export async function GET(request: Request) {
       database
         .select()
         .from(sentences)
-        .where(and(eq(sentences.lessonId, lessonId), where))
+        .where(and(eq(sentences.lessonId, lessonId), aliveSentence, where))
         .orderBy(asc(sentences.sortOrder))
 
     let data = await forLesson(usableSentenceSql(sentences.chinese, sentences.english))

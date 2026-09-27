@@ -1,8 +1,9 @@
 import { NextResponse } from "next/server"
 import { db } from "@/lib/db"
+import { aliveSentence } from "@/lib/soft-delete"
 import { sentences } from "@/lib/db/schema"
 import { requireAdmin } from "@/lib/admin-auth"
-import { eq } from "drizzle-orm"
+import { and, eq } from "drizzle-orm"
 
 /**
  * 保存课时内的句子顺序。
@@ -48,7 +49,8 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
   const rows = await database
     .select({ id: sentences.id })
     .from(sentences)
-    .where(eq(sentences.lessonId, lessonId))
+    // 只统计未删除的句子：前端从列表里看到的就是这些，校验集合必须对齐同一批
+    .where(and(eq(sentences.lessonId, lessonId), aliveSentence))
   const actual = new Set(rows.map((r) => r.id))
 
   if (actual.size !== payload.size) {

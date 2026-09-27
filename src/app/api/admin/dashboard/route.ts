@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server"
 import { db } from "@/lib/db"
+import { aliveCourse, aliveLesson, aliveSentence } from "@/lib/soft-delete"
 import {
   analyticsEvents,
   courses,
@@ -167,15 +168,15 @@ export async function GET(request: Request) {
 
     // ── 内容总量走缓存（句子表 46 万行，不能每次 COUNT(*)）──
     getCachedCount(STATS_KEYS.totalSentences, async () => {
-      const r = await database.select({ n: sql<number>`COUNT(*)` }).from(sentences)
+      const r = await database.select({ n: sql<number>`COUNT(*)` }).from(sentences).where(aliveSentence)
       return Number(r[0]?.n ?? 0)
     }),
     getCachedCount(STATS_KEYS.totalCourses, async () => {
-      const r = await database.select({ n: sql<number>`COUNT(*)` }).from(courses)
+      const r = await database.select({ n: sql<number>`COUNT(*)` }).from(courses).where(aliveCourse)
       return Number(r[0]?.n ?? 0)
     }),
     getCachedCount(STATS_KEYS.totalLessons, async () => {
-      const r = await database.select({ n: sql<number>`COUNT(*)` }).from(lessons)
+      const r = await database.select({ n: sql<number>`COUNT(*)` }).from(lessons).where(aliveLesson)
       return Number(r[0]?.n ?? 0)
     }),
   ])

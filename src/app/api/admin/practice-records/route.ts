@@ -70,6 +70,9 @@ export async function GET(request: Request) {
         userPhone: users.phone,
         chinese: sentences.chinese,
         english: sentences.english,
+        // 句子可能已被软删除。练习记录是历史事实、不跟着消失（用户当初确实练过），
+        // 但界面要能标出"这句已下架"，否则看起来像内容凭空丢了
+        sentenceDeletedAt: sentences.deletedAt,
       })
       .from(practiceRecords)
       .leftJoin(users, eq(practiceRecords.userId, users.id))
@@ -90,6 +93,7 @@ export async function GET(request: Request) {
     data: rows.map((r) => ({
       ...r,
       userPhone: maskPhone(r.userPhone),
+      sentenceDeleted: r.sentenceDeletedAt != null,
     })),
     total: Number(total),
     appliedRange: range,

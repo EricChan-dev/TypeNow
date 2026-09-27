@@ -1,10 +1,11 @@
 import { NextResponse } from "next/server"
 import { createHash } from "crypto"
 import { db } from "@/lib/db"
+import { aliveSentence } from "@/lib/soft-delete"
 import { sentences, sentenceKnowledge } from "@/lib/db/schema"
 import { requireAdmin } from "@/lib/admin-auth"
 import { checkAdminAiQuota, quotaExceededBody } from "@/lib/admin-ai-quota"
-import { eq } from "drizzle-orm"
+import { and, eq } from "drizzle-orm"
 import { analyzeSentence } from "@/lib/llm"
 
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
@@ -20,7 +21,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   const { id } = await params
   const force = new URL(req.url).searchParams.get("force") === "1"
 
-  const [sentence] = await db.select().from(sentences).where(eq(sentences.id, id)).limit(1)
+  const [sentence] = await db.select().from(sentences).where(and(eq(sentences.id, id), aliveSentence)).limit(1)
   if (!sentence) return NextResponse.json({ error: "Not found" }, { status: 404 })
 
   const english = sentence.english ?? ""

@@ -2,15 +2,17 @@
 
 import { useState } from "react"
 import { useRouter } from "next/navigation"
-import { List, CreateButton, useTable, DeleteButton } from "@refinedev/antd"
+import { List, CreateButton, useTable } from "@refinedev/antd"
 import {
-  Table, Space, Switch, Button, message, Avatar,
+  Table, Space, Switch, Button, message, Avatar, Tag,
   Modal, Form, Input, Select, Row, Col, Image,
   Upload, App,
 } from "antd"
 import { EyeOutlined, EditOutlined, PictureOutlined, InboxOutlined } from "@ant-design/icons"
 import { COURSE_CATEGORIES } from "@/types/course"
 import type { UploadFile } from "antd"
+import DeleteRestoreButton from "@/components/admin/DeleteRestoreButton"
+import DeletedViewToggle from "@/components/admin/DeletedViewToggle"
 
 const { Dragger } = Upload
 
@@ -25,6 +27,8 @@ interface CourseRow {
   subCategoryKey: string | null
   isPublished: number
   learnerCount: number
+  /** 软删除时间；非空表示在回收站里 */
+  deletedAt: string | null
 }
 
 const mainCategories = COURSE_CATEGORIES.filter((c) => c.key !== "all")
@@ -44,7 +48,7 @@ export default function CoursesList() {
   const router = useRouter()
   const { message: msg } = App.useApp()
   // q 走 refine 的 filters 通道，服务端在 /api/admin/courses 里按标题/简介/来源检索
-  const { tableProps, tableQuery, setFilters } = useTable({
+  const { tableProps, tableQuery, filters, setFilters } = useTable({
     pagination: { pageSize: 20 },
     syncWithLocation: true,
   })
@@ -134,7 +138,8 @@ export default function CoursesList() {
 
   return (
     <List headerButtons={<CreateButton>新增课程</CreateButton>}>
-      <div style={{ marginBottom: 16 }}>
+      <div style={{ marginBottom: 16, display: "flex", gap: 12, flexWrap: "wrap" }}>
+        <DeletedViewToggle filters={filters as never} setFilters={setFilters as never} />
         <Input.Search
           allowClear
           placeholder="搜索课程标题 / 简介 / 来源"
@@ -165,7 +170,21 @@ export default function CoursesList() {
             )
           }
         />
-        <Table.Column dataIndex="title" title="标题" ellipsis />
+        <Table.Column
+          dataIndex="title"
+          title="标题"
+          ellipsis
+          render={(v: string, r: CourseRow) =>
+            r.deletedAt ? (
+              <Space size={6}>
+                <Tag color="red">已删除</Tag>
+                <span style={{ textDecoration: "line-through", opacity: 0.6 }}>{v}</span>
+              </Space>
+            ) : (
+              v
+            )
+          }
+        />
         <Table.Column dataIndex="sourceName" title="来源" width={80} />
         <Table.Column
           dataIndex="categoryKey"
@@ -215,7 +234,14 @@ export default function CoursesList() {
               >
                 编辑
               </Button>
-              <DeleteButton recordItemId={record.id} hideText size="small" />
+              {/* 删除改为软删除：先展示影响面（这门课连带多少课时/句子），可恢复 */}
+              <DeleteRestoreButton
+                basePath="/api/admin/courses"
+                id={record.id}
+                isDeleted={record.deletedAt != null}
+                hasChildren
+                onDone={() => tableQuery.refetch()}
+              />
             </Space>
           )}
         />

@@ -1,8 +1,9 @@
 "use client"
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
-import { List, CreateButton, useTable, EditButton, DeleteButton } from "@refinedev/antd"
+import { List, CreateButton, useTable, EditButton } from "@refinedev/antd"
 import { Alert, Input, Select, Space, Spin, Table, Tag, Typography } from "antd"
+import DeleteRestoreButton from "@/components/admin/DeleteRestoreButton"
 
 const { Text } = Typography
 
@@ -204,10 +205,15 @@ export default function SentencesList() {
         <Table.Column
           title="操作"
           width={120}
-          render={(_, record: { id: string }) => (
+          render={(_, record: { id: string; deletedAt?: string | null }) => (
             <Space>
               <EditButton recordItemId={record.id} hideText size="small" />
-              <DeleteButton recordItemId={record.id} hideText size="small" />
+              <DeleteRestoreButton
+                basePath="/api/admin/sentences"
+                id={record.id}
+                isDeleted={record.deletedAt != null}
+                onDone={() => tableQuery.refetch()}
+              />
             </Space>
           )}
         />

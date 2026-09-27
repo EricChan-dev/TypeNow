@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server"
 import { db } from "@/lib/db"
+import { aliveSentence } from "@/lib/soft-delete"
 import { reviewQueue, sentences, lessons, courses } from "@/lib/db/schema"
 import { and, eq, lte, sql } from "drizzle-orm"
 import { getSession } from "@/app/actions/auth"
@@ -50,7 +51,9 @@ export async function GET(request: Request) {
     .innerJoin(sentences, eq(reviewQueue.sentenceId, sentences.id))
     .leftJoin(lessons, eq(sentences.lessonId, lessons.id))
     .leftJoin(courses, eq(lessons.courseId, courses.id))
-    .where(and(whereClause, usable))
+    // 已软删除的句子不再进入复习（内容已下架，练不了）。
+    // 下面计数那条也必须带同样的条件，否则分页 total 与实际能取到的行数不符
+    .where(and(whereClause, usable, aliveSentence))
     .orderBy(sql`${reviewQueue.nextReviewAt} ASC`)
     .limit(pageSize)
     .offset(offset)
@@ -59,7 +62,7 @@ export async function GET(request: Request) {
     .select({ total: sql<number>`COUNT(*)` })
     .from(reviewQueue)
     .innerJoin(sentences, eq(reviewQueue.sentenceId, sentences.id))
-    .where(and(whereClause, usable))
+    .where(and(whereClause, usable, aliveSentence))
 
   // Always include due count for badge
   const [{ dueCount }] = await db

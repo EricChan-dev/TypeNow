@@ -110,6 +110,20 @@ export const courses = mysqlTable("courses", {
   isPublished: tinyint("is_published").notNull().default(0),
   createdBy: varchar("created_by", { length: 36 }),
   createdAt: datetime("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  /**
+   * 软删除标记，见 db/migrations/00016_soft_delete.sql。
+   *
+   * 为什么是两列：
+   *   deletedAt    —— 什么时候删的（展示用）
+   *   deletedBatch —— 哪一次删除操作（**恢复时的唯一依据**）
+   *
+   * 批次**不能**用 deletedAt 的时间戳代替：本仓库 drizzle 的 datetime 映射
+   * （src/lib/db/index.ts 的 toDbDateTime）只取到「秒」，同一秒内两次删除会
+   * 得到相同的值、恢复时互相串台（这是上线前被测试证伪的方案）。
+   * 显式 UUID 批次不依赖时间精度。NULL = 正常。
+   */
+  deletedAt: datetime("deleted_at", { fsp: 3 }),
+  deletedBatch: varchar("deleted_batch", { length: 36 }),
 })
 
 // ─── Lessons ─────────────────────────────────────────────────────────────────
@@ -122,6 +136,9 @@ export const lessons = mysqlTable(
     summary: text("summary"),
     sortOrder: int("sort_order").notNull().default(0),
     createdAt: datetime("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+    /** 软删除标记，语义见 courses.deletedAt / deletedBatch。NULL = 正常。 */
+    deletedAt: datetime("deleted_at", { fsp: 3 }),
+    deletedBatch: varchar("deleted_batch", { length: 36 }),
   },
   (t) => [index("idx_lessons_course_id").on(t.courseId)]
 )
@@ -200,6 +217,9 @@ export const sentences = mysqlTable(
       explanation: string
     }>>(),
     createdAt: datetime("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+    /** 软删除标记，语义见 courses.deletedAt / deletedBatch。NULL = 正常。 */
+    deletedAt: datetime("deleted_at", { fsp: 3 }),
+    deletedBatch: varchar("deleted_batch", { length: 36 }),
   },
   (t) => [
     index("idx_sentences_lesson_id").on(t.lessonId),

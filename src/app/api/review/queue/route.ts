@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server"
 import { db } from "@/lib/db"
+import { aliveSentence } from "@/lib/soft-delete"
 import { reviewQueue, sentences } from "@/lib/db/schema"
 import { and, eq, lte, sql } from "drizzle-orm"
 import { getSession } from "@/app/actions/auth"
@@ -39,6 +40,9 @@ export async function GET() {
         eq(reviewQueue.status, "pending"),
         lte(reviewQueue.nextReviewAt, now),
         usable,
+        // 已软删除的句子不再回到复习队列（内容下架了练不了）。
+        // 数据查询与下面的计数查询都要带上，否则返回的 total 会大于实际条数
+        aliveSentence,
       )
     )
     .orderBy(sql`${reviewQueue.nextReviewAt} ASC`)
@@ -58,6 +62,9 @@ export async function GET() {
         eq(reviewQueue.status, "pending"),
         lte(reviewQueue.nextReviewAt, now),
         usable,
+        // 已软删除的句子不再回到复习队列（内容下架了练不了）。
+        // 数据查询与下面的计数查询都要带上，否则返回的 total 会大于实际条数
+        aliveSentence,
       )
     )
 

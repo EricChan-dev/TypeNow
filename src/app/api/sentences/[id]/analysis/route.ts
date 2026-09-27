@@ -2,7 +2,8 @@ import { NextResponse } from "next/server"
 import { createHash } from "crypto"
 import { db } from "@/lib/db"
 import { sentences, sentenceKnowledge } from "@/lib/db/schema"
-import { eq } from "drizzle-orm"
+import { and, eq } from "drizzle-orm"
+import { aliveSentence } from "@/lib/soft-delete"
 import { getSession } from "@/lib/auth/session"
 
 export async function GET(_: Request, { params }: { params: Promise<{ id: string }> }) {
@@ -17,7 +18,8 @@ export async function GET(_: Request, { params }: { params: Promise<{ id: string
   const [sentence] = await db
     .select({ english: sentences.english })
     .from(sentences)
-    .where(eq(sentences.id, id))
+    // 已软删除的句子不再提供解析（内容已下架）
+    .where(and(eq(sentences.id, id), aliveSentence))
     .limit(1)
 
   if (!sentence) return NextResponse.json({ error: "Not found" }, { status: 404 })

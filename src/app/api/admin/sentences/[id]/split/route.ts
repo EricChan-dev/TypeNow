@@ -1,9 +1,10 @@
 import { NextResponse } from "next/server"
 import { db } from "@/lib/db"
+import { aliveSentence } from "@/lib/soft-delete"
 import { sentences } from "@/lib/db/schema"
 import { requireAdmin } from "@/lib/admin-auth"
 import { checkAdminAiQuota, quotaExceededBody } from "@/lib/admin-ai-quota"
-import { eq } from "drizzle-orm"
+import { and, eq } from "drizzle-orm"
 import { llmCall } from "@/lib/llm"
 
 function buildSplitPrompt(wordCount: number): string {
@@ -65,7 +66,7 @@ export async function POST(_: Request, { params }: { params: Promise<{ id: strin
   if (!db) return NextResponse.json({ error: "DB not configured" }, { status: 500 })
 
   const { id } = await params
-  const [sentence] = await db.select().from(sentences).where(eq(sentences.id, id)).limit(1)
+  const [sentence] = await db.select().from(sentences).where(and(eq(sentences.id, id), aliveSentence)).limit(1)
   if (!sentence) return NextResponse.json({ error: "Not found" }, { status: 404 })
 
   const wordCount = (sentence.english ?? "").trim().split(/\s+/).length

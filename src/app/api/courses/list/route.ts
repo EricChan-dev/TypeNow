@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import { db } from "@/lib/db"
 import { courses } from "@/lib/db/schema"
+import { aliveCourse } from "@/lib/soft-delete"
 import { eq, and, like, sql, desc } from "drizzle-orm"
 import type { SortMode } from "@/types/course"
 
@@ -33,7 +34,8 @@ export async function GET(request: Request) {
     const search = searchParams.get("search")?.trim()
     const sortMode = (searchParams.get("sortMode") ?? "latest") as SortMode
 
-    const conditions = [eq(courses.isPublished, 1)]
+    // 软删除的课程对学习者不可见（见 lib/soft-delete）
+    const conditions = [eq(courses.isPublished, 1), aliveCourse]
     if (categoryKey && categoryKey !== "all") conditions.push(eq(courses.categoryKey, categoryKey))
     if (subCategoryKey) conditions.push(eq(courses.subCategoryKey, subCategoryKey))
     if (search) {

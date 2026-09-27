@@ -1,10 +1,12 @@
 import { randomUUID } from "crypto"
 import { NextResponse } from "next/server"
 import { db } from "@/lib/db"
+import { aliveCourse, deletedCourse } from "@/lib/soft-delete"
+import { deletedCondition, deletedScope } from "@/lib/soft-delete-view"
 import { courses } from "@/lib/db/schema"
 import { requireAdmin } from "@/lib/admin-auth"
 import { parsePagination } from "@/lib/pagination"
-import { desc, eq, or, like, sql, type SQL } from "drizzle-orm"
+import { desc, eq, or, like, sql, type SQL, and } from "drizzle-orm"
 
 export async function GET(request: Request) {
   const auth = await requireAdmin()
@@ -15,9 +17,15 @@ export async function GET(request: Request) {
   const { pageSize, offset } = parsePagination(searchParams)
   const q = (searchParams.get("q") ?? "").trim().slice(0, 64)
 
-  const where: SQL | undefined = q
-    ? or(like(courses.title, `%${q}%`), like(courses.sourceName, `%${q}%`))
-    : undefined
+  // 删除视图：默认只看未删除的（normal），deleted=1 只看回收站，deleted=all 全部。
+  // 恢复入口就在"已删除"视图里，所以必须能查得到它们。
+  const deletedView = deletedScope(searchParams.get("deleted"))
+  const conds: SQL[] = [deletedCondition(deletedView, aliveCourse, deletedCourse)]
+  if (q) {
+    const matched = or(like(courses.title, `%${q}%`), like(courses.sourceName, `%${q}%`))
+    if (matched) conds.push(matched)
+  }
+  const where: SQL | undefined = and(...conds)
 
   const [rows, [{ total }]] = await Promise.all([
     db

@@ -1,6 +1,8 @@
 import { randomUUID } from "crypto"
 import { NextResponse } from "next/server"
 import { db } from "@/lib/db"
+import { aliveSentence, deletedSentence } from "@/lib/soft-delete"
+import { deletedCondition, deletedScope } from "@/lib/soft-delete-view"
 import { sentences } from "@/lib/db/schema"
 import { requireAdmin } from "@/lib/admin-auth"
 import { parsePagination } from "@/lib/pagination"
@@ -66,7 +68,8 @@ export async function GET(request: Request) {
     )
   }
 
-  const conditions: SQL[] = []
+  const view = deletedScope(searchParams.get("deleted"))
+  const conditions: SQL[] = [deletedCondition(view, aliveSentence, deletedSentence)]
   if (lessonId) conditions.push(eq(sentences.lessonId, lessonId))
   if (search) {
     const matched = or(
@@ -75,12 +78,7 @@ export async function GET(request: Request) {
     )
     if (matched) conditions.push(matched)
   }
-  const where =
-    conditions.length === 0
-      ? undefined
-      : conditions.length === 1
-        ? conditions[0]
-        : and(...conditions)
+  const where = and(...conditions)
 
   // 有课时范围时按课内顺序（有意义且走索引），否则按最近添加。
   // 第二个排序键是**稳定分页**所必需的：同一秒内批量导入的句子 created_at 完全相同，
@@ -101,7 +99,10 @@ export async function GET(request: Request) {
   // total：有课时范围时精确计数（单课最多 960 行，走复合索引），
   // 没有范围时就是全表总数，直接复用缓存
   let total: number
-  if (lessonId) {
+  // 只有"正常视图 + 无任何筛选"时，全表未删除总数才等于这个列表的 total，
+  // 那时可以复用缓存；其余情况（课内、回收站、搜索）都必须精确计数。
+  // 缓存条件是 view === "normal" 而不是别的：回收站里的 total 显然不是全局总数。
+  if (lessonId || view !== "normal" || search) {
     const [row] = await database
       .select({ total: sql<number>`count(*)` })
       .from(sentences)
@@ -109,7 +110,12 @@ export async function GET(request: Request) {
     total = Number(row?.total ?? 0)
   } else {
     const cached = await getCachedCount(STATS_KEYS.totalSentences, async () => {
-      const [row] = await database.select({ total: sql<number>`count(*)` }).from(sentences)
+      const [row] = await database
+        .select({ total: sql<number>`count(*)` })
+        .from(sentences)
+        // 必须与仪表盘「句子库」算的是同一个数（未删除总数）：
+        // 两者共用 stats.total_sentences 这个 key，口径不一致会互相覆盖缓存
+        .where(aliveSentence)
       return Number(row?.total ?? 0)
     })
     if (cached === null) {
@@ -126,7 +132,7 @@ export async function GET(request: Request) {
     total,
     // 回显排序口径，页面据此决定列含义（课内顺序 vs 添加时间）
     orderedBy: lessonId ? "sortOrder" : "createdAt",
-    totalIsCached: !lessonId,
+    totalIsCached: !(lessonId || view !== "normal" || search),
   })
 }
 
