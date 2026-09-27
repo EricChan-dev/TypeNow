@@ -157,17 +157,26 @@ feedback/[id]  PATCH             处理反馈（退回待处理会清空 handled
   （例如历史硬删留下的数据）。是否补外键需要单独评估（存量数据要先清理）。
 - **metabase 常驻**：`~/metabase/`（本机 JVM + 两条 LaunchAgent 隧道）。
   结论是自建埋点更合适，它是留着做临时探索的；不用了可以卸载。
-- **webhook 的交付可靠性**：2026-09-28 发现 `f099e02` 那次 push **完全没触发部署**
-  （deploy.log 里没有对应的「开始部署」，最后只能手工跑 `deploy.sh` 补上）。
-  同一时段 `git push` 本身也不稳定（连接 443 失败），所以更像 GitHub 的
-  **webhook 交付失败**而不是服务端漏处理 —— 但服务端对此毫无感知：
-  接口收到请求就回 200 并异步构建，交付丢了没有任何提示。
-  建议做法：到 GitHub 仓库的 Settings → Webhooks → Recent Deliveries 看那次
-  交付的响应码；如果要根治，可以加一条"origin/main 与本地 HEAD 不一致超过 N 分钟
-  就告警"的巡检（现在只能靠人发现线上版本落后）。
-  顺带：`pm2 logs webhook` 的 error 日志里全是 `拒绝：签名缺失或无效`，
-  说明该端口在公网被扫过 —— 验签挡住了，但值得确认端口只对 GitHub 的
-  出网地址段开放（或改用不可猜的路径）。
+- **webhook 交付偶发丢失**：2026-09-28 发现 `f099e02` 那次 push **没有触发部署**
+  （deploy.log 里没有对应的「开始部署」，最后手工跑 `deploy.sh` 补上）；而紧接着的
+  `dc046b7` 又正常触发了。同一时段 `git push` 本身也不稳定（连接 443 失败），
+  所以更像是 GitHub 的**交付失败**而不是服务端漏处理。
+  ⚠️ 服务端对此**毫无感知**：接口收到请求就回 200 再异步构建，交付丢了没有任何提示，
+  只能靠人发现线上版本落后于 `origin/main`。要根治得加一条巡检
+  （本地 `origin/main` 与线上 HEAD 不一致超过 N 分钟就告警），或改用
+  「拉取式」部署（服务器定时 `git pull --ff-only`）。
+  下次发生时先去 GitHub 的 Settings → Webhooks → Recent Deliveries 看那次交付的响应码。
+
+  > 同一轮里已修掉的是一个**看起来像失败、其实成功了**的问题：webhook 的
+  > `exec(DEPLOY_CMD, cb)` 没设 `maxBuffer`（Node 默认 1MB），而一次 Next 生产构建的
+  > 输出轻易超过它 —— 超限时 Node 会杀掉子进程并回调错误，于是 deploy.log 里写着
+  > 「部署完成」、webhook 日志里却是「部署失败」。现在显式给到 64MB，失败路径也会
+  > 打印 stderr / exit code；实测同一次部署已报「部署成功（耗时 99s）」。
+  > （提交 `dc046b7`。注意它需要 `pm2 restart webhook` 才生效 —— `deploy.sh` 只重启
+  > `typenow`，不会重启 webhook 自己。）
+- **webhook 端口在公网被扫**：`pm2 logs webhook` 的 error 里大量
+  `拒绝：签名缺失或无效`。验签挡住了，但值得确认 9000 端口只对 GitHub 的出网
+  地址段开放（或改用不可猜的路径）。
 
 ---
 
