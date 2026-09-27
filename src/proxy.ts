@@ -2,15 +2,7 @@ import { type NextRequest, NextResponse } from "next/server"
 import { db } from "@/lib/db"
 import { sessions, users } from "@/lib/db/schema"
 import { and, eq, gt } from "drizzle-orm"
-
-function getAdminPhones(): string[] {
-  if (process.env.NODE_ENV === "development") {
-    return ["16634482010"]
-  }
-  const raw = process.env.ADMIN_PHONES
-  if (raw) return raw.split(",").map((s) => s.trim()).filter(Boolean)
-  return []
-}
+import { isAdminUser } from "@/lib/admin-identity"
 
 async function getSessionUser(request: NextRequest) {
   if (!db) return null
@@ -33,9 +25,10 @@ function isWechatCallback(pathname: string): boolean {
     pathname.startsWith("/api/payment/notify")
 }
 
+// 管理员判定收敛到 lib/admin-identity：这里曾经自己写了一份 role/phone 判定，
+// 而前端 authProvider 是第三份（只认 role），漂移会导致"合法的手机号管理员进不去后台"
 function isAdmin(user: { role: string | null; phone: string | null } | null) {
-  if (!user) return false
-  return user.role === "admin" || (user.phone != null && getAdminPhones().includes(user.phone))
+  return isAdminUser(user)
 }
 
 export async function proxy(request: NextRequest) {

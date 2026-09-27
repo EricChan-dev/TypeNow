@@ -11,6 +11,18 @@ export async function POST(request: Request) {
   if (!db) return NextResponse.json({ error: "DB not configured" }, { status: 500 })
 
   const MAX_FILE_SIZE = 10 * 1024 * 1024 // 10MB
+
+  // 先看 Content-Length 再读 body：formData() 会把整个请求体读进内存，
+  // 在它之后再检查 file.size 已经晚了（见 upload/image 的同类注释）。
+  // 头部缺失（chunked）或谎报时下面的真实大小检查仍然兜底。
+  const declared = Number(request.headers.get("content-length") ?? "")
+  if (Number.isFinite(declared) && declared > MAX_FILE_SIZE + 64 * 1024) {
+    return NextResponse.json(
+      { error: `文件大小不能超过 ${Math.floor(MAX_FILE_SIZE / 1024 / 1024)}MB（请求体过大，已提前拒绝）` },
+      { status: 413 },
+    )
+  }
+
   const formData = await request.formData()
   const file = formData.get("file") as File | null
   const lessonId = formData.get("lesson_id") as string | null

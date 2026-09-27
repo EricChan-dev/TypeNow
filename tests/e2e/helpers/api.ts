@@ -78,7 +78,18 @@ export class ApiClient {
   async request<T = unknown>(
     method: string,
     path: string,
-    init: { json?: unknown; headers?: Record<string, string>; redirect?: RequestRedirect } = {}
+    init: {
+      json?: unknown
+      headers?: Record<string, string>
+      redirect?: RequestRedirect
+      /**
+       * 原始请求体（与 json 互斥）。用于需要**非 JSON** 体的接口，
+       * 例如 multipart 上传 —— 这类接口的"体积上限"要靠真实的 Content-Length
+       * 才能验到：手工伪造 content-length 而 body 为空会被 HTTP 层拒掉（实测 500），
+       * 验不出任何东西。
+       */
+      rawBody?: BodyInit
+    } = {}
   ): Promise<ApiResponse<T>> {
     const headers: Record<string, string> = {
       ...(init.json !== undefined ? { "Content-Type": "application/json" } : {}),
@@ -88,7 +99,12 @@ export class ApiClient {
     const res = await fetch(`${this.baseUrl}${path}`, {
       method,
       headers,
-      body: init.json !== undefined ? JSON.stringify(init.json) : undefined,
+      body:
+        init.rawBody !== undefined
+          ? init.rawBody
+          : init.json !== undefined
+            ? JSON.stringify(init.json)
+            : undefined,
       redirect: init.redirect ?? "manual",
       signal: AbortSignal.timeout(60_000),
     })

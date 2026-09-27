@@ -48,7 +48,7 @@ CREATE TABLE `analytics_events` (
   KEY `idx_ae_type_time` (`event_type`,`created_at`),
   KEY `idx_ae_user` (`user_id`),
   KEY `idx_ae_created_at` (`created_at`)
-) ENGINE=InnoDB AUTO_INCREMENT=153 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=193 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 DROP TABLE IF EXISTS `check_ins`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
@@ -81,6 +81,8 @@ CREATE TABLE `courses` (
   `is_published` tinyint NOT NULL DEFAULT '0',
   `created_by` varchar(36) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
   `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `deleted_at` datetime(3) DEFAULT NULL,
+  `deleted_batch` char(36) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
   PRIMARY KEY (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
@@ -127,6 +129,8 @@ CREATE TABLE `lessons` (
   `summary` text COLLATE utf8mb4_unicode_ci,
   `sort_order` int NOT NULL DEFAULT '0',
   `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `deleted_at` datetime(3) DEFAULT NULL,
+  `deleted_batch` char(36) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
   PRIMARY KEY (`id`),
   KEY `idx_lessons_course_id` (`course_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
@@ -324,6 +328,8 @@ CREATE TABLE `sentences` (
   `sort_order` int NOT NULL DEFAULT '0',
   `dependency_analysis` json DEFAULT NULL,
   `sentence_structure` json DEFAULT NULL,
+  `deleted_at` datetime(3) DEFAULT NULL,
+  `deleted_batch` char(36) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
   PRIMARY KEY (`id`),
   KEY `idx_sentences_lesson_id` (`lesson_id`),
   KEY `idx_sentences_lesson_sort` (`lesson_id`,`sort_order`),
@@ -383,7 +389,8 @@ CREATE TABLE `subscriptions` (
   PRIMARY KEY (`id`),
   KEY `idx_subscriptions_user_id` (`user_id`),
   KEY `idx_subscriptions_expires` (`expires_at`),
-  KEY `idx_subscriptions_created_at` (`created_at`)
+  KEY `idx_subscriptions_created_at` (`created_at`),
+  KEY `idx_subscriptions_status` (`status`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 DROP TABLE IF EXISTS `task_logs`;
@@ -494,7 +501,8 @@ CREATE TABLE `users` (
   UNIQUE KEY `idx_users_wechat_openid` (`wechat_openid`),
   UNIQUE KEY `users_invite_code_unique` (`invite_code`),
   UNIQUE KEY `idx_users_wechat_unionid` (`wechat_unionid`),
-  KEY `idx_users_created_at` (`created_at`)
+  KEY `idx_users_created_at` (`created_at`),
+  KEY `idx_users_trial_claimed_at` (`trial_claimed_at`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 DROP TABLE IF EXISTS `verification_codes`;

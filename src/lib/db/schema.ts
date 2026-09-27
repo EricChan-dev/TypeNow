@@ -58,6 +58,8 @@ export const users = mysqlTable(
     uniqueIndex("idx_users_wechat_openid").on(t.wechatOpenid),
     uniqueIndex("idx_users_wechat_unionid").on(t.wechatUnionid),
     index("idx_users_created_at").on(t.createdAt),
+    // 后台按"领取体验会员"的时间范围筛（仪表盘指标 + 用户列表的 trial=1 钻取）
+    index("idx_users_trial_claimed_at").on(t.trialClaimedAt),
   ]
 )
 
@@ -340,6 +342,8 @@ export const subscriptions = mysqlTable(
     index("idx_subscriptions_user_id").on(t.userId),
     index("idx_subscriptions_expires").on(t.expiresAt),
     index("idx_subscriptions_created_at").on(t.createdAt),
+    // 仪表盘「活跃订阅」= COUNT(*) WHERE status='active'，钻取也按它筛
+    index("idx_subscriptions_status").on(t.status),
   ]
 )
 

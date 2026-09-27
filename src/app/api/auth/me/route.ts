@@ -1,15 +1,7 @@
 import { NextResponse } from "next/server"
 import { getCurrentUser } from "@/lib/auth/user"
+import { judgeAdmin } from "@/lib/admin-identity"
 import { getActiveSubscription, checkAndExpirePro } from "@/lib/subscription"
-
-function getAdminPhones(): string[] {
-  if (process.env.NODE_ENV === "development") {
-    return ["16634482010"]
-  }
-  const raw = process.env.ADMIN_PHONES
-  if (raw) return raw.split(",").map((s) => s.trim()).filter(Boolean)
-  return []
-}
 
 export async function GET() {
   const user = await getCurrentUser()
@@ -20,7 +12,9 @@ export async function GET() {
   const revoked = await checkAndExpirePro(user.id)
   const isPro = revoked ? false : !!user.isPro
 
-  const isAdmin = user.role === "admin" || (user.phone != null && getAdminPhones().includes(user.phone))
+  // 判定收敛到 lib/admin-identity：这里曾经自己写了一份，且它的 dev 兜底
+  // （无条件返回一个硬编码手机号）与 proxy/requireAdmin 不一致
+  const isAdmin = judgeAdmin({ role: user.role, phone: user.phone }).isAdmin
 
   let memberTier: "trial" | "monthly" | "yearly" | "partner" | "free" = "free"
   if (user.isPartner) {
