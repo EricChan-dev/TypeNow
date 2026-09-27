@@ -9,7 +9,7 @@ export default function PaymentsList() {
   return (
     <List>
       <Table {...tableProps} rowKey="id">
-        <Table.Column dataIndex="out_trade_no" title="订单号" ellipsis width={200} />
+        <Table.Column dataIndex="outTradeNo" title="订单号" ellipsis width={200} />
         <Table.Column
           dataIndex="plan"
           title="方案"
@@ -45,7 +45,7 @@ export default function PaymentsList() {
           }}
         />
         <Table.Column
-          dataIndex="paid_at"
+          dataIndex="paidAt"
           title="支付时间"
           width={180}
           render={(d: string) =>
@@ -53,7 +53,7 @@ export default function PaymentsList() {
           }
         />
         <Table.Column
-          dataIndex="created_at"
+          dataIndex="createdAt"
           title="创建时间"
           width={180}
           render={(d: string) =>

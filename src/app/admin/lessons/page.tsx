@@ -10,8 +10,8 @@ export default function LessonsList() {
     <List headerButtons={<CreateButton>新增课时</CreateButton>}>
       <Table {...tableProps} rowKey="id">
         <Table.Column dataIndex="title" title="课时名称" ellipsis />
-        <Table.Column dataIndex="course_id" title="课程ID" width={200} ellipsis />
-        <Table.Column dataIndex="sort_order" title="排序" width={80} />
+        <Table.Column dataIndex="courseId" title="课程ID" width={200} ellipsis />
+        <Table.Column dataIndex="sortOrder" title="排序" width={80} />
         <Table.Column dataIndex="summary" title="简介" ellipsis />
         <Table.Column
           title="操作"

@@ -23,33 +23,50 @@ export default function AdminDashboard() {
 
   useEffect(() => {
     async function fetchStats() {
-      try {
-        const [usersRes, subsRes, sentencesRes, paymentsRes] = await Promise.all([
-          fetch("/api/admin/users?pageSize=1"),
-          fetch("/api/admin/subscriptions?pageSize=1"),
-          fetch("/api/admin/sentences?pageSize=1"),
-          fetch("/api/admin/payment-orders?pageSize=10"),
-        ])
-        const [usersData, subsData, sentencesData, paymentsData] = await Promise.all([
-          usersRes.json(), subsRes.json(), sentencesRes.json(), paymentsRes.json(),
-        ])
-        const payments: Array<Record<string, unknown>> = paymentsData.data ?? []
-        const totalRev = payments
-          .filter((p) => p.status === "paid")
-          .reduce((sum, p) => sum + ((p.amount as number) || 0), 0)
-
-        setStats({
-          totalUsers: usersData.total ?? 0,
-          activeSubs: subsData.total ?? 0,
-          totalRevenue: totalRev / 100,
-          totalSentences: sentencesData.total ?? 0,
-          recentPayments: payments,
-        })
-      } catch {
-        // no-op
-      } finally {
-        setLoading(false)
+      /**
+       * 单个接口失败不能拖垮整个仪表盘。
+       *
+       * 原先四个请求的 .json() 一起 Promise.all：只要有一个返回非 JSON
+       * （例如接口不存在时 Next 返回 404 HTML），.json() 就抛错，
+       * catch 把整页统计一起吞掉 —— 一个坏接口表现为"仪表盘完全打不开"。
+       * 2026-09-26 就是这么发生的：/api/admin/subscriptions 整个缺失。
+       * 现在逐个请求独立兜底，坏掉的那项显示 0，其余照常。
+       */
+      const safeJson = async <T,>(url: string, fallback: T): Promise<T> => {
+        try {
+          const res = await fetch(url)
+          if (!res.ok) return fallback
+          const text = await res.text()
+          try {
+            return JSON.parse(text) as T
+          } catch {
+            return fallback
+          }
+        } catch {
+          return fallback
+        }
       }
+
+      const [usersData, subsData, sentencesData, paymentsData] = await Promise.all([
+        safeJson<{ total?: number }>("/api/admin/users?pageSize=1", {}),
+        safeJson<{ total?: number }>("/api/admin/subscriptions?pageSize=1", {}),
+        safeJson<{ total?: number }>("/api/admin/sentences?pageSize=1", {}),
+        safeJson<{ data?: Array<Record<string, unknown>> }>("/api/admin/payment-orders?pageSize=10", {}),
+      ])
+
+      const payments: Array<Record<string, unknown>> = paymentsData.data ?? []
+      const totalRev = payments
+        .filter((p) => p.status === "paid")
+        .reduce((sum, p) => sum + ((p.amount as number) || 0), 0)
+
+      setStats({
+        totalUsers: usersData.total ?? 0,
+        activeSubs: subsData.total ?? 0,
+        totalRevenue: totalRev / 100,
+        totalSentences: sentencesData.total ?? 0,
+        recentPayments: payments,
+      })
+      setLoading(false)
     }
     fetchStats()
   }, [])

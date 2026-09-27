@@ -14,7 +14,7 @@ export default function UsersList() {
         <Table.Column dataIndex="name" title="昵称" ellipsis />
         <Table.Column dataIndex="phone" title="手机" width={140} />
         <Table.Column
-          dataIndex="is_pro"
+          dataIndex="isPro"
           title="会员"
           width={80}
           render={(p: boolean) =>
@@ -30,7 +30,7 @@ export default function UsersList() {
           }
         />
         <Table.Column
-          dataIndex="created_at"
+          dataIndex="createdAt"
           title="注册时间"
           width={180}
           render={(d: string) =>

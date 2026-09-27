@@ -36,7 +36,7 @@ export default function SubscriptionsList() {
           }}
         />
         <Table.Column
-          dataIndex="starts_at"
+          dataIndex="startsAt"
           title="开始时间"
           width={180}
           render={(d: string) =>
@@ -44,7 +44,7 @@ export default function SubscriptionsList() {
           }
         />
         <Table.Column
-          dataIndex="expires_at"
+          dataIndex="expiresAt"
           title="到期时间"
           width={180}
           render={(d: string) =>
@@ -52,7 +52,7 @@ export default function SubscriptionsList() {
           }
         />
         <Table.Column
-          dataIndex="created_at"
+          dataIndex="createdAt"
           title="创建时间"
           width={180}
           render={(d: string) =>
