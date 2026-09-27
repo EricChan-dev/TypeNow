@@ -14,6 +14,29 @@
 `drizzle-kit push`（不读 `migrations/`），生产走手工执行 `migrations/`，
 两条路径只有靠人工保持一致。
 
+**新增表必须显式写排序规则**：`DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`。
+
+不写的后果（2026-09-27 实际踩到，排查了很久）：MySQL 8 的服务器默认是
+`utf8mb4_0900_ai_ci`，于是新表与既有表（含 `users`）**排序规则不一致**。一旦有查询
+把两张表 JOIN 起来比较字符串列，MySQL 直接报
+`ERROR 1267 Illegal mix of collations ... for operation '='`，表现为
+**某个页面莫名 500**，而服务端日志里往往看不到有用信息（错在驱动层就抛了）。
+
+当时生产库里就躺着 4 张这种表（`post_likes` / `practice_sessions` /
+`task_logs` / `user_feedback`），直到新写的后台反馈接口做了
+`user_feedback LEFT JOIN users` 才炸出来（见 `00021_unify_collation.sql`）。
+
+⚠️ **e2e 抓不到这类问题**：它的库是 `drizzle-kit push` 一次性生成的，所有表排序规则
+天然一致。所以只能靠核对线上库：
+
+```sql
+SELECT table_collation, COUNT(*) AS tables
+FROM information_schema.tables
+WHERE table_schema='typenow' AND table_type='BASE TABLE'
+GROUP BY table_collation;
+-- 只应有一行；出现第二行就说明漂移了
+```
+
 ## 关于被删除的 10 个文件
 
 2026-09-26 删除了 `init-all.sql` 与 `migrations/00001`–`00008`、`00010`，

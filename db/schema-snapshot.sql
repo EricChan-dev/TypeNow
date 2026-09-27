@@ -48,7 +48,7 @@ CREATE TABLE `analytics_events` (
   KEY `idx_ae_type_time` (`event_type`,`created_at`),
   KEY `idx_ae_user` (`user_id`),
   KEY `idx_ae_created_at` (`created_at`)
-) ENGINE=InnoDB AUTO_INCREMENT=193 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=259 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 DROP TABLE IF EXISTS `check_ins`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
@@ -214,13 +214,13 @@ DROP TABLE IF EXISTS `post_likes`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `post_likes` (
-  `id` varchar(36) NOT NULL DEFAULT (uuid()),
-  `post_id` varchar(36) NOT NULL,
-  `user_id` varchar(36) NOT NULL,
+  `id` varchar(36) COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT (uuid()),
+  `post_id` varchar(36) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `user_id` varchar(36) COLLATE utf8mb4_unicode_ci NOT NULL,
   `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`),
   UNIQUE KEY `uk_post_like` (`post_id`,`user_id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 DROP TABLE IF EXISTS `posts`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
@@ -259,12 +259,12 @@ DROP TABLE IF EXISTS `practice_sessions`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `practice_sessions` (
-  `id` varchar(36) NOT NULL DEFAULT (uuid()),
-  `user_id` varchar(36) NOT NULL,
-  `course_id` varchar(36) NOT NULL,
-  `lesson_id` varchar(36) NOT NULL,
+  `id` varchar(36) COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT (uuid()),
+  `user_id` varchar(36) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `course_id` varchar(36) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `lesson_id` varchar(36) COLLATE utf8mb4_unicode_ci NOT NULL,
   `current_index` int NOT NULL DEFAULT '0',
-  `state` varchar(16) NOT NULL DEFAULT 'active',
+  `state` varchar(16) COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'active',
   `sentence_count` int NOT NULL DEFAULT '0',
   `mistake_count` int NOT NULL DEFAULT '0',
   `elapsed_seconds` int NOT NULL DEFAULT '0',
@@ -274,7 +274,7 @@ CREATE TABLE `practice_sessions` (
   PRIMARY KEY (`id`),
   UNIQUE KEY `uk_practice_session` (`user_id`,`lesson_id`),
   KEY `idx_practice_session_user` (`user_id`,`updated_at`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 DROP TABLE IF EXISTS `review_queue`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
@@ -397,18 +397,18 @@ DROP TABLE IF EXISTS `task_logs`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `task_logs` (
-  `id` varchar(36) NOT NULL DEFAULT (uuid()),
-  `user_id` varchar(36) NOT NULL,
-  `task_type` enum('share_invite','invite_register','invite_purchase') NOT NULL,
-  `reward_type` enum('diamond','trial_days') NOT NULL,
+  `id` varchar(36) COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT (uuid()),
+  `user_id` varchar(36) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `task_type` enum('share_invite','invite_register','invite_purchase') COLLATE utf8mb4_unicode_ci NOT NULL,
+  `reward_type` enum('diamond','trial_days') COLLATE utf8mb4_unicode_ci NOT NULL,
   `reward_amount` int NOT NULL,
-  `date` varchar(10) NOT NULL,
-  `ref_id` varchar(36) DEFAULT NULL,
+  `date` varchar(10) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `ref_id` varchar(36) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
   `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`),
   UNIQUE KEY `uk_task_user_type_date` (`user_id`,`task_type`,`date`),
   UNIQUE KEY `uk_task_ref_type` (`task_type`,`ref_id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 DROP TABLE IF EXISTS `tts_cache`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
@@ -423,6 +423,19 @@ CREATE TABLE `tts_cache` (
   PRIMARY KEY (`id`),
   UNIQUE KEY `tts_cache_cache_key_unique` (`cache_key`),
   UNIQUE KEY `idx_tts_cache_key` (`cache_key`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `user_acquired_courses`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `user_acquired_courses` (
+  `id` varchar(36) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+  `user_id` varchar(36) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+  `course_id` varchar(36) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+  `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_user_course_acquired` (`user_id`,`course_id`),
+  KEY `idx_user_acquired_user` (`user_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 DROP TABLE IF EXISTS `user_course_progress`;
@@ -443,21 +456,21 @@ DROP TABLE IF EXISTS `user_feedback`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `user_feedback` (
-  `id` varchar(36) NOT NULL DEFAULT (uuid()),
-  `user_id` varchar(36) NOT NULL,
-  `category` enum('bug','feature','suggestion','other') NOT NULL DEFAULT 'other',
-  `content` text NOT NULL,
+  `id` varchar(36) COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT (uuid()),
+  `user_id` varchar(36) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `category` enum('bug','feature','suggestion','other') COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'other',
+  `content` text COLLATE utf8mb4_unicode_ci NOT NULL,
   `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  `source` varchar(20) NOT NULL DEFAULT 'unknown',
-  `status` enum('open','in_progress','resolved','ignored') NOT NULL DEFAULT 'open',
-  `handled_by` varchar(36) DEFAULT NULL,
+  `source` varchar(20) COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'unknown',
+  `status` enum('open','in_progress','resolved','ignored') COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'open',
+  `handled_by` varchar(36) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
   `handled_at` datetime DEFAULT NULL,
-  `admin_note` text,
+  `admin_note` text COLLATE utf8mb4_unicode_ci,
   PRIMARY KEY (`id`),
   KEY `idx_feedback_created` (`created_at`),
   KEY `idx_feedback_status` (`status`),
   KEY `idx_feedback_status_created` (`status`,`created_at`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 DROP TABLE IF EXISTS `user_notes`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
