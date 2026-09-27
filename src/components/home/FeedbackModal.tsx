@@ -1,6 +1,8 @@
 "use client"
 
 import { useState } from "react"
+import { usePathname } from "next/navigation"
+import { sourceFromPathname } from "@/lib/feedback"
 import { X, MessageSquarePlus } from "lucide-react"
 import { toast } from "sonner"
 import { cn } from "@/lib/utils"
@@ -18,6 +20,7 @@ interface FeedbackModalProps {
 }
 
 export function FeedbackModal({ open, onClose }: FeedbackModalProps) {
+  const pathname = usePathname()
   const [category, setCategory] = useState<string>("suggestion")
   const [content, setContent] = useState("")
   const [submitting, setSubmitting] = useState(false)
@@ -31,7 +34,8 @@ export function FeedbackModal({ open, onClose }: FeedbackModalProps) {
       const res = await fetch("/api/feedback", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ category, content }),
+        // 来源按当前路由推断（门户端 / 学习中心），后台据此分组
+        body: JSON.stringify({ category, content, source: sourceFromPathname(pathname) }),
       })
       if (res.ok) {
         toast.success("感谢您的反馈！我们会认真改进 🙏")

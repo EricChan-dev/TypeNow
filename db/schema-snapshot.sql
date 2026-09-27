@@ -448,8 +448,15 @@ CREATE TABLE `user_feedback` (
   `category` enum('bug','feature','suggestion','other') NOT NULL DEFAULT 'other',
   `content` text NOT NULL,
   `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `source` varchar(20) NOT NULL DEFAULT 'unknown',
+  `status` enum('open','in_progress','resolved','ignored') NOT NULL DEFAULT 'open',
+  `handled_by` varchar(36) DEFAULT NULL,
+  `handled_at` datetime DEFAULT NULL,
+  `admin_note` text,
   PRIMARY KEY (`id`),
-  KEY `idx_feedback_created` (`created_at`)
+  KEY `idx_feedback_created` (`created_at`),
+  KEY `idx_feedback_status` (`status`),
+  KEY `idx_feedback_status_created` (`status`,`created_at`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 DROP TABLE IF EXISTS `user_notes`;

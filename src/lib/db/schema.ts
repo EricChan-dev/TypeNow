@@ -688,9 +688,33 @@ export const userFeedback = mysqlTable(
     userId: varchar("user_id", { length: 36 }).notNull(),
     category: mysqlEnum("category", ["bug", "feature", "suggestion", "other"]).notNull().default("other"),
     content: text("content").notNull(),
+    /**
+     * 来源：门户端 / 学习中心 / 未知。两者共用同一个 FeedbackModal，
+     * 由前端按当前路由上报，服务端用白名单校验（只用于展示与分组）。
+     * 存量数据是 'unknown' —— 当时没有记录，不去猜。
+     */
+    source: varchar("source", { length: 20 }).notNull().default("unknown"),
+    /**
+     * 处理状态。**没有这一列的话后台列表就只能按时间铺开**，
+     * 处理过与没处理过的混在一起，没人看得下去（见 00018 迁移说明）。
+     */
+    status: mysqlEnum("status", ["open", "in_progress", "resolved", "ignored"])
+      .notNull()
+      .default("open"),
+    /** 处理人（后台用户 id）与处理时间 */
+    handledBy: varchar("handled_by", { length: 36 }),
+    handledAt: datetime("handled_at"),
+    /** 处理备注，例如"已修复，下版生效" */
+    adminNote: text("admin_note"),
     createdAt: datetime("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
   },
-  (t) => [index("idx_feedback_created").on(t.createdAt)]
+  (t) => [
+    index("idx_feedback_created").on(t.createdAt),
+    // 按状态筛（含仪表盘「待处理反馈」计数）
+    index("idx_feedback_status").on(t.status),
+    // 按状态筛之后按时间倒序翻页
+    index("idx_feedback_status_created").on(t.status, t.createdAt),
+  ]
 )
 
 // ─── Type Exports ─────────────────────────────────────────────────────────────

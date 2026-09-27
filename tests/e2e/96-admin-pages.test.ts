@@ -91,3 +91,61 @@ describe("后台页面渲染冒烟", () => {
     expect(log).not.toMatch(/Error: Cannot find module/i)
   })
 })
+
+/**
+ * 缓存策略（next.config.ts 的 headers）。
+ *
+ * 为什么值得单独钉住：这里的错法是"配置错了但站点看起来很正常"——
+ * 部署之后要人工清浏览器缓存才看得到新版，而使用者只会觉得"改了没生效"。
+ * 三类资源的策略必须分开，混成一条一定会有某一类错：
+ *   - 带内容哈希的静态资源：永久缓存（改了就换文件名，缓存是安全的）
+ *   - 接口：绝不缓存（带登录态的响应被中间层缓存是事故）
+ *   - HTML 文档：每次回源校验（构建变了 chunk 名就变，ETag 随之改变）
+ */
+describe("缓存策略", () => {
+  it("HTML 文档：必须让浏览器每次回源校验（只有 s-maxage 等于让浏览器自行其是）", async () => {
+    const res = await ApiClient.anonymous().get("/")
+    const cc = res.headers.get("cache-control") ?? ""
+
+    // 断言语义而不是字面量：dev 下 Next 自己发 "no-cache, must-revalidate"，
+    // 生产发我们配置的 "public, max-age=0, must-revalidate" —— 形式不同、语义一致。
+    // 真正的不变量是"必须回源校验"，写成字面量会在 dev 下假红。
+    expect(cc).toMatch(/must-revalidate|no-cache/)
+
+    // 而修复前的状态恰恰是只有 s-maxage：那是给共享缓存看的，浏览器会忽略它，
+    // 于是 HTML 没有任何面向浏览器的指令 —— 这正是"部署后要手动清缓存"的根源
+    expect(cc).not.toBe("s-maxage=31536000")
+    expect(cc).not.toContain("s-maxage")
+  })
+
+  it("预渲染的后台页面同样是每次校验（后台最容易出现改了没生效）", async () => {
+    const admin = await makeAdmin()
+    const res = await admin.get("/admin/feedback")
+    expect(res.headers.get("cache-control") ?? "").toContain("must-revalidate")
+  })
+
+  it("接口：private, no-store（绝不能被任何中间层缓存）", async () => {
+    const admin = await makeAdmin()
+    const res = await admin.get("/api/admin/feedback?pageSize=1")
+    const cc = res.headers.get("cache-control") ?? ""
+    expect(cc).toContain("no-store")
+    expect(cc).toContain("private")
+  })
+
+  it("接口虽然 no-store，安全头不能丢", async () => {
+    const admin = await makeAdmin()
+    const res = await admin.get("/api/admin/feedback?pageSize=1")
+    expect(res.headers.get("x-frame-options")).toBe("DENY")
+  })
+
+  it("带内容哈希的静态资源仍然长期 immutable 缓存（别误伤它）", async () => {
+    // 从首页 HTML 里取一个真实的 chunk 路径来验，避免写死文件名
+    const page = await ApiClient.anonymous().get("/")
+    const m = page.raw.match(/\/_next\/static\/[^"']+\.js/)
+    expect(m, "首页应当引用至少一个 _next/static 资源").toBeTruthy()
+    const res = await ApiClient.anonymous().get(m![0])
+    const cc = res.headers.get("cache-control") ?? ""
+    expect(cc).toContain("max-age=31536000")
+    expect(cc).toContain("immutable")
+  })
+})

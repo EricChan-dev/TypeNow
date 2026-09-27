@@ -31,6 +31,8 @@ interface DashboardData {
     revenueFen: number
     trialClaims: number
   }
+  /** 待处理反馈（待办，不随时间范围变化） */
+  pendingFeedback: number
   totals: {
     users: number
     activeSubscriptions: number
@@ -284,6 +286,20 @@ export default function AdminDashboard() {
             loading={loading}
             href="/admin/sentences"
             drillHint="句子管理"
+          />
+        </Col>
+        <Col xs={12} lg={6}>
+          <MetricCard
+            title="待处理反馈"
+            // 没有待办时不着重标记；有待办时用橙色，扫一眼就知道要去做事
+            value={data?.pendingFeedback ?? 0}
+            valueStyle={
+              (data?.pendingFeedback ?? 0) > 0 ? { color: "#FA8C16" } : undefined
+            }
+            loading={loading}
+            // 与反馈页「未结束」同口径（待处理 + 处理中）
+            href="/admin/feedback"
+            drillHint="去处理"
           />
         </Col>
       </Row>

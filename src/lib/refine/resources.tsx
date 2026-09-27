@@ -11,6 +11,7 @@ import {
   UploadOutlined,
   LineChartOutlined,
   ThunderboltOutlined,
+  MessageOutlined,
 } from "@ant-design/icons"
 
 export const resources: IResourceItem[] = [
@@ -66,6 +67,11 @@ export const resources: IResourceItem[] = [
     name: "subscriptions",
     list: "/admin/subscriptions",
     meta: { label: "订阅管理", icon: <CrownOutlined /> },
+  },
+  {
+    name: "feedback",
+    list: "/admin/feedback",
+    meta: { label: "反馈管理", icon: <MessageOutlined /> },
   },
   {
     name: "analytics",

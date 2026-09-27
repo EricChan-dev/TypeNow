@@ -5,6 +5,7 @@ import { userFeedback, users } from "@/lib/db/schema"
 import { eq } from "drizzle-orm"
 import { getOAGlobalAccessToken } from "@/lib/wechat"
 import { checkRateLimit } from "@/lib/rate-limit"
+import { isFeedbackCategory, isFeedbackSource } from "@/lib/feedback"
 
 const CATEGORY_LABELS: Record<string, string> = {
   bug: "🐛 Bug 反馈",
@@ -29,7 +30,7 @@ export async function POST(request: Request) {
       )
     }
 
-    let body: { category?: string; content?: string }
+    let body: { category?: string; content?: string; source?: string }
     try {
       body = await request.json()
     } catch {
@@ -43,14 +44,16 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "内容不能超过 500 字" }, { status: 400 })
   }
 
-  const validCategory = ["bug", "feature", "suggestion", "other"].includes(category ?? "")
-    ? (category as "bug" | "feature" | "suggestion" | "other")
-    : "other"
+  const validCategory = isFeedbackCategory(category) ? category : "other"
+  // 来源由前端按当前路由上报，这里白名单校验：它只用于后台展示与分组，
+  // 不参与权限判断，所以非法值回落 unknown 即可，不必报错中断提交
+  const validSource = isFeedbackSource(body.source) ? body.source : "unknown"
 
   await db.insert(userFeedback).values({
     userId: session.userId,
     category: validCategory,
     content: content.trim(),
+    source: validSource,
   })
 
   const adminOpenid = process.env.WECHAT_FEEDBACK_ADMIN_OPENID

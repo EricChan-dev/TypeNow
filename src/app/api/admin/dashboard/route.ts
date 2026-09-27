@@ -14,7 +14,9 @@ import {
 import { requireAdmin } from "@/lib/admin-auth"
 import { parseRange, rangeStart, rangeLabel } from "@/lib/admin-range"
 import { getCachedCount, STATS_KEYS } from "@/lib/stats-cache"
-import { and, gte, eq, sql } from "drizzle-orm"
+import { userFeedback } from "@/lib/db/schema"
+import { OPEN_FEEDBACK_STATUSES } from "@/lib/feedback"
+import { and, gte, eq, inArray, sql } from "drizzle-orm"
 
 /**
  * 后台仪表盘统计。
@@ -62,6 +64,10 @@ export async function GET(request: Request) {
     dailyPractice,
     dailyEvents,
     dailyPaid,
+    // 位置必须与下面 Promise.all 的顺序**逐一对齐**：这个数组是位置解构，
+    // 中间多插一个查询而变量名写在末尾，会让后面所有的值整体错位一格
+    // （实测：pendingFeedback 拿到的是课时总数，totals.sentences 拿到的是反馈数）
+    pendingFeedback,
     totalSentences,
     totalCourses,
     totalLessons,
@@ -167,6 +173,15 @@ export async function GET(request: Request) {
       .then((rows) => rows.map((r) => ({ date: r.date, fen: Number(r.fen) }))),
 
     // ── 内容总量走缓存（句子表 46 万行，不能每次 COUNT(*)）──
+    // 「待处理反馈」是**待办**，不随时间范围变化（与内容总量同类）。
+    // 口径必须与反馈页的「未结束」一致：待处理 + 处理中，
+    // 否则仪表盘上的数字和点进去的列表条数对不上。
+    database
+      .select({ n: sql<number>`COUNT(*)` })
+      .from(userFeedback)
+      .where(inArray(userFeedback.status, OPEN_FEEDBACK_STATUSES))
+      .then((r) => Number(r[0]?.n ?? 0)),
+
     getCachedCount(STATS_KEYS.totalSentences, async () => {
       const r = await database.select({ n: sql<number>`COUNT(*)` }).from(sentences).where(aliveSentence)
       return Number(r[0]?.n ?? 0)
@@ -206,6 +221,7 @@ export async function GET(request: Request) {
       revenueFen: paidRow.fen,
       trialClaims: trialClaimRow,
     },
+    pendingFeedback,
     totals: {
       users: totalUsers,
       activeSubscriptions: activeSubs,
