@@ -253,7 +253,7 @@ export async function checkAndExpirePro(userId: string): Promise<boolean> {
  * 为什么需要它：`users.is_pro` 是一个**标记**，不是事实 —— 它只在
  * `checkAndExpirePro` 被调用的那一刻才被回收，而后者只挂在三个接口上
  * （`/api/auth/me`、`/api/subscription/status`、`/api/courses/sentences`）。
- * 于是**再也不回来的用户会一直挂着 `is_pro=1`**：2026-09-28 实测线上有 18 行
+ * 于是**再也不回来的用户会一直挂着 `is_pro=1`**：2026-09-27 实测线上有 18 行
  * （全是注册时领的 3 天体验会员，早已过期），把后台的会员数从真实的 3 抬到 21。
  *
  * 所以凡是**统计、筛选、展示**会员身份的地方，都必须按下面的口径算，

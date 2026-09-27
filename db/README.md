@@ -95,7 +95,7 @@ git show <旧提交>:supabase/migrations/00001_initial_schema.sql
 
 ### `drizzle-kit push` 不会应用表级 COLLATE
 
-2026-09-28 实测：新建表的迁移里写了
+2026-09-27 实测：新建表的迁移里写了
 `ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`，
 但 e2e 测试库（由 `drizzle-kit push` 从 `schema.ts` 生成）建出来的仍是
 服务器默认的 `utf8mb4_0900_ai_ci`。也就是说**测试库与生产库的排序规则

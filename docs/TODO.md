@@ -3,7 +3,7 @@
 > 活的文档：每完成一项就把状态改掉（`[ ]` → `[x]`）并补上提交号。
 > 已完成的实现细节看 git log 与 `db/migrations/`；这里只记**还没做的事**与**需要人工介入的事**。
 
-最后更新：2026-09-28
+最后更新：2026-09-27
 
 ---
 
@@ -150,7 +150,7 @@ Chrome 因此报 "preloaded but not used"（16 条同类警告的一部分）。
 
 | 位置 | 内容 |
 |---|---|
-| `db/migrations/00022_admin_audit_logs.sql` | 新表 `admin_audit_logs`（**已于 2026-09-28 在生产执行**，34 张表排序规则统一为 `utf8mb4_unicode_ci`） |
+| `db/migrations/00022_admin_audit_logs.sql` | 新表 `admin_audit_logs`（**已于 2026-09-27 在生产执行**，34 张表排序规则统一为 `utf8mb4_unicode_ci`） |
 | `src/lib/admin-audit.ts` | 写入助手 `logAdminAction` + 脱敏/截断/差异计算（纯函数已被单测覆盖） |
 | `src/lib/admin-audit-labels.ts` | 动作/对象词表（**无 db 依赖**，页面与接口共用一份） |
 | `src/app/api/admin/audit-logs/route.ts` | 只读列表接口（按操作人/动作/对象/时间/关键词筛） |
@@ -190,7 +190,7 @@ feedback/[id]  PATCH             处理反馈（退回待处理会清空 handled
 保存的高频操作；且数组上限 50 会静默截断，一份被截断的顺序比没有更危险）、
 教材正文（可能是整本教材）、逐句内容。
 
-上线校验（2026-09-28，均在 `typenow.cn` 上实测）：
+上线校验（2026-09-27，均在 `typenow.cn` 上实测）：
 
 - 迁移后 34/34 张表为 `utf8mb4_unicode_ci`，`admin_audit_logs` 的 4 条索引齐全
 - 未带 cookie 访问 `/api/admin/audit-logs` → **401**（不是 500，说明路由与表都正常），
@@ -239,7 +239,7 @@ feedback/[id]  PATCH             处理反馈（退回待处理会清空 handled
   （例如历史硬删留下的数据）。是否补外键需要单独评估（存量数据要先清理）。
 - **metabase 常驻**：`~/metabase/`（本机 JVM + 两条 LaunchAgent 隧道）。
   结论是自建埋点更合适，它是留着做临时探索的；不用了可以卸载。
-- **webhook 交付偶发丢失**：2026-09-28 发现 `f099e02` 那次 push **没有触发部署**
+- **webhook 交付偶发丢失**：2026-09-27 发现 `f099e02` 那次 push **没有触发部署**
   （deploy.log 里没有对应的「开始部署」，最后手工跑 `deploy.sh` 补上）；而紧接着的
   `dc046b7` 又正常触发了。同一时段 `git push` 本身也不稳定（连接 443 失败），
   所以更像是 GitHub 的**交付失败**而不是服务端漏处理。

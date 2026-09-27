@@ -76,7 +76,7 @@ export interface EventMeta {
  * （上线半年后没人知道 `trial_claimed` 和 `paywall_shown` 差在哪）。
  *
  * register_success 曾经在白名单里却没有任何调用点（注册以 users 表为准）。
- * 2026-09-28 补上了**服务端**上报：users 表答不了"在哪一天、从哪个渠道来的"
+ * 2026-09-27 补上了**服务端**上报：users 表答不了"在哪一天、从哪个渠道来的"
  * 这种时序问题，而这两件事一起看才有意义（见 lib/analytics-server.ts）。
  * 数量仍以 users 表为权威，两边不一致时报表会把差异显式暴露出来。
  */
