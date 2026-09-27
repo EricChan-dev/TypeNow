@@ -9,7 +9,11 @@ import {
   ThunderboltOutlined,
 } from "@ant-design/icons"
 import Link from "next/link"
-import { useCallback, useEffect, useState } from "react"
+import { useState } from "react"
+import EChart from "@/components/admin/EChart"
+import { multiLineOption } from "@/lib/admin-chart-options"
+import { eventsUrl } from "@/lib/admin-links"
+import { useAdminFetch } from "@/lib/admin-fetch"
 import { RANGE_OPTIONS, DEFAULT_RANGE, type StatsRange } from "@/lib/admin-range"
 
 const { Title, Text } = Typography
@@ -49,30 +53,57 @@ interface OrderRow {
   createdAt: string
 }
 
+/**
+ * 可点击的指标卡。
+ *
+ * 「可查指标背后的埋点详情」在仪表盘上的落点：每个行为指标都要能一步走到
+ * 构成它的明细。没有 drills 的指标（比如练习句数，后台没有逐条列表页）
+ * 就渲染成普通卡片，**不做**假链接 —— 点了没反应比没有链接更消耗信任。
+ */
+function MetricCard({
+  title,
+  value,
+  prefix,
+  valueStyle,
+  loading,
+  href,
+  drillHint,
+}: {
+  title: string
+  value: string | number
+  prefix?: React.ReactNode
+  valueStyle?: React.CSSProperties
+  loading?: boolean
+  href?: string
+  drillHint?: string
+}) {
+  const card = (
+    <Card loading={loading} hoverable={Boolean(href)}>
+      <Statistic title={title} value={value} prefix={prefix} valueStyle={valueStyle} />
+      {href && drillHint ? (
+        <div style={{ fontSize: 12, color: "#1677ff", marginTop: 4 }}>{drillHint} →</div>
+      ) : null}
+    </Card>
+  )
+  return href ? (
+    <Link href={href} style={{ display: "block" }}>
+      {card}
+    </Link>
+  ) : (
+    card
+  )
+}
+
 export default function AdminDashboard() {
   const [range, setRange] = useState<StatsRange>(DEFAULT_RANGE)
-  const [data, setData] = useState<DashboardData | null>(null)
-  const [orders, setOrders] = useState<OrderRow[]>([])
-  const [loading, setLoading] = useState(true)
 
-  const load = useCallback(async (r: StatsRange) => {
-    setLoading(true)
-    try {
-      // 单个接口失败不拖垮整页（此前一个 404 让整页 Promise.all 抛错）
-      const [dashRes, orderRes] = await Promise.all([
-        fetch(`/api/admin/dashboard?range=${r}`),
-        fetch("/api/admin/payment-orders?pageSize=10"),
-      ])
-      if (dashRes.ok) setData((await dashRes.json()) as DashboardData)
-      if (orderRes.ok) setOrders(((await orderRes.json()).data ?? []) as OrderRow[])
-    } finally {
-      setLoading(false)
-    }
-  }, [])
-
-  useEffect(() => {
-    load(range)
-  }, [range, load])
+  // 两个接口各自独立取数：任何一个挂掉都不影响另一半渲染。
+  // 早前是 Promise.all 一起 await，一个 404 会让整页指标全空。
+  const { data, loading } = useAdminFetch<DashboardData>(`/api/admin/dashboard?range=${range}`)
+  const { data: orderData } = useAdminFetch<{ data: OrderRow[] }>(
+    "/api/admin/payment-orders?pageSize=10",
+  )
+  const orders = orderData?.data ?? []
 
   const a = data?.activity
   const t = data?.totals
@@ -127,52 +158,96 @@ export default function AdminDashboard() {
         />
       </div>
 
-      {/* ── 行为指标：随上方时间范围变化 ── */}
+      {/* ── 行为指标：随上方时间范围变化，且每个都能钻到明细 ── */}
       <Text type="secondary" style={{ display: "block", margin: "16px 0 8px" }}>
-        <ThunderboltOutlined /> 行为指标 · {data?.rangeLabel ?? "—"}
+        <ThunderboltOutlined /> 行为指标 · {data?.rangeLabel ?? "—"} · 点卡片可看明细
       </Text>
       <Row gutter={[16, 16]}>
         <Col xs={12} lg={6}>
-          <Card loading={loading}>
-            <Statistic title="新增用户" value={a?.newUsers ?? 0} prefix={<UserOutlined />} />
-          </Card>
+          <MetricCard
+            title="新增用户"
+            value={a?.newUsers ?? 0}
+            prefix={<UserOutlined />}
+            loading={loading}
+            href="/admin/users"
+            drillHint="用户列表"
+          />
         </Col>
         <Col xs={12} lg={6}>
-          <Card loading={loading}>
-            <Statistic title="活跃用户（有练习）" value={a?.activeUsers ?? 0} />
-          </Card>
+          <MetricCard
+            title="活跃用户（有练习）"
+            value={a?.activeUsers ?? 0}
+            loading={loading}
+            href="/admin/users"
+            drillHint="用户列表"
+          />
         </Col>
         <Col xs={12} lg={6}>
-          <Card loading={loading}>
-            <Statistic title="练习句数" value={a?.practiceRecords ?? 0} />
-          </Card>
+          <MetricCard title="练习句数" value={a?.practiceRecords ?? 0} loading={loading} />
         </Col>
         <Col xs={12} lg={6}>
-          <Card loading={loading}>
-            <Statistic title="埋点事件" value={a?.events ?? 0} />
-          </Card>
+          <MetricCard
+            title="埋点事件"
+            value={a?.events ?? 0}
+            loading={loading}
+            href={eventsUrl({ range })}
+            drillHint="埋点分析"
+          />
         </Col>
         <Col xs={12} lg={6}>
-          <Card loading={loading}>
-            <Statistic title="付费订单" value={a?.paidOrders ?? 0} prefix={<DollarOutlined />} />
-          </Card>
+          <MetricCard
+            title="付费订单"
+            value={a?.paidOrders ?? 0}
+            prefix={<DollarOutlined />}
+            loading={loading}
+            href="/admin/payments"
+            drillHint="支付订单"
+          />
         </Col>
         <Col xs={12} lg={6}>
-          <Card loading={loading}>
-            <Statistic
-              title="收入"
-              value={((a?.revenueFen ?? 0) / 100).toFixed(2)}
-              prefix="¥"
-              valueStyle={{ color: "#22C55E" }}
-            />
-          </Card>
+          <MetricCard
+            title="收入"
+            value={((a?.revenueFen ?? 0) / 100).toFixed(2)}
+            prefix="¥"
+            valueStyle={{ color: "#22C55E" }}
+            loading={loading}
+            href="/admin/payments"
+            drillHint="支付订单"
+          />
         </Col>
         <Col xs={12} lg={6}>
-          <Card loading={loading}>
-            <Statistic title="领取体验会员" value={a?.trialClaims ?? 0} />
-          </Card>
+          <MetricCard
+            title="领取体验会员"
+            value={a?.trialClaims ?? 0}
+            loading={loading}
+            href={eventsUrl({ event: "trial_claimed", range })}
+            drillHint="埋点明细"
+          />
         </Col>
       </Row>
+
+      <Card
+        size="small"
+        title={`行为趋势（${data?.rangeLabel ?? "—"}）`}
+        style={{ marginTop: 16 }}
+        extra={<Link href={eventsUrl({ range })}>埋点分析 →</Link>}
+      >
+        <EChart
+          option={multiLineOption(
+            (data?.daily ?? []) as unknown as Record<string, string | number>[],
+            "date",
+            [
+              { key: "newUsers", label: "新增用户" },
+              { key: "practice", label: "练习句数" },
+              { key: "events", label: "埋点事件" },
+            ],
+          )}
+          height={260}
+          loading={loading}
+          empty={!loading && (data?.daily?.length ?? 0) === 0}
+          emptyText="该时间范围内没有行为数据"
+        />
+      </Card>
 
       {/* ── 内容总量：不随时间筛选 ── */}
       <Text type="secondary" style={{ display: "block", margin: "24px 0 8px" }}>

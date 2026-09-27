@@ -1,9 +1,11 @@
 "use client"
 
-import { useCallback, useEffect, useState } from "react"
+import { useState } from "react"
 import { Card, Descriptions, Spin, Table, Tag, Typography } from "antd"
 import { useParams } from "next/navigation"
 import Link from "next/link"
+import { eventLabel } from "@/lib/analytics-events"
+import { useAdminFetch } from "@/lib/admin-fetch"
 
 const { Title, Text } = Typography
 
@@ -27,20 +29,13 @@ interface EventRow {
 }
 
 /** 事件名的中文说明。埋点是自由字符串，不翻译的话运营看不懂。 */
-const EVENT_LABELS: Record<string, string> = {
-  page_view: "浏览页面",
-  click: "点击",
-  theme_toggle: "切换主题",
-  login_success: "登录成功",
-  course_open: "打开课程",
-  lesson_start: "进入练习",
-  practice_complete: "练完一句",
-  paywall_shown: "看到付费墙",
-  trial_claimed: "领取体验会员",
-  click_subscribe: "点击购买",
-  subscribe_pay_success: "支付成功",
-}
-
+/**
+ * 事件名的中文说明与配色。
+ *
+ * 中文名一律取自 src/lib/analytics-events 的 EVENT_META（单一来源）——
+ * 这里以前自己维护了一份 map，结果新增 pricing_view 时漏了，页面上就直接
+ * 显示原始事件名。配色只有后台用得上，留在本地。
+ */
 const EVENT_COLORS: Record<string, string> = {
   login_success: "green",
   course_open: "blue",
@@ -65,36 +60,22 @@ const EVENT_COLORS: Record<string, string> = {
 export default function UserShow() {
   const params = useParams()
   const id = params?.id as string
-  const [loading, setLoading] = useState(true)
-  const [record, setRecord] = useState<Record<string, unknown> | null>(null)
-  const [stats, setStats] = useState<UserStats | null>(null)
-  const [events, setEvents] = useState<EventRow[]>([])
   const [eventFilter, setEventFilter] = useState<string>("")
 
-  const loadEvents = useCallback(
-    async (event: string) => {
-      const url = `/api/admin/users/${id}/events?pageSize=30${event ? `&event=${encodeURIComponent(event)}` : ""}`
-      const res = await fetch(url)
-      if (res.ok) setEvents(((await res.json()).data ?? []) as EventRow[])
-    },
-    [id]
+  // 两个接口各自取数（原本是 effect 里手动 fetch + 同步 setLoading，
+  // 那会多一轮渲染，也被 lint 的 set-state-in-effect 规则拦住）
+  const { data: userData, loading } = useAdminFetch<{ data: Record<string, unknown> | null }>(
+    id ? `/api/admin/users/${id}` : null,
+  )
+  const { data: eventData } = useAdminFetch<{ data: EventRow[] }>(
+    id
+      ? `/api/admin/users/${id}/events?pageSize=30${eventFilter ? `&event=${encodeURIComponent(eventFilter)}` : ""}`
+      : null,
   )
 
-  useEffect(() => {
-    if (!id) return
-    fetch(`/api/admin/users/${id}`)
-      .then((r) => r.json())
-      .then((data) => {
-        setRecord(data.data ?? null)
-        setStats((data.data?.stats ?? null) as UserStats | null)
-      })
-      .catch(() => setRecord(null))
-      .finally(() => setLoading(false))
-  }, [id])
-
-  useEffect(() => {
-    if (id) loadEvents(eventFilter)
-  }, [id, eventFilter, loadEvents])
+  const record = userData?.data ?? null
+  const stats = (record?.stats ?? null) as UserStats | null
+  const events = eventData?.data ?? []
 
   if (loading) return <Spin size="large" style={{ display: "block", margin: "100px auto" }} />
   if (!record) return <Title level={4}>用户不存在</Title>
@@ -106,7 +87,7 @@ export default function UserShow() {
       key: "eventType",
       width: 130,
       render: (t: string) => (
-        <Tag color={EVENT_COLORS[t] ?? "default"}>{EVENT_LABELS[t] ?? t}</Tag>
+        <Tag color={EVENT_COLORS[t] ?? "default"}>{eventLabel(t)}</Tag>
       ),
     },
     {
@@ -202,7 +183,7 @@ export default function UserShow() {
 
       {/* 埋点时间线 */}
       <Card
-        title={`埋点记录${eventFilter ? ` · 仅「${EVENT_LABELS[eventFilter] ?? eventFilter}」` : ""}`}
+        title={`埋点记录${eventFilter ? ` · 仅「${eventLabel(eventFilter)}」` : ""}`}
         extra={
           eventFilter ? (
             <a onClick={() => setEventFilter("")}>清除筛选</a>

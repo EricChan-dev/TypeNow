@@ -9,6 +9,7 @@ import {
   BookOutlined,
   UnorderedListOutlined,
   UploadOutlined,
+  LineChartOutlined,
 } from "@ant-design/icons"
 
 export const resources: IResourceItem[] = [
@@ -63,5 +64,13 @@ export const resources: IResourceItem[] = [
     name: "analytics",
     list: "/admin/analytics",
     meta: { label: "数据分析", icon: <BarChartOutlined /> },
+  },
+  {
+    name: "events",
+    list: "/admin/events",
+    // 详情页是 /admin/events/:id，但这里不声明 show：
+    // 该页不是 refine 的 Show（自己 fetch 带上下文），声明了反而会让
+    // refine 在菜单里生成一个用不到的入口
+    meta: { label: "埋点分析", icon: <LineChartOutlined /> },
   },
 ]

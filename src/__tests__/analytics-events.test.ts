@@ -11,7 +11,11 @@
 import { describe, it, expect } from "vitest"
 import {
   ALLOWED_EVENTS,
+  EVENT_CATEGORIES,
+  EVENT_META,
   FUNNEL_STEPS,
+  eventLabel,
+  eventsByCategory,
   isAllowedEvent,
 } from "@/lib/analytics-events"
 
@@ -75,6 +79,60 @@ describe("FUNNEL_STEPS", () => {
   it("每一步都有中文标签", () => {
     for (const s of FUNNEL_STEPS) {
       expect(s.label.length).toBeGreaterThan(0)
+    }
+  })
+})
+
+// ─── 事件字典（EVENT_META） ──────────────────────────────────────────────────
+
+describe("EVENT_META", () => {
+  it("每个白名单事件都有字典条目（漏写会被 TS 拦住，这里再兜一层运行时保证）", () => {
+    for (const e of ALLOWED_EVENTS) {
+      expect(EVENT_META[e], `缺少 ${e} 的字典条目`).toBeDefined()
+      expect(EVENT_META[e].label.length).toBeGreaterThan(0)
+      expect(EVENT_META[e].description.length).toBeGreaterThan(0)
+    }
+  })
+
+  it("字典里没有白名单之外的多余条目", () => {
+    for (const key of Object.keys(EVENT_META)) {
+      expect(ALLOWED_EVENTS).toContain(key)
+    }
+  })
+
+  it("每个事件只属于一个分类，且分类在 EVENT_CATEGORIES 内", () => {
+    for (const e of ALLOWED_EVENTS) {
+      expect(EVENT_CATEGORIES).toContain(EVENT_META[e].category)
+    }
+  })
+
+  it("事件名不重复出现在多个分类分组里（分组是划分，不是标签）", () => {
+    const seen = new Set<string>()
+    for (const group of eventsByCategory()) {
+      for (const e of group.events) {
+        expect(seen.has(e), `${e} 出现在多个分类`).toBe(false)
+        seen.add(e)
+      }
+    }
+    expect(seen.size).toBe(ALLOWED_EVENTS.length)
+  })
+})
+
+describe("eventLabel", () => {
+  it("白名单内返回中文名", () => {
+    expect(eventLabel("page_view")).toBe(EVENT_META.page_view.label)
+    expect(eventLabel("trial_claimed")).toBe("领取体验会员")
+  })
+
+  it("未知事件名原样返回，不抛错（历史脏数据必须能展示）", () => {
+    expect(eventLabel("legacy_event_from_2024")).toBe("legacy_event_from_2024")
+    expect(eventLabel("")).toBe("")
+  })
+
+  it("漏斗里每一个 source=events 的步骤都能翻译成中文", () => {
+    for (const step of FUNNEL_STEPS.filter((s) => s.source === "events")) {
+      expect(isAllowedEvent(step.key), `漏斗步骤 ${step.key} 不在白名单`).toBe(true)
+      expect(eventLabel(step.key)).not.toBe(step.key)
     }
   })
 })
