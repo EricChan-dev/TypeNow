@@ -1,6 +1,7 @@
 "use client"
 
 import { useState } from "react"
+import { posLabel } from "@/lib/pos-labels"
 import type { Word, Phonetic } from "@/types"
 import { WordDetailPopover } from "./WordDetailPopover"
 import { getPosColor } from "@/lib/pos-color"
@@ -75,7 +76,7 @@ export function CompletedSentence({ words, small, sentenceId }: CompletedSentenc
 
             {/* POS label */}
             <span className={`${labelClass} font-semibold text-foreground/60 mt-0.5 bg-foreground/10 border border-foreground/10 rounded-full px-2.5 py-0.5`}>
-              {word.pos}
+              {posLabel(word.pos)}
             </span>
 
             {/* Chinese */}

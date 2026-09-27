@@ -8,7 +8,7 @@ import { CompletedSentence } from "@/components/home/learn/CompletedSentence"
 import { TypedChars } from "@/components/home/TypedChars"
 import type { Word } from "@/types"
 import { cn } from "@/lib/utils"
-import { isTypingMatch, isTypingPrefix } from "@/lib/typing-compare"
+import { isTypingMatch } from "@/lib/typing-compare"
 import { alignWordsWithEnglish } from "@/lib/word-align"
 import { classifyTypingKey, isEditableTarget } from "@/lib/typing-keys"
 import { playBuzz, playTick } from "@/lib/sfx"
@@ -230,7 +230,8 @@ export function ReviewClient() {
       setWordStates((prev) => {
         const next = [...prev]
         // 状态必须跟着回退，否则删回正确前缀了还挂着红色
-        next[activeIdx] = { value: newVal, status: isTypingPrefix(newVal, expected) ? "active" : "error" }
+        // 删除后回到 active：错误标记只在"确认过"之后才有意义
+        next[activeIdx] = { value: newVal, status: "active" }
         return next
       })
       return
@@ -261,7 +262,6 @@ export function ReviewClient() {
     playTick()
 
     const next = currentVal + e.key
-    const correctSoFar = isTypingPrefix(next, expected)
     const fullMatch = isTypingMatch(next, expected)
 
     if (fullMatch) {
@@ -269,12 +269,19 @@ export function ReviewClient() {
       return
     }
 
+    // 一律 active：**不在这里判错、也不标红**。
+    //
+    // 原先是 `status: correctSoFar ? "active" : "error"` + flagWrong() ——
+    // 敲错一个字母就立刻计一次错、整词变红。后果有两个：
+    //   1. 反馈噪音：任何单词打到一半都在闪红，真正的错误被淹没；
+    //   2. 配合"错词态下清空重打"的旧逻辑，用户想改中间一个字母会被迫整词重敲。
+    // 现在改成按空格/Enter 确认时才判定，与练习页完全同一口径
+    // （两页共用 TypedChars，口径漂移过，所以这里刻意保持一致）。
     setWordStates((prev) => {
       const ns = [...prev]
-      ns[activeIdx] = { value: next, status: correctSoFar ? "active" : "error" }
+      ns[activeIdx] = { value: next, status: "active" }
       return ns
     })
-    if (!correctSoFar) flagWrong(activeIdx)
   }, [completeWord, flagWrong])
 
   useEffect(() => {
@@ -481,7 +488,12 @@ export function ReviewClient() {
                       {word.english}
                     </span>
                     <span className="col-start-1 row-start-1 whitespace-pre px-1">
-                      <TypedChars value={ws?.value || ""} expected={word.english} />
+                      <TypedChars
+                        value={ws?.value || ""}
+                        expected={word.english}
+                        // 只有确认过（error 态）才把错的字母标红
+                        revealErrors={ws?.status === "error"}
+                      />
                     </span>
                   </div>
                   <div

@@ -1,6 +1,6 @@
 "use client"
 
-import { useCallback, useEffect, useRef, useState } from "react"
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react"
 import { Volume2, BookmarkPlus, BookmarkCheck, Loader2 } from "lucide-react"
 import { toast } from "sonner"
 
@@ -25,6 +25,18 @@ interface Props {
 const HOVER_DELAY = 300
 const LEAVE_DELAY = 200
 
+/** 浮层宽度。比原来的 340 宽一些：释义/词性/同义词挤在 340px 里会频繁折行。 */
+const POPOVER_WIDTH = 380
+/** 与可视区域边缘留的空隙 */
+const VIEWPORT_MARGIN = 12
+/** 浮层与单词之间的间距 */
+const ANCHOR_GAP = 10
+
+function clamp(v: number, min: number, max: number): number {
+  // max 可能小于 min（窗口比浮层还窄），此时取 min，保证至少左边缘可见
+  return Math.max(min, Math.min(v, Math.max(min, max)))
+}
+
 export function WordDetailPopover({ word, sentenceId, children }: Props) {
   const triggerRef = useRef<HTMLSpanElement>(null)
   const popoverRef = useRef<HTMLDivElement>(null)
@@ -33,6 +45,8 @@ export function WordDetailPopover({ word, sentenceId, children }: Props) {
   const audioRef = useRef<HTMLAudioElement | null>(null)
   const [open, setOpen] = useState(false)
   const [pos, setPos] = useState<{ top: number; left: number }>({ top: 0, left: 0 })
+  /** 首次测量完成前先隐藏，避免看到浮层"跳"到正确位置的那一帧 */
+  const [placed, setPlaced] = useState(false)
   const [data, setData] = useState<DictResult | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -48,16 +62,65 @@ export function WordDetailPopover({ word, sentenceId, children }: Props) {
     leaveTimer.current = null
   }, [])
 
+  /**
+   * 算出浮层应该摆在哪。
+   *
+   * 旧实现是 `top = rect.top - 12` 再配合 CSS 的 `-translate-y-full`（向上展开），
+   * 并且只把**锚点**夹进了可视区（`Math.max(margin, …)`）—— 夹的是单词的坐标，
+   * 不是浮层盒子的坐标。于是内容一多，盒子向上溢出屏幕顶部被直接裁掉：
+   * 用户看到的是一张缺了上半截的卡片（释义/音标正好在那半截里）。
+   *
+   * 现在改成按**盒子实际尺寸**摆放，三级优先：
+   *   1. 放单词**右侧** —— 横向空间通常比纵向富余，而且不会盖住正在读的句子；
+   *   2. 右侧放不下 → 放**下方**；
+   *   3. 下方也放不下 → 放**上方**，并且 top 是按盒子高度算出来的真实位置，
+   *      不再依赖 translate。
+   * 三种情况都用盒子尺寸把 left/top 夹进可视区域，任何窗口大小都不会被裁。
+   */
   const computePosition = useCallback(() => {
     const el = triggerRef.current
+    const box = popoverRef.current
     if (!el) return
+
     const rect = el.getBoundingClientRect()
-    const width = 340
-    const margin = 12
-    let left = rect.left + rect.width / 2 - width / 2
-    left = Math.max(margin, Math.min(left, window.innerWidth - width - margin))
-    const top = Math.max(margin, rect.top - 12)
-    setPos({ top, left })
+    const vw = window.innerWidth
+    const vh = window.innerHeight
+    // 首帧还没渲染出盒子时用估算值兜底（下一帧就会用真实尺寸重算）
+    const w = box?.offsetWidth || POPOVER_WIDTH
+    const h = box?.offsetHeight || 240
+
+    const fitsRight = rect.right + ANCHOR_GAP + w <= vw - VIEWPORT_MARGIN
+    const fitsBelow = rect.bottom + ANCHOR_GAP + h <= vh - VIEWPORT_MARGIN
+
+    /**
+     * 默认按"右侧"的横向定位算；只有真的放不下右侧时才回到居中对齐
+     * （居中对齐在窄窗口下会把 left 夹到边距上，看着更乱）。
+     */
+    const centeredLeft = clamp(
+      rect.left + rect.width / 2 - w / 2,
+      VIEWPORT_MARGIN,
+      vw - w - VIEWPORT_MARGIN,
+    )
+
+    if (fitsRight) {
+      setPos({
+        top: clamp(rect.top + rect.height / 2 - h / 2, VIEWPORT_MARGIN, vh - h - VIEWPORT_MARGIN),
+        left: rect.right + ANCHOR_GAP,
+      })
+    } else if (fitsBelow) {
+      setPos({
+        top: rect.bottom + ANCHOR_GAP,
+        left: centeredLeft,
+      })
+    } else {
+      // 上方：即使 fitsAbove 为 false 也选它，因为此时只有上方还有空间，
+      // 后面的 maxHeight 会让内容可滚动而不是被裁掉
+      setPos({
+        top: clamp(rect.top - ANCHOR_GAP - h, VIEWPORT_MARGIN, vh - h - VIEWPORT_MARGIN),
+        left: centeredLeft,
+      })
+    }
+    setPlaced(true)
   }, [])
 
   const fetchWord = useCallback(async () => {
@@ -84,7 +147,8 @@ export function WordDetailPopover({ word, sentenceId, children }: Props) {
   const handleEnter = () => {
     clearTimers()
     enterTimer.current = setTimeout(() => {
-      computePosition()
+      setPlaced(false)
+      // 先开再测：位置要在浮层真正渲染出来之后才量得准（见下面的 useLayoutEffect）
       setOpen(true)
       if (!data) fetchWord()
     }, HOVER_DELAY)
@@ -98,6 +162,20 @@ export function WordDetailPopover({ word, sentenceId, children }: Props) {
   const handlePopoverEnter = () => {
     if (leaveTimer.current) clearTimeout(leaveTimer.current)
   }
+
+  /**
+   * 摆位。用 useLayoutEffect 而不是 useEffect：它在浏览器绘制**之前**执行，
+   * 所以"先隐藏、量完再定位"这个过程用户看不到，不会出现浮层先闪现在错误位置
+   * 再跳过去的抖动。
+   *
+   * 依赖里带上 loading/data：加载完成后盒子会从"查询中…"长成完整内容，
+   * 尺寸变了必须重算，否则高度按加载态算出来的位置会不准。
+   */
+  useLayoutEffect(() => {
+    if (!open) return
+    computePosition()
+    // 内容异步到达后再量一次，确保以最终尺寸定位
+  }, [open, loading, data, error, computePosition])
 
   useEffect(() => {
     if (!open) return
@@ -179,8 +257,25 @@ export function WordDetailPopover({ word, sentenceId, children }: Props) {
           ref={popoverRef}
           onMouseEnter={handlePopoverEnter}
           onMouseLeave={handleLeave}
-          className="fixed z-[70] w-[340px] -translate-y-full rounded-2xl border border-border bg-card/97 backdrop-blur-md shadow-2xl text-foreground"
-          style={{ top: pos.top, left: pos.left }}
+          /*
+            不再用 -translate-y-full 做"向上展开"：translate 让 CSS 位置与
+            JS 计算出的 top 之间隔了一层语义，夹取可视区域时极易算错（旧实现
+            就是只夹了锚点坐标，导致内容一多就从屏幕顶部被裁掉）。
+            现在 top/left 就是盒子的最终位置，配合 useLayoutEffect 里的真实尺寸测量。
+
+            maxHeight + overflow-y-auto：极长的词条（词性+释义+同义词+例句）
+            在矮窗口里也不会溢出屏幕，而是内部滚动。
+            width 用 CSS 变量兜底到 max-w，窄屏时不会超出可视宽度。
+          */
+          className="fixed z-[70] overflow-y-auto overscroll-contain rounded-2xl border border-border bg-card/97 backdrop-blur-md shadow-2xl text-foreground"
+          style={{
+            top: pos.top,
+            left: pos.left,
+            width: POPOVER_WIDTH,
+            maxWidth: `calc(100vw - ${VIEWPORT_MARGIN * 2}px)`,
+            maxHeight: `calc(100vh - ${VIEWPORT_MARGIN * 2}px)`,
+            visibility: placed ? "visible" : "hidden",
+          }}
         >
           <div className="p-4 flex flex-col gap-3">
             <div className="flex items-start justify-between gap-3">

@@ -5,7 +5,8 @@ import { animate } from "animejs"
 import Link from "next/link"
 import { ChevronLeft, ChevronRight, ArrowLeft, BookOpen, ShoppingBag, Pause, Play, RotateCcw, Shuffle, Maximize, Minimize, Keyboard, List, Settings, Eye, EyeOff, Volume2 } from "lucide-react"
 import type { Sentence, Word } from "@/types"
-import { isTypingMatch, isTypingPrefix } from "@/lib/typing-compare"
+import { isTypingMatch } from "@/lib/typing-compare"
+import { isModifierPressed, modifierKeyLabel } from "@/lib/platform"
 import { classifyTypingKey, isEditableTarget } from "@/lib/typing-keys"
 import { TypedChars } from "@/components/home/TypedChars"
 import { findNextLesson } from "@/lib/course-nav"
@@ -85,6 +86,22 @@ interface WordState {
 }
 
 type ChunkStatus = "idle" | "active" | "done" | "error"
+
+/**
+ * 一句练习的输入快照，用于"回头翻上一句还能看到当时敲的内容"。
+ *
+ * 只存纯前端状态，不含任何服务端数据 —— 它解决的问题是：原先切句时
+ * wordStates 被整个重建为空白，于是 Shift+← 回去看到的是一道新题，
+ * 而不是自己刚才敲的那一遍。
+ */
+interface SentenceInputSnapshot {
+  wordStates: WordState[]
+  activeWordIndex: number
+  chunkInput: string
+  activeChunkIndex: number
+  chunkStatuses: ChunkStatus[]
+  status: SentenceStatus
+}
 
 // 音效已统一到 @/lib/sfx：那里收敛了原来散在本页与 ReviewClient 的两套实现
 // （同一个产品里「错了」的声音却不一样），并加上了可持久化的总开关。
@@ -321,6 +338,19 @@ export function LearnClient({
   // 错句追踪：记本次练习中出过错的句子 id，完成弹窗据此提供「再练错句」。
   // 存 id 而不是下标 —— 打乱顺序（doShuffle）之后下标就失效了。
   const errorSentenceIdsRef = useRef<Set<string>>(new Set())
+
+  /**
+   * 当前这句是"回看已完成的"。为 true 时，完成态的 5 个上报 effect 一律跳过。
+   *
+   * 为什么必须有这道闸：完成态挂着 5 个 effect（复习入队、练习进度、练习记录、
+   * 钻石、埋点），都以 `status === "complete"` 为条件。回看一句已完成的话时
+   * status 会重新变成 complete —— 不加闸就会重复写练习记录、重复发钻石。
+   */
+  const replayingRef = useRef(false)
+  /** sentenceId → 当时的输入快照 */
+  const inputCacheRef = useRef<Map<string, SentenceInputSnapshot>>(new Map())
+  /** 上一句的 id：切句时先把它的输入存进缓存，再初始化新句 */
+  const prevSentenceIdRef = useRef<string | null>(null)
   /**
    * 错句数量。渲染里必须读 state 而不是 ref：ref 存在只代表写过了，
    * 不代表 React 会重渲染 —— 完成弹窗上的「再练错句 (N)」会停在旧数字上。
@@ -546,6 +576,8 @@ export function LearnClient({
   // Enqueue current sentence for spaced-repetition review when completed
   useEffect(() => {
     if (status !== "complete") return
+    // 回看一位已完成的句子：数据当初已经上报过，不能再写一遍（见 replayingRef）
+    if (replayingRef.current) return
     const s = sentencesRef.current[currentIndexRef.current]
     if (!s?.id) return
     const parentId = baseSentenceId(s.id)
@@ -567,6 +599,8 @@ export function LearnClient({
    */
   useEffect(() => {
     if (status !== "complete") return
+    // 回看一位已完成的句子：数据当初已经上报过，不能再写一遍（见 replayingRef）
+    if (replayingRef.current) return
     if (sentencesRef.current !== fullSentencesRef.current) return
     const idx = currentIndexRef.current
     const total = sentencesRef.current.length
@@ -591,6 +625,8 @@ export function LearnClient({
   // which /api/home/stats and /api/archive/stats aggregate.
   useEffect(() => {
     if (status !== "complete") return
+    // 回看一位已完成的句子：数据当初已经上报过，不能再写一遍（见 replayingRef）
+    if (replayingRef.current) return
     const s = sentencesRef.current[currentIndexRef.current]
     if (!s?.id) return
     const parentId = baseSentenceId(s.id)
@@ -612,6 +648,8 @@ export function LearnClient({
   // Earn diamonds when a sentence is completed
   useEffect(() => {
     if (status !== "complete") return
+    // 回看一位已完成的句子：数据当初已经上报过，不能再写一遍（见 replayingRef）
+    if (replayingRef.current) return
     const s = sentencesRef.current[currentIndexRef.current]
     if (!s?.id) return
     const parentId = baseSentenceId(s.id)
@@ -663,6 +701,8 @@ export function LearnClient({
    */
   useEffect(() => {
     if (status !== "complete") return
+    // 回看一位已完成的句子：数据当初已经上报过，不能再写一遍（见 replayingRef）
+    if (replayingRef.current) return
     trackPracticeComplete(score, currentIndexRef.current + 1)
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [status])
@@ -670,6 +710,22 @@ export function LearnClient({
   // Initialize word/chunk states for current sentence
   useEffect(() => {
     if (!sentence) return
+
+    // 切句前先把**上一句**的输入存下来，这样回头翻还能看到当时敲的内容。
+    // 必须先存再重置：这个 effect 体内就会把 wordStates 覆盖掉。
+    const prevId = prevSentenceIdRef.current
+    if (prevId && prevId !== sentence.id) {
+      inputCacheRef.current.set(prevId, {
+        wordStates: wordStatesRef.current,
+        activeWordIndex: activeWordIndexRef.current,
+        chunkInput: chunkInputRef.current,
+        activeChunkIndex: activeChunkIndexRef.current,
+        chunkStatuses: chunkStatusesRef.current,
+        status: statusRef.current,
+      })
+    }
+    prevSentenceIdRef.current = sentence.id
+
     sentenceHasErrorRef.current = false
     sentenceMistakesRef.current = 0
     sentenceStartTimeRef.current = Date.now()
@@ -681,6 +737,25 @@ export function LearnClient({
     globalSpeak(sentence.english).then((played) => {
       if (!played) setNeedsAudioGesture(true)
     }).catch((e) => { console.error(e) })
+    // 回看：这一句之前敲过，直接把当时的输入恢复出来。
+    // status 也一并恢复 —— 用户回看一句已完成的话，看到的就是"我打完了"的样子，
+    // 而 replayingRef 保证那 5 个上报 effect 不会再跑一遍（见其声明处的说明）。
+    const cached = inputCacheRef.current.get(sentence.id)
+    if (cached) {
+      // 只有"恢复出来就是已完成"的才算回看。
+      // 恢复的是**半句**时不能算：用户接着把它敲完，那一次完成必须照常上报
+      // （否则"回看半句→敲完"就永远不记练习记录）。
+      replayingRef.current = cached.status === "complete"
+      setWordStates(cached.wordStates)
+      setActiveWordIndex(cached.activeWordIndex)
+      setChunkInput(cached.chunkInput)
+      setActiveChunkIndex(cached.activeChunkIndex)
+      setChunkStatuses(cached.chunkStatuses)
+      setStatus(cached.status)
+      return
+    }
+
+    replayingRef.current = false
     if (sentence.chunks && sentence.chunks.length > 0) {
       setChunkInput("")
       setActiveChunkIndex(0)
@@ -709,6 +784,8 @@ export function LearnClient({
    */
   useEffect(() => {
     if (status !== "complete") return
+    // 回看一位已完成的句子：数据当初已经上报过，不能再写一遍（见 replayingRef）
+    if (replayingRef.current) return
     const id = sentencesRef.current[currentIndexRef.current]?.id
     if (!id) return
     setRevealedIds((prev) => (prev.has(id) ? prev : new Set(prev).add(id)))
@@ -789,13 +866,24 @@ export function LearnClient({
     }
   }, [])
 
+  /**
+   * 下一句。**必须先敲完当前这句**。
+   *
+   * 原先没有任何守卫：敲到一半直接点「下一句」就跳走了，当前这句既没有练习记录，
+   * 也没进复习队列 —— 而界面上看不出发生过什么，用户会以为自己练过了。
+   */
   const goNext = useCallback(() => {
+    if (statusRef.current !== "complete") {
+      toast("先把当前这句敲完，再进入下一句")
+      return
+    }
     const idx = currentIndexRef.current
     const all = sentencesRef.current
     if (idx < all.length - 1) {
       setCurrentIndex(idx + 1)
     }
   }, [])
+
 
   const goPrev = useCallback(() => {
     const idx = currentIndexRef.current
@@ -882,10 +970,21 @@ export function LearnClient({
     if (!words.length) return
 
     let hasError = false
+    // 一个字都没敲的词：**不判错、也不显示答案**，让它留在原地等用户继续试。
+    //
+    // 旧行为是把它标成 error，而 error 态的渲染会在下划线下方把正确拼写摆出来
+    // （见 wordStates 渲染处的 `ws?.status === "error" && <span>{word.english}</span>`）——
+    // 于是"空着按回车"成了免费看答案的捷径，练习也就没有意义了。
+    // 与 confirmWord 里 `if (!currentVal.trim()) return` 是同一口径：空输入不算错。
+    const emptyIndices: number[] = []
     const newStates: WordState[] = wStates.map((ws, i) => {
       const expected = words[i]?.english || ""
       if (ws.status === "done") return ws
       const val = ws.value || ""
+      if (!val.trim()) {
+        emptyIndices.push(i)
+        return { value: val, status: "active" }
+      }
       // 与 confirmWord 同一口径（normalizeForTyping），不再用裸 toLowerCase：
       // 两处判定不一致时，会出现「按空格算对、按回车算错」这种自相矛盾。
       if (isTypingMatch(val, expected)) {
@@ -895,6 +994,28 @@ export function LearnClient({
       return { value: val, status: "error" }
     })
     setWordStates(newStates)
+
+    // 有词还空着：提示去补，而不是当成"全对"直接判定整句完成。
+    // 注意不能把它算成失误（用户只是没敲完，不是敲错）。
+    if (emptyIndices.length > 0) {
+      playBuzz()
+      const firstEmpty = emptyIndices[0]
+      setActiveWordIndex(firstEmpty)
+      setShakeWords((prev) => {
+        const next = new Set(prev)
+        emptyIndices.forEach((i) => next.add(i))
+        return next
+      })
+      setTimeout(() => {
+        setShakeWords((prev) => {
+          const next = new Set(prev)
+          emptyIndices.forEach((i) => next.delete(i))
+          return next
+        })
+      }, 500)
+      toast(`还有 ${emptyIndices.length} 个词没敲，先补完再提交`)
+      return
+    }
     if (hasError) {
       playBuzz()
       sentenceHasErrorRef.current = true
@@ -999,7 +1120,7 @@ export function LearnClient({
     function handleKeyDown(e: KeyboardEvent) {
       // Ctrl+P 必须在守卫之前：暂停后正是靠它恢复。若一并被挡住，
       // 用户就只能去点「继续学习」按钮，键盘用户被锁在暂停态里。
-      if (e.ctrlKey && e.key === "p") {
+      if (isModifierPressed(e) && e.key === "p") {
         e.preventDefault()
         debouncedTogglePause()
         return
@@ -1023,14 +1144,14 @@ export function LearnClient({
       // Ctrl+1 / Ctrl+2 / Ctrl+/ —— 三个「看讲解」的入口。
       // 必须放在下面 `st === "complete"` 的提前 return 之前：句子做完之后
       // 正是最想回头看语法树、看句子解析的时候，放在后面等于做完就看不到了。
-      if (e.ctrlKey && e.key === "1") {
+      if (isModifierPressed(e) && e.key === "1") {
         e.preventDefault()
         setShowOutline(true)
         return
       }
 
       // Ctrl+2 — 依存语法树
-      if (e.ctrlKey && e.key === "2") {
+      if (isModifierPressed(e) && e.key === "2") {
         e.preventDefault()
         if (!sentencesRef.current[currentIndexRef.current]?.dependencyAnalysis) {
           toast("这句还没有语法树数据")
@@ -1041,7 +1162,7 @@ export function LearnClient({
       }
 
       // Ctrl+/ — 句子解析（词汇、结构、AI 讲解）
-      if (e.ctrlKey && (e.key === "/" || e.key === "?")) {
+      if (isModifierPressed(e) && (e.key === "/" || e.key === "?")) {
         e.preventDefault()
         setShowExplain(true)
         return
@@ -1057,7 +1178,7 @@ export function LearnClient({
       }
 
       // Ctrl+' — pronounce
-      if (e.ctrlKey && e.key === "'") {
+      if (isModifierPressed(e) && e.key === "'") {
         e.preventDefault()
         const s = sentencesRef.current[currentIndexRef.current]
         if (s) globalSpeak(s.english)
@@ -1065,15 +1186,19 @@ export function LearnClient({
       }
 
       // Ctrl+; — toggle show answer
-      if (e.ctrlKey && e.key === ";") {
+      if (isModifierPressed(e) && e.key === ";") {
         e.preventDefault()
         setShowAnswer((prev) => !prev)
         return
       }
 
-      // Shift+→ — next sentence
+      // Shift+→ — next sentence（与「下一句」按钮同一守卫，键盘路径不能绕过）
       if (e.shiftKey && e.key === "ArrowRight") {
         e.preventDefault()
+        if (statusRef.current !== "complete") {
+          toast("先把当前这句敲完，再进入下一句")
+          return
+        }
         const idx = currentIndexRef.current
         if (idx < sentencesRef.current.length - 1) setCurrentIndex(idx + 1)
         return
@@ -1088,14 +1213,14 @@ export function LearnClient({
       }
 
       // Ctrl+N — 收藏当前正在打的词
-      if (e.ctrlKey && e.key === "n") {
+      if (isModifierPressed(e) && e.key === "n") {
         e.preventDefault()
         void addWordToWordbook(words[activeIdx]?.english)
         return
       }
 
       // Ctrl+M — 标记掌握并跳下一句
-      if (e.ctrlKey && e.key === "m") {
+      if (isModifierPressed(e) && e.key === "m") {
         e.preventDefault()
         void markCurrentMastered(true)
         return
@@ -1148,16 +1273,20 @@ export function LearnClient({
         setWordStates((prev) => {
           const cur = prev[activeIdx]
           if (!cur) return prev
-          // 错词态下继续输入 = 清空重打：给出一条明确的出路，
-          // 不必逐个退格去猜「到底哪个字母错了」。
-          const base = cur.status === "error" ? "" : cur.value
-          const value = base + e.key
-          // 实时判定（与复习页同一口径）：一旦不再是期望的前缀就立刻标错。
-          // 原先写死 `value.length >= expected.length` 就 return，敲到上限后
-          // 按键毫无反应、而且不提示，用户会以为键盘坏了。
-          const status = isTypingPrefix(value, activeWord.english) ? "active" : "error"
+          // 一律**接着已输入的内容往后追加**，不再"错词态下先清空重打"。
+          //
+          // 旧行为是 `base = cur.status === "error" ? "" : cur.value`：一旦某个
+          // 字母敲错（那时会立刻标 error），下一次按键就把整个词清掉重新开始。
+          // 后果是用户明明只想改中间那一个字母，却被迫整词重敲 ——
+          // 而真正该做的是让他退格改掉那一个字母。
+          const value = cur.value + e.key
           const next = [...prev]
-          next[activeIdx] = { value, status }
+          // 敲字过程中一律保持 "active"：**不在这里标红**。
+          //
+          // 边敲边判会把反馈噪音拉满：任何单词打到一半时前缀都还没到终点，
+          // 一旦敲错一个字母立刻变红、同时下次按键又清空重来（见上），
+          // 用户根本来不及看清哪里错了。改成只在 Enter/空格确认时才判定。
+          next[activeIdx] = { value, status: "active" }
           return next
         })
         return
@@ -1173,11 +1302,9 @@ export function LearnClient({
           if (cur.value.length === 0) return prev
           const value = cur.value.slice(0, -1)
           const next = [...prev]
-          // 状态要跟着回退，否则删到正确前缀了还挂着红色
-          next[activeIdx] = {
-            value,
-            status: isTypingPrefix(value, activeWord.english) ? "active" : "error",
-          }
+          // 删除后回到 active：错误标记只在"确认过"之后才有意义，
+          // 用户正在改的过程中不该同时显示上一次确认的红
+          next[activeIdx] = { value, status: "active" }
           return next
         })
         return
@@ -1200,6 +1327,38 @@ export function LearnClient({
 
     document.addEventListener("keydown", handleKeyDown)
     return () => document.removeEventListener("keydown", handleKeyDown)
+  }, [])
+
+  /**
+   * 进入练习时主动申请一次麦克风权限。
+   *
+   * 为什么必须提前要：跟读评分（VoicePanel）是在**用户点录音的那一刻**才调
+   * getUserMedia 的。浏览器弹权限框、用户再去找「允许」需要好几秒，而录音已经
+   * 在计时了 —— 拿到权限时往往只剩后半句，评分自然很差；更常见的是用户压根
+   * 没意识到刚才弹了个框，直接得到"无法访问麦克风"。
+   *
+   * 两个细节：
+   *   1. 拿到轨道后**立刻 stop()**：我们只要权限，不要在整节课期间一直占着麦克风
+   *      （浏览器地址栏会一直亮着录制指示，用户会怀疑被偷听）。
+   *   2. 每个浏览器会话只问一次（sessionStorage）：用户明确拒绝后不该每次切句都
+   *      再弹一次；被拒绝时保持安静，等真正点录音时 VoicePanel 再给出可操作的提示。
+   */
+  useEffect(() => {
+    if (typeof navigator === "undefined" || !navigator.mediaDevices?.getUserMedia) return
+    const ASKED_KEY = "typenow_mic_permission_asked"
+    try {
+      if (sessionStorage.getItem(ASKED_KEY)) return
+      sessionStorage.setItem(ASKED_KEY, "1")
+    } catch {
+      // 隐私模式下 sessionStorage 可能不可用：那就每次都问，
+      // 总好过因为存储异常而完全不申请权限
+    }
+    navigator.mediaDevices
+      .getUserMedia({ audio: true })
+      .then((stream) => stream.getTracks().forEach((t) => t.stop()))
+      .catch(() => {
+        /* 用户拒绝或设备不可用：不打扰，跟读时再提示 */
+      })
   }, [])
 
   // Timer
@@ -1832,7 +1991,12 @@ export function LearnClient({
                         {word.english}
                       </span>
                       <span className="col-start-1 row-start-1 whitespace-pre px-1">
-                        <TypedChars value={ws?.value || ""} expected={word.english} />
+                        {/* 只有确认过（error 态）才把错的字母标红；敲字过程中一律正常着色，见 TypedChars 的说明 */}
+                        <TypedChars
+                          value={ws?.value || ""}
+                          expected={word.english}
+                          revealErrors={ws?.status === "error"}
+                        />
                       </span>
                     </div>
                     <div
@@ -2063,18 +2227,18 @@ export function LearnClient({
             </div>
             <div className="px-4 py-4 space-y-1">
               {([
-                { keys: ["Ctrl", "'"], label: "播放声音", action: () => { const s = sentencesRef.current[currentIndexRef.current]; if (s) globalSpeak(s.english) } },
-                { keys: ["Ctrl", ";"], label: "显示/隐藏答案" },
-                { keys: ["Ctrl", "P"], label: "暂停/继续" },
-                { keys: ["Ctrl", "1"], label: "查看课程大纲", action: () => setShowOutline(true) },
-                { keys: ["Ctrl", "2"], label: "查看语法树", action: () => setShowTree(true) },
-                { keys: ["Ctrl", "/"], label: "查看句子解析", action: () => setShowExplain(true) },
+                { keys: [modifierKeyLabel(), "'"], label: "播放声音", action: () => { const s = sentencesRef.current[currentIndexRef.current]; if (s) globalSpeak(s.english) } },
+                { keys: [modifierKeyLabel(), ";"], label: "显示/隐藏答案" },
+                { keys: [modifierKeyLabel(), "P"], label: "暂停/继续" },
+                { keys: [modifierKeyLabel(), "1"], label: "查看课程大纲", action: () => setShowOutline(true) },
+                { keys: [modifierKeyLabel(), "2"], label: "查看语法树", action: () => setShowTree(true) },
+                { keys: [modifierKeyLabel(), "/"], label: "查看句子解析", action: () => setShowExplain(true) },
                 { keys: ["Space"], label: "确认当前单词" },
                 { keys: ["Enter"], label: "提交整句" },
                 { keys: ["Backspace"], label: "删除字符" },
                 { keys: ["Shift", "←/→"], label: "上一句/下一句" },
-                { keys: ["Ctrl", "M"], label: "标记掌握并跳下一句", action: () => { void markCurrentMastered(true) } },
-                { keys: ["Ctrl", "N"], label: "收藏当前单词到生词本", action: () => { void addWordToWordbook(inputWords[activeWordIndex]?.english) } },
+                { keys: [modifierKeyLabel(), "M"], label: "标记掌握并跳下一句", action: () => { void markCurrentMastered(true) } },
+                { keys: [modifierKeyLabel(), "N"], label: "收藏当前单词到生词本", action: () => { void addWordToWordbook(inputWords[activeWordIndex]?.english) } },
               ] as ShortcutItem[]).map((item, i) => (
                 <div
                   key={i}
@@ -2242,11 +2406,11 @@ export function LearnClient({
 
         {/* Keyboard shortcuts — hidden on smallest mobile */}
         <div className="hidden sm:flex items-center gap-1 sm:gap-2 flex-wrap justify-center">
-          <ShortcutBadge keys={["Ctrl", "'"]} label="发音" onClick={() => { const s = sentencesRef.current[currentIndexRef.current]; if (s) globalSpeak(s.english) }} />
-          <ShortcutBadge keys={["Ctrl", ";"]} label={showAnswer ? "隐藏答案" : "显示答案"} onClick={debouncedToggleAnswer} />
-          <ShortcutBadge keys={["Ctrl", "2"]} label="语法树" onClick={() => setShowTree(true)} />
-          <ShortcutBadge keys={["Ctrl", "/"]} label="解析" onClick={() => setShowExplain(true)} />
-          <ShortcutBadge keys={["Ctrl", "P"]} label={isPaused ? "继续" : "暂停"} onClick={debouncedTogglePause} />
+          <ShortcutBadge keys={[modifierKeyLabel(), "'"]} label="发音" onClick={() => { const s = sentencesRef.current[currentIndexRef.current]; if (s) globalSpeak(s.english) }} />
+          <ShortcutBadge keys={[modifierKeyLabel(), ";"]} label={showAnswer ? "隐藏答案" : "显示答案"} onClick={debouncedToggleAnswer} />
+          <ShortcutBadge keys={[modifierKeyLabel(), "2"]} label="语法树" onClick={() => setShowTree(true)} />
+          <ShortcutBadge keys={[modifierKeyLabel(), "/"]} label="解析" onClick={() => setShowExplain(true)} />
+          <ShortcutBadge keys={[modifierKeyLabel(), "P"]} label={isPaused ? "继续" : "暂停"} onClick={debouncedTogglePause} />
           <ShortcutBadge keys={["Space"]} label="确认" onClick={debouncedConfirmWord} />
           <ShortcutBadge keys={["Enter"]} label="提交" onClick={debouncedSubmitAll} />
         </div>

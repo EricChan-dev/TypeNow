@@ -48,3 +48,35 @@ describe("migrateTTSSettings", () => {
     expect(migrateTTSSettings(null).youdaoVoice).toBeTruthy()
   })
 })
+
+// ─── v3：默认音色改成「有雅婷」 ──────────────────────────────────────────────
+
+describe("migrateTTSSettings v3 音色迁移", () => {
+  it("v2 的老配置：音色被刷成 youyating（不刷的话改了默认值对老用户完全无效）", () => {
+    // localStorage 里躺着旧默认 youxiaomei —— 包括从没进过设置页的人，
+    // 因为任何一次 updateSettings 都会把整个对象写回去
+    const out = migrateTTSSettings({ youdaoVoice: "youxiaomei", version: 2 })
+    expect(out.youdaoVoice).toBe("youyating")
+    expect(out.version).toBe(3)
+  })
+
+  it("从未存过配置（version 缺失）也拿到新音色", () => {
+    expect(migrateTTSSettings(null).youdaoVoice).toBe("youyating")
+    expect(migrateTTSSettings({}).youdaoVoice).toBe("youyating")
+  })
+
+  it("已经是 v3 的配置不再被动：用户自己换的音色要保住", () => {
+    // 迁移只发生一次。否则每次朗读都把人选的音色改回去 —— 那比不迁移更糟
+    const out = migrateTTSSettings({ youdaoVoice: "youxiaoguan", version: 3 })
+    expect(out.youdaoVoice).toBe("youxiaoguan")
+  })
+
+  it("v1 配置同时完成两件事：source 归一到 youdao、音色刷成新默认", () => {
+    const out = migrateTTSSettings({ source: "browser", voice: "Daniel", version: 1 })
+    expect(out.source).toBe("youdao")
+    expect(out.youdaoVoice).toBe("youyating")
+    expect(out.version).toBe(3)
+    // 与音色无关的设置不能被顺手清掉
+    expect(out.voice).toBe("Daniel")
+  })
+})

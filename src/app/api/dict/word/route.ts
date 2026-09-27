@@ -23,6 +23,51 @@ type RawResponse = {
   entries?: RawEntry[]
 }
 
+/**
+ * 上游（freedictionaryapi.com）把「中文」这一坨混在一起，只按 code 过滤会取到垃圾。
+ *
+ * 实测 tomorrow 的上游响应有 468 条 translation、约 200 种语言，其中
+ * `language.code === "zh"` 的条目既包含我们要的普通话，也包含**根本不是中文**的：
+ *
+ *   {code:"zh", name:"Chinese",          word:"минтян"}   ← 西里尔字母（鞑靼语一类被误标成 zh）
+ *   {code:"zh", name:"Chinese",          word:"мир"}
+ *   {code:"zh", name:"Chinese",          word:"миргә"}
+ *   {code:"zh", name:"Chinese",          word:"明仔日"}    ← 闽南语
+ *   {code:"zh", name:"Chinese",          word:"明仔载"}
+ *   {code:"zh", name:"Chinese Mandarin", word:"明天"}      ← 这才是要的
+ *
+ * 而原来的实现只看 code、按顺序取前 5 条，于是界面上出现了
+ * 「минтян；мир；миргә；明仔日；明仔载」这种四不像。
+ *
+ * 所以这里加三道闸：
+ *   1. **普通话优先**：name 含 "Mandarin"（或 code 为 cmn）的排最前，
+ *      有普通话就别用那个大杂烩的 "Chinese" 桶；
+ *   2. **必须含汉字**：滤掉西里尔/纯拉丁拼写 —— "中文释义"里不该出现 "минтян"；
+ *   3. 繁简并存的形式（"明兒 /明儿"）取斜杠后的简体。
+ */
+const CJK_RE = /[\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff]/
+
+function isMandarin(t: { language?: { code?: string; name?: string } }): boolean {
+  const code = (t.language?.code ?? "").toLowerCase()
+  const name = (t.language?.name ?? "").toLowerCase()
+  return code === "cmn" || name.includes("mandarin")
+}
+
+/** 只保留真正含汉字的条目，并把「繁 /简」取简体那一半。 */
+export function cleanChineseWord(word: string): string | null {
+  let w = word.trim()
+  if (!w) return null
+  // 上游用 "AA /BB" 表示「繁体 /简体」。取后半（简体）——
+  // 本站面向简体用户，展示 "明兒 /明儿" 这种双写反而像数据坏了。
+  // 只有一侧有内容时（"明天/"、"/明天"）就用那一侧：否则斜杠会被留在释义里。
+  if (w.includes("/")) {
+    const parts = w.split("/").map((x) => x.trim()).filter(Boolean)
+    if (parts.length >= 1) w = parts[parts.length - 1]
+  }
+  if (!CJK_RE.test(w)) return null
+  return w
+}
+
 function pickPhonetic(entries: RawEntry[], wanted: "us" | "uk"): string | null {
   const usTags = ["General American", "GenAm", "American"]
   const ukTags = ["Received Pronunciation", "RP", "British"]
@@ -51,6 +96,8 @@ function parseDictionary(raw: RawResponse) {
 
   const pos: { pos: string; meaning: string }[] = []
   const translations: string[] = []
+  /** 普通话释义单独攒：大杂烩的 "Chinese" 桶（含闽南语等）不能排在它前面 */
+  const mandarin: string[] = []
   const synonyms = new Set<string>()
   const examples: { en: string; zh: string }[] = []
 
@@ -67,9 +114,14 @@ function parseDictionary(raw: RawResponse) {
         if (ex) examples.push({ en: ex, zh: "" })
       }
       for (const t of s.translations ?? []) {
-        const code = t.language?.code
+        const code = (t.language?.code ?? "").toLowerCase()
         if ((code === "cmn" || code === "zh") && t.word) {
-          if (!translations.includes(t.word)) translations.push(t.word)
+          const cleaned = cleanChineseWord(t.word)
+          if (!cleaned) continue
+          // 普通话优先：先分开攒、最后合并 ——
+          // 否则那个大杂烩的 "Chinese" 桶（含闽南语）会插在普通话前面
+          if (isMandarin(t)) mandarin.push(cleaned)
+          else if (!translations.includes(cleaned)) translations.push(cleaned)
         }
       }
     }
@@ -79,7 +131,10 @@ function parseDictionary(raw: RawResponse) {
     phonetic,
     phoneticUk,
     pos: pos.slice(0, 20),
-    translations: translations.slice(0, 30),
+    // 有普通话就**只用**普通话：那个大杂烩的 "Chinese" 桶里混着闽南语
+    // （明仔日 / 明仔载）—— 是汉字但不是普通话，作为"中文释义"展示会误导
+    // 一个在学普通话的人。只有整条词目都不含普通话时才回退到通用桶。
+    translations: Array.from(new Set(mandarin.length > 0 ? mandarin : translations)).slice(0, 30),
     synonyms: Array.from(synonyms).slice(0, 20),
     examples: examples.slice(0, 6),
   }

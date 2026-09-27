@@ -25,18 +25,28 @@ const STORAGE_KEY = "typenow_tts_settings"
  * 配置结构版本。
  *   v1 — source 默认 "browser"（系统语音），有道只是可选
  *   v2 — source 默认 "youdao"，全站朗读统一走有道
+ *   v3 — 默认音色改为「有雅婷 (美式·女)」（原先是有小美）
  *
  * 为什么必须有版本号：`load()` 是 `{...defaults, ...localStorage}`，老用户的
  * localStorage 里**已经存了** `source:"browser"`，只改 defaults 对他们完全无效，
  * 声音依旧不统一。所以 v1 → v2 迁移时强制把 source 刷成 youdao；用户之后仍可在
  * 设置里自己改回系统语音（那时 version 已是 2，不会再被覆盖）。
+ *
+ * v2 → v3 同理，而这次是**音色**：localStorage 里躺着 `youdaoVoice:"youxiaomei"`
+ * 的人（包括从没进过设置页的 —— 任何一次 updateSettings 都会把整个对象写回去）
+ * 光改 defaults 是听不出变化的。所以 v3 迁移强制刷成 youyating。代价是"特意选过
+ * youxiaomei 的人"也会被改一次：他只会在设置页再点一次，而反过来（不强制）
+ * 则等于"改了默认值却对所有老用户无效"。
  */
-const SETTINGS_VERSION = 2
+const SETTINGS_VERSION = 3
+
+/** 默认音色：有雅婷（美式·女）。设置页可从 YOUDAO_EN_VOICES 里换。 */
+const DEFAULT_YOUDAO_VOICE = "youyating"
 
 const defaults: TTSSettings = {
   source: "youdao",
   voice: "",
-  youdaoVoice: "youxiaomei",
+  youdaoVoice: DEFAULT_YOUDAO_VOICE,
   volume: 1,
   rate: 0.9,
   version: SETTINGS_VERSION,
@@ -61,8 +71,16 @@ export const YOUDAO_EN_VOICES: YoudaoVoice[] = [
  */
 export function migrateTTSSettings(stored: Partial<TTSSettings> | null | undefined): TTSSettings {
   const merged: TTSSettings = { ...defaults, ...(stored ?? {}) }
-  if (!stored?.version || stored.version < SETTINGS_VERSION) {
+  const from = stored?.version ?? 0
+
+  if (from < 2) {
     merged.source = "youdao"
+  }
+  if (from < 3) {
+    // 音色：老配置存着旧默认 youxiaomei，不刷的话"改了默认值"对所有人无效
+    merged.youdaoVoice = DEFAULT_YOUDAO_VOICE
+  }
+  if (from < SETTINGS_VERSION) {
     merged.version = SETTINGS_VERSION
   }
   return merged
