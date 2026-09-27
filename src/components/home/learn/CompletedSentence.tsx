@@ -4,19 +4,32 @@ import { useState } from "react"
 import { posLabel } from "@/lib/pos-labels"
 import type { Word, Phonetic } from "@/types"
 import { WordDetailPopover } from "./WordDetailPopover"
+import { wrapPhonetic } from "@/lib/dict-display"
 import { getPosColor } from "@/lib/pos-color"
 
 /** 提取 phonetic 展示字符串：兼容 string 和 {uk,us} 两种格式 */
+/**
+ * 展示用的音标。
+ *
+ * 一律包进 `/ /`（IPA 惯例）：库里存的 phonetic 大多是 `{uk, us}` 且**不带斜杠**，
+ * 直接渲染出来是一串光秃秃的音标符号，看着不像音标也不像单词。
+ * wrapPhonetic 是幂等的，所以词典接口那份本就带斜杠的不会被包成 `//x//`。
+ *
+ * 没音标时返回一个空格（不是空串）：这一列是 grid 的一行，返回空串会让
+ * 词块高度塌陷、整行文字上下跳动。
+ */
 function phoneticDisplay(phonetic: Word["phonetic"]): string {
   if (!phonetic) return " "
-  if (typeof phonetic === "string") return phonetic
+  if (typeof phonetic === "string") return wrapPhonetic(phonetic) || " "
   // {uk, us} object — 默认显示英式，hover 显示美式
-  return phonetic.uk || phonetic.us || " "
+  return wrapPhonetic(phonetic.uk || phonetic.us) || " "
 }
 
 function phoneticAlt(phonetic: Word["phonetic"]): string | null {
   if (!phonetic || typeof phonetic === "string") return null
-  return phonetic.us && phonetic.us !== phonetic.uk ? phonetic.us : null
+  if (!phonetic.us || phonetic.us === phonetic.uk) return null
+  // hover 提示里的美式音标同样包斜杠，保持与主显示一致
+  return wrapPhonetic(phonetic.us)
 }
 
 interface CompletedSentenceProps {

@@ -1,9 +1,10 @@
 "use client"
 
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react"
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react"
 import { globalSpeak } from "@/lib/hooks/useTTSSettings"
 import { Volume2, BookmarkPlus, BookmarkCheck, Loader2 } from "lucide-react"
 import { toast } from "sonner"
+import { groupSensesByPos, wrapPhonetic, type DictSense } from "@/lib/dict-display"
 
 interface DictResult {
   word: string
@@ -54,6 +55,15 @@ export function WordDetailPopover({ word, sentenceId, children }: Props) {
   const [busySpeak, setBusySpeak] = useState(false)
 
   const normalized = word.replace(/[^a-zA-Z' -]/g, "").trim().toLowerCase()
+
+  /**
+   * 词性分组。放在渲染之外算一次：data.pos 每次渲染都是同一个引用，
+   * 在 JSX 里现算会每次渲染都重建 Map/数组。
+   */
+  const posGroups = useMemo(
+    () => groupSensesByPos((data?.pos ?? []) as DictSense[]),
+    [data?.pos],
+  )
 
   const clearTimers = useCallback(() => {
     if (enterTimer.current) clearTimeout(enterTimer.current)
@@ -277,8 +287,8 @@ export function WordDetailPopover({ word, sentenceId, children }: Props) {
                 <span className="text-2xl font-bold">{data?.word ?? normalized}</span>
                 {(data?.phonetic || data?.phoneticUk) && (
                   <div className="flex flex-wrap items-center gap-2 text-[12px] text-muted-foreground font-mono">
-                    {data.phonetic && <span>美 {data.phonetic}</span>}
-                    {data.phoneticUk && <span>英 {data.phoneticUk}</span>}
+                    {data.phonetic && <span>美 {wrapPhonetic(data.phonetic)}</span>}
+                    {data.phoneticUk && <span>英 {wrapPhonetic(data.phoneticUk)}</span>}
                   </div>
                 )}
               </div>
@@ -313,18 +323,38 @@ export function WordDetailPopover({ word, sentenceId, children }: Props) {
                   </div>
                 )}
 
-                {data.pos && data.pos.length > 0 && (
+                {/*
+                  词性用**中文**，并且**按词性分组**。
+
+                  原来是把上游的 (partOfSpeech, definition) 平铺最多 5 条：
+                    · partOfSpeech 是英文单词（noun / adverb / pronoun…），
+                      没登记中文就原样露出来 —— 用户看到的 "pronoun" 就是它；
+                    · 一个词通常只有 2 个词性，但每个词性下有 2~4 条义项，
+                      平铺后同一词性重复出现，看起来像"一个单词有那么多词性"；
+                    · definition 是**英文句子**（"On the day after the present day."），
+                      和上面的「中文释义」混在一起，中英对不上。
+
+                  分组之后：每个词性只出现一次、中文标签在前，它下面挂最多 2 条释义。
+                  释义保留英文是**如实标注**——那是词典原文，我们没有离线翻译能力，
+                  所以把标题写成「词性 · 英文释义」，让人一眼知道这块本来就是英文，
+                  而不是"中文没显示出来"。
+                */}
+                {posGroups.length > 0 && (
                   <div className="flex flex-col gap-1.5">
-                    <span className="text-[11px] uppercase tracking-wider text-muted-foreground/70 font-semibold">词性 · 释义</span>
-                    <div className="flex flex-col gap-1.5 max-h-44 overflow-y-auto pr-1">
-                      {data.pos.slice(0, 5).map((p, i) => (
-                        <div key={i} className="flex gap-2 text-[12px]">
-                          {p.pos && (
-                            <span className="shrink-0 px-1.5 py-0.5 rounded bg-violet-500/20 text-violet-300 font-mono text-[10px] uppercase">
-                              {p.pos}
+                    <span className="text-[11px] uppercase tracking-wider text-muted-foreground/70 font-semibold">
+                      词性 · 英文释义
+                    </span>
+                    <div className="flex flex-col gap-2 max-h-52 overflow-y-auto pr-1">
+                      {posGroups.map((g) => (
+                        <div key={g.pos || "none"} className="flex flex-col gap-0.5">
+                          <span className="self-start shrink-0 px-2 py-0.5 rounded bg-violet-500/20 text-violet-200 text-[11px] font-semibold">
+                            {g.label}
+                          </span>
+                          {g.meanings.map((m, i) => (
+                            <span key={i} className="text-[12px] text-foreground/70 leading-snug">
+                              {m}
                             </span>
-                          )}
-                          <span className="text-foreground/75 leading-snug">{p.meaning}</span>
+                          ))}
                         </div>
                       ))}
                     </div>

@@ -43,6 +43,43 @@ const POS_LABELS: Record<string, string> = {
   X: "其他",
   // 库里用中文"标点"标记不可输入的符号位（见 getInputWords），保持一致
   标点: "标点",
+
+  // ── 词典接口（freedictionaryapi）用的**全称**形式 ──
+  //
+  // 注意这套取值与上面的 UD 缩写是**两套词汇**：
+  //   UD 给的是 NOUN / VERB / PRON（缩写、全大写）
+  //   词典给的是 noun / adverb / pronoun（全称、小写）
+  // 悬浮单词卡里显示的 "pronoun" 就来自后者 —— 它确实是词性，
+  // 只是因为没登记中文而原样露出了英文。
+  PRONOUN: "代词",
+  ADJECTIVE: "形容词",
+  ADVERB: "副词",
+  PREPOSITION: "介词",
+  CONJUNCTION: "连词",
+  INTERJECTION: "感叹词",
+  DETERMINER: "限定词",
+  NUMERAL: "数词",
+  ARTICLE: "冠词",
+  PARTICLE: "小品词",
+  PHRASE: "短语",
+  "PROPER NOUN": "专有名词",
+  "AUXILIARY VERB": "助动词",
+  "MODAL VERB": "情态动词",
+  "PHRASAL VERB": "动词短语",
+  "NOUN PHRASE": "名词短语",
+  "VERB PHRASE": "动词短语",
+  CONTRACTION: "缩略形式",
+  ABBREVIATION: "缩写",
+  EXCLAMATION: "感叹词",
+  PREFIX: "前缀",
+  SUFFIX: "后缀",
+  AFFIX: "词缀",
+  SYMBOL: "符号",
+  WORD: "单词",
+  LETTER: "字母",
+  PUNCTUATION: "标点",
+  ORDINAL: "序数词",
+  CARDINAL: "基数词",
 }
 
 /**
