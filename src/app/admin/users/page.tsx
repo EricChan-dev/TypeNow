@@ -54,6 +54,15 @@ export default function UsersList() {
           )}
         />
         <Table.Column dataIndex="phone" title="手机" width={130} />
+        {/* 来源摘要由接口算好（describeSignupSource）—— 渠道、微信 scene 与
+            首触来源的优先级只该有一份实现，前端只负责渲染 */}
+        <Table.Column
+          dataIndex="signupLabel"
+          title="来源"
+          width={190}
+          ellipsis
+          render={(v: string | null) => <span style={{ fontSize: 12 }}>{v || "—"}</span>}
+        />
         <Table.Column
           dataIndex="hasWechat"
           title="微信"

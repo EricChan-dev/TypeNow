@@ -11,8 +11,9 @@ import {
   sanitizeAuditDetail,
   diffAuditFields,
   describeAuditActor,
-  clientIpOf,
 } from "@/lib/admin-audit"
+// clientIpOf 已收敛到 lib/request-meta（注册归因也要用同一份实现）
+import { clientIpOf } from "@/lib/request-meta"
 
 describe("truncateAuditText", () => {
   it("null / undefined 保持为 null（而不是空串）", () => {

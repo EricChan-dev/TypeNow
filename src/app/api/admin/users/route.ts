@@ -4,6 +4,10 @@ import { analyticsEvents, paymentOrders, practiceRecords, users } from "@/lib/db
 import { requireAdmin } from "@/lib/admin-auth"
 import { parsePagination } from "@/lib/pagination"
 import { parseRange, rangeStart, rangeLabel } from "@/lib/admin-range"
+// 列表里显示的是**一句人话**（渠道 + 微信 scene + 首触来源）。
+// 让后端算而不是前端算：同一个摘要函数将来详情页、导出的 CSV 都要用，
+// 各算一遍就会出现三个页面三种说法。
+import { describeSignupSource } from "@/lib/signup-source"
 import { desc, eq, and, gte, inArray, isNotNull, or, like, sql, type SQL } from "drizzle-orm"
 
 /**
@@ -104,6 +108,9 @@ export async function GET(request: Request) {
         wechatOpenid: users.wechatOpenid,
         trialClaimedAt: users.trialClaimedAt,
         proExpires: users.proExpires,
+        // 注册来源：列表页要能一眼看出"这个人从哪来的"
+        signupChannel: users.signupChannel,
+        signupSource: users.signupSource,
         createdAt: users.createdAt,
       })
       .from(users)
@@ -157,6 +164,8 @@ export async function GET(request: Request) {
       hasWechat: u.wechatOpenid != null,
       // 不把 openid 原文发给前端
       wechatOpenid: undefined,
+      // 原始 JSON 之外再给一个算好的摘要，前端直接渲染，不必重复实现优先级规则
+      signupLabel: describeSignupSource(u.signupChannel, u.signupSource),
       practiceCount: practiceMap.get(u.id) ?? 0,
       eventCount: eventMap.get(u.id) ?? 0,
       paidOrderCount: paidMap.get(u.id) ?? 0,

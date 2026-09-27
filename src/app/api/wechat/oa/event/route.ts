@@ -11,6 +11,8 @@ import {
   sendOACustomerMessage,
 } from "@/lib/wechat"
 import { generateInviteCode } from "@/lib/subscription"
+import { signupFields } from "@/lib/signup-source"
+import { recordServerEvent } from "@/lib/analytics-server"
 import { trialGrantFields } from "@/lib/trial"
 import { INVITE_REGISTER_DAYS } from "@/lib/invite-rules"
 
@@ -261,6 +263,22 @@ async function processSceneLogin(openid: string, sceneStr: string): Promise<void
       const id = randomUUID()
       const referredBy = await resolveReferredBy(extractRefCode(sceneStr))
 
+      // 注册来源：这条链路能拿到微信侧的**权威归因**——subscribe_scene 回答
+      // 「他怎么找到我们的」（公众号搜索 / 名片分享 / 扫码…），qr_scene 是我们
+      // 自己的码（带邀请码时能看出是谁的码）。此前这些字段一个都没落库，
+      // 于是"新增用户从哪来"只能事后写临时脚本去微信接口捞。
+      //
+      // 这里没有 IP/UA：请求来自微信服务器，记它毫无意义（会在 oa-check 那步
+      // 用扫码者浏览器的真实请求头补齐）。
+      const signup = signupFields({
+        channel: "wechat_oa_qr",
+        wechat: {
+          subscribeScene: oaUser.subscribe_scene,
+          qrScene: sceneStr,
+          subscribeTime: oaUser.subscribe_time,
+        },
+      })
+
       await db.insert(users).values({
         id,
         wechatOpenid: openid,
@@ -269,9 +287,25 @@ async function processSceneLogin(openid: string, sceneStr: string): Promise<void
         avatar: oaUser.headimgurl,
         referredBy,
         inviteCode: generateInviteCode(),
+        signupChannel: signup.signupChannel,
+        signupSource: signup.signupSource as never,
         // 未受邀不送会员，由 /api/trial/claim 主动领取；受邀注册即自动领取。
         // 见 db/migrations/00012_trial_claim.sql
         ...(referredBy ? trialGrantFields(new Date(), INVITE_REGISTER_DAYS) : {}),
+      })
+
+      // 注册事件：数量仍以 users 表为权威（见 lib/analytics-events 的 FUNNEL_STEPS），
+      // 这条事件只补"什么时候注册、走的哪个渠道"的时序
+      await recordServerEvent({
+        event: "register_success",
+        userId: id,
+        properties: {
+          channel: signup.signupChannel,
+          scene: oaUser.subscribe_scene ?? null,
+          qrScene: sceneStr,
+          referred: Boolean(referredBy),
+        },
+        pageUrl: "/login",
       })
 
       if (referredBy) {

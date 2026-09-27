@@ -22,6 +22,8 @@ import { adminAuditLogs, users } from "@/lib/db/schema"
 // 手机号脱敏复用后台统一的那一份（src/lib/mask.ts）：
 // 这里再写一遍就会有两套规则，将来改一处必然漏另一处
 import { maskPhone } from "@/lib/mask"
+// IP 提取只留一份实现：注册来源归因也要用它，各写一遍就会同一台机器两个答案
+import { clientIpOf } from "@/lib/request-meta"
 
 /** 与 DDL 中的列宽一一对应；超长会直接抛 "Data too long" 并被吞掉，等于丢日志 */
 const MAX_ACTION = 50
@@ -169,18 +171,6 @@ export function sentenceAuditLabel(chinese: string | null | undefined): string |
   const s = (chinese ?? "").trim()
   if (!s) return null
   return s.length <= 80 ? s : `${s.slice(0, 79)}…`
-}
-
-/** 取真实客户端 IP：经过 nginx，x-forwarded-for 的第一段才是原始来源 */
-export function clientIpOf(req: Request | null | undefined): string | null {
-  if (!req) return null
-  const h = req.headers
-  const xff = h.get("x-forwarded-for")
-  if (xff) {
-    const first = xff.split(",")[0]?.trim()
-    if (first) return first
-  }
-  return h.get("x-real-ip") ?? null
 }
 
 /**

@@ -75,8 +75,10 @@ export interface EventMeta {
  * 文档，tsc 会直接报错。字典与白名单脱节是这类系统最常见的腐化方式
  * （上线半年后没人知道 `trial_claimed` 和 `paywall_shown` 差在哪）。
  *
- * 注意 register_success 虽然在白名单里但没有任何调用点 —— 注册以 users 表
- * 为准（见 lib/analytics.ts 的说明），保留它只为兼容可能的历史数据。
+ * register_success 曾经在白名单里却没有任何调用点（注册以 users 表为准）。
+ * 2026-09-28 补上了**服务端**上报：users 表答不了"在哪一天、从哪个渠道来的"
+ * 这种时序问题，而这两件事一起看才有意义（见 lib/analytics-server.ts）。
+ * 数量仍以 users 表为权威，两边不一致时报表会把差异显式暴露出来。
  */
 export const EVENT_META: Record<AnalyticsEvent, EventMeta> = {
   page_view: {
@@ -106,8 +108,11 @@ export const EVENT_META: Record<AnalyticsEvent, EventMeta> = {
   register_success: {
     label: "注册成功",
     category: "account",
-    description: "保留事件。注册以 users 表为权威数据，前端目前不上报。",
-    props: [],
+    description:
+      "建号成功时由**服务端**上报（注册只有服务端知道渠道与来源）。" +
+      "数量仍以 users 表为权威（见 FUNNEL_STEPS 的 registered 那步），" +
+      "这条事件只用来把渠道与时间对起来看。",
+    props: ["channel", "scene", "qrScene", "referred", "fallback"],
   },
   course_open: {
     label: "打开课程",

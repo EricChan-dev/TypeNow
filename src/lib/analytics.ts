@@ -76,9 +76,9 @@ export function trackThemeToggle(theme: string) {
 // 这几个事件此前**只有 helper 定义、没有任何调用点**，所以线上
 // /admin/analytics 的「热门页面」永远是空的。现在接上真实调用。
 //
-// 注意这里**没有** register_success：注册这件事 users 表本身就是权威数据
-// （method 看 phone/wechat_openid，是否受邀看 referred_by），不需要客户端再报一遍。
-// 只有「客户端才知道、数据库里没有」的动作才值得埋点。
+// 注意这里**没有** register_success：注册这件事只有服务端知道（渠道、微信 scene、
+// 首触来源都在服务端那一步），所以它由 lib/analytics-server.ts 在建号时写入，
+// 不走这个客户端 helper。数量以 users 表为权威，事件只补渠道与时序。
 
 /** 打开课程详情页。这是「注册了但没开始学」的第一个分界点。 */
 export function trackCourseOpen(courseId: string) {

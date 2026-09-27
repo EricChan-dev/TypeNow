@@ -1,10 +1,11 @@
 "use client"
 
 import { useState } from "react"
-import { Card, Descriptions, Spin, Table, Tag, Typography } from "antd"
+import { Card, Descriptions, Space, Spin, Table, Tag, Typography } from "antd"
 import { useParams } from "next/navigation"
 import Link from "next/link"
 import { eventLabel } from "@/lib/analytics-events"
+import { describeSignupSource } from "@/lib/signup-source"
 import { useAdminFetch } from "@/lib/admin-fetch"
 
 const { Title, Text } = Typography
@@ -177,6 +178,22 @@ export default function UserShow() {
           </Descriptions.Item>
           <Descriptions.Item label="注册时间">
             {record.createdAt ? new Date(record.createdAt as string).toLocaleString("zh-CN") : "-"}
+          </Descriptions.Item>
+          {/* 注册来源：摘要是接口算好的（describeSignupSource），
+              这里只把原始 JSON 折叠在下面，排查时用得上 */}
+          <Descriptions.Item label="注册来源" span={2}>
+            <Space direction="vertical" size={2} style={{ width: "100%" }}>
+              <span>{describeSignupSource(record.signupChannel as string, record.signupSource)}</span>
+              {record.signupSource ? (
+                <Text type="secondary" style={{ fontSize: 12 }}>
+                  {JSON.stringify(record.signupSource)}
+                </Text>
+              ) : (
+                <Text type="secondary" style={{ fontSize: 12 }}>
+                  该用户注册于来源归因上线之前（迁移 00023），没有记录
+                </Text>
+              )}
+            </Space>
           </Descriptions.Item>
         </Descriptions>
       </Card>

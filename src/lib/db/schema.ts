@@ -52,6 +52,21 @@ export const users = mysqlTable(
     partnerAgreedAt: datetime("partner_agreed_at"),
     diamonds: int("diamonds").notNull().default(0),
     checkInGoal: int("check_in_goal").notNull().default(50),
+    /**
+     * 注册渠道（可筛可 GROUP BY 的那根主轴）。取值见 lib/signup-source.ts 的
+     * SIGNUP_CHANNELS。存量行为 NULL —— 那时的来源无法从数据库还原。
+     */
+    signupChannel: varchar("signup_channel", { length: 30 }),
+    /**
+     * 注册来源明细（JSON）。键集合固定，写入必须走 buildSignupSource 白名单清洗：
+     * 微信侧的 scene / qrScene / subscribedAt，首触的 referrer / landing / utm，
+     * 以及注册那次请求的 requestReferrer / userAgent / ip。
+     *
+     * 为什么是 JSON 而不是再加七列：这批字段是「微信给了什么 + 这次请求带了什么」，
+     * 天生开放（以后加 UTM、设备、小程序场景号都不必再迁表）。理由与
+     * db/migrations/00023 的说明一致。
+     */
+    signupSource: json("signup_source"),
     createdAt: datetime("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
   },
   (t) => [
@@ -60,6 +75,8 @@ export const users = mysqlTable(
     index("idx_users_created_at").on(t.createdAt),
     // 后台按"领取体验会员"的时间范围筛（仪表盘指标 + 用户列表的 trial=1 钻取）
     index("idx_users_trial_claimed_at").on(t.trialClaimedAt),
+    // 「按来源统计/筛选」用的轴
+    index("idx_users_signup_channel").on(t.signupChannel),
   ]
 )
 

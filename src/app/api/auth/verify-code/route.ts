@@ -6,6 +6,9 @@ import { eq, and, gt } from "drizzle-orm"
 import { createSession } from "@/lib/auth/session"
 import { checkRateLimit, getClientIP } from "@/lib/rate-limit"
 import { generateInviteCode } from "@/lib/subscription"
+import { requestSignupContext, signupFields } from "@/lib/signup-source"
+import { FIRST_TOUCH_COOKIE, parseFirstTouch } from "@/lib/first-touch"
+import { recordServerEvent } from "@/lib/analytics-server"
 import { trialGrantFields } from "@/lib/trial"
 import { INVITE_REGISTER_DAYS } from "@/lib/invite-rules"
 
@@ -103,13 +106,29 @@ export async function POST(request: NextRequest) {
     // 注册不再无条件送会员：未受邀用户保持非会员，练完每课免费 3 句后由
     // /api/trial/claim 主动领取；受邀用户注册即自动领取（对齐句乐部）。
     // 为什么/安全性见 db/migrations/00012_trial_claim.sql。
+    // 手机号渠道没有微信侧字段，能记的是首触来源 + 这次请求的 Referer/UA/IP
+    const signup = signupFields({
+      channel: "phone",
+      firstTouch: parseFirstTouch(request.cookies.get(FIRST_TOUCH_COOKIE)?.value),
+      request: requestSignupContext(request),
+    })
+
     await db.insert(users).values({
       id,
       phone,
       name: defaultName,
       referredBy,
       inviteCode: generateInviteCode(),
+      signupChannel: signup.signupChannel,
+      signupSource: signup.signupSource as never,
       ...(referredBy ? trialGrantFields(new Date(), INVITE_REGISTER_DAYS) : {}),
+    })
+
+    await recordServerEvent({
+      event: "register_success",
+      userId: id,
+      properties: { channel: signup.signupChannel, referred: Boolean(referredBy) },
+      pageUrl: "/login",
     })
     const [newUser] = await db.select().from(users).where(eq(users.id, id)).limit(1)
     user = newUser

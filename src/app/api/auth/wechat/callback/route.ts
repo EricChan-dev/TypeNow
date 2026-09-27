@@ -9,6 +9,9 @@ import { encrypt } from "@/lib/crypto"
 import { generateInviteCode } from "@/lib/subscription"
 import { trialGrantFields } from "@/lib/trial"
 import { INVITE_REGISTER_DAYS } from "@/lib/invite-rules"
+import { requestSignupContext, signupFields } from "@/lib/signup-source"
+import { FIRST_TOUCH_COOKIE, parseFirstTouch } from "@/lib/first-touch"
+import { recordServerEvent } from "@/lib/analytics-server"
 import {
   exchangeCodeForAccessToken,
   getUserInfo,
@@ -90,7 +93,13 @@ export async function GET(request: NextRequest) {
       isOAUserSubscribed = await checkUserSubscribe(userInfo.openid)
     }
 
-    const redirectRes = await upsertWeChatUser(tokenData, userInfo, request, isOAUserSubscribed)
+    const redirectRes = await upsertWeChatUser(
+      tokenData,
+      userInfo,
+      request,
+      isOAUserSubscribed,
+      flowType,
+    )
     redirectRes.cookies.set("wechat_oauth_state", "", { maxAge: 0, path: "/" })
     return redirectRes
   } catch (err) {
@@ -121,7 +130,10 @@ async function upsertWeChatUser(
   tokenData: WechatTokenResponse,
   wechatUser: WechatUserInfo,
   request: NextRequest,
-  isSubscribed = true
+  isSubscribed = true,
+  // 注册来源要区分「微信内授权」与「开放平台扫码」：两者的转化率差很多，
+  // 而这个信息只存在于调用方（state 前缀决定 flow），必须显式传进来
+  flowType: WechatFlowType = "open"
 ): Promise<NextResponse> {
   const loginUrl = new URL("/login", siteOrigin(request))
 
@@ -179,6 +191,15 @@ async function upsertWeChatUser(
       referredBy = partner?.id ?? null
     }
     const id = randomUUID()
+    // 来源：OA 内授权（微信内置浏览器自动跳转 snsapi_userinfo）与开放平台扫码
+    // 是两条不同的入口，报表里要分得开 —— 它们的转化率差异很大。
+    // sns/userinfo 不返回 subscribe_scene，所以这里只有渠道 + 这次请求的
+    // 首触/Referer/UA/IP。
+    const signup = signupFields({
+      channel: flowType === "oa" ? "wechat_oa_oauth" : "wechat_open_qr",
+      firstTouch: parseFirstTouch(request.cookies.get(FIRST_TOUCH_COOKIE)?.value),
+      request: requestSignupContext(request),
+    })
     await db.insert(users).values({
       id,
       wechatOpenid: wechatUser.openid,
@@ -190,9 +211,18 @@ async function upsertWeChatUser(
       wechatRefreshToken: encrypt(tokenData.refresh_token),
       wechatTokenExpiresAt: tokenExpiresAt,
       inviteCode: generateInviteCode(),
+      signupChannel: signup.signupChannel,
+      signupSource: signup.signupSource as never,
       // 未受邀不送会员，由 /api/trial/claim 主动领取；受邀注册即自动领取。
       // 见 db/migrations/00012_trial_claim.sql
       ...(referredBy ? trialGrantFields(new Date(), INVITE_REGISTER_DAYS) : {}),
+    })
+
+    await recordServerEvent({
+      event: "register_success",
+      userId: id,
+      properties: { channel: signup.signupChannel, referred: Boolean(referredBy) },
+      pageUrl: "/login",
     })
     const [newUser] = await db.select().from(users).where(eq(users.id, id)).limit(1)
     user = newUser
