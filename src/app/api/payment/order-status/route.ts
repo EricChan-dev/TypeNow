@@ -56,8 +56,13 @@ export async function GET(request: Request) {
             .limit(1)
           return NextResponse.json({ status: fresh?.status ?? "paid", plan: fresh?.plan ?? order.plan })
         }
-      } catch {
-        // WeChat query failed, rely on local status
+      } catch (err) {
+        // 这个 catch 的初衷是「微信查单失败就沿用本地状态」，但它同时也罩住了
+        // activateSubscription（含**佣金写入**）—— 一旦佣金写失败，错误会在这里
+        // 被静默吞掉，而且被误记成"查单失败"。佣金是合作方的钱，必须留痕。
+        // 好消息是这条路径不是唯一保障：微信的支付回调必然会到，
+        // 而 activateSubscription 的幂等分支会补一次佣金写入。
+        console.error("[payment/order-status] 查单或开通失败（若为佣金错误，将由回调重试补上）:", err)
       }
     }
 

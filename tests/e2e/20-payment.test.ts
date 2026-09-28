@@ -43,7 +43,12 @@ function successNotify(outTradeNo: string, transactionId = "WX-TX-0001") {
   }
 }
 
-/** 支付回调里的佣金是 fire-and-forget 写的，断言前需要等它落库。 */
+/**
+ * 等佣金落库。
+ *
+ * 佣金现在与订阅开通在**同一条 await 路径**上（不再是 fire-and-forget），
+ * 所以回调返回时理论上已经写好；这里保留轮询只是为了不让断言依赖这个时序。
+ */
 async function waitForCommission(
   partnerId: string,
   referredUserId: string,
@@ -345,10 +350,13 @@ describe("支付回调 /api/payment/notify", () => {
     expect(Number(diff?.d)).toBe(365 * 99)
   })
 
-  // triggerCommission 是 fire-and-forget（activateSubscription 里 void 调用），
-  // 所以这里用轮询等它落库，验证「被邀请人首单 → 邀请人拿到 50% 佣金」这条
-  // 最核心的分销口径在生产代码里真的跑通了，而不只是 lib 层的单元测试。
-  it("被邀请人首单支付成功后，邀请人拿到 50% 首单佣金（fire-and-forget 落库）", async () => {
+  // 验证「被邀请人首单 → 邀请人拿到 50% 佣金」这条最核心的分销口径在生产代码里
+  // 真的跑通了，而不只是 lib 层的单元测试。
+  //
+  // 注意：佣金写入**已经不再是 fire-and-forget**（那会让进程抖动直接吞掉合作方的
+  // 钱，而且没有重试路径）。现在它与订阅开通同一条 await 路径，失败会抛出去让
+  // 微信回调重试；幂等分支还会再补一次。
+  it("被邀请人首单支付成功后，邀请人拿到 50% 首单佣金", async () => {
     const { outTradeNo } = await insertPendingOrder(FIXTURE.userBuyer, "yearly", 19900)
     await notify(successNotify(outTradeNo, "WX-TX-COMMISSION"))
 
@@ -591,7 +599,11 @@ describe("支付回调的安全与佣金口径", () => {
     })
     expect(notifyRes.status).toBe(200)
 
-    // 佣金是 fire-and-forget 写的
+    // 这一条同时验证了「幂等分支补写佣金」是安全的：
+    // 重复回调会走到 activateSubscription 的幂等分支，而那里**也会**再调一次
+    // triggerCommission（为了修补"订阅已写、佣金没写"的历史失败）。它必须靠
+    // partner_commissions.order_id 的唯一索引被判成"已发过"而静默返回，
+    // 否则重复回调就会产生第二条佣金 —— 也就是给合作方多发钱。
     let row: Record<string, unknown> | undefined
     const deadline = Date.now() + 5000
     while (Date.now() < deadline && !row) {

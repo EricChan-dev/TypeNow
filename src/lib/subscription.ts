@@ -2,6 +2,7 @@ import { db } from "@/lib/db"
 import { subscriptions, users, partnerCommissions, paymentOrders as paymentOrdersTable } from "@/lib/db/schema"
 import { eq, and, lte, desc, ne, sql, count as sqlCount, type SQL } from "drizzle-orm"
 import { randomInt, randomUUID } from "crypto"
+import { CommissionWriteError, classifyCommissionWriteError } from "@/lib/commission-safety"
 
 function getPlanDurationDays(plan: "monthly" | "yearly" | "partner"): number {
   if (plan === "monthly") return 30
@@ -76,8 +77,14 @@ async function grantPartnerAccess(userId: string): Promise<void> {
       .where(and(eq(paymentOrdersTable.id, row.orderId), eq(paymentOrdersTable.status, "paid")))
       .limit(1)
     if (order?.amount) {
+      // 追溯扫描刻意保持"失败不阻断"：这是合伙人开通之后的补记，
+      // 让它把整笔开通事务炸掉更糟。但必须留下可检索的 CRITICAL 痕迹 ——
+      // 这一档没有重试路径，靠日志人工补。
       await triggerCommission(row.userId, row.orderId, order.amount).catch((e) =>
-        console.error("Retroactive commission failed:", e)
+        console.error(
+          `[Partner] CRITICAL: 追溯佣金写入失败，需人工补记 referredUserId=${row.userId} orderId=${row.orderId}`,
+          e,
+        )
       )
     }
   }
@@ -138,18 +145,28 @@ async function triggerCommission(
   const commissionAmount = Math.floor(orderAmount * rate)
   const availableAt = new Date(Date.now() + 15 * 24 * 60 * 60 * 1000)
 
-  await db.insert(partnerCommissions).values({
-    id: randomUUID(),
-    partnerId: partner.id,
-    orderId,
-    referredUserId: userId,
-    grossAmount: orderAmount,
-    commissionAmount,
-    rate: String(rate),
-    commissionType: isFirst ? "first" : "renewal",
-    status: "cooling",
-    availableAt,
-  })
+  try {
+    await db.insert(partnerCommissions).values({
+      id: randomUUID(),
+      partnerId: partner.id,
+      orderId,
+      referredUserId: userId,
+      grossAmount: orderAmount,
+      commissionAmount,
+      rate: String(rate),
+      commissionType: isFirst ? "first" : "renewal",
+      status: "cooling",
+      availableAt,
+    })
+  } catch (err) {
+    // 撞唯一键 idx_pc_order_id = 这一单已经结算过（微信重试回调必然走到），
+    // 属于正常的幂等结果，静默返回。
+    if (classifyCommissionWriteError(err) === "already_awarded") return
+    // 其余是真故障：**必须抛出去**。此前这里是 fire-and-forget，进程抖动就
+    // 让这笔佣金永久消失（没有重试、也没有定时任务补偿）。抛出去 → 回调 500
+    // → 微信重试 → activateSubscription 的幂等分支再补一次，即可自愈。
+    throw new CommissionWriteError(orderId, err)
+  }
 }
 
 export async function activateSubscription(
@@ -178,6 +195,13 @@ export async function activateSubscription(
           .update(users)
           .set({ isPro: 1, proExpires: dup.expiresAt })
           .where(eq(users.id, userId))
+      }
+      // 补一次佣金写入：上一次可能在"写入订阅"之后、"写入佣金"之前失败
+      // （佣金原先是 fire-and-forget，那条路径失败不会有任何重试）。
+      // 幂等由 partner_commissions.order_id 的唯一索引保证，重复调用安全；
+      // 若这次仍失败就继续抛，交给微信的回调重试再试。
+      if (paymentOrderId && orderAmount) {
+        await triggerCommission(userId, paymentOrderId, orderAmount)
       }
       console.warn(`[Subscription] Duplicate activation skipped for paymentOrder: ${paymentOrderId}`)
       return
@@ -211,11 +235,12 @@ export async function activateSubscription(
   if (plan === "partner") {
     await grantPartnerAccess(userId)
   }
-  // Trigger commission regardless of plan — partner plan also earns referral commission
+  // 佣金：与订阅开通同一条路径，且**必须 await**。
+  // 原来这里是 `void ... .catch(console.error)` —— 记账失败时用户已经拿到会员，
+  // 而合作方的佣金永久消失。现在让它抛出去：payment/notify 返回 500 → 微信重试
+  // → 上面的幂等分支再补一次，最终要么记上、要么在日志里留下明确的失败。
   if (paymentOrderId && orderAmount) {
-    void triggerCommission(userId, paymentOrderId, orderAmount).catch((e) =>
-      console.error("Commission trigger failed:", e)
-    )
+    await triggerCommission(userId, paymentOrderId, orderAmount)
   }
 
   return { plan, startsAt, expiresAt }
