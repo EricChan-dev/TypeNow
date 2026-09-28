@@ -127,6 +127,41 @@ let currentAudio: HTMLAudioElement | null = null
 let speakSeq = 0
 
 /**
+ * 「此刻是否有朗读在响」的订阅式状态。
+ *
+ * 为什么需要它：`globalSpeak` 返回的布尔值只说明**有没有开始播**——
+ * 有道路径里它是 `await audio.play()` 的产物，而 `play()` 在**开始播放**的
+ * 瞬间就 resolve，不等播完。于是「朗读/停止」按钮的 `playing` 状态会立刻复位，
+ * 停止分支只在 fetch 音频的那几百毫秒内可达 —— 用户看到的就是「长句念起来停不掉」，
+ * 只能退出页面。更糟的是它连带影响跟读评分：录音时参考音还在响，会被麦克风采进去，
+ * 评出虚高的分。
+ *
+ * 按仓库既有约定（见 lib/sfx.ts、lib/desktop-only.ts）用模块级订阅而不是 Context：
+ * 这类状态只有「开/关」两态，且要被练习页之外的地方读。
+ */
+let speaking = false
+const speakingListeners = new Set<() => void>()
+
+function setSpeaking(next: boolean): void {
+  if (speaking === next) return
+  speaking = next
+  for (const listener of speakingListeners) listener()
+}
+
+/** 当前是否有朗读在响。作为 useSyncExternalStore 的 getSnapshot。 */
+export function isSpeaking(): boolean {
+  return speaking
+}
+
+/** 订阅朗读状态变化；返回取消订阅函数（用法与 useSyncExternalStore 一致）。 */
+export function subscribeSpeaking(listener: () => void): () => void {
+  speakingListeners.add(listener)
+  return () => {
+    speakingListeners.delete(listener)
+  }
+}
+
+/**
  * 停掉当前正在播放的朗读（有道音频与系统语音都停）。
  *
  * 导出的目的：调用方在离开练习页/切课时可以主动收声，而不必等下一次朗读
@@ -147,6 +182,8 @@ export function stopSpeaking(): void {
   if (typeof window !== "undefined" && window.speechSynthesis) {
     window.speechSynthesis.cancel()
   }
+  // pause() 不会触发 ended，所以这里必须自己收尾，否则订阅方会一直以为还在响
+  setSpeaking(false)
 }
 
 let cachedVoices: SpeechSynthesisVoice[] = []
@@ -172,6 +209,16 @@ function speakWithBrowser(
   // 这里必须自己放弃，否则会把新的一句盖掉（同样是"两个人声"的来源之一）。
   requestAnimationFrame(() => {
     if (seq !== speakSeq) return
+    // 系统语音没有可靠的"开始播放"事件，只能按调用即视为在响；
+    // onend / onerror 收尾。若浏览器吞掉了这次 speak（Chrome 的已知怪癖），
+    // 状态会停在 true —— 由下一次 stopSpeaking() 或新的朗读纠正。
+    setSpeaking(true)
+    u.onend = () => {
+      if (seq === speakSeq) setSpeaking(false)
+    }
+    u.onerror = () => {
+      if (seq === speakSeq) setSpeaking(false)
+    }
     synth.speak(u)
   })
 }
@@ -236,16 +283,34 @@ export async function globalSpeak(
     stopSpeaking()
     const audio = new Audio(URL.createObjectURL(blob))
     currentAudio = audio
+    // 收尾必须带 `currentAudio === audio` 的判断：期间可能有更新的朗读把
+    // currentAudio 换成别的音频，那时这次的回调不该去改全局状态。
     audio.onended = () => {
       URL.revokeObjectURL(audio.src)
-      if (currentAudio === audio) currentAudio = null
+      if (currentAudio === audio) {
+        currentAudio = null
+        setSpeaking(false)
+      }
+    }
+    audio.onerror = () => {
+      if (currentAudio === audio) {
+        currentAudio = null
+        setSpeaking(false)
+      }
     }
     try {
       await audio.play()
+      // play() 在**开始播放**时即 resolve，所以这里标记"在响"，
+      // 由 onended 负责收尾 —— 这正是「停止」按钮能用的前提。
+      if (currentAudio === audio) setSpeaking(true)
       return true
     } catch {
       // 自动播放被拦。这**不是**「有道不可用」，所以不能顺手降级成系统语音 ——
       // 系统语音被同一条策略管着，一样发不出声，降级只会让失败更难被看见。
+      if (currentAudio === audio) {
+        currentAudio = null
+        setSpeaking(false)
+      }
       return false
     }
   } catch (err) {
