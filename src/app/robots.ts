@@ -34,7 +34,9 @@ export default function robots(): MetadataRoute.Robots {
         ],
       },
     ],
-    // 刻意**不**写 sitemap：仓库里还没有 sitemap.xml，引用一个 404 的地址
-    // 指给爬虫还不如不指。（要做的话是另加 src/app/sitemap.ts，届时再补这一行。）
+    // 此前这一行是刻意留空的：当时没有 sitemap.xml，指一个 404 的地址给爬虫
+    // 还不如不指。现在 sitemap 已由 src/app/sitemap.ts 生成，补上它，
+    // 爬虫就能直接发现全部公开页，不必靠外链慢慢爬（新站几乎没有外链，这是当前的瓶颈）。
+    sitemap: "https://typenow.cn/sitemap.xml",
   }
 }
