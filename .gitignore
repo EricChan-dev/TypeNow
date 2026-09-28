@@ -21,6 +21,9 @@
 # 工作区出现未跟踪文件而拒绝推送。
 /.next-staging/
 /.next-prev/
+# e2e 专用构建目录（CI 与本地干跑用 TYPENOW_DIST_DIR 指向它，
+# 目的是不让 dev 产物覆盖生产构建的 .next）。
+/.next-e2e/
 
 # production
 /build

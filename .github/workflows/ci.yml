@@ -1,0 +1,104 @@
+# 持续集成。
+#
+# 这个仓库此前**没有任何自动门禁**：54 个单测文件与 445 条 e2e 全靠人手跑。
+# 代价已经具体出现过两次，都不是"理论上可能出问题"：
+#
+#   · tests/e2e/80-engagement 里曾有一条用例名就叫「不需要练习记录」——
+#     把「钻石奖励完全不校验完成度」这个漏洞固化成了**预期行为**。
+#     修它时必须连测试一起改，因为没有别的东西会告诉你"这个断言本身是错的"。
+#   · 跟读评分请求的接口地址 openapi.youdao.com/speechevaluateapi 实测返回 404，
+#     即该功能自上线以来从未成功过一次 —— 而没有任何检查会发现这件事。
+#
+# 所以这里只做一件事：**推上去的代码必须通过类型检查、单测、生产构建与 e2e。**
+#
+# 为什么不跑 lint：`pnpm lint` 在 HEAD 上本就有大量既有报错（见 CLAUDE.md），
+# 直接当门禁会永远是红的。等存量清干净再纳入 —— 那本身是一件独立的活儿。
+# 评估自己引入的增量时用 `git show HEAD:<file> | npx eslint --stdin --stdin-filename <file>`
+# 对比同文件前后数量，不要看全局总数。
+
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+# 同一分支连续推送时取消仍在跑的旧任务：省额度，也避免旧结果误导判断
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+
+    # e2e 需要真实 MySQL。参数与本地 scripts/e2e/db-up.sh 保持一致
+    # （8.0 / +08:00 / utf8mb4_0900_ai_ci 的服务器默认排序规则）。
+    # 端口映射到 3399 是因为 tests/e2e/helpers/env.ts 的 TEST_DB_URL 用它，
+    # 且那里会断言「库名必须是 typenow_test、主机必须是本机」——
+    # 写错也不会误伤别处的库。
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: typenow_test_pw
+          MYSQL_DATABASE: typenow_test
+        ports:
+          - 3399:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -uroot -ptypenow_test_pw"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=30
+          --default-time-zone=+08:00
+          --character-set-server=utf8mb4
+          --collation-server=utf8mb4_0900_ai_ci
+          --max-connections=200
+
+    env:
+      # e2e 会 TRUNCATE 全部业务表，这个变量只指向 CI 内部的临时 MySQL
+      E2E_DATABASE_URL: mysql://root:typenow_test_pw@127.0.0.1:3399/typenow_test
+      E2E_PORT: "3311"
+      # 与生产构建产物分开，避免 e2e 的 dev 产物覆盖上一步 build 的结果
+      TYPENOW_DIST_DIR: .next-e2e
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: 安装依赖
+        run: pnpm install --frozen-lockfile
+
+      - name: 类型检查
+        run: npx tsc --noEmit
+
+      - name: 单元测试
+        run: pnpm test
+
+      - name: 生产构建
+        # 刻意用**假的 DATABASE_URL**：构建期不该连数据库（实测确实不连，
+        # 因此 CI 不需要任何生产凭据）。若哪天构建开始连库，这里会立刻失败，
+        # 那正是我们想知道的。
+        run: pnpm build
+        env:
+          DATABASE_URL: mysql://root:nope@127.0.0.1:1/nope
+          NEXT_PUBLIC_DB_CONFIGURED: "1"
+
+      - name: 准备 e2e 测试库
+        # 与本地 `pnpm e2e:db:up` 同一条路径：drizzle-kit push 读 src/lib/db/schema.ts，
+        # **不读** db/migrations。所以 schema.ts 与 migrations 必须同步改
+        # （见 db/README.md）—— 这一条只能靠人工保持一致，CI 帮不上。
+        run: npx drizzle-kit push --force
+        env:
+          DATABASE_URL: mysql://root:typenow_test_pw@127.0.0.1:3399/typenow_test
+
+      - name: 端到端测试
+        run: pnpm test:e2e
