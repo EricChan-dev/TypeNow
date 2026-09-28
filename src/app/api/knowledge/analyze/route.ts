@@ -10,8 +10,12 @@ import { DEEPSEEK_MODEL, DEEPSEEK_THINKING } from "@/lib/llm"
 
 // 每次 LLM 调用都是真金白银，必须给单用户额度上限：
 // 5 次/分钟防突发，20 次/小时作为实际成本上限。
-// 注意：checkRateLimit 的内存清理只保留 1 小时内的记录，
-// 因此更长的窗口（如每日额度）在此实现下不可靠，这里只用 ≤1 小时的窗口。
+//
+// 这里原本还写着「checkRateLimit 的内存清理只保留 1 小时内的记录，因此更长的
+// 窗口（如每日额度）不可靠」—— 那个限制**已经不存在了**：清理现在按每个桶
+// 自己的 windowMs 过滤（见 lib/rate-limit.ts 的 Bucket.windowMs），
+// 跟读评分与 AI 私教的每日额度就是这么实现的。
+// 现在仍用 ≤1 小时的窗口，只是因为对「解析一句」这个动作够用，不再是因为实现受限。
 const MAX_ANALYZE_PER_MINUTE = 5
 const MAX_ANALYZE_PER_HOUR = 20
 
