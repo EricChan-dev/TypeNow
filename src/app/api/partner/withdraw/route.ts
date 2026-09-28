@@ -4,7 +4,12 @@ import { partnerCommissions, withdrawalRequests, users } from "@/lib/db/schema"
 import { getSession } from "@/lib/auth/session"
 import { eq, and, inArray, lte } from "drizzle-orm"
 import { randomUUID } from "crypto"
-import { wechatTransferBatch, isWeChatPayConfigured } from "@/lib/wechat-pay"
+import { wechatTransferBatch, isWeChatPayConfigured, WechatPayError } from "@/lib/wechat-pay"
+import {
+  UNCERTAIN_WITHDRAW_MESSAGE,
+  UNCERTAIN_WITHDRAW_REASON,
+  classifyTransferFailure,
+} from "@/lib/withdraw-safety"
 
 const MIN_WITHDRAW = 5000 // ¥50 in fen
 
@@ -126,7 +131,10 @@ export async function POST(request: Request) {
   // 否则会出现"钱已打给对方、佣金又变回可提现"的重复打款。
   let transferDone = false
   try {
-    if (!isWeChatPayConfigured()) throw new Error("微信支付未配置，请联系管理员")
+    // 标成 not_sent：请求根本没发出去，钱一定没动，调用方可以安全回滚
+    if (!isWeChatPayConfigured()) {
+      throw new WechatPayError("微信支付未配置，请联系管理员", "not_sent")
+    }
 
     const { batchId } = await wechatTransferBatch({
       appId,
@@ -163,6 +171,36 @@ export async function POST(request: Request) {
         { error: "提现已提交，请稍后联系客服确认到账" },
         { status: 500 },
       )
+    }
+
+    // ── Step 2b: 结果未知 —— **绝不回滚** ───────────────────────────────────
+    // 超时/网络中断/5xx/429/应答验签失败都意味着"请求可能已经被微信处理"。
+    // 此时若把佣金退回 available，用户立刻能再提一次，而第一次可能已经到账：
+    // 那就是同一笔钱打款两次，且不可逆。
+    //
+    // 代价是这笔钱暂时卡住、需要人工核对 —— 相对重复打款，这个代价是值得的。
+    if (classifyTransferFailure(e) === "uncertain") {
+      console.error(
+        "[Withdraw] CRITICAL: 转账结果未知，佣金保持 withdrawn，待人工核对 outBatchNo=",
+        outBatchNo,
+      )
+      try {
+        // 落一条 processing 的流水（而不是 failed）：我们确实还不知道结果，
+        // 记成 failed 是假的。failReason 写清原因供人工核对。
+        await db.insert(withdrawalRequests).values({
+          id: requestId,
+          partnerId: session.userId,
+          amount: lockedAmount,
+          wechatOpenid: partner.wechatOpenid,
+          partnerTradeNo: outBatchNo,
+          status: "processing",
+          failReason: UNCERTAIN_WITHDRAW_REASON,
+        })
+      } catch (recordErr) {
+        // 连待核对的流水都写不进去，只能靠上面的 CRITICAL 日志
+        console.error("[Withdraw] CRITICAL: 待核对流水写入失败!", recordErr)
+      }
+      return NextResponse.json({ error: UNCERTAIN_WITHDRAW_MESSAGE }, { status: 500 })
     }
 
     // ── Step 3: Rollback — 只恢复本次占用的佣金行 ──────────────────────────

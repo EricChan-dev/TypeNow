@@ -134,36 +134,120 @@ export async function verifyWechatPayResponse(headers: Headers, body: string): P
   }
 }
 
+/**
+ * 微信支付请求失败。
+ *
+ * `kind` 是给**资金链路**用的：它决定调用方能不能安全地"当这件事没发生过"。
+ *
+ *   · `not_sent`  —— 请求根本没发出去（本地配置缺失、参数构建失败）。
+ *                    钱一定没动，可以安全回滚本地状态。
+ *   · `rejected`  —— 微信**明确拒绝**（4xx：参数错、权限不足、单号重复…）。
+ *                    钱一定没动，可以安全回滚。
+ *   · `uncertain` —— 结果未知（超时、网络中断、5xx、429、应答验签失败、
+ *                    2xx 但响应体读不出来）。请求**可能已经被处理**，
+ *                    调用方**绝不能**回滚本地状态，否则同一笔钱会被再操作一次。
+ *
+ * 这条区分是为提现链路加的。原来的实现把所有异常一视同仁地回滚佣金：
+ * 转账超时（结果未知）时佣金被退回"可提现"，用户立刻能再提一次，而第一次
+ * 可能已经到账 —— 那就是重复打款。资金动作里，"不知道结果"必须当成
+ * "可能已经发生"，而不是"没发生"。
+ */
+export class WechatPayError extends Error {
+  readonly kind: "not_sent" | "rejected" | "uncertain"
+  readonly status?: number
+
+  constructor(message: string, kind: "not_sent" | "rejected" | "uncertain", status?: number) {
+    super(message)
+    this.name = "WechatPayError"
+    this.kind = kind
+    this.status = status
+  }
+}
+
 async function wechatPayRequest(
   method: string,
   urlPath: string,
   body?: Record<string, unknown>
 ): Promise<Record<string, unknown>> {
-  const cfg = getConfig()
-  const bodyStr = body ? JSON.stringify(body) : ""
-  const headers: Record<string, string> = {
-    ...wechatPayBaseHeaders(),
-    "Content-Type": "application/json",
-    ...buildAuthHeader(method, urlPath, bodyStr),
+  // 配置与签名头都在**发请求之前**构建。这一步失败意味着请求根本没发出去，
+  // 钱一定没动 —— 标成 not_sent，调用方（提现）可以安全回滚。
+  let cfg: ReturnType<typeof getConfig>
+  let bodyStr: string
+  let headers: Record<string, string>
+  try {
+    cfg = getConfig()
+    bodyStr = body ? JSON.stringify(body) : ""
+    headers = {
+      ...wechatPayBaseHeaders(),
+      "Content-Type": "application/json",
+      ...buildAuthHeader(method, urlPath, bodyStr),
+    }
+  } catch (err) {
+    throw new WechatPayError(
+      `微信支付请求未能发出：${err instanceof Error ? err.message : String(err)}`,
+      "not_sent",
+    )
   }
 
   const url = `${cfg.sandbox ? WECHAT_PAY_HOST + "/sandboxnew" : WECHAT_PAY_HOST}${urlPath}`
-  const res = await fetch(url, { method, headers, body: bodyStr || undefined })
+
+  let res: Response
+  try {
+    res = await fetch(url, { method, headers, body: bodyStr || undefined })
+  } catch (err) {
+    // fetch 自己抛错 = 连响应都没拿到。请求是否已被微信处理**未知**。
+    throw new WechatPayError(
+      `微信支付请求未获得响应：${err instanceof Error ? err.message : String(err)}`,
+      "uncertain",
+    )
+  }
 
   // 先取原文再验签：签名是对**原始字节**算的，JSON.parse 之后再序列化会破坏它
-  const text = await res.text()
+  let text: string
+  try {
+    text = await res.text()
+  } catch (err) {
+    // 已经拿到 2xx 却读不出响应体：请求很可能已被处理，按"结果未知"抛出
+    throw new WechatPayError(
+      `读取微信支付应答失败：${err instanceof Error ? err.message : String(err)}`,
+      "uncertain",
+      res.status,
+    )
+  }
 
   if (!res.ok) {
-    throw new Error(`WeChat Pay error ${res.status}: ${text}`)
+    // 4xx 是微信明确拒绝（参数错、权限不足、单号重复…），钱没动；
+    // 5xx / 429 说明服务端可能正在处理，必须按"结果未知"对待。
+    const kind = res.status >= 500 || res.status === 429 ? "uncertain" : "rejected"
+    throw new WechatPayError(`WeChat Pay error ${res.status}: ${text}`, kind, res.status)
   }
 
   // 生产环境必须验签。开发环境的模拟分支在上面已经提前 return，走不到这里；
   // 沙箱环境（sandboxnew）不提供应答签名，故显式豁免，避免本地沙箱联调被卡死。
   if (!cfg.sandbox) {
-    await verifyWechatPayResponse(res.headers, text)
+    try {
+      await verifyWechatPayResponse(res.headers, text)
+    } catch (err) {
+      // 应答验签失败：响应内容不可信，但我们**确实发出了请求且拿到了 2xx** ——
+      // 请求很可能已被处理，因此按"结果未知"抛出，而不是当成失败。
+      throw new WechatPayError(
+        `微信支付应答验签失败：${err instanceof Error ? err.message : String(err)}`,
+        "uncertain",
+        res.status,
+      )
+    }
   }
 
-  return text ? (JSON.parse(text) as Record<string, unknown>) : {}
+  try {
+    return text ? (JSON.parse(text) as Record<string, unknown>) : {}
+  } catch (err) {
+    // 同样是 2xx 之后的解析失败：不能当成"没发生"
+    throw new WechatPayError(
+      `微信支付应答不是合法 JSON：${err instanceof Error ? err.message : String(err)}`,
+      "uncertain",
+      res.status,
+    )
+  }
 }
 
 export async function createNativeOrder(
