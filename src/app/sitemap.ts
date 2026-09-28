@@ -29,13 +29,17 @@ export default function sitemap(): MetadataRoute.Sitemap {
    *
    * 常见写法是 `lastModified: new Date()`，但那等于每次爬虫来都声称「所有页面刚改过」。
    * Google 明确表示只在 lastmod 稳定可信时才采信它，长期不可信的 lastmod 会让这个
-   * 字段被整体忽略 —— 比不写更糟。这 5 个页面是静态 TSX，运行时拿不到真实的
+   * 字段被整体忽略 —— 比不写更糟。这些页面是静态 TSX，运行时拿不到真实的
    * 文件修改时间（构建产物会被原子替换，见 next.config.ts 的 distDir 说明），
    * 所以宁可不写。将来若这些页改为从数据库或 CMS 取内容，再把内容自身的更新时间填进来。
    */
   return [
     { url: `${SITE_URL}/`, changeFrequency: "weekly", priority: 1 },
     { url: `${SITE_URL}/pricing`, changeFrequency: "weekly", priority: 0.8 },
+    // 功能介绍是转化路径上的关键页（用户在决定要不要付费前会找"到底能做什么"），
+    // 更新日志则是新站向爬虫证明"站点还活着"的信号，故都给到中等偏上优先级。
+    { url: `${SITE_URL}/features`, changeFrequency: "monthly", priority: 0.7 },
+    { url: `${SITE_URL}/releases`, changeFrequency: "weekly", priority: 0.5 },
     { url: `${SITE_URL}/terms`, changeFrequency: "yearly", priority: 0.3 },
     { url: `${SITE_URL}/privacy`, changeFrequency: "yearly", priority: 0.3 },
     { url: `${SITE_URL}/partner-agreement`, changeFrequency: "yearly", priority: 0.3 },

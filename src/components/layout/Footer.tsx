@@ -1,10 +1,14 @@
 import Link from "next/link"
 import Image from "next/image"
+// 页脚「产品」列：改版前是 4 个落地页锚点（首页/功能/评价/问题），
+// 现在指向独立的功能介绍页与更新日志页。"首页"去掉（logo 已承担该入口），
+// "功能"换成真正的内容页 —— 锚点只能看落地页那段概述，独立页才讲得清每条能力的边界。
 const productLinks = [
-  { href: "/#hero", label: "首页" },
-  { href: "/#features", label: "功能" },
-  { href: "/#testimonials", label: "评价" },
-  { href: "/#faq", label: "问题" },
+  { href: "/features", label: "功能介绍" },
+  { href: "/pricing", label: "会员方案" },
+  { href: "/releases", label: "版本更新" },
+  { href: "/#testimonials", label: "用户评价" },
+  { href: "/#faq", label: "常见问题" },
 ]
 
 const companyLinks = [

@@ -1,10 +1,19 @@
 import Link from "next/link"
+import type { Metadata } from "next"
 import { ArrowRight, Sparkles } from "lucide-react"
 import { Check, Minus } from "lucide-react"
 import { PricingClient } from "@/components/pricing/PricingClient"
 import { PricingFAQ } from "@/components/pricing/PricingFAQ"
 import { cn } from "@/lib/utils"
 import { COMPARISON_ROWS, NOT_APPLICABLE } from "@/lib/membership-benefits"
+
+// 此前价格页没有页面级 metadata，搜索结果里只能落到根 layout 的泛化标题，
+// 而这正是最需要被搜到的一页（"码上英语 多少钱"这类查询的落点）。
+export const metadata: Metadata = {
+  title: "会员方案与价格 - TypeNow",
+  description:
+    "免费与会员的差别一次看清：免费可试学每门课开头几句，会员解锁全部课程内容，并获得更高的跟读评分与 AI 助手额度。¥29/月、¥199/年、¥399 合伙人终身。",
+}
 
 /**
  * 对比表单元格。
@@ -111,6 +120,15 @@ export default function PricingPage() {
               目的是避免"买了月卡发现功能不够"的挫败感。 */}
           <p className="text-sm text-muted-foreground text-center">
             月度与年度会员的功能完全相同，只差时长与价格；合伙人会员额外获得推广权益。
+          </p>
+
+          {/* 指路功能介绍页：价格页说的是"能买到什么"，能力细节与已知边界在那里，
+              也省得用户在两张表之间猜。 */}
+          <p className="text-sm text-muted-foreground text-center">
+            想看完整的能力清单与已知边界？
+            <Link href="/features" className="ml-1 text-primary hover:underline">
+              查看功能介绍
+            </Link>
           </p>
         </div>
       </section>

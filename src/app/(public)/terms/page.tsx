@@ -19,8 +19,8 @@ export default function TermsPage() {
 
         <h2 className="text-lg font-semibold mt-8 mb-3">1. 服务说明</h2>
         <p>
-          TypeNow 是一款 AI 驱动的中译英打字练习平台，提供包括但不限于打字练习、智能复习、AI
-          强化训练等功能。我们保留随时修改、暂停或终止部分或全部服务的权利，且无需事先通知用户。
+          TypeNow 是一款 AI 驱动的中译英打字练习平台，提供包括但不限于打字练习、间隔重复复习、点词详情与 AI
+          句子讲解、学习统计等功能。我们保留随时修改、暂停或终止部分或全部服务的权利，且无需事先通知用户。
         </p>
 
         <h2 className="text-lg font-semibold mt-8 mb-3">2. 用户注册与账号</h2>

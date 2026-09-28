@@ -19,6 +19,15 @@ import { ScrollToSection } from "@/components/layout/ScrollToSection"
 import { ScrollToTop } from "@/components/layout/ScrollToTop"
 import { AuthLink } from "@/components/layout/AuthLink"
 import { PARTNER_BENEFITS, PRO_BENEFITS } from "@/lib/membership-benefits"
+import type { Metadata } from "next"
+
+// 落地页此前也没有页面级 metadata：搜索结果里显示的是根 layout 的泛化描述，
+// 而这里才是最该自己说话的一页。
+export const metadata: Metadata = {
+  title: "TypeNow 码上英语 - 中译英打字练习，把英语用出来",
+  description:
+    "看中文、敲英文，把「认识」练成「能用出来」。700+ 门课程、间隔重复复习、点词详情与 AI 句子讲解，每门课都可免费试学。",
+}
 
 // 会员权益不再各写一份：统一取自 lib/membership-benefits（唯一事实源）。
 // 改版前首页与价格页各写了一套，于是同一个功能在两边说法不同、且都含有
