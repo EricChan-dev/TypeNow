@@ -29,6 +29,41 @@ async function insertDiamondLog(userId: string, amount: number, type: string, da
   )
 }
 
+/**
+ * 造一个「已练完」的课时 / 课程：1 门已发布课程 + 1 个课时 + N 句，
+ * 并按需写入练习记录。
+ *
+ * 为什么非会员只练前 3 句就算「练完」：/api/courses/sentences 对非会员
+ * 只下发前 FREE_TRIAL_SENTENCES 句，完成门槛必须与下发口径同源
+ * （见 src/lib/reward-rules.ts）。insertUser 默认 isPro=0，故默认门槛是 3。
+ *
+ * 这是 lesson_complete / course_complete 能领到奖的**唯一**合法前态 ——
+ * 此前这两个奖励不校验 refId 与练习记录，随机字符串即可无限领奖。
+ */
+async function seedCompletedLesson(
+  userId: string,
+  opts: { sentences?: number; practiced?: number } = {}
+): Promise<{ courseId: string; lessonId: string; sentenceIds: string[] }> {
+  const { courseId } = await insertCourse({ title: "e2e 奖励课程" })
+  const { lessonId } = await insertLesson(courseId)
+  const total = opts.sentences ?? 5
+  const sentenceIds: string[] = []
+  for (let i = 0; i < total; i++) {
+    const { sentenceId } = await insertSentence({
+      lessonId,
+      sortOrder: i,
+      chinese: `这是第 ${i} 句中文题干。`,
+      english: `This is sentence number ${i}.`,
+    })
+    sentenceIds.push(sentenceId)
+  }
+  const practiced = opts.practiced ?? Math.min(total, 3)
+  for (let i = 0; i < practiced; i++) {
+    await insertPractice(userId, sentenceIds[i])
+  }
+  return { courseId, lessonId, sentenceIds }
+}
+
 beforeEach(async () => {
   await seedFixtures()
 })
@@ -198,46 +233,119 @@ describe("钻石发放 /api/diamonds/earn", () => {
     expect(Number(log?.amount)).toBe(9)
   })
 
-  it("lesson_complete → 30；course_complete → 100（不需要练习记录）", async () => {
+  it("lesson_complete → 30；course_complete → 100（须真实练完）", async () => {
     const userId = await insertUser({ name: "课时课程奖励" })
     const api = ApiClient.asUser(userId)
+    const { courseId, lessonId } = await seedCompletedLesson(userId)
 
     const lesson = await api.post<{ earned: number; totalDiamonds: number }>("/api/diamonds/earn", {
       type: "lesson_complete",
-      refId: "lesson-1",
+      refId: lessonId,
     })
     expect(lesson.body.earned).toBe(30)
 
     const course = await api.post<{ earned: number; totalDiamonds: number }>("/api/diamonds/earn", {
       type: "course_complete",
-      refId: "course-1",
+      refId: courseId,
     })
     expect(course.body.earned).toBe(100)
     expect(course.body.totalDiamonds).toBe(130)
   })
 
+  it("回归：不存在的 refId 一律 403，不发钻石", async () => {
+    const userId = await insertUser({ name: "伪造refId" })
+    const api = ApiClient.asUser(userId)
+
+    const lesson = await api.post("/api/diamonds/earn", {
+      type: "lesson_complete",
+      refId: "lesson-1",
+    })
+    expect(lesson.status).toBe(403)
+
+    const course = await api.post("/api/diamonds/earn", {
+      type: "course_complete",
+      refId: "course-1",
+    })
+    expect(course.status).toBe(403)
+
+    const user = await one<{ diamonds: number }>("SELECT diamonds FROM users WHERE id = ?", [userId])
+    expect(Number(user?.diamonds)).toBe(0)
+  })
+
+  it("回归：课时/课程为真但一句都没练 → 403（原漏洞可无限领奖）", async () => {
+    const userId = await insertUser({ name: "零练习领奖" })
+    const api = ApiClient.asUser(userId)
+    const { courseId, lessonId } = await seedCompletedLesson(userId, { practiced: 0 })
+
+    const lesson = await api.post("/api/diamonds/earn", {
+      type: "lesson_complete",
+      refId: lessonId,
+    })
+    expect(lesson.status).toBe(403)
+
+    const course = await api.post("/api/diamonds/earn", {
+      type: "course_complete",
+      refId: courseId,
+    })
+    expect(course.status).toBe(403)
+
+    // 换一串随机 refId 反复领，也一颗都拿不到：去重键含 refId，
+    // 若 refId 不被校验，这里每一次都会成功（原漏洞的形状）。
+    for (let i = 0; i < 5; i++) {
+      await api.post("/api/diamonds/earn", { type: "lesson_complete", refId: `rand-${i}` })
+      await api.post("/api/diamonds/earn", { type: "course_complete", refId: `rand-c-${i}` })
+    }
+
+    const user = await one<{ diamonds: number }>("SELECT diamonds FROM users WHERE id = ?", [userId])
+    expect(Number(user?.diamonds)).toBe(0)
+  })
+
+  it("回归：课时未练满（会员口径）→ 403；练满 → 通过", async () => {
+    const userId = await insertUser({ name: "会员练满", isPro: 1, proExpires: new Date(Date.now() + 86400_000) })
+    const api = ApiClient.asUser(userId)
+    // 会员门槛是整课 5 句（非会员才是 3 句），先只练 3 句
+    const { lessonId, sentenceIds } = await seedCompletedLesson(userId, { sentences: 5, practiced: 3 })
+
+    const short = await api.post("/api/diamonds/earn", {
+      type: "lesson_complete",
+      refId: lessonId,
+    })
+    expect(short.status).toBe(403)
+
+    // 补满剩下 2 句后才可领
+    await insertPractice(userId, sentenceIds[3])
+    await insertPractice(userId, sentenceIds[4])
+
+    const full = await api.post<{ earned: number }>("/api/diamonds/earn", {
+      type: "lesson_complete",
+      refId: lessonId,
+    })
+    expect(full.body.earned).toBe(30)
+  })
+
   it("同一天同一 refId 重复领取 → alreadyClaimed，钻石不重复增加", async () => {
     const userId = await insertUser({ name: "重复领取" })
     const api = ApiClient.asUser(userId)
+    const { lessonId } = await seedCompletedLesson(userId)
 
     const first = await api.post<{ earned: number; alreadyClaimed: boolean }>("/api/diamonds/earn", {
       type: "lesson_complete",
-      refId: "lesson-dup",
+      refId: lessonId,
     })
     expect(first.body.earned).toBe(30)
     expect(first.body.alreadyClaimed).toBe(false)
 
     const second = await api.post<{ earned: number; alreadyClaimed: boolean; totalDiamonds: number }>(
       "/api/diamonds/earn",
-      { type: "lesson_complete", refId: "lesson-dup" }
+      { type: "lesson_complete", refId: lessonId }
     )
     expect(second.body.earned).toBe(0)
     expect(second.body.alreadyClaimed).toBe(true)
     expect(second.body.totalDiamonds).toBe(30)
 
     const cnt = await one<{ c: number }>(
-      "SELECT COUNT(*) AS c FROM diamond_logs WHERE user_id = ? AND ref_id = 'lesson-dup'",
-      [userId]
+      "SELECT COUNT(*) AS c FROM diamond_logs WHERE user_id = ? AND ref_id = ?",
+      [userId, lessonId]
     )
     expect(Number(cnt?.c)).toBe(1)
   })
@@ -245,12 +353,13 @@ describe("钻石发放 /api/diamonds/earn", () => {
   it("并发领取同一 refId：只能成功一次", async () => {
     const userId = await insertUser({ name: "并发领取" })
     const api = ApiClient.asUser(userId)
+    const { courseId } = await seedCompletedLesson(userId)
 
     const results = await Promise.all(
       Array.from({ length: 5 }, () =>
         api.post<{ earned: number; alreadyClaimed: boolean }>("/api/diamonds/earn", {
           type: "course_complete",
-          refId: "course-race",
+          refId: courseId,
         })
       )
     )
@@ -264,25 +373,30 @@ describe("钻石发放 /api/diamonds/earn", () => {
   it("durationSeconds 非法一律落 NULL，超长被截断到 24 小时", async () => {
     const userId = await insertUser({ name: "时长归一" })
     const api = ApiClient.asUser(userId)
+    // 两门各自已练完的课程：durationSeconds 是每次领取独立写入的字段
+    const first = await seedCompletedLesson(userId)
+    const second = await seedCompletedLesson(userId)
 
     const invalid = await api.post("/api/diamonds/earn", {
       type: "course_complete",
-      refId: "dur-bad",
+      refId: first.courseId,
       durationSeconds: "abc",
     })
     expect(invalid.status).toBe(200)
     const bad = await one<{ duration_seconds: number | null }>(
-      "SELECT duration_seconds FROM diamond_logs WHERE ref_id = 'dur-bad'"
+      "SELECT duration_seconds FROM diamond_logs WHERE ref_id = ?",
+      [first.courseId]
     )
     expect(bad?.duration_seconds).toBeNull()
 
     await api.post("/api/diamonds/earn", {
       type: "course_complete",
-      refId: "dur-long",
+      refId: second.courseId,
       durationSeconds: 999_999,
     })
     const long = await one<{ duration_seconds: number }>(
-      "SELECT duration_seconds FROM diamond_logs WHERE ref_id = 'dur-long'"
+      "SELECT duration_seconds FROM diamond_logs WHERE ref_id = ?",
+      [second.courseId]
     )
     expect(Number(long?.duration_seconds)).toBe(24 * 60 * 60)
   })
@@ -291,10 +405,11 @@ describe("钻石发放 /api/diamonds/earn", () => {
     const userId = await insertUser({ name: "今日汇总" })
     await insertDiamondLog(userId, 7, "sentence", new Date(Date.now() - 36 * 3600_000)) // 昨天
     await insertDiamondLog(userId, 3, "sentence", new Date())
+    const { courseId } = await seedCompletedLesson(userId)
 
     const res = await ApiClient.asUser(userId).post<{ todayDiamonds: number }>("/api/diamonds/earn", {
       type: "course_complete",
-      refId: "summary",
+      refId: courseId,
     })
     expect(res.body.todayDiamonds).toBe(103)
   })

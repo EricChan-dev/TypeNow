@@ -4,6 +4,22 @@ import { db } from "@/lib/db"
 import { ttsCache } from "@/lib/db/schema"
 import { eq } from "drizzle-orm"
 import { getSession } from "@/lib/auth/session"
+import { checkRateLimit, getClientIP } from "@/lib/rate-limit"
+
+/**
+ * 有道 TTS 按调用计费，必须给「真正会产生费用的调用」封顶。
+ *
+ * 为什么限流只卡缓存未命中：tts_cache 命中时零成本、也不该限制用户重听，
+ * 所以播放已缓存句子不计次；而随机文本必然穿透缓存，每次都打到有道 ——
+ * 那正是要卡的关口。
+ *
+ * 取值的取舍：学生看完一句就播一次，一小时内遇到 120 条**全新**句子
+ * （约 9 节课）已属重度使用，故用户级给到 120；IP 级 300 用来兜住
+ * 「批量注册小号绕开用户级」的情况（同一出口 IP 的正常用户极少）。
+ * 两个数都是初始值，上线后应按有道控制台的真实调用曲线回调。
+ */
+const MAX_TTS_PER_USER_HOUR = 120
+const MAX_TTS_PER_IP_HOUR = 300
 
 function truncateInput(q: string): string {
   if (q.length <= 20) return q
@@ -61,6 +77,34 @@ export async function POST(request: Request) {
 
   if (!appKey || !appSecret) {
     return NextResponse.json({ error: "有道API未配置" }, { status: 500 })
+  }
+
+  // 限流刻意放在**缓存命中之后、有道调用之前**（理由见顶部常量注释）。
+  // 也刻意放在 key 检查之后：没配 key 时根本没产生调用，不该扣用户额度。
+  const userLimit = checkRateLimit(
+    "youdao-tts-user",
+    session.userId,
+    MAX_TTS_PER_USER_HOUR,
+    3600_000,
+  )
+  if (!userLimit.allowed) {
+    return NextResponse.json(
+      { error: `语音合成次数已达上限，请${userLimit.retryAfter}秒后重试` },
+      { status: 429 },
+    )
+  }
+
+  const ipLimit = checkRateLimit(
+    "youdao-tts-ip",
+    getClientIP(request),
+    MAX_TTS_PER_IP_HOUR,
+    3600_000,
+  )
+  if (!ipLimit.allowed) {
+    return NextResponse.json(
+      { error: `语音合成次数已达上限，请${ipLimit.retryAfter}秒后重试` },
+      { status: 429 },
+    )
   }
 
   const salt = randomUUID()

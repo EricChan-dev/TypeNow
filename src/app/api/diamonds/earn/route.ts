@@ -4,6 +4,9 @@ import { db } from "@/lib/db"
 import { diamondLogs, practiceRecords, users } from "@/lib/db/schema"
 import { eq, and, desc, sql } from "drizzle-orm"
 import { toShanghaiDateStr } from "@/lib/practice-stats"
+import { isProActive } from "@/lib/subscription"
+import { COURSE_COMPLETE_REWARD, LESSON_COMPLETE_REWARD } from "@/lib/reward-rules"
+import { isCourseRewardEligible, isLessonRewardEligible } from "@/lib/reward-eligibility"
 
 const EARN_TYPES = ["sentence", "lesson_complete", "course_complete"] as const
 type EarnType = (typeof EARN_TYPES)[number]
@@ -30,7 +33,10 @@ const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
 
 /**
  * 奖励完全由服务端权威数据推导：
- *   - lesson_complete / course_complete 是固定额度；
+ *   - lesson_complete / course_complete 额度固定，但**必须先通过完成度校验**：
+ *     refId 必须是真实存在、已发布的课时 / 课程，且本人确实练完
+ *     （见 lib/reward-rules 与 lib/reward-eligibility）。此前这两条都不校验，
+ *     而去重键含 refId，于是随机 refId 即可无限领奖 —— 等于没有去重；
  *   - sentence 的 perfect 与连击 streak 全部来自 practice_records。
  * 请求体里的 perfect / streak 一律不采信（旧实现直接采信，可无限伪造）。
  */
@@ -101,12 +107,31 @@ export async function POST(request: NextRequest) {
       return Math.max(1, streak)
     }
 
+    // 会员身份决定「练完一节课」的门槛：非会员在 /api/courses/sentences 只能拿到
+    // 每课前 FREE_TRIAL_SENTENCES 句，门槛必须按同一口径推导，否则练完也领不到
+    // （口径同源见 lib/reward-rules 顶部注释）。
+    const [viewer] = await database
+      .select({ isPro: users.isPro, proExpires: users.proExpires })
+      .from(users)
+      .where(eq(users.id, userId))
+      .limit(1)
+    const isPro = isProActive(viewer)
+
     let earned: number
     let streak = 0
     if (type === "lesson_complete") {
-      earned = 30
+      // refId 必须是真实课时，且本人已练完该课的下发句数 —— 两条缺一不可。
+      const eligibility = await isLessonRewardEligible(userId, refId, isPro)
+      if (!eligibility.ok) {
+        return NextResponse.json({ error: eligibility.reason ?? "尚不满足领取条件" }, { status: 403 })
+      }
+      earned = LESSON_COMPLETE_REWARD
     } else if (type === "course_complete") {
-      earned = 100
+      const eligibility = await isCourseRewardEligible(userId, refId, isPro)
+      if (!eligibility.ok) {
+        return NextResponse.json({ error: eligibility.reason ?? "尚不满足领取条件" }, { status: 403 })
+      }
+      earned = COURSE_COMPLETE_REWARD
     } else {
       // sentence：必须存在本人对该句的真实练习记录才发放奖励。
       let attempt = await loadAttempt()

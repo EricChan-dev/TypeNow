@@ -1,7 +1,9 @@
 import { NextRequest, NextResponse } from "next/server"
 import { getSession } from "@/lib/auth/session"
 import { db } from "@/lib/db"
-import { practiceRecords } from "@/lib/db/schema"
+import { courses, lessons, practiceRecords, sentences } from "@/lib/db/schema"
+import { and, eq } from "drizzle-orm"
+import { aliveCourse, aliveLesson, aliveSentence } from "@/lib/soft-delete"
 import { scoreForMistakes } from "@/lib/practice-score"
 
 /**
@@ -36,6 +38,29 @@ export async function POST(request: NextRequest) {
     const { sentenceId, userInput, mistakes = 0, isReview = false } = body
     if (!sentenceId) {
       return NextResponse.json({ error: "sentenceId required" }, { status: 400 })
+    }
+
+    // sentenceId 必须是真实存在、且用户真的可能练到的句子（已发布课程下、未软删除）。
+    // 此前只判非空，于是任意字符串都能落成一条练习记录：既产出孤儿行
+    // （生产库无外键，见 docs/TODO.md），又为 /api/diamonds/earn 的
+    // sentence 奖励提供可凭空制造的前置记录。
+    const [target] = await db
+      .select({ id: sentences.id })
+      .from(sentences)
+      .innerJoin(lessons, eq(lessons.id, sentences.lessonId))
+      .innerJoin(courses, eq(courses.id, lessons.courseId))
+      .where(
+        and(
+          eq(sentences.id, sentenceId),
+          aliveSentence,
+          aliveLesson,
+          aliveCourse,
+          eq(courses.isPublished, 1),
+        ),
+      )
+      .limit(1)
+    if (!target) {
+      return NextResponse.json({ error: "句子不存在或不可练习" }, { status: 404 })
     }
 
     const normalizedMistakes = Number.isFinite(Number(mistakes))
