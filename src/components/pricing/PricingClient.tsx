@@ -5,25 +5,14 @@ import { useRouter } from "next/navigation"
 import { PricingCard } from "@/components/pricing/PricingCard"
 import { CheckoutModal } from "@/components/payment/CheckoutModal"
 import { trackSubscribeClick } from "@/lib/analytics"
+import { PARTNER_BENEFITS, PRO_BENEFITS } from "@/lib/membership-benefits"
 
-const proFeatures = [
-  "多种练习模式，听说读写全覆盖",
-  "AI 口语评测，音素级纠音，越练越准",
-  "AI 私教助手，不懂随时问",
-  "FSRS 智能复习，学了就忘不掉",
-  "自定义上传内容，考题歌词都能练",
-  "深度统计 & 学习报告导出",
-  "会员专属徽章",
-]
+// 权益清单取自唯一事实源（lib/membership-benefits），不在组件里另写一份。
+// 改版前这里是硬编码的 7 条，其中 4 条在代码里根本不存在、
+// 另 3 条则是"人人都有"却被当成会员专属 —— 与价格页对比表、首页又各不相同。
+const proFeatures = PRO_BENEFITS.map((b) => b.claim)
 
-const partnerFeatures = [
-  "永久免费解锁全部会员功能",
-  "生成专属邀请链接 / 二维码 / 海报",
-  "90天窗口内首次付款赚取 50% 佣金",
-  "90天窗口内每次续费赚取 30% 佣金",
-  "¥50 起随时提现至微信零钱",
-  "实时数据看板：邀请数、转化率、收益",
-]
+const partnerFeatures = PARTNER_BENEFITS.map((b) => b.claim)
 
 export function PricingClient() {
   const router = useRouter()
@@ -66,7 +55,7 @@ export function PricingClient() {
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6 w-full">
         <PricingCard
           name="月度会员"
-          description="解锁全部功能，高效提升英语能力"
+          description="解锁全部课程与更高额度"
           price="¥29"
           period="/月"
           features={proFeatures}

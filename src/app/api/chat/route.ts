@@ -5,6 +5,10 @@ import { diamondLogs, users } from "@/lib/db/schema"
 import { eq, and, gte, sql } from "drizzle-orm"
 import { affectedRows } from "@/lib/db/affected-rows"
 import { DEEPSEEK_MODEL, DEEPSEEK_THINKING } from "@/lib/llm"
+import { checkRateLimit } from "@/lib/rate-limit"
+import { isProActive } from "@/lib/subscription"
+import { toShanghaiDateStr } from "@/lib/practice-stats"
+import { DAY_MS, PRO_AI_CHAT_PER_DAY } from "@/lib/membership-benefits"
 
 const COST = 5
 /** 单条消息（含历史）字符上限，防止超大提示词造成成本失控。 */
@@ -65,19 +69,40 @@ export async function POST(request: Request) {
   const apiKey = process.env.DEEPSEEK_API_KEY
   if (!apiKey) return NextResponse.json({ error: "AI 服务未配置" }, { status: 500 })
 
+  // 会员每天 N 次免费提问（数值与价格页文案同源，见 lib/membership-benefits）。
+  // 必须在扣费**之前**判断：命中免费额度就不扣钻石。key 带上海日历日 → 跨天重置，
+  // 窗口取一天，且依赖 rate-limit 的「按桶窗口清理」才不会被截短成 1 小时。
+  const [viewer] = await database
+    .select({ isPro: users.isPro, proExpires: users.proExpires })
+    .from(users)
+    .where(eq(users.id, userId))
+    .limit(1)
+  const isPro = isProActive(viewer)
+  const usedFreeQuota =
+    isPro &&
+    checkRateLimit(
+      "chat-member-free-daily",
+      `${userId}:${toShanghaiDateStr()}`,
+      PRO_AI_CHAT_PER_DAY,
+      DAY_MS,
+    ).allowed
+
   // 先原子扣费：余额判断与扣减在同一条 UPDATE 里完成，杜绝并发请求超额消费
   // （原实现先读余额、LLM 返回后才扣减，中间隔着网络调用，可被并发绕过）。
-  const deducted = await database.transaction(async (tx) => {
-    const result = await tx
-      .update(users)
-      .set({ diamonds: sql`${users.diamonds} - ${COST}` })
-      .where(and(eq(users.id, userId), gte(users.diamonds, COST)))
+  // 命中会员免费额度时跳过扣费：此时视为「已通过」，且后续失败**不**退款。
+  const deducted = usedFreeQuota
+    ? true
+    : await database.transaction(async (tx) => {
+        const result = await tx
+          .update(users)
+          .set({ diamonds: sql`${users.diamonds} - ${COST}` })
+          .where(and(eq(users.id, userId), gte(users.diamonds, COST)))
 
-    if (affectedRows(result) === 0) return false
+        if (affectedRows(result) === 0) return false
 
-    await tx.insert(diamondLogs).values({ userId, amount: -COST, type: "chat" })
-    return true
-  })
+        await tx.insert(diamondLogs).values({ userId, amount: -COST, type: "chat" })
+        return true
+      })
 
   if (!deducted) {
     const [row] = await database
@@ -114,6 +139,12 @@ export async function POST(request: Request) {
     const aiData = await aiRes.json()
     reply = aiData.choices?.[0]?.message?.content ?? ""
   } catch (err) {
+    // 只有真的扣过费才需要退还。命中会员免费额度时一分钱都没扣，
+    // 无条件退款会凭空给用户加 COST 颗钻石（典型的"越失败越赚"）。
+    if (usedFreeQuota) {
+      console.error("[chat] LLM 调用失败（本次走会员免费额度，无需退费）:", err)
+      return NextResponse.json({ error: "AI 服务暂时不可用" }, { status: 503 })
+    }
     console.error("[chat] LLM 调用失败，退还钻石:", err)
     try {
       await database.transaction(async (tx) => {

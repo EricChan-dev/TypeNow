@@ -2,10 +2,20 @@ import { NextResponse } from "next/server"
 import { createHash, randomUUID } from "crypto"
 import { getSession } from "@/lib/auth/session"
 import { checkRateLimit, getClientIP } from "@/lib/rate-limit"
+import { db } from "@/lib/db"
+import { users } from "@/lib/db/schema"
+import { eq } from "drizzle-orm"
+import { isProActive } from "@/lib/subscription"
+import { toShanghaiDateStr } from "@/lib/practice-stats"
+import {
+  DAY_MS,
+  FREE_PRONUNCIATION_PER_DAY,
+  PRO_PRONUNCIATION_PER_DAY,
+} from "@/lib/membership-benefits"
 
 // 有道语音评测按调用计费，必须限制调用量与输入体积。
-// 单用户 30 次/小时；同一 IP 再兜一层 60 次/小时，防止批量注册账号绕过。
-const MAX_EVALUATE_PER_USER_HOUR = 30
+// 每日额度按会员身份区分（数值与价格页文案同源，见 lib/membership-benefits）；
+// 同一 IP 再兜一层 60 次/小时，防止批量注册账号绕过每日额度。
 const MAX_EVALUATE_PER_IP_HOUR = 60
 // 评测对象是句子，500 字符足够；音频按 16kHz wav 30 秒估算 base64 体积上限。
 const MAX_TEXT_LENGTH = 500
@@ -42,15 +52,40 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "audio 数据过大" }, { status: 413 })
   }
 
+  // 先查 key：未配置时根本没产生调用，不该先扣掉用户当天的额度
+  // （顺序与 tts 路由一致，也与 knowledge/analyze 的既有约定一致）。
+  const appKey = process.env.YOUDAO_APP_KEY
+  const appSecret = process.env.YOUDAO_APP_SECRET
+  if (!appKey || !appSecret) {
+    return NextResponse.json({ error: "有道API未配置" }, { status: 500 })
+  }
+
+  // 每日额度按会员身份区分。key 里带上海日历日 —— 跨天即换新桶，额度自然重置；
+  // 窗口取一天，且必须配合 rate-limit 的「按桶窗口清理」才不会被截短成 1 小时。
+  const [viewer] = db
+    ? await db
+        .select({ isPro: users.isPro, proExpires: users.proExpires })
+        .from(users)
+        .where(eq(users.id, session.userId))
+        .limit(1)
+    : []
+  const isPro = isProActive(viewer)
+  const dailyQuota = isPro ? PRO_PRONUNCIATION_PER_DAY : FREE_PRONUNCIATION_PER_DAY
+
   const userLimit = checkRateLimit(
-    "youdao-evaluate-user",
-    session.userId,
-    MAX_EVALUATE_PER_USER_HOUR,
-    3600_000,
+    "youdao-evaluate-user-daily",
+    `${session.userId}:${toShanghaiDateStr()}`,
+    dailyQuota,
+    DAY_MS,
   )
   if (!userLimit.allowed) {
     return NextResponse.json(
-      { error: `评测次数已达上限，请${userLimit.retryAfter}秒后重试` },
+      {
+        error: isPro
+          ? `今日评测次数已用完（会员每天 ${PRO_PRONUNCIATION_PER_DAY} 次），请明天再来`
+          : `今日免费评测次数已用完（每天 ${FREE_PRONUNCIATION_PER_DAY} 次），开通会员可提升至每天 ${PRO_PRONUNCIATION_PER_DAY} 次`,
+        code: "quota_exhausted",
+      },
       { status: 429 },
     )
   }
@@ -66,12 +101,6 @@ export async function POST(request: Request) {
       { error: `评测次数已达上限，请${ipLimit.retryAfter}秒后重试` },
       { status: 429 },
     )
-  }
-
-  const appKey = process.env.YOUDAO_APP_KEY
-  const appSecret = process.env.YOUDAO_APP_SECRET
-  if (!appKey || !appSecret) {
-    return NextResponse.json({ error: "有道API未配置" }, { status: 500 })
   }
 
   const salt = randomUUID()

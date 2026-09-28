@@ -3,28 +3,36 @@ import { ArrowRight, Sparkles } from "lucide-react"
 import { Check, Minus } from "lucide-react"
 import { PricingClient } from "@/components/pricing/PricingClient"
 import { PricingFAQ } from "@/components/pricing/PricingFAQ"
+import { cn } from "@/lib/utils"
+import { COMPARISON_ROWS, NOT_APPLICABLE } from "@/lib/membership-benefits"
 
-interface ComparisonRow {
-  feature: string
-  monthly: string
-  yearly: string
-  partner: string
+/**
+ * 对比表单元格。
+ *
+ * 表格数据全部来自 lib/membership-benefits 的 COMPARISON_ROWS（唯一事实源），
+ * 这里只负责把 `-` / `✓` 两种约定值渲染成图形。
+ */
+function ComparisonCell({ value, tone }: { value: string; tone?: string }) {
+  if (value === NOT_APPLICABLE) {
+    return (
+      <div className="text-sm text-center self-center">
+        <Minus className="h-4 w-4 inline text-muted-foreground/40" />
+      </div>
+    )
+  }
+  if (value === "✓") {
+    return (
+      <div className="text-sm text-center self-center">
+        <Check className={cn("h-4 w-4 inline", tone)} />
+      </div>
+    )
+  }
+  return (
+    <div className="text-sm text-center self-center">
+      <span className={cn("font-semibold", tone)}>{value}</span>
+    </div>
+  )
 }
-
-const comparisonRows: ComparisonRow[] = [
-  { feature: "打字练习", monthly: "无限", yearly: "无限", partner: "无限" },
-  { feature: "开放场景", monthly: "全部 6 个", yearly: "全部 6 个", partner: "全部 6 个" },
-  { feature: "智能复习", monthly: "全部历史，无上限", yearly: "全部历史，无上限", partner: "全部历史，无上限" },
-  { feature: "AI 强化", monthly: "无限次", yearly: "无限次", partner: "无限次" },
-  { feature: "学习统计", monthly: "深度统计 + 报告导出", yearly: "深度统计 + 报告导出", partner: "深度统计 + 报告导出" },
-  { feature: "会员有效期", monthly: "按月", yearly: "按年", partner: "永久终身" },
-  { feature: "专属邀请链接", monthly: "-", yearly: "-", partner: "✓" },
-  { feature: "分享海报 / 二维码", monthly: "-", yearly: "-", partner: "✓" },
-  { feature: "首次付款佣金（90天内）", monthly: "-", yearly: "-", partner: "50%" },
-  { feature: "续费佣金（90天内）", monthly: "-", yearly: "-", partner: "30%" },
-  { feature: "随时提现", monthly: "-", yearly: "-", partner: "¥50 起" },
-  { feature: "价格", monthly: "¥29/月", yearly: "¥199/年", partner: "¥399 终身" },
-]
 
 export default function PricingPage() {
   return (
@@ -66,47 +74,44 @@ export default function PricingPage() {
           </h2>
 
           <div className="rounded-2xl bg-card border border-border overflow-hidden">
-            <div className="grid grid-cols-4 px-8 py-5 border-b border-border">
-              <div className="text-sm font-bold text-muted-foreground">功能</div>
-              <div className="text-sm font-bold text-muted-foreground text-center">月度会员</div>
-              <div className="text-sm font-bold text-accent text-center">年度会员</div>
-              <div className="text-sm font-bold text-amber-500 text-center">合伙人会员</div>
-            </div>
+            {/* 5 列在手机上会挤，允许横向滚动（原来 4 列时就已经溢出，只是没人注意） */}
+            <div className="overflow-x-auto">
+              <div className="min-w-[760px]">
+                <div className="grid grid-cols-5 px-8 py-5 border-b border-border">
+                  <div className="text-sm font-bold text-muted-foreground">功能</div>
+                  <div className="text-sm font-bold text-muted-foreground text-center">免费</div>
+                  <div className="text-sm font-bold text-muted-foreground text-center">月度会员</div>
+                  <div className="text-sm font-bold text-accent text-center">年度会员</div>
+                  <div className="text-sm font-bold text-amber-500 text-center">合伙人会员</div>
+                </div>
 
-            {comparisonRows.map((row, i) => (
-              <div
-                key={row.feature}
-                className={`grid grid-cols-4 px-8 py-4 ${
-                  i % 2 === 0 ? "bg-transparent" : "bg-muted/50"
-                } ${i < comparisonRows.length - 1 ? "border-b border-border" : ""}`}
-              >
-                <div className="text-sm text-foreground self-center">{row.feature}</div>
-                <div className="text-sm text-center self-center">
-                  {row.monthly === "-" ? (
-                    <Minus className="h-4 w-4 inline text-muted-foreground/40" />
-                  ) : (
-                    <span className="font-semibold text-success">{row.monthly}</span>
-                  )}
-                </div>
-                <div className="text-sm text-center self-center">
-                  {row.yearly === "-" ? (
-                    <Minus className="h-4 w-4 inline text-muted-foreground/40" />
-                  ) : (
-                    <span className="font-semibold text-success">{row.yearly}</span>
-                  )}
-                </div>
-                <div className="text-sm text-center self-center">
-                  {row.partner === "-" ? (
-                    <Minus className="h-4 w-4 inline text-muted-foreground/40" />
-                  ) : row.partner === "✓" ? (
-                    <Check className="h-4 w-4 inline text-amber-500" />
-                  ) : (
-                    <span className="font-semibold text-amber-500">{row.partner}</span>
-                  )}
-                </div>
+                {COMPARISON_ROWS.map((row, i) => (
+                  <div
+                    key={row.feature}
+                    className={cn(
+                      "grid grid-cols-5 px-8 py-4",
+                      i % 2 === 0 ? "bg-transparent" : "bg-muted/50",
+                      i < COMPARISON_ROWS.length - 1 && "border-b border-border",
+                    )}
+                  >
+                    <div className="text-sm text-foreground self-center">{row.feature}</div>
+                    {/* 免费列用中性色：它是对照基准，不该和付费列抢注意力 */}
+                    <ComparisonCell value={row.free} tone="text-foreground/70" />
+                    <ComparisonCell value={row.monthly} tone="text-success" />
+                    <ComparisonCell value={row.yearly} tone="text-success" />
+                    <ComparisonCell value={row.partner} tone="text-amber-500" />
+                  </div>
+                ))}
               </div>
-            ))}
+            </div>
           </div>
+
+          {/* 如实说明付费档之间没有功能差别 —— 差异只在时长与推广权益。
+              这也是句乐部的做法（其官方 FAQ 专门回答"几种会员权益一样吗"），
+              目的是避免"买了月卡发现功能不够"的挫败感。 */}
+          <p className="text-sm text-muted-foreground text-center">
+            月度与年度会员的功能完全相同，只差时长与价格；合伙人会员额外获得推广权益。
+          </p>
         </div>
       </section>
 

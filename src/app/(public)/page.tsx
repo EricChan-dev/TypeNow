@@ -18,25 +18,14 @@ import { PricingFAQ } from "@/components/pricing/PricingFAQ"
 import { ScrollToSection } from "@/components/layout/ScrollToSection"
 import { ScrollToTop } from "@/components/layout/ScrollToTop"
 import { AuthLink } from "@/components/layout/AuthLink"
+import { PARTNER_BENEFITS, PRO_BENEFITS } from "@/lib/membership-benefits"
 
-const proMemberFeatures = [
-  "多种练习模式，听说读写全覆盖",
-  "AI 口语评测，音素级纠音，越练越准",
-  "AI 私教助手，不懂随时问",
-  "FSRS 智能复习，学了就忘不掉",
-  "自定义上传内容，考题歌词都能练",
-  "深度统计 & 学习报告导出",
-  "会员专属徽章",
-]
+// 会员权益不再各写一份：统一取自 lib/membership-benefits（唯一事实源）。
+// 改版前首页与价格页各写了一套，于是同一个功能在两边说法不同、且都含有
+// 代码里并不存在的条目（听说读写全覆盖 / 自定义上传 / 报告导出 / 会员徽章）。
+const proMemberFeatures = PRO_BENEFITS.map((b) => b.claim)
 
-const partnerFeatures = [
-  "永久免费解锁全部会员功能",
-  "生成专属邀请链接 / 二维码 / 海报",
-  "90天窗口内首次付款赚取 50% 佣金",
-  "90天窗口内每次续费赚取 30% 佣金",
-  "¥50 起随时提现至微信零钱",
-  "实时数据看板：邀请数、转化率、收益",
-]
+const partnerFeatures = PARTNER_BENEFITS.map((b) => b.claim)
 
 export default function LandingPage() {
   return (
@@ -51,7 +40,7 @@ export default function LandingPage() {
       <section id="hero" className="flex flex-col items-center justify-center bg-muted min-h-[680px] px-5 xl:px-20 py-16 xl:py-0 text-center">
         {/* Badge */}
         <span className="inline-flex items-center rounded-full bg-accent/10 px-4 py-1.5 text-[13px] font-medium text-accent mb-6">
-          &middot; 智能复习 + AI 强化训练 &middot;
+          &middot; 中译英打字练习 + AI 句子讲解 &middot;
         </span>
 
         {/* Headline */}
@@ -134,13 +123,13 @@ export default function LandingPage() {
             </h2>
 
             <p className="text-base text-muted-foreground leading-[1.7]">
-              中译英逐词打字，即时判分反馈。不需要死记硬背，真实使用才是最好的记忆。上千套学习课程资源，让每次练习都有收获。
+              中译英逐词打字，即时判分反馈。不需要死记硬背，真实使用才是最好的记忆。700+ 门课程资源，让每次练习都有收获。
             </p>
 
             <ul className="flex flex-col gap-3">
               {[
                 "即时判分，打完即知对错",
-                "上千套学习课程资源",
+                "700+ 门课程资源",
                 "错题自动收录进入复习队列",
               ].map((item) => (
                 <li
@@ -166,7 +155,10 @@ export default function LandingPage() {
               <div className="flex items-center justify-center h-11 w-11 rounded-[10px] bg-primary/10">
                 <Zap className="h-5 w-5 text-primary" />
               </div>
-              <p className="text-[36px] font-bold text-card-foreground">1000+</p>
+              {/* 课程数按「已发布」口径写（实测 762 门）。取 700+ 而不是精确值：
+                  数字只会随内容增长，向下取整不会变成假宣称；改版前写的是
+                  「上千套」「1000+」，与库里实际数量不符。 */}
+              <p className="text-[36px] font-bold text-card-foreground">700+</p>
               <p className="text-sm text-muted-foreground leading-relaxed">
                 学习课程资源，覆盖生活、职场、旅行
               </p>
@@ -331,24 +323,24 @@ export default function LandingPage() {
           <div className="flex-1 flex flex-col gap-7">
             <span className="inline-flex items-center gap-1.5 self-start rounded-full bg-card px-3.5 py-1.5 text-[15px] font-semibold text-primary">
               <Sparkles className="h-3.5 w-3.5" />
-              Layer 3 &middot; AI 强化训练
+              Layer 3 &middot; AI 句子讲解
             </span>
 
             <h2 className="text-[42px] font-bold text-foreground leading-[1.2]">
-              AI 精准识别弱点
+              不懂就问 AI
               <br />
-              靶向强化训练
+              每个句子讲透
             </h2>
 
             <p className="text-base text-muted-foreground leading-[1.7]">
-              系统自动分析你的练习记录，找出真正的薄弱点，生成针对性训练。选你最顺手的方式，把弱点彻底攻克。
+              点一个词就能看释义与音标，整句读不懂时唤出 AI 讲解：语法结构、用词习惯逐条说清。难点随手记进生词本，之后复习自然会再遇到。
             </p>
 
             <ul className="flex flex-col gap-3">
               {[
-                "出题练习 · 多题型精准训练",
-                "场景对话 · 真实语境中演练",
-                "AI 写作批改 · 逐句优化提升",
+                "点词详情 · 释义 / 音标 / 词性",
+                "AI 句子讲解 · 语法与用词逐条拆解",
+                "生词本与笔记 · 难点随手记下",
               ].map((item) => (
                 <li
                   key={item}
@@ -369,36 +361,45 @@ export default function LandingPage() {
                 <span className="h-2.5 w-2.5 rounded-full bg-amber-400" />
                 <span className="h-2.5 w-2.5 rounded-full bg-emerald-400" />
                 <span className="ml-2 text-xs text-muted-foreground">
-                  AI 强化训练
+                  AI 句子讲解
                 </span>
               </div>
 
               <div className="p-5 flex flex-col gap-3.5">
                 <span className="text-[13px] text-muted-foreground">
-                  根据你的错误记录，AI 为你出题：
+                  点一个词看释义，或整句唤出讲解：
                 </span>
 
                 <div className="rounded-lg bg-background p-4 flex flex-col gap-2.5">
                   <p className="text-sm text-foreground leading-relaxed">
-                    Choose the correct form:
+                    她每天步行去学校。
                     <br />
-                    She ___ to school every day.
+                    She walks to school every day.
                   </p>
 
-                  <div className="rounded-md bg-accent px-3.5 py-2">
-                    <span className="text-[13px] font-semibold text-white">
-                      &#10003; &nbsp;goes
-                    </span>
+                  <div className="flex flex-col gap-2">
+                    <div className="rounded-md bg-card border border-border px-3.5 py-2">
+                      <span className="text-[13px] font-semibold text-foreground">
+                        walks
+                      </span>
+                      <span className="ml-2 text-[12px] text-muted-foreground">
+                        步行 · 第三人称单数
+                      </span>
+                    </div>
+
+                    <div className="rounded-md bg-card border border-border px-3.5 py-2">
+                      <span className="text-[13px] font-semibold text-foreground">
+                        every day
+                      </span>
+                      <span className="ml-2 text-[12px] text-muted-foreground">
+                        时间状语 · 一般现在时标志
+                      </span>
+                    </div>
                   </div>
 
-                  <div className="rounded-md bg-muted border border-border px-3.5 py-2">
-                    <span className="text-[13px] text-muted-foreground">go</span>
-                  </div>
-                  <div className="rounded-md bg-muted border border-border px-3.5 py-2">
-                    <span className="text-[13px] text-muted-foreground">
-                      is going
-                    </span>
-                  </div>
+                  <p className="text-[12px] text-muted-foreground leading-relaxed">
+                    主语是第三人称单数，谓语要用 walks，不能写成 walk。
+                  </p>
                 </div>
               </div>
             </div>
