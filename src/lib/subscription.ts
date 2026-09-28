@@ -1,7 +1,7 @@
 import { db } from "@/lib/db"
 import { subscriptions, users, partnerCommissions, paymentOrders as paymentOrdersTable } from "@/lib/db/schema"
 import { eq, and, lte, desc, ne, sql, count as sqlCount, type SQL } from "drizzle-orm"
-import { randomUUID } from "crypto"
+import { randomInt, randomUUID } from "crypto"
 
 function getPlanDurationDays(plan: "monthly" | "yearly" | "partner"): number {
   if (plan === "monthly") return 30
@@ -9,9 +9,21 @@ function getPlanDurationDays(plan: "monthly" | "yearly" | "partner"): number {
   return 365 * 99 // partner: effectively permanent (2099)
 }
 
+/**
+ * 生成邀请码。
+ *
+ * 用 `crypto.randomInt` 而不是 `Math.random()`：邀请码是**归因凭据** ——
+ * 拿到某个码就能拿到它带来的佣金，所以"不可预测"本身就是它的安全属性。
+ * `Math.random()` 用的是非密码学 PRNG（V8 是 xorshift128+），观察到若干输出
+ * 即可推出后续；而字符集只有 32 个、长度 8（约 40 bit），可预测 + 可枚举
+ * 不是好组合。
+ *
+ * `randomInt` 还自带无偏取模 —— `Math.floor(Math.random() * len)` 在 len 不整除
+ * 2^32 时对靠前的字符有微小偏好（这里 32 恰好整除，但依赖这种巧合很脆弱）。
+ */
 export function generateInviteCode(): string {
   const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
-  return Array.from({ length: 8 }, () => chars[Math.floor(Math.random() * chars.length)]).join("")
+  return Array.from({ length: 8 }, () => chars[randomInt(chars.length)]).join("")
 }
 
 async function grantPartnerAccess(userId: string): Promise<void> {

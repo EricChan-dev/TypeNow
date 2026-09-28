@@ -62,7 +62,9 @@ export async function GET(request: NextRequest) {
 
     return response
   } catch (err) {
-    const message = err instanceof Error ? err.message : "获取二维码失败"
-    return NextResponse.json({ error: message }, { status: 500 })
+    // 不要把内部的 err.message 直接回给客户端：微信接口的错误信息里可能带着
+    // appid、access_token 片段或内部 URL。日志留全量，响应给通用文案。
+    console.error("[wechat/oa-qrcode] 创建二维码失败:", err)
+    return NextResponse.json({ error: "获取二维码失败，请稍后重试" }, { status: 500 })
   }
 }

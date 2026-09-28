@@ -10,6 +10,7 @@ import {
   storeSceneLogin,
   sendOACustomerMessage,
 } from "@/lib/wechat"
+import { maskId } from "@/lib/log-redact"
 import { generateInviteCode } from "@/lib/subscription"
 import { signupFields } from "@/lib/signup-source"
 import { recordServerEvent } from "@/lib/analytics-server"
@@ -159,7 +160,7 @@ export async function POST(request: NextRequest) {
 
   // Parse event
   const event = parseWechatXml(xml)
-  console.log("[OA Event] Received event:", event.Event, "from:", event.FromUserName)
+  console.log("[OA Event] Received event:", event.Event, "from:", maskId(event.FromUserName))
 
   await handleEvent(event)
   return new NextResponse("success")
@@ -204,7 +205,7 @@ async function processSceneLogin(openid: string, sceneStr: string): Promise<void
     // Get user info from WeChat OA
     const oaUser = await getOAUserInfo(openid)
     if (!oaUser || oaUser.subscribe !== 1) {
-      console.warn("[OA Event] User not found or not subscribed:", openid)
+      console.warn("[OA Event] User not found or not subscribed:", maskId(openid))
       return
     }
 

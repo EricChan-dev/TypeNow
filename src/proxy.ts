@@ -3,6 +3,7 @@ import { db } from "@/lib/db"
 import { sessions, users } from "@/lib/db/schema"
 import { and, eq, gt } from "drizzle-orm"
 import { isAdminUser } from "@/lib/admin-identity"
+import { redactQuery } from "@/lib/log-redact"
 
 async function getSessionUser(request: NextRequest) {
   if (!db) return null
@@ -36,7 +37,9 @@ export async function proxy(request: NextRequest) {
 
   // Log API requests
   if (pathname.startsWith("/api/")) {
-    console.log(`[API] → ${request.method} ${pathname}${request.nextUrl.search || ""}`)
+    // 脱敏后再打印：/api/auth/wechat/callback?code=… 里的 code 是 OAuth 授权码，
+    // state 是 CSRF 令牌 —— 凭据不该落进日志（见 lib/log-redact）
+    console.log(`[API] → ${request.method} ${pathname}${redactQuery(request.nextUrl.search)}`)
   }
 
   // CSRF defense-in-depth: check Origin/Referer on critical mutation endpoints.
