@@ -59,7 +59,7 @@ describe("FUNNEL_STEPS", () => {
     expect(new Set(keys).size).toBe(keys.length)
   })
 
-  it("**关键不变量**：声明来自埋点的步骤，其 key 必须在白名单里", () => {
+  it("**关键不变量**：声明来自埋点事件的步骤，其 key 必须在白名单里", () => {
     const eventSteps = FUNNEL_STEPS.filter((s) => s.source === "events")
     expect(eventSteps.length).toBeGreaterThan(0)
     for (const step of eventSteps) {
@@ -71,8 +71,25 @@ describe("FUNNEL_STEPS", () => {
     }
   })
 
-  it("漏斗以注册开始、以付费结束（顺序即展示顺序）", () => {
-    expect(FUNNEL_STEPS[0].key).toBe("registered")
+  it("**关键不变量**：traffic 类步骤是推导量，不能与某个事件名同名", () => {
+    // 同名会让人误以为"这一步就是那个事件的次数"，而两者口径完全不同
+    // （traffic 按 visitor 去重，events 按事件行数）。真同名时这里直接拦住。
+    const trafficSteps = FUNNEL_STEPS.filter((s) => s.source === "traffic")
+    expect(trafficSteps.length).toBeGreaterThan(0)
+    for (const step of trafficSteps) {
+      expect(
+        isAllowedEvent(step.key),
+        `漏斗步骤 ${step.key} 声明为推导量（traffic），但恰好是一个事件名 —— ` +
+          `这会让"报表口径"与"事件次数"混淆，请改名或改 source`,
+      ).toBe(false)
+    }
+  })
+
+  it("漏斗从访问站点开始、以付费结束（顺序即展示顺序）", () => {
+    // 第一步曾经是 registered，导致"来了多少人 → 注册了多少"这个获客顶端
+    // 在后台完全无法回答（匿名数据其实一直在库里）
+    expect(FUNNEL_STEPS[0].key).toBe("visited")
+    expect(FUNNEL_STEPS[1].key).toBe("registered")
     expect(FUNNEL_STEPS[FUNNEL_STEPS.length - 1].key).toBe("paid")
   })
 

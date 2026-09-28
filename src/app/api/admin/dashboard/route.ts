@@ -58,6 +58,7 @@ export async function GET(request: Request) {
     activeRow,
     practiceRow,
     eventRow,
+    visitorRow,
     paidRow,
     trialClaimRow,
     totalUsers,
@@ -100,6 +101,27 @@ export async function GET(request: Request) {
       .from(analyticsEvents)
       .where(since(analyticsEvents))
       .then((r) => Number(r[0]?.n ?? 0)),
+
+    // 独立访客 + 未登录占比（随 range 变化）。
+    // 这一条回答的是「来了多少人、其中多少没注册」—— 与「新增用户」并排放在
+    // 仪表盘上，注册转化率一眼可见。此前仪表盘只有事件总数，看不出人数。
+    //
+    // 访客身份优先用 visitor_id，缺失（存量数据 / cookie 被拦）时退回 session_id：
+    // 退回口径会偏大（同一人多次访问算多个），所以这个数只能当下界看。
+    // 两列都空的行必须排除，否则会被聚成一个"神秘访客"（见 funnel 路由同类注释）。
+    db
+      .select({
+        visitors: sql<number>`COUNT(DISTINCT COALESCE(NULLIF(${analyticsEvents.visitorId}, ''), NULLIF(${analyticsEvents.sessionId}, '')))`,
+        anonymous: sql<number>`SUM(CASE WHEN ${analyticsEvents.userId} IS NULL THEN 1 ELSE 0 END)`,
+        events: sql<number>`COUNT(*)`,
+      })
+      .from(analyticsEvents)
+      .where(since(analyticsEvents))
+      .then((r) => ({
+        visitors: Number(r[0]?.visitors ?? 0),
+        anonymous: Number(r[0]?.anonymous ?? 0),
+        events: Number(r[0]?.events ?? 0),
+      })),
 
     db
       .select({
@@ -222,6 +244,11 @@ export async function GET(request: Request) {
       activeUsers: activeRow,
       practiceRecords: practiceRow,
       events: eventRow,
+      // 独立访客（含未登录的人）。与 newUsers 并排看就是注册转化率的分母
+      visitors: visitorRow.visitors,
+      // 未登录事件占比：这个数很高说明绝大部分流量没转化到账号，
+      // 是获客环节的问题而不是产品功能的问题
+      anonymousRate: visitorRow.events > 0 ? visitorRow.anonymous / visitorRow.events : null,
       paidOrders: paidRow.n,
       revenueFen: paidRow.fen,
       trialClaims: trialClaimRow,

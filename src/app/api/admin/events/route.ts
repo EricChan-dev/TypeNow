@@ -16,7 +16,10 @@ import { desc, eq, sql } from "drizzle-orm"
  *   - 筛选维度与 /api/admin/events/stats 完全一致（共用 admin-event-filter），
  *     否则表格和图表会对不上；
  *   - LEFT JOIN users 带出是谁，未登录的记为匿名 —— 匿名流量是漏斗第一段，
- *     不能因为 JOIN 不上就把它过滤掉（那样总量会凭空变少）。
+ *     不能因为 JOIN 不上就把它过滤掉（那样总量会凭空变少）；
+ *   - 匿名行必须带上 visitor_id：这是区分"3 个不同访客"与"同一个人 3 次"的
+ *     唯一依据。没有它，整张表里的匿名记录看起来完全一样
+ *     （见 lib/visitor.ts）。
  *
  * 返回 refine 的列表契约 { data, total }，字段保持驼峰（选出来的别名）。
  */
@@ -36,6 +39,7 @@ export async function GET(request: Request) {
         id: analyticsEvents.id,
         eventType: analyticsEvents.eventType,
         userId: analyticsEvents.userId,
+        visitorId: analyticsEvents.visitorId,
         pageUrl: analyticsEvents.pageUrl,
         sessionId: analyticsEvents.sessionId,
         properties: analyticsEvents.properties,
@@ -62,6 +66,8 @@ export async function GET(request: Request) {
       id: String(r.id),
       eventType: r.eventType,
       userId: r.userId,
+      // 存量数据（00024 之前）与 cookie 被拦的场景下为 null，界面要能显示"无标识"
+      visitorId: r.visitorId,
       userName: r.userName ?? null,
       userPhone: maskPhone(r.userPhone),
       userIsPro: r.userIsPro ?? null,

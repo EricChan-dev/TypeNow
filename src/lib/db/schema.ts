@@ -382,12 +382,24 @@ export const analyticsEvents = mysqlTable(
     pageUrl: text("page_url"),
     sessionId: varchar("session_id", { length: 64 }),
     createdAt: datetime("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+    // 匿名访客的长期身份（见 lib/visitor.ts）。session_id 存在 sessionStorage，
+    // 关标签页即失效，数不出"人"；visitor_id 才能算匿名 UV 并把匿名流量与
+    // 之后的注册串起来。历史数据与拦截器场景下为 NULL，报表用
+    // COALESCE(visitor_id, session_id) 兜底降级。
+    //
+    // **位置必须在 created_at 之后**：00024 是用 ALTER TABLE ADD COLUMN 加的这一列，
+    // MySQL 只能把它追加到末尾。schema.ts 若写成中间位置，`drizzle-kit push`
+    // （e2e 测试库由它生成）会认为列序不一致而生成多余的调整 ——
+    // 列序在这里没有语义，跟线上一致比"读起来顺眼"重要。
+    visitorId: varchar("visitor_id", { length: 64 }),
   },
   (t) => [
     index("idx_ae_type_time").on(t.eventType, t.createdAt),
     index("idx_ae_user").on(t.userId),
     // 全局时间范围（不带 event_type）用不上上面的复合索引，单独补一个
     index("idx_ae_created_at").on(t.createdAt),
+    // 独立访客数与"首访时间"都是按 visitor_id 分组，没它只能全表扫
+    index("idx_ae_visitor").on(t.visitorId),
   ]
 )
 

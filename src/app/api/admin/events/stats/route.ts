@@ -16,7 +16,9 @@ const TOP_EVENT_SERIES = 6
  * 「表里翻到的」是同一批数据。参数完全一致，可以放心把 URL 原样传过来。
  *
  * 返回三块：
- *   summary —— 总量、独立用户、匿名占比、时间跨度。用于判断"这段数据够不够看"。
+ *   summary —— 总量、独立访客、独立用户、匿名占比、时间跨度。用于判断"这段数据够不够看"。
+ *              独立访客（visitors）≠ 独立用户（users）：前者含未登录的人，
+ *              是"有多少人来过"，后者只数已登录的账号。
  *   trend   —— 按天 × 事件的堆叠序列。看"哪类行为在涨/在跌"。
  *   byEvent —— 事件排行（次数 + 独立人数）。次数高但人数低 = 少数人刷量。
  *   pages   —— 页面排行。看流量落在哪些页面。
@@ -42,6 +44,11 @@ export async function GET(request: Request) {
         users: sql<number>`COUNT(DISTINCT ${analyticsEvents.userId})`,
         anonymous: sql<number>`SUM(CASE WHEN ${analyticsEvents.userId} IS NULL THEN 1 ELSE 0 END)`,
         sessions: sql<number>`COUNT(DISTINCT ${analyticsEvents.sessionId})`,
+        // 独立访客：优先用长期 visitor_id，缺失（存量数据 / cookie 被拦）时退回
+        // session_id。退回口径会偏大（同一人多次访问算多个），所以界面上
+        // 这个数只当"不小于真实访客数"的下界看。空串要当 NULL，否则
+        // 所有"两列皆空"的行会被并成一个神秘访客。
+        visitors: sql<number>`COUNT(DISTINCT COALESCE(NULLIF(${analyticsEvents.visitorId}, ''), NULLIF(${analyticsEvents.sessionId}, '')))`,
         first: sql<string | null>`MIN(${analyticsEvents.createdAt})`,
         last: sql<string | null>`MAX(${analyticsEvents.createdAt})`,
       })
@@ -136,6 +143,7 @@ export async function GET(request: Request) {
       events: totalEvents,
       users: Number(summary?.users ?? 0),
       sessions: Number(summary?.sessions ?? 0),
+      visitors: Number(summary?.visitors ?? 0),
       anonymous,
       // 未登录占比：这个数很高说明绝大部分流量没转化到账号，
       // 是获客环节的问题而不是产品功能的问题

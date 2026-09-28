@@ -22,8 +22,8 @@
 --     只是因为线上又来了几条埋点）。留着它，每次重新生成的 diff 里都会混进这种噪音，
 --     真正的结构改动反而容易被看漏 —— 这份文件只该记录结构。
 --
--- 生成时间：2026-09-27（同日二次生成：00023 之后）
--- 对应迁移：00009 / 00011 ～ 00023 全部已应用（00022 admin_audit_logs、00023 users.signup_* 于本日执行）
+-- 生成时间：2026-09-28（00024 之后）
+-- 对应迁移：00009 / 00011 ～ 00024 全部已应用（00024 analytics_events.visitor_id 于本日执行）
 -- ============================================================================
 
 
@@ -70,10 +70,12 @@ CREATE TABLE `analytics_events` (
   `page_url` text COLLATE utf8mb4_unicode_ci,
   `session_id` varchar(64) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
   `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `visitor_id` varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '匿名访客长期身份（typ_vid cookie，见 lib/visitor.ts）',
   PRIMARY KEY (`id`),
   KEY `idx_ae_type_time` (`event_type`,`created_at`),
   KEY `idx_ae_user` (`user_id`),
-  KEY `idx_ae_created_at` (`created_at`)
+  KEY `idx_ae_created_at` (`created_at`),
+  KEY `idx_ae_visitor` (`visitor_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 DROP TABLE IF EXISTS `check_ins`;

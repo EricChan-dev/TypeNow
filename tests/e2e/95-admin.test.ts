@@ -211,6 +211,43 @@ describe("仪表盘统计 /api/admin/dashboard", () => {
     }
   })
 
+  it("**仪表盘给出独立访客与未登录占比**（此前只有事件总数，看不出人数）", async () => {
+    const api = ApiClient.asUser(await makeAdmin())
+    const v1 = "3f2504e0-4f89-41d3-9a0c-000000000401"
+    const v2 = "3f2504e0-4f89-41d3-9a0c-000000000402"
+    // 两个未登录访客各留一条事件
+    await q(
+      `INSERT INTO analytics_events (event_type, visitor_id, session_id, page_url)
+       VALUES ('page_view', ?, ?, '/dash'), ('page_view', ?, ?, '/dash')`,
+      [v1, `s-${v1}`, v2, `s-${v2}`],
+    )
+    // 一条已登录事件（同一个访客 v1，登录后继续上报的形状）
+    await q(
+      `INSERT INTO analytics_events (event_type, user_id, visitor_id, session_id, page_url)
+       VALUES ('page_view', ?, ?, ?, '/dash')`,
+      [FIXTURE.userFree, v1, `s-${v1}`],
+    )
+
+    const res = await api.get<{
+      activity: { events: number; visitors: number; anonymousRate: number | null }
+    }>("/api/admin/dashboard?range=all")
+
+    expect(res.status).toBe(200)
+    // 访客按 visitor 去重：v1 有两条事件但只算一个人，加上 v2 共两人
+    expect(res.body.activity.visitors).toBe(2)
+    // 未登录事件 2 条 / 总事件 3 条
+    expect(res.body.activity.anonymousRate).toBeCloseTo(2 / 3, 5)
+  })
+
+  it("没有埋点事件时匿名占比是 null 而不是 NaN（0/0）", async () => {
+    const api = ApiClient.asUser(await makeAdmin())
+    const res = await api.get<{ activity: { visitors: number; anonymousRate: number | null } }>(
+      "/api/admin/dashboard?range=all",
+    )
+    expect(res.body.activity.visitors).toBe(0)
+    expect(res.body.activity.anonymousRate).toBeNull()
+  })
+
   it("内容总量不随时间范围变化（句子库走缓存，不是每次全表 COUNT）", async () => {
     const api = ApiClient.asUser(await makeAdmin())
     const week = await api.get<{ totals: { users: number } }>("/api/admin/dashboard?range=week")

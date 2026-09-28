@@ -35,11 +35,18 @@ interface FunnelResponse {
   funnel: Array<{
     key: string
     label: string
-    source: "db" | "events"
+    source: "db" | "events" | "traffic"
     value: number
     stepRate: number | null
     overallRate: number | null
   }>
+  acquisition: {
+    visitors: number
+    converted: number
+    conversionRate: number | null
+    visitorShortfall: boolean
+    note: string
+  }
   domain: {
     registered: number
     practicedUsers: number
@@ -48,14 +55,22 @@ interface FunnelResponse {
     paidOrders: number
     revenueFen: number
     subscriptions: number
+    visitors: number
   }
   events: Array<{ eventType: string; events: number; users: number }>
   daily: Array<{ date: string; events: number; users: number }>
   topPages: Array<{ page: string; count: number }>
 }
 
-async function getFunnel(client: ApiClient) {
-  return client.get<FunnelResponse>("/api/admin/analytics/funnel")
+/** 造一个合规的 visitor id（track 接口只认这个格式，见 lib/visitor.ts） */
+function vid(n: number): string {
+  const tail = String(n).padStart(12, "0")
+  return `3f2504e0-4f89-41d3-9a0c-${tail}`
+}
+
+async function getFunnel(client: ApiClient, range?: string) {
+  const qs = range ? `?range=${range}` : ""
+  return client.get<FunnelResponse>(`/api/admin/analytics/funnel${qs}`)
 }
 
 beforeEach(async () => {
@@ -103,6 +118,50 @@ describe("埋点上报 /api/analytics/track", () => {
       `SELECT COUNT(*) AS n FROM analytics_events WHERE user_id = '${FIXTURE.userFree}'`
     )
     expect(n).toBe(1)
+  })
+
+  // ── 匿名访客身份（visitor_id）─────────────────────────────────────────────
+  // 这几个用例钉住的是「匿名流量能不能归人」这件事：没有稳定 visitor 时，
+  // 匿名事件只是一堆无法归人的记录，首启漏斗也就只能从「注册」那一步开始画。
+  it("合法的 visitorId 落库", async () => {
+    await ApiClient.anonymous().request("POST", "/api/analytics/track", {
+      json: { event: "page_view", properties: {}, pageUrl: "/", visitorId: vid(1) },
+    })
+    expect(await dbScalar(`SELECT COUNT(*) AS n FROM analytics_events WHERE visitor_id = '${vid(1)}'`)).toBe(1)
+  })
+
+  it("**非法 visitorId 存 NULL 而不是拒绝上报**：丢身份可以，丢事件不行", async () => {
+    const res = await ApiClient.anonymous().request("POST", "/api/analytics/track", {
+      json: { event: "page_view", properties: {}, pageUrl: "/", visitorId: "随手编的字符串" },
+    })
+    expect(res.status).toBe(200)
+    expect(await dbScalar("SELECT COUNT(*) AS n FROM analytics_events WHERE visitor_id IS NULL")).toBe(1)
+  })
+
+  it("完全不带 visitorId 也能上报（老客户端 / cookie 被拦）", async () => {
+    const res = await ApiClient.anonymous().request("POST", "/api/analytics/track", {
+      json: { event: "page_view", properties: {}, pageUrl: "/" },
+    })
+    expect(res.status).toBe(200)
+    expect(await dbScalar("SELECT COUNT(*) AS n FROM analytics_events")).toBe(1)
+  })
+
+  it("同一 visitor 的上报与登录后的上报能串起来（visitor 绑定到账号）", async () => {
+    // 先匿名逛，再登录上报 —— 后者同时带 user_id 与同一个 visitor_id，
+    // 这就是「匿名 → 注册」归因成立的前提
+    await ApiClient.anonymous().request("POST", "/api/analytics/track", {
+      json: { event: "page_view", properties: {}, pageUrl: "/", visitorId: vid(7) },
+    })
+    await ApiClient.asUser(FIXTURE.userFree).request("POST", "/api/analytics/track", {
+      json: { event: "page_view", properties: {}, pageUrl: "/home", visitorId: vid(7) },
+    })
+
+    expect(
+      await dbScalar(
+        `SELECT COUNT(*) AS n FROM analytics_events
+          WHERE visitor_id = '${vid(7)}' AND user_id IS NOT NULL`
+      )
+    ).toBe(1)
   })
 })
 
@@ -162,8 +221,126 @@ describe("漏斗报表 /api/admin/analytics/funnel", () => {
 
     const courseOpen = res.body.funnel.find((s) => s.key === "course_open")
     expect(courseOpen?.value).toBe(0)
-    // 第一步是权威数据，所以即使零埋点也不是 0（夹具里有用户）
-    expect(res.body.funnel[0].value).toBeGreaterThan(0)
+    // 「注册」这一步是权威数据，零埋点也不是 0（夹具里有用户）
+    expect(res.body.funnel.find((s) => s.key === "registered")?.value).toBeGreaterThan(0)
+    // 而成品零埋点时，第一步「访问站点」只能取注册数作下界，并显式标记出来
+    expect(res.body.acquisition.visitorShortfall).toBe(true)
+    expect(res.body.acquisition.conversionRate).toBeNull()
+  })
+
+  // ── 获客段：匿名流量终于进了漏斗顶端 ─────────────────────────────────────
+  //
+  // 这几个用例一律**直接写库**而不是走上报接口来造访客：
+  // /api/analytics/track 按 IP 限流（60 次/分钟），而这里经常要造十几个访客，
+  // 走接口会把整个 e2e 套件打到 429，失败还看不出跟谁有关。
+  // 接口侧的写入行为由上面「埋点上报」那组用例覆盖，这里只管报表口径。
+
+  /** 写一条页面浏览。daysAgo 用于控制"首访时间" */
+  async function insertView(
+    visitorId: string | null,
+    opts: { userId?: string | null; path?: string; daysAgo?: number } = {}
+  ): Promise<void> {
+    await q(
+      `INSERT INTO analytics_events (event_type, user_id, visitor_id, session_id, page_url, created_at)
+       VALUES ('page_view', ?, ?, ?, ?, DATE_SUB(NOW(), INTERVAL ? DAY))`,
+      [
+        opts.userId ?? null,
+        visitorId,
+        visitorId ? `s-${visitorId}` : null,
+        opts.path ?? "/",
+        opts.daysAgo ?? 0,
+      ]
+    )
+  }
+
+  /**
+   * 当前注册用户数（= 接口的 cohortSize 下界比较基准）。
+   *
+   * 为什么用例要自己算它：访客数少于注册数时，接口会按注册数取**下界**并标记
+   * visitorShortfall（防止漏斗出现下游大于上游）。夹具里用户是现成的，
+   * 所以用例必须先保证访客足够多，否则测的是下界逻辑而不是获客口径。
+   */
+  async function registeredCount(): Promise<number> {
+    return dbScalar("SELECT COUNT(*) AS n FROM users")
+  }
+
+  it("匿名访客计入第一步「访问站点」（此前漏斗第一步就是注册，匿名流量整体缺席）", async () => {
+    const adminId = await makeAdmin()
+    const registered = await registeredCount()
+    const total = registered + 3
+    for (let i = 1; i <= total; i++) await insertView(vid(i))
+
+    const res = await getFunnel(ApiClient.asUser(adminId))
+    const visited = res.body.funnel.find((s) => s.key === "visited")
+    expect(visited?.source).toBe("traffic")
+    expect(res.body.acquisition.visitorShortfall).toBe(false)
+    expect(visited?.value).toBe(total)
+    expect(res.body.acquisition.visitors).toBe(total)
+    // 这些访客一个账号都没绑上 —— 这正是"没注册的用户"的可观测形态
+    expect(res.body.acquisition.converted).toBe(0)
+    expect(res.body.acquisition.conversionRate).toBe(0)
+  })
+
+  it("同一访客多次访问只算一个人（按 visitor 去重，不是按事件数）", async () => {
+    const adminId = await makeAdmin()
+    const registered = await registeredCount()
+    const total = registered + 2
+    // 1 号访客留下 5 条事件，其余每人 1 条；事件总数远多于人数
+    for (const path of ["/", "/pricing", "/login", "/pricing", "/"]) {
+      await insertView(vid(1), { path })
+    }
+    for (let i = 2; i <= total; i++) await insertView(vid(i))
+
+    const res = await getFunnel(ApiClient.asUser(adminId))
+    expect(res.body.acquisition.visitors).toBe(total)
+  })
+
+  it("访客后来归属了账号 → converted 计数（匿名 → 注册的转化率）", async () => {
+    const adminId = await makeAdmin()
+    const registered = await registeredCount()
+    const total = registered + 3
+    for (let i = 1; i <= total; i++) {
+      await insertView(vid(i))
+    }
+    // 其中 1 号访客后来又带上了 user_id：同一浏览器登录后继续上报就是这个形状
+    await insertView(vid(1), { userId: FIXTURE.userFree, path: "/home" })
+
+    const res = await getFunnel(ApiClient.asUser(adminId))
+    expect(res.body.acquisition.visitors).toBe(total)
+    expect(res.body.acquisition.converted).toBe(1)
+    expect(res.body.acquisition.conversionRate).toBeCloseTo(1 / total, 5)
+  })
+
+  it("**老访客再访问不算新访客**：首访必须落在所选时间范围内", async () => {
+    const adminId = await makeAdmin()
+    const registered = await registeredCount()
+    const total = registered + 2
+    // 一个 30 天前就来过的老访客 + total 个本周新访客
+    await insertView(vid(99), { daysAgo: 30 })
+    for (let i = 1; i <= total; i++) await insertView(vid(i))
+
+    const week = await getFunnel(ApiClient.asUser(adminId), "week")
+    expect(week.body.acquisition.visitors).toBe(total)
+
+    // 不限时间时，那位老访客同样计入
+    const all = await getFunnel(ApiClient.asUser(adminId), "all")
+    expect(all.body.acquisition.visitors).toBe(total + 1)
+  })
+
+  it("visitor_id 与 session_id 都缺的历史数据不并成一个『神秘访客』", async () => {
+    const adminId = await makeAdmin()
+    const registered = await registeredCount()
+    const total = registered + 3
+    for (let i = 1; i <= total; i++) await insertView(vid(i))
+    // 加列之前的存量行就是"两列皆空"这个形状：它们聚合出的那个 NULL 分组
+    // 不该被算成第 total + 1 个访客
+    await q(
+      `INSERT INTO analytics_events (event_type, visitor_id, session_id, page_url)
+       VALUES ('page_view', NULL, NULL, '/'), ('page_view', NULL, NULL, '/pricing')`
+    )
+
+    const res = await getFunnel(ApiClient.asUser(adminId), "all")
+    expect(res.body.acquisition.visitors).toBe(total)
   })
 
   it("事件分布与每日趋势随上报更新", async () => {

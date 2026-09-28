@@ -77,6 +77,7 @@ git show <旧提交>:supabase/migrations/00001_initial_schema.sql
 | `00021_unify_collation.sql` | 统一 4 张表的排序规则（修复后台反馈页 500） | 顺序无关 |
 | `00022_admin_audit_logs.sql` | 后台操作审计日志 | **先 DDL**（代码依赖新表） |
 | `00023_user_signup_source.sql` | 注册来源归因（`users.signup_channel` + `signup_source`） | **先 DDL**（代码依赖新列） |
+| `00024_analytics_visitor_id.sql` | 匿名访客长期身份（`analytics_events.visitor_id` + 索引） | **先 DDL**（代码读写新列；执行后需重新生成结构快照） |
 
 编号不连续是正常的（中间的是被删掉的 PG 文件）。**不要为了连续而重排编号**：
 文档与提交信息里都按编号引用过这些文件。

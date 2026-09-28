@@ -188,19 +188,21 @@ describe("buildEventWhere", () => {
     expect(render(params({ range: "all" }))).toBeNull()
   })
 
-  it("关键词同时匹配页面、事件名与 properties（JSON 列要 CAST 后比较）", () => {
+  it("关键词同时匹配页面、事件名、访客与 properties（JSON 列要 CAST 后比较）", () => {
     const q = render(params({ q: "pricing", range: "all" }))!
     expect(q.sql).toContain("page_url")
     expect(q.sql).toContain("event_type")
+    // visitor_id 必须在搜索范围内：埋点详情页的「访客」一栏靠它跳到这里筛轨迹
+    expect(q.sql).toContain("visitor_id")
     expect(q.sql.toUpperCase()).toContain("CAST")
   })
 
   it("LIKE 的通配符被转义后再进参数", () => {
     const q = render(params({ q: "100%", range: "all" }))!
-    // 三个条件各带一份参数（页面 / 事件名 / properties），都必须是转义后的。
+    // 四个条件各带一份参数（页面 / 事件名 / 访客 / properties），都必须是转义后的。
     // 期望值是 "%100\%%"：外层两个 % 是 LIKE 的通配，中间的 \% 是用户输入的
     // 那个百分号被转义后的样子 —— 没转义的话它会变成"匹配任意内容"
-    expect(q.params.length).toBe(3)
+    expect(q.params.length).toBe(4)
     for (const p of q.params) expect(p).toBe("%100\\%%")
   })
 })

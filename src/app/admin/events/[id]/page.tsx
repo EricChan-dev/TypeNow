@@ -26,6 +26,7 @@ interface Detail {
   id: string
   eventType: string
   userId: string | null
+  visitorId: string | null
   pageUrl: string | null
   sessionId: string | null
   properties: Record<string, unknown> | null
@@ -40,7 +41,7 @@ interface Detail {
     referredBy: string | null
     eventCount: number
   } | null
-  contextScope: "user" | "session" | "none"
+  contextScope: "user" | "visitor" | "session" | "none"
 }
 
 function fmtTime(v: string | null | undefined): string {
@@ -54,7 +55,8 @@ function fmtTime(v: string | null | undefined): string {
  * 单看一条 `click` 是没有信息量的 —— 排查「用户为什么没付费」时真正需要的是
  * 它前后发生了什么：先看了定价页、点了购买、然后什么都没有。所以这一页的
  * 主体不是那条记录本身，而是**围绕它的上下文时间线**（同一用户前后各 15 条，
- * 匿名时退化成同一 session）。
+ * 匿名时优先按 visitor 归并 —— 一年不变，能看到跨访问的完整轨迹；
+ * 没有 visitor 才退化成同一 session，那条线在第二次访问处会断开）。
  *
  * 当前记录混在时间线里高亮，而不是单独摆在上面：只有放进序列里才能看出
  * 「这一步之前/之后」的关系。
@@ -186,6 +188,19 @@ export default function EventDetailPage() {
               ),
             },
             {
+              key: "visitor",
+              label: "访客",
+              children: detail.visitorId ? (
+                // 一年期的匿名访客身份：跨标签页、跨访问都不变（见 lib/visitor.ts）。
+                // 点它可以筛出这个访客的全部轨迹 —— 包括注册前那几条匿名记录
+                <a onClick={() => router.push(eventsUrl({ q: detail.visitorId ?? undefined }))}>
+                  <Text code style={{ fontSize: 12 }}>{detail.visitorId}</Text>
+                </a>
+              ) : (
+                <Text type="secondary">未记录（2026-09-28 前的存量数据没有此字段）</Text>
+              ),
+            },
+            {
               key: "session",
               label: "会话",
               children: detail.sessionId ? (
@@ -247,16 +262,24 @@ export default function EventDetailPage() {
 
       <Card
         size="small"
-        title={detail.contextScope === "user" ? "该用户的行为上下文（前后各 15 条）" : "该会话的行为上下文（前后各 15 条）"}
+        title={
+          detail.contextScope === "user"
+            ? "该用户的行为上下文（前后各 15 条）"
+            : detail.contextScope === "visitor"
+              ? "该访客的行为上下文（前后各 15 条，跨访问）"
+              : "该会话的行为上下文（前后各 15 条）"
+        }
         style={{ marginTop: 16 }}
         extra={
           detail.contextScope === "none" ? (
-            <Text type="secondary" style={{ fontSize: 12 }}>无用户与会话信息，无法回溯上下文</Text>
+            <Text type="secondary" style={{ fontSize: 12 }}>无用户 / 访客 / 会话信息，无法回溯上下文</Text>
+          ) : detail.contextScope === "session" ? (
+            <Text type="secondary" style={{ fontSize: 12 }}>这条记录没有访客身份，只能按会话回溯（跨访问会断开）</Text>
           ) : null
         }
       >
         {detail.contextScope === "none" ? (
-          <Text type="secondary">这条记录既没有 user_id 也没有 session_id，只能看它自身。</Text>
+          <Text type="secondary">这条记录既没有 user_id 也没有 visitor_id / session_id，只能看它自身。</Text>
         ) : (
           <Table
             columns={columns}

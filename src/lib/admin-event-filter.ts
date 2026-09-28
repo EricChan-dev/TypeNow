@@ -127,6 +127,9 @@ export function buildEventWhere(filter: EventFilter): SQL | undefined {
     // CAST(... AS CHAR)：properties 是 JSON 列，直接 LIKE 在 MySQL 8 上
     // 按二进制比较，搜不到 JSON 里的内容；转成字符再匹配才行。
     //
+    // visitor_id 也纳入搜索：埋点详情页的「访客」一栏就是用它跳到这里筛轨迹的，
+    // 漏了它那个链接会落空（详情页有值、列表页筛不出，看起来像数据丢了）。
+    //
     // 这里手写了列引用，是因为 JSON 列的 CAST 没有对应的 drizzle 构造器。
     // properties 是本表列，单表查询里本就该生成不带表限定的 `properties`，
     // 所以这里不会踩「drizzle 剥离表限定符导致相关子查询算错」的坑
@@ -134,6 +137,7 @@ export function buildEventWhere(filter: EventFilter): SQL | undefined {
     const matched = or(
       like(analyticsEvents.pageUrl, needle),
       like(analyticsEvents.eventType, needle),
+      like(analyticsEvents.visitorId, needle),
       sql`CAST(${analyticsEvents.properties} AS CHAR) LIKE ${needle}`,
     )
     if (matched) parts.push(matched)

@@ -11,7 +11,7 @@ import { trialGrantFields } from "@/lib/trial"
 import { INVITE_REGISTER_DAYS } from "@/lib/invite-rules"
 import { requestSignupContext, signupFields } from "@/lib/signup-source"
 import { FIRST_TOUCH_COOKIE, parseFirstTouch } from "@/lib/first-touch"
-import { recordServerEvent } from "@/lib/analytics-server"
+import { recordServerEvent, visitorIdFromRequest } from "@/lib/analytics-server"
 import {
   exchangeCodeForAccessToken,
   getUserInfo,
@@ -223,6 +223,9 @@ async function upsertWeChatUser(
       userId: id,
       properties: { channel: signup.signupChannel, referred: Boolean(referredBy) },
       pageUrl: "/login",
+      // 微信 OAuth 回调是**用户浏览器**的顶层跳转（SameSite=Lax 下 cookie 照常带上），
+      // 所以这里读得到注册前那几次匿名浏览用的同一个 visitor（见 lib/visitor.ts）
+      visitorId: visitorIdFromRequest(request),
     })
     const [newUser] = await db.select().from(users).where(eq(users.id, id)).limit(1)
     user = newUser

@@ -27,6 +27,10 @@ interface DashboardData {
     activeUsers: number
     practiceRecords: number
     events: number
+    /** 独立访客（含未登录的人，见 lib/visitor.ts）。与 newUsers 并排看就是注册转化率 */
+    visitors: number
+    /** 未登录事件占比（0~1）；没有事件时为 null，界面显示「—」 */
+    anonymousRate: number | null
     paidOrders: number
     revenueFen: number
     trialClaims: number
@@ -128,6 +132,17 @@ export default function AdminDashboard() {
       </Text>
       <Row gutter={[16, 16]}>
         <Col xs={12} lg={6}>
+          {/* 放在「新增用户」前面：访客 → 注册 是漏斗顺序，
+              两个数并排就自然读出注册转化率（此前仪表盘只有事件总数，看不出人数） */}
+          <MetricCard
+            title="独立访客"
+            value={a?.visitors ?? 0}
+            loading={loading}
+            href={eventsUrl({ range, identity: "anonymous" })}
+            drillHint="仅看未登录的原始记录"
+          />
+        </Col>
+        <Col xs={12} lg={6}>
           <MetricCard
             title="新增用户"
             value={a?.newUsers ?? 0}
@@ -210,6 +225,18 @@ export default function AdminDashboard() {
           />
         </Col>
       </Row>
+
+      {/* 未登录占比单独写一行文字而不是再加一张卡片：
+          它的作用是解释「独立访客 vs 新增用户」的差值，不是又一个独立的 KPI。
+          这个数很高说明流量多数没转化到账号 —— 是获客问题，不是产品功能问题。 */}
+      <Text type="secondary" style={{ display: "block", marginTop: 8, fontSize: 12 }}>
+        {a?.anonymousRate === null || a?.anonymousRate === undefined
+          ? "未登录事件占比：—（这段时间没有埋点事件）"
+          : `未登录事件占比：${(a.anonymousRate * 100).toFixed(1)}%`}
+        {" · "}独立访客按一年期 typ_vid cookie 去重（lib/visitor.ts），缺失时退回按会话计，
+        因此这个数只会偏大、可当下界看；它含未注册的人，所以「独立访客 − 新增用户」
+        大致就是来了但没注册的规模。
+      </Text>
 
       {/* 行为趋势：卡片回答"多少"，这张图回答"什么时候、在涨还是在跌" */}
       <Card

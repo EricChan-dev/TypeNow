@@ -16,10 +16,18 @@ const { Title, Text } = Typography
 interface FunnelStep {
   key: string
   label: string
-  source: "db" | "events"
+  source: "db" | "events" | "traffic"
   value: number
   stepRate: number | null
   overallRate: number | null
+}
+
+interface Acquisition {
+  visitors: number
+  converted: number
+  conversionRate: number | null
+  visitorShortfall: boolean
+  note: string
 }
 
 interface FunnelData {
@@ -27,6 +35,7 @@ interface FunnelData {
   rangeLabel: string
   cohortSize: number
   cohortNote: string
+  acquisition: Acquisition
   funnel: FunnelStep[]
   domain: {
     registered: number
@@ -36,6 +45,7 @@ interface FunnelData {
     paidOrders: number
     revenueFen: number
     subscriptions: number
+    visitors: number
   }
 }
 
@@ -57,6 +67,10 @@ function pct(v: number | null): string {
  */
 function stepHref(step: FunnelStep, range: StatsRange): string | null {
   switch (step.key) {
+    // 访客步骤没有对应的单一事件可筛，落点是"仅匿名"的原始记录 ——
+    // 也就是「来了但没注册」那批人，正是这一步要看的东西
+    case "visited":
+      return eventsUrl({ range, identity: "anonymous" })
     case "course_open":
     case "lesson_start":
     case "trial_claimed":
@@ -78,12 +92,47 @@ function stepHref(step: FunnelStep, range: StatsRange): string | null {
 }
 
 /**
+ * 步骤来源标签。三种来源的失败模式完全不同，颜色必须能一眼区分：
+ *   数据库（绿）—— 权威，不依赖客户端上报
+ *   埋点（蓝）  —— 某个具体事件的次数/人数
+ *   推导（青）  —— 由埋点算出来的量（目前只有访客数），不对应任何单个事件
+ */
+const SOURCE_TAG: Record<FunnelStep["source"], { color: string; label: string }> = {
+  db: { color: "green", label: "数据库" },
+  events: { color: "blue", label: "埋点" },
+  traffic: { color: "cyan", label: "独立访客" },
+}
+
+const SOURCE_BAR: Record<FunnelStep["source"], string> = {
+  db: "linear-gradient(90deg,#52c41a,#95de64)",
+  events: "linear-gradient(90deg,#1677ff,#69b1ff)",
+  traffic: "linear-gradient(90deg,#13c2c2,#87e8de)",
+}
+
+/**
+ * 「看明细」的文案。
+ *
+ * 「访问站点」必须换一个说法：它的数字是**全部**独立访客（含后来注册的人），
+ * 而落点只能给未登录的原始记录 —— 没有"按访客去重"的列表页，这是数据层的
+ * 事实，不是实现偷懒。文案里写清是子集，比让人点进去发现数字对不上、
+ * 然后怀疑埋点丢了要好得多。
+ */
+function stepLinkLabel(step: FunnelStep): string {
+  return step.key === "visited" ? "看未登录访客 →" : "看明细 →"
+}
+
+/**
  * 首启漏斗报表。
  *
- * 口径是**混合**的，界面上用标签明确标出每一步的数从哪来：
+ * 口径是**混合**的，界面上用标签明确标出每一步的数从哪来（见 SOURCE_TAG）：
  *   数据库（绿）—— 注册 / 练完至少一句 / 付费。权威，不依赖客户端上报。
  *   埋点（蓝）  —— 打开课程 / 进入练习 / 领取体验 / 看过定价。
+ *   独立访客（青）—— 第一步「访问站点」，按 visitor 去重，含未注册的人。
  * 标出来是为了让人不会拿「埋点少报」去误判成「用户没做」。
+ *
+ * 第一步与其余各步**分母不同**（全站流量 vs 同期群），所以 cohortNote 与
+ * 页面文案都要写清楚，否则「访客 100 → 注册 3」会被当成可以跟
+ * 「注册 3 → 付费 0」连起来读的一段。
  *
  * 这一页只回答「首启漏斗转化如何」。事件分布、趋势、页面排行、原始记录
  * 全部在【埋点分析】页 —— 同一份数据在两个页面各画一遍，迟早会改出不一致。
@@ -135,8 +184,52 @@ export default function AnalyticsPage() {
         {rangeSegmented}
       </div>
       <Text type="secondary" style={{ display: "block", marginTop: 4 }}>
-        首启漏斗 · 注册 → 打开课程 → 进入练习 → 练完一句 → 领取体验 → 看定价 → 付费
+        首启漏斗 · 访问站点 → 注册 → 打开课程 → 进入练习 → 练完一句 → 领取体验 → 看定价 → 付费
       </Text>
+
+      {/* 获客：流量 → 注册。
+          这一段存在的唯一理由是回答「来了多少人、注册了多少」——
+          同期群口径的第一行就是"注册"，天然答不了这个问题（没注册的人在
+          cohort 之外），此前的后台因此完全没有获客顶端。 */}
+      <Card title={`获客（流量 → 注册 · ${data.rangeLabel}）`} style={{ marginTop: 20 }}>
+        <Row gutter={[16, 16]}>
+          <Col xs={12} md={8}>
+            <MetricCard
+              title="独立访客"
+              value={data.acquisition.visitors}
+              href={eventsUrl({ range, identity: "anonymous" })}
+              drillHint="仅看未登录的原始记录"
+            />
+          </Col>
+          <Col xs={12} md={8}>
+            <MetricCard
+              title="其中已归属账号"
+              value={data.acquisition.converted}
+            />
+          </Col>
+          <Col xs={12} md={8}>
+            <MetricCard
+              title="注册转化率"
+              value={pct(data.acquisition.conversionRate)}
+            />
+          </Col>
+        </Row>
+
+        {data.acquisition.visitorShortfall ? (
+          <Alert
+            style={{ marginTop: 12 }}
+            type="warning"
+            showIcon
+            message="访客数不完整，转化率暂不计算"
+            description={data.acquisition.note}
+          />
+        ) : (
+          <Text type="secondary" style={{ display: "block", marginTop: 12, fontSize: 12 }}>
+            「其中已归属账号」= 这批访客里后来注册/登录过的人；注册转化率 = 已归属账号 ÷ 独立访客。
+            {" "}{data.acquisition.note}
+          </Text>
+        )}
+      </Card>
 
       {/* 关键指标：全部走数据库权威口径，且每一项都能点进构成它的记录。
           这是「指标 → 埋点详情」闭环在漏斗页的一半 —— 另一半是下面每一步的「看明细」。 */}
@@ -204,14 +297,16 @@ export default function AnalyticsPage() {
 
         <div style={{ marginTop: 16 }}>
           {data.funnel.map((step) => {
-            const width = Math.round((step.value / maxValue) * 100)
+            // 访客数被按注册数取下界时，条宽不能超过 100%，否则会撑破容器；
+            // 数字本身仍然照实显示（差异要显式暴露，而不是靠裁掉来隐藏）
+            const width = Math.min(100, Math.round((step.value / maxValue) * 100))
             const href = stepHref(step, range)
             return (
               <div key={step.key} style={{ marginBottom: 14 }}>
                 <div style={{ display: "flex", alignItems: "baseline", gap: 8, marginBottom: 4, flexWrap: "wrap" }}>
                   <span style={{ fontWeight: 600, minWidth: 110 }}>{step.label}</span>
-                  <Tag color={step.source === "db" ? "green" : "blue"} style={{ marginRight: 0 }}>
-                    {step.source === "db" ? "数据库" : "埋点"}
+                  <Tag color={SOURCE_TAG[step.source].color} style={{ marginRight: 0 }}>
+                    {SOURCE_TAG[step.source].label}
                   </Tag>
                   <span style={{ fontSize: 18, fontWeight: 700 }}>{step.value.toLocaleString()}</span>
                   <span style={{ color: "#999", fontSize: 12 }}>
@@ -219,7 +314,7 @@ export default function AnalyticsPage() {
                   </span>
                   {href ? (
                     <Link href={href} style={{ fontSize: 12 }}>
-                      看明细 →
+                      {stepLinkLabel(step)}
                     </Link>
                   ) : null}
                 </div>
@@ -229,10 +324,7 @@ export default function AnalyticsPage() {
                       width: `${width}%`,
                       height: "100%",
                       borderRadius: 5,
-                      background:
-                        step.source === "db"
-                          ? "linear-gradient(90deg,#52c41a,#95de64)"
-                          : "linear-gradient(90deg,#1677ff,#69b1ff)",
+                      background: SOURCE_BAR[step.source],
                     }}
                   />
                 </div>
@@ -245,7 +337,7 @@ export default function AnalyticsPage() {
           style={{ marginTop: 8 }}
           type="warning"
           showIcon
-          message="同期群口径"
+          message="口径说明（两段分母不同）"
           description={data.cohortNote}
         />
 
@@ -258,7 +350,10 @@ export default function AnalyticsPage() {
             <>
               绿色步骤取自数据库（注册 / 练完至少一句 / 付费），不受客户端上报影响；
               蓝色步骤只有埋点能回答。因此蓝色数字明显偏低时，通常是埋点被广告拦截器挡掉
-              或漏发，而不是用户没做。点每一步的「看明细」可以核对背后是哪些具体记录。
+              或漏发，而不是用户没做。
+              青色第一步按一年期 visitor cookie 去重（见 lib/visitor.ts），它含**未注册的人**，
+              所以和后面各步不是同一个分母，不要跨段算比率。
+              点每一步的「看明细」可以核对背后是哪些具体记录。
             </>
           }
         />

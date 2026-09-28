@@ -1,6 +1,14 @@
 "use client"
 
+import {
+  VISITOR_COOKIE,
+  VISITOR_MAX_AGE_DAYS,
+  newVisitorId,
+  parseVisitorId,
+} from "@/lib/visitor"
+
 let sessionId = ""
+let visitorId: string | null = null
 
 function getSessionId(): string {
   if (typeof window === "undefined") return ""
@@ -12,6 +20,49 @@ function getSessionId(): string {
     }
   }
   return sessionId
+}
+
+/** 读 cookie。只用一次 split，避免正则带来的转义歧义 */
+function readCookie(name: string): string | null {
+  const prefix = `${name}=`
+  for (const part of document.cookie.split("; ")) {
+    if (part.startsWith(prefix)) return part.slice(prefix.length)
+  }
+  return null
+}
+
+/**
+ * 拿到（必要时创建）本浏览器的长期 visitor id。
+ *
+ * 为什么要有它、以及为什么不能用 sessionId 代替：见 lib/visitor.ts 文件头。
+ * 一句话是 —— sessionId 活在 sessionStorage 里，关标签页就没了，
+ * 匿名事件因此数不出"人"，也没法与之后的注册串起来。
+ *
+ * 写 cookie 失败（隐私模式）不抛出：埋点是旁路，这次不带 visitor id 也要照常上报，
+ * 服务端会存 NULL，报表按 session_id 降级统计。
+ */
+function getVisitorId(): string | null {
+  if (typeof window === "undefined") return null
+  if (visitorId) return visitorId
+
+  try {
+    const existing = parseVisitorId(readCookie(VISITOR_COOKIE))
+    if (existing) {
+      visitorId = existing
+      return visitorId
+    }
+
+    const created = newVisitorId()
+    const maxAge = VISITOR_MAX_AGE_DAYS * 24 * 60 * 60
+    // SameSite=Lax：从外部链接（含微信）跳进来时要能读到同一个 visitor
+    // 不加 Secure：本地 http 调试也要能写上（生产是 https，加上会让 e2e 失效）
+    document.cookie = `${VISITOR_COOKIE}=${created}; path=/; max-age=${maxAge}; SameSite=Lax`
+    // 只有确认写得进去才认这个值；写不进去下次再试，而不是让内存与 cookie 长期不一致
+    visitorId = parseVisitorId(readCookie(VISITOR_COOKIE))
+    return visitorId
+  } catch {
+    return null
+  }
 }
 
 export function track(
@@ -29,6 +80,7 @@ export function track(
         properties: properties || {},
         pageUrl: window.location.pathname,
         sessionId: getSessionId(),
+        visitorId: getVisitorId(),
       }),
       keepalive: true,
     })

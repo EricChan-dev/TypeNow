@@ -13,11 +13,14 @@ import { and, asc, desc, eq, gt, lt, sql } from "drizzle-orm"
  *
  * 1. `user`：这条事件属于谁。埋点表只存 user_id，不 JOIN 的话详情页
  *    只有一串 UUID，看不出是人还是匿名流量。
- * 2. `context`：同一用户（或同一 session，匿名时）在这条事件**前后各 15 条**。
+ * 2. `context`：同一用户（或匿名时同一访客/会话）在这条事件**前后各 15 条**。
  *    单看一条 click 没有意义，要看它前面的 page_view 和后面的
  *    click_subscribe 才能还原用户当时在干什么。
  *
- * 匿名事件没有 userId，退化成按 sessionId 取上下文；两者都没有就只返回记录本身。
+ * 匿名事件的归并优先级：visitor_id（一年期 cookie，见 lib/visitor.ts）
+ * → session_id（sessionStorage，关标签页就没了）。必须优先 visitor：
+ * 匿名流量最有价值的轨迹恰恰是"跨了几次访问"的那条线，按 session 取
+ * 会在第二次访问处断掉，看起来就像另一个人。两者都没有就只返回记录本身。
  */
 const CONTEXT_LIMIT = 15
 
@@ -39,6 +42,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
       id: analyticsEvents.id,
       eventType: analyticsEvents.eventType,
       userId: analyticsEvents.userId,
+      visitorId: analyticsEvents.visitorId,
       pageUrl: analyticsEvents.pageUrl,
       sessionId: analyticsEvents.sessionId,
       properties: analyticsEvents.properties,
@@ -56,12 +60,21 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
 
   if (!row) return NextResponse.json({ error: "Not found" }, { status: 404 })
 
-  // 上下文：优先按用户，匿名时按 session
+  // 上下文归属：用户 → 访客（visitor）→ 会话（session），逐级退化
   const scope = row.userId
     ? eq(analyticsEvents.userId, row.userId)
-    : row.sessionId
-      ? eq(analyticsEvents.sessionId, row.sessionId)
-      : null
+    : row.visitorId
+      ? eq(analyticsEvents.visitorId, row.visitorId)
+      : row.sessionId
+        ? eq(analyticsEvents.sessionId, row.sessionId)
+        : null
+  const contextScope: "user" | "visitor" | "session" | "none" = row.userId
+    ? "user"
+    : row.visitorId
+      ? "visitor"
+      : row.sessionId
+        ? "session"
+        : "none"
 
   const context = scope
     ? (
@@ -110,6 +123,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
       id: String(row.id),
       eventType: row.eventType,
       userId: row.userId,
+      visitorId: row.visitorId,
       pageUrl: row.pageUrl,
       sessionId: row.sessionId,
       properties: row.properties,
@@ -130,7 +144,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
             eventCount: userEventCount,
           }
         : null,
-      contextScope: row.userId ? "user" : row.sessionId ? "session" : "none",
+      contextScope,
     },
   })
 }

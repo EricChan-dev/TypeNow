@@ -183,20 +183,35 @@ export function eventLabel(event: string): string {
  * 首启漏斗。顺序即用户真实路径，报表按这个顺序展示每一步。
  *
  * 每步标注 `source`，决定数字从哪来：
- *   "db"     —— 权威域数据。埋点会被广告拦截器挡掉或漏发，注册/练习/付费
- *               这三个最关键的数必须来自数据库，不能靠客户端上报。
- *   "events" —— 只有行为埋点能回答的问题（比如「打开了课程但一句没练」）。
+ *   "db"      —— 权威域数据。埋点会被广告拦截器挡掉或漏发，注册/练习/付费
+ *                这三个最关键的数必须来自数据库，不能靠客户端上报。
+ *   "events"  —— **某个具体事件**的次数/人数，key 必须同时是 ALLOWED_EVENTS 里的
+ *                事件名（否则前端根本不上报，这一步会永远是 0）。只有行为埋点
+ *                能回答的问题（比如「打开了课程但一句没练」）才用它。
+ *   "traffic" —— 由埋点**推导**出来的量，不对应任何单个事件：目前只有首步
+ *                「访问站点」，按 lib/visitor.ts 的匿名访客身份去重计数。
  *
- * 这也意味着：即使埋点全丢，前三个数依然准确；反过来若埋点数与 db 数差异巨大，
- * 说明埋点本身有问题，报表会把这个差异显式暴露出来。
+ * 为什么要区分 "events" 与 "traffic"，而不是把 visited 硬塞成某个事件名：
+ * 它们的失败模式完全不同 —— 前者数字为 0 意味着"事件没上报"，
+ * 后者为 0 意味着"这段时间真没人来"。混在内一起会让人对着空漏斗查错方向。
+ *
+ * 这也意味着：即使埋点全丢，"traffic"/"events" 两类步骤之外的 db 数字依然准确；
+ * 反过来若埋点数与 db 数差异巨大，说明埋点本身有问题，报表会把这个差异显式暴露出来。
+ *
+ * 「访问站点」放在最前面是为了补上此前**完全缺失的漏斗顶端**：
+ * 2026-09-28 之前第一步就是「注册」，于是"来了多少人、注册转化率是多少"
+ * 这两个获客环节的核心问题在后台没有任何地方能回答 —— 而匿名数据其实一直在库里。
  */
 export interface FunnelStep {
   key: string
   label: string
-  source: "db" | "events"
+  source: "db" | "events" | "traffic"
 }
 
 export const FUNNEL_STEPS: FunnelStep[] = [
+  // 全站新访客（按 visitor_id 去重，见 lib/visitor.ts）。注意这一步是
+  // 全站流量口径，不与后面各步共享同一个同期群 —— 见 funnel 路由的 cohortNote
+  { key: "visited", label: "访问站点", source: "traffic" },
   { key: "registered", label: "注册", source: "db" },
   { key: "course_open", label: "打开课程", source: "events" },
   { key: "lesson_start", label: "进入练习", source: "events" },

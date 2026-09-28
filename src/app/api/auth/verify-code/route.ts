@@ -8,7 +8,7 @@ import { checkRateLimit, getClientIP } from "@/lib/rate-limit"
 import { generateInviteCode } from "@/lib/subscription"
 import { requestSignupContext, signupFields } from "@/lib/signup-source"
 import { FIRST_TOUCH_COOKIE, parseFirstTouch } from "@/lib/first-touch"
-import { recordServerEvent } from "@/lib/analytics-server"
+import { recordServerEvent, visitorIdFromRequest } from "@/lib/analytics-server"
 import { trialGrantFields } from "@/lib/trial"
 import { INVITE_REGISTER_DAYS } from "@/lib/invite-rules"
 
@@ -129,6 +129,9 @@ export async function POST(request: NextRequest) {
       userId: id,
       properties: { channel: signup.signupChannel, referred: Boolean(referredBy) },
       pageUrl: "/login",
+      // 把这次手机号注册绑到浏览器的匿名访客上（见 lib/visitor.ts）。
+      // 没有它，匿名流量与注册用户之间就没有任何字段可join。
+      visitorId: visitorIdFromRequest(request),
     })
     const [newUser] = await db.select().from(users).where(eq(users.id, id)).limit(1)
     user = newUser

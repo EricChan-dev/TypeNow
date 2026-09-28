@@ -39,6 +39,7 @@ interface StatsData {
     events: number
     users: number
     sessions: number
+    visitors: number
     anonymous: number
     anonymousRate: number | null
     firstAt: string | null
@@ -55,6 +56,7 @@ interface EventRow {
   id: string
   eventType: string
   userId: string | null
+  visitorId: string | null
   userName: string | null
   userPhone: string | null
   userIsPro: number | null
@@ -202,7 +204,29 @@ function EventsExplorer() {
       dataIndex: "userId",
       width: 160,
       render: (_: string | null, row: EventRow) => {
-        if (!row.userId) return <Tag>匿名</Tag>
+        if (!row.userId) {
+          // 匿名行必须带出访客标识：没有它，表里所有匿名记录长得一模一样，
+          // 分不清是 3 个不同的人还是同一个人来了 3 次（见 lib/visitor.ts）。
+          // 点它 = 按这个访客筛出完整轨迹（q 已支持匹配 visitor_id）。
+          return (
+            <Space direction="vertical" size={2}>
+              <Tag style={{ marginRight: 0 }}>匿名</Tag>
+              {row.visitorId ? (
+                <Tooltip title={`按此访客筛选完整轨迹：${row.visitorId}`}>
+                  <a onClick={() => setParam({ q: row.visitorId })}>
+                    <Text code style={{ fontSize: 12 }}>
+                      {row.visitorId.slice(0, 8)}
+                    </Text>
+                  </a>
+                </Tooltip>
+              ) : (
+                <Text type="secondary" style={{ fontSize: 12 }}>
+                  无访客标识
+                </Text>
+              )}
+            </Space>
+          )
+        }
         return (
           <Space size={4}>
             <Link href={`/admin/users/${row.userId}`}>{row.userName || "(未命名)"}</Link>
@@ -383,7 +407,9 @@ function EventsExplorer() {
         </Col>
         <Col xs={12} md={6}>
           <Card size="small">
-            <Statistic title="会话数" value={summary?.sessions ?? 0} loading={statsLoading} />
+            {/* 独立访客 vs 独立用户：前者含未登录的人（按 visitor_id / session_id 去重），
+                后者只数已登录账号。差值是"来了但没注册"的规模 —— 这个数此前根本没有 */}
+            <Statistic title="独立访客" value={summary?.visitors ?? 0} loading={statsLoading} />
           </Card>
         </Col>
         <Col xs={12} md={6}>
@@ -403,6 +429,9 @@ function EventsExplorer() {
       {summary?.firstAt ? (
         <Text type="secondary" style={{ display: "block", marginTop: 8, fontSize: 12 }}>
           最早一条：{fmtTime(summary.firstAt)} · 最新一条：{fmtTime(summary.lastAt)}
+          {" · "}会话数 {summary.sessions}
+          {" · "}独立访客按一年期 visitor cookie 去重（lib/visitor.ts）；缺失时退回按会话计，
+          因此这个数只会偏大，可当下界看
         </Text>
       ) : null}
 

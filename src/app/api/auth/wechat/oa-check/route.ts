@@ -12,7 +12,7 @@ import {
   signupFields,
 } from "@/lib/signup-source"
 import { FIRST_TOUCH_COOKIE, parseFirstTouch } from "@/lib/first-touch"
-import { recordServerEvent } from "@/lib/analytics-server"
+import { recordServerEvent, visitorIdFromRequest } from "@/lib/analytics-server"
 
 export async function GET(request: NextRequest) {
   const scene = request.cookies.get("wechat_oa_scene")?.value
@@ -118,6 +118,10 @@ export async function GET(request: NextRequest) {
         userId: id,
         properties: { channel: signup.signupChannel, fallback: true },
         pageUrl: "/login",
+        // 这是扫码者自己的浏览器在轮询，所以读得到 typ_vid（见 lib/visitor.ts）。
+        // 注意：主路径（关注事件先建号）的建号发生在微信服务器的 webhook 里，
+        // 那里没有 cookie；那条链路的 visitor 绑定靠登录后浏览器继续上报的埋点事件。
+        visitorId: visitorIdFromRequest(request),
       })
     }
   }

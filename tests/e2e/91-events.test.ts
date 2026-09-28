@@ -29,17 +29,19 @@ async function insertEvent(opts: {
   userId?: string | null
   pageUrl?: string | null
   sessionId?: string | null
+  visitorId?: string | null
   properties?: Record<string, unknown>
 }): Promise<number> {
   const res = await q(
-    `INSERT INTO analytics_events (event_type, user_id, properties, page_url, session_id)
-     VALUES (?, ?, ?, ?, ?)`,
+    `INSERT INTO analytics_events (event_type, user_id, properties, page_url, session_id, visitor_id)
+     VALUES (?, ?, ?, ?, ?, ?)`,
     [
       opts.eventType,
       opts.userId ?? null,
       JSON.stringify(opts.properties ?? {}),
       opts.pageUrl ?? null,
       opts.sessionId ?? null,
+      opts.visitorId ?? null,
     ],
   )
   return Number((res as unknown as { insertId: number }).insertId)
@@ -50,6 +52,7 @@ interface EventsList {
     id: string
     eventType: string
     userId: string | null
+    visitorId: string | null
     userName: string | null
     userPhone: string | null
     pageUrl: string | null
@@ -66,6 +69,7 @@ interface StatsResponse {
     events: number
     users: number
     sessions: number
+    visitors: number
     anonymous: number
     anonymousRate: number | null
   }
@@ -220,6 +224,37 @@ describe("埋点图表数据 /api/admin/events/stats", () => {
     expect(stats.body.summary.events).toBe(list.body.total)
   })
 
+  it("**明细行带出 visitor_id**：匿名记录之间才分得清是几个不同的人", async () => {
+    const admin = ApiClient.asUser(await makeAdmin())
+    const v1 = "3f2504e0-4f89-41d3-9a0c-000000000301"
+    const v2 = "3f2504e0-4f89-41d3-9a0c-000000000302"
+    await insertEvent({ eventType: "page_view", visitorId: v1, pageUrl: "/vv-list" })
+    await insertEvent({ eventType: "page_view", visitorId: v1, pageUrl: "/vv-list" })
+    await insertEvent({ eventType: "page_view", visitorId: v2, pageUrl: "/vv-list" })
+    // 存量行（两列皆空）也必须能渲染，visitorId 为 null 而不是报错
+    await insertEvent({ eventType: "page_view", pageUrl: "/vv-list" })
+
+    const res = await admin.get<EventsList>("/api/admin/events?range=all&pageUrl=/vv-list")
+    expect(res.status).toBe(200)
+    expect(res.body.total).toBe(4)
+    const ids = res.body.data.map((r) => r.visitorId)
+    expect(ids.filter((v) => v === v1).length).toBe(2)
+    expect(ids.filter((v) => v === v2).length).toBe(1)
+    expect(ids.filter((v) => v === null).length).toBe(1)
+  })
+
+  it("关键词按 visitor_id 能筛出同一个访客的全部轨迹（界面点访客码就靠它）", async () => {
+    const admin = ApiClient.asUser(await makeAdmin())
+    const v = "3f2504e0-4f89-41d3-9a0c-000000000303"
+    await insertEvent({ eventType: "page_view", visitorId: v, pageUrl: "/q-a" })
+    await insertEvent({ eventType: "theme_toggle", visitorId: v, pageUrl: "/q-b" })
+    await insertEvent({ eventType: "page_view", visitorId: "3f2504e0-4f89-41d3-9a0c-000000000304", pageUrl: "/q-c" })
+
+    const res = await admin.get<EventsList>(`/api/admin/events?range=all&q=${v}`)
+    expect(res.body.total).toBe(2)
+    expect(res.body.data.every((r) => r.visitorId === v)).toBe(true)
+  })
+
   it("事件排行给出次数与独立人数两个口径", async () => {
     const admin = ApiClient.asUser(await makeAdmin())
     const a = await insertUser({ name: "A" })
@@ -280,6 +315,35 @@ describe("埋点图表数据 /api/admin/events/stats", () => {
     expect(res.body.summary.events).toBe(2)
     expect(res.body.summary.anonymousRate).toBeCloseTo(0.5, 5)
   })
+
+  it("独立访客含未登录的人，且按 visitor_id 去重（同一人多条事件只算一个）", async () => {
+    const admin = ApiClient.asUser(await makeAdmin())
+    const uid = await insertUser({ name: "访客口径" })
+    // 未登录访客：同一个 visitor 三条事件
+    for (let i = 0; i < 3; i++) {
+      await insertEvent({ eventType: "page_view", pageUrl: "/vv", visitorId: "3f2504e0-4f89-41d3-9a0c-000000000101" })
+    }
+    // 已登录用户：另一个 visitor
+    await insertEvent({ eventType: "page_view", userId: uid, pageUrl: "/vv", visitorId: "3f2504e0-4f89-41d3-9a0c-000000000102" })
+
+    const res = await admin.get<StatsResponse>("/api/admin/events/stats?range=all&pageUrl=/vv")
+    expect(res.body.summary.events).toBe(4)
+    // 独立用户只数登录账号（1），独立访客把匿名的那位也算进来（2）
+    expect(res.body.summary.users).toBe(1)
+    expect(res.body.summary.visitors).toBe(2)
+  })
+
+  it("visitor_id 缺失时退回按 session_id 计，不会把两列皆空的行并成一个访客", async () => {
+    const admin = ApiClient.asUser(await makeAdmin())
+    await insertEvent({ eventType: "page_view", pageUrl: "/fb", sessionId: "s1" })
+    await insertEvent({ eventType: "page_view", pageUrl: "/fb", sessionId: "s1" })
+    await insertEvent({ eventType: "page_view", pageUrl: "/fb", sessionId: "s2" })
+    // 两列皆空：不该被算成第 3 个访客
+    await insertEvent({ eventType: "page_view", pageUrl: "/fb" })
+
+    const res = await admin.get<StatsResponse>("/api/admin/events/stats?range=all&pageUrl=/fb")
+    expect(res.body.summary.visitors).toBe(2)
+  })
 })
 
 describe("埋点详情 /api/admin/events/:id", () => {
@@ -337,7 +401,34 @@ describe("埋点详情 /api/admin/events/:id", () => {
     expect([...ids].sort((x, y) => x - y)).toEqual(ids)
   })
 
-  it("匿名记录按 session 取上下文（没有 userId 时退化成会话）", async () => {
+  it("匿名记录优先按 visitor 取上下文（跨访问的轨迹不断开）", async () => {
+    const admin = ApiClient.asUser(await makeAdmin())
+    const visitor = "3f2504e0-4f89-41d3-9a0c-000000000201"
+    // 同一访客在两个不同会话里的记录：按 session 只能看到一半，按 visitor 才是完整轨迹
+    await insertEvent({ eventType: "page_view", sessionId: "s-day1", visitorId: visitor, pageUrl: "/v/pre" })
+    const targetId = await insertEvent({
+      eventType: "pricing_view",
+      sessionId: "s-day2",
+      visitorId: visitor,
+      pageUrl: "/v/target",
+    })
+    await insertEvent({ eventType: "click_subscribe", sessionId: "s-day2", visitorId: visitor, pageUrl: "/v/post" })
+
+    const res = await admin.get<{
+      data: {
+        visitorId: string | null
+        contextScope: string
+        context: Array<{ eventType: string }>
+      }
+    }>(`/api/admin/events/${targetId}`)
+
+    expect(res.body.data.contextScope).toBe("visitor")
+    expect(res.body.data.visitorId).toBe(visitor)
+    // 另一个会话里的那条 page_view 也在上下文里 —— 这正是 visitor 归并的意义
+    expect(res.body.data.context.map((c) => c.eventType)).toContain("page_view")
+  })
+
+  it("匿名记录没有 visitor 时按 session 取上下文（逐级退化）", async () => {
     const admin = ApiClient.asUser(await makeAdmin())
     const sid = "e2e-session-ctx"
     await insertEvent({ eventType: "page_view", sessionId: sid, pageUrl: "/s/pre" })
@@ -353,7 +444,7 @@ describe("埋点详情 /api/admin/events/:id", () => {
     expect(res.body.data.context.length).toBe(2)
   })
 
-  it("既无 user_id 也无 session_id 时只返回记录本身，不报错", async () => {
+  it("既无 user_id 也无 visitor_id / session_id 时只返回记录本身，不报错", async () => {
     const admin = ApiClient.asUser(await makeAdmin())
     const id = await insertEvent({ eventType: "page_view" })
 
