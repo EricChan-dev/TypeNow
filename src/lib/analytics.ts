@@ -6,6 +6,7 @@ import {
   newVisitorId,
   parseVisitorId,
 } from "@/lib/visitor"
+import { deviceClassOf, type DeviceClass } from "@/lib/desktop-only"
 
 let sessionId = ""
 let visitorId: string | null = null
@@ -65,6 +66,30 @@ function getVisitorId(): string | null {
   }
 }
 
+/**
+ * 当前设备的类别，挂在**每个**事件的 properties 上。
+ *
+ * 为什么自动挂而不是让调用点自己传：要回答「扫码进来的手机用户是不是就是那些
+ * 练不了一句的人」，需要**任何**漏斗都能按设备拆开。只在个别事件上带这个字段，
+ * 恰恰会漏掉最关键的两步（lesson_start / practice_complete）—— 那样就只能看到
+ * "有多少手机用户来了"，看不到"他们走到哪一步掉的"。
+ *
+ * 判定复用 lib/desktop-only 的 deviceClassOf，与练习页那条提示同源。
+ * 这里直接读 matchMedia，不复用 desktop-only 的订阅快照：订阅是为渲染服务的
+ * （要在设备形态变化时重渲染），埋点只需要调用这一瞬间的值。
+ */
+function currentDeviceClass(): DeviceClass {
+  if (typeof window === "undefined" || typeof window.matchMedia !== "function") return "unknown"
+  try {
+    return deviceClassOf({
+      coarsePointer: window.matchMedia("(pointer: coarse)").matches,
+      noHover: window.matchMedia("(hover: none)").matches,
+    })
+  } catch {
+    return "unknown"
+  }
+}
+
 export function track(
   event: string,
   properties?: Record<string, unknown>
@@ -77,7 +102,9 @@ export function track(
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         event,
-        properties: properties || {},
+        // device 放在最后：它是维度，不允许调用点覆盖成别的值，
+        // 否则同一份报表里会混进两种口径。
+        properties: { ...(properties || {}), device: currentDeviceClass() },
         pageUrl: window.location.pathname,
         sessionId: getSessionId(),
         visitorId: getVisitorId(),
@@ -113,6 +140,15 @@ export function trackSubscribeClick(plan: string, fromPage: string) {
 
 export function trackSubscribeSuccess(plan: string, amount: number) {
   track("subscribe_pay_success", { plan, amount })
+}
+
+export function trackTouchNoticeShown(): void {
+  // device 由 track() 自动挂上，这里不用再传
+  track("touch_notice_shown")
+}
+
+export function trackTouchNoticeDismissed(): void {
+  track("touch_notice_dismissed")
 }
 
 export function trackLoginSuccess(method: "phone" | "wechat") {

@@ -23,6 +23,9 @@ export const ALLOWED_EVENTS = [
   "course_open",
   "lesson_start",
   "practice_complete",
+  // 触屏设备上的练习页提示（练习页 PC 优先，见 lib/desktop-only）
+  "touch_notice_shown",
+  "touch_notice_dismissed",
   // 付费
   "paywall_shown",
   "trial_claimed",
@@ -131,6 +134,20 @@ export const EVENT_META: Record<AnalyticsEvent, EventMeta> = {
     category: "learning",
     description: "一次练习结束。score 是正确率，sentences_count 是本次句数。",
     props: ["score", "sentences_count", "scene"],
+  },
+  touch_notice_shown: {
+    label: "触屏提示出现",
+    category: "learning",
+    description:
+      "在触屏设备上进入练习页，看到「建议在电脑上打开」。与同一 visitor 的 lesson_start / practice_complete 一起看，才能判断触屏用户是被这条提示劝退，还是本来就不会回来。",
+    props: ["device"],
+  },
+  touch_notice_dismissed: {
+    label: "关闭触屏提示",
+    category: "learning",
+    description:
+      "用户主动关掉了触屏提示。关掉不等于开始练习 —— 它只说明这条提示打扰到了人，之后有没有 practice_complete 才是结果。",
+    props: ["device"],
   },
   paywall_shown: {
     label: "出现试学墙",

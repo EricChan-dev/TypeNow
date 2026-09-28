@@ -32,6 +32,29 @@ export function isTouchPrimaryDevice(input: {
   return input.coarsePointer && input.noHover
 }
 
+/**
+ * 设备类别，供埋点当**维度**用。
+ *
+ * 为什么需要它：要回答「扫码进来的手机用户是不是就是那些练不了一句的人」，
+ * 必须能把漏斗按设备拆开（见 lib/analytics —— 它把 device 挂在**每个**事件上）。
+ * 这比只埋一个"提示条出现了"更有用：后者只能证明有人看到了提示，
+ * 前者能算出"触屏用户走到 lesson_start 之后还剩多少"。
+ *
+ * 与 isTouchPrimaryDevice 同源是刻意的：若提示条用一套判定、埋点用另一套，
+ * 就会出现「提示说你是手机、埋点说你是桌面」，据此得出的结论是错的。
+ *
+ * 保留 `unknown` 而**不并进 desktop**：拿不到 matchMedia 时（老浏览器、
+ * 非浏览器环境）算成桌面会把未知混进分母，让"手机的转化率"被高估。
+ */
+export type DeviceClass = "touch" | "desktop" | "unknown"
+
+export function deviceClassOf(
+  input: { coarsePointer: boolean; noHover: boolean } | null
+): DeviceClass {
+  if (!input) return "unknown"
+  return isTouchPrimaryDevice(input) ? "touch" : "desktop"
+}
+
 /** 读取「用户关闭过提示」的持久化标记。只认 "1"，其他一律视为未关闭。 */
 export function parseDesktopNoticeDismissed(raw: string | null): boolean {
   return raw === "1"

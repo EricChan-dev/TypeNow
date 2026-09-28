@@ -64,7 +64,14 @@ import { baseSentenceId } from "@/lib/sentence-id"
 import { decideResume } from "@/lib/practice-session"
 import { toast } from "sonner"
 import { TRIAL_DAYS } from "@/lib/trial-days"
-import { trackLessonStart, trackPracticeComplete, trackPaywallShown, trackTrialClaimed } from "@/lib/analytics"
+import {
+  trackLessonStart,
+  trackPracticeComplete,
+  trackPaywallShown,
+  trackTrialClaimed,
+  trackTouchNoticeShown,
+  trackTouchNoticeDismissed,
+} from "@/lib/analytics"
 
 function useDebounce<T extends (...args: never[]) => void>(fn: T, delay: number): T {
   const lastCall = useRef(0)
@@ -442,6 +449,18 @@ export function LearnClient({
     getDesktopNoticeSnapshot,
     getDesktopNoticeServerSnapshot,
   )
+
+  // 触屏提示出现时上报一次。
+  // 每次挂载只报一次是必须的：showDesktopNotice 会随 `(hover: none)` 变化
+  // （平板插上/拔掉键盘），跟着它报会在同一次访问里重复计数，
+  // 于是"触屏用户有多少"这个分母直接被放大。
+  const touchNoticeTrackedRef = useRef(false)
+  useEffect(() => {
+    if (showDesktopNotice && !touchNoticeTrackedRef.current) {
+      touchNoticeTrackedRef.current = true
+      trackTouchNoticeShown()
+    }
+  }, [showDesktopNotice])
 
   useEffect(() => {
     // 进入练习页 = 漏斗里「真的开始学」的那一步。这个 effect 在切换课时时会重跑，
@@ -1865,7 +1884,12 @@ export function LearnClient({
             <Keyboard className="h-3.5 w-3.5 text-amber-400/70 shrink-0" />
             <span>打字练习需要物理键盘，建议在电脑上打开，手感与识别都更可靠</span>
             <button
-              onClick={dismissDesktopNotice}
+              onClick={() => {
+                // 关掉≠开始练习：它只说明这条提示打扰到了人。
+                // 之后有没有 practice_complete 才是"移动端是不是劝退"的答案。
+                trackTouchNoticeDismissed()
+                dismissDesktopNotice()
+              }}
               className="text-foreground/35 hover:text-foreground/70 transition-colors"
               aria-label="关闭"
             >

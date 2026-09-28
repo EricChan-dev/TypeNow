@@ -9,6 +9,8 @@
  *   2. 白名单不能有重复项（Set 会静默吞掉，事件名写重了看不出来）。
  */
 import { describe, it, expect } from "vitest"
+import fs from "node:fs"
+import path from "node:path"
 import {
   ALLOWED_EVENTS,
   EVENT_CATEGORIES,
@@ -101,6 +103,38 @@ describe("FUNNEL_STEPS", () => {
 })
 
 // ─── 事件字典（EVENT_META） ──────────────────────────────────────────────────
+
+describe("触屏提示事件与 device 维度", () => {
+  it("两个触屏提示事件都在白名单里，且归在学习分类", () => {
+    for (const name of ["touch_notice_shown", "touch_notice_dismissed"] as const) {
+      expect(ALLOWED_EVENTS).toContain(name)
+      expect(EVENT_META[name].category).toBe("learning")
+      expect(EVENT_META[name].label.length).toBeGreaterThan(0)
+    }
+  })
+
+  it("track() 给**每个**事件自动挂上 device，且不允许调用点覆盖", () => {
+    const src = fs.readFileSync(path.join(process.cwd(), "src/lib/analytics.ts"), "utf8")
+    // 放在展开之后 = 调用点传的同名值会被覆盖：device 是维度，必须只有一个口径
+    expect(src).toMatch(/properties:\s*\{\s*\.\.\.\(properties \|\| \{\}\),\s*device: currentDeviceClass\(\)\s*\}/)
+    // 判定必须复用 desktop-only 的那一套，否则会出现
+    // 「提示条说你是手机、埋点说你是桌面」
+    expect(src).toContain('from "@/lib/desktop-only"')
+    expect(src).toContain("deviceClassOf(")
+    expect(src).not.toContain('window.innerWidth <')
+  })
+
+  it("练习页的提示接线完整：出现报一次、关闭也报一次", () => {
+    const src = fs.readFileSync(
+      path.join(process.cwd(), "src/components/home/learn/LearnClient.tsx"),
+      "utf8",
+    )
+    expect(src).toContain("trackTouchNoticeShown()")
+    expect(src).toContain("trackTouchNoticeDismissed()")
+    // 每次挂载只报一次，否则 showDesktopNotice 随 (hover:none) 变化会重复计数
+    expect(src).toContain("touchNoticeTrackedRef")
+  })
+})
 
 describe("EVENT_META", () => {
   it("每个白名单事件都有字典条目（漏写会被 TS 拦住，这里再兜一层运行时保证）", () => {

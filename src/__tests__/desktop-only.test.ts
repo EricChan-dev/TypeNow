@@ -4,6 +4,7 @@ import {
   isTouchPrimaryDevice,
   parseDesktopNoticeDismissed,
   shouldShowDesktopNotice,
+  deviceClassOf,
 } from "@/lib/desktop-only"
 
 /**
@@ -28,6 +29,24 @@ describe("isTouchPrimaryDevice", () => {
 
   it("只有无悬停也不足以判定（可能是键盘操作的设备）", () => {
     expect(isTouchPrimaryDevice({ coarsePointer: false, noHover: true })).toBe(false)
+  })
+})
+
+describe("deviceClassOf（埋点用的设备维度）", () => {
+  it("与 isTouchPrimaryDevice 同源：粗指针且无悬停 = touch", () => {
+    expect(deviceClassOf({ coarsePointer: true, noHover: true })).toBe("touch")
+  })
+
+  it("触屏笔记本、普通桌面都算 desktop", () => {
+    expect(deviceClassOf({ coarsePointer: true, noHover: false })).toBe("desktop")
+    expect(deviceClassOf({ coarsePointer: false, noHover: true })).toBe("desktop")
+    expect(deviceClassOf({ coarsePointer: false, noHover: false })).toBe("desktop")
+  })
+
+  it("拿不到 matchMedia 时是 unknown，**不能**并进 desktop", () => {
+    // 并进 desktop 会把未知混进分母，让"手机的转化率"被高估 ——
+    // 而这个比率正是要用它来决策的东西。
+    expect(deviceClassOf(null)).toBe("unknown")
   })
 })
 
