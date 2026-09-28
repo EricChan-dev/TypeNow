@@ -19,11 +19,13 @@ import fs from "node:fs"
 import path from "node:path"
 import {
   COMPARISON_ROWS,
+  FREE_AI_ANALYZE_PER_DAY,
   FREE_AI_CHAT_PER_DAY,
   FREE_PRONUNCIATION_PER_DAY,
   INCLUDED_FOR_EVERYONE,
   NOT_APPLICABLE,
   PARTNER_BENEFITS,
+  PRO_AI_ANALYZE_PER_DAY,
   PRO_AI_CHAT_PER_DAY,
   PRO_BENEFITS,
   PRO_PRONUNCIATION_PER_DAY,
@@ -81,11 +83,43 @@ describe("PRO_BENEFITS · 会员卖点必须真的只给会员", () => {
   })
 
   it("额度类权益的文案里的数字与常量一致（不写死、不改口径）", () => {
-    const pronunciation = PRO_BENEFITS.find((b) => b.id === "pronunciation")
-    const aiChat = PRO_BENEFITS.find((b) => b.id === "ai-chat")
-    expect(pronunciation?.claim).toContain(String(PRO_PRONUNCIATION_PER_DAY))
-    expect(pronunciation?.claim).toContain(String(FREE_PRONUNCIATION_PER_DAY))
-    expect(aiChat?.claim).toContain(String(PRO_AI_CHAT_PER_DAY))
+    // 遍历**所有** quota 权益而不是逐个点名：以后再加额度点位时，
+    // 漏掉文案同步会在这里失败，而不是悄悄漂移。
+    const quotaBenefits = PRO_BENEFITS.filter((b) => b.gate.kind === "quota")
+    expect(quotaBenefits.length).toBeGreaterThan(0)
+    for (const b of quotaBenefits) {
+      if (b.gate.kind !== "quota") continue
+      // 会员额度必须出现在文案里
+      expect(`${b.label} ${b.claim}`).toContain(String(b.gate.proPerDay))
+      // 免费额度若 > 0 也必须出现（否则用户不知道免费用得完多少）
+      if (b.gate.freePerDay > 0) {
+        expect(`${b.label} ${b.claim}`).toContain(String(b.gate.freePerDay))
+      }
+    }
+  })
+
+  it("同一个能力在价格页与功能介绍页必须是同一个名字", () => {
+    // 这曾经真的漂移过：价格页写「AI 句子解析」、功能介绍页写「AI 句子讲解」，
+    // 同一个能力两个名字。用户面统一叫「讲解」（内部代码叫 analyze 没关系，
+    // 那是对实现的描述）。
+    const pricingSide = read("src/lib/membership-benefits.ts")
+    const featuresSide = read("src/lib/product-features.ts")
+    for (const [name, src] of [["membership-benefits", pricingSide], ["product-features", featuresSide]] as const) {
+      expect(src, `${name} 不该再出现另一种叫法`).not.toContain("句子解析")
+      expect(src, `${name} 应使用「句子讲解」`).toContain("句子讲解")
+    }
+  })
+
+  it("AI 句子解析也进了权益清单（此前它只被限流、没有任何会员区分）", () => {
+    const analyze = PRO_BENEFITS.find((b) => b.id === "ai-analyze")
+    expect(analyze).toBeDefined()
+    expect(analyze?.gate).toEqual({
+      kind: "quota",
+      freePerDay: FREE_AI_ANALYZE_PER_DAY,
+      proPerDay: PRO_AI_ANALYZE_PER_DAY,
+    })
+    // 免费用户也有这一项（有全局缓存兜底），所以 free 必须 > 0
+    expect(FREE_AI_ANALYZE_PER_DAY).toBeGreaterThan(0)
   })
 
   it("回归：不得再出现曾经上线过的假宣称", () => {
@@ -183,6 +217,19 @@ describe("接口与文案同源（防漂移的核心）", () => {
     expect(src).toContain("FREE_PRONUNCIATION_PER_DAY")
     // 旧实现是"每用户 30 次/小时"的硬编码常量，不得回退
     expect(src).not.toContain("MAX_EVALUATE_PER_USER_HOUR")
+  })
+
+  it("analyze 路由用「日期键 + 一天窗口」的每日额度，且按会员区分", () => {
+    const src = read("src/app/api/knowledge/analyze/route.ts")
+    expect(src).toContain("@/lib/membership-benefits")
+    expect(src).toContain("PRO_AI_ANALYZE_PER_DAY")
+    expect(src).toContain("FREE_AI_ANALYZE_PER_DAY")
+    // 日期键 + 一天窗口：跨天重置，且不会被清理截短成 1 小时
+    expect(src).toContain("toShanghaiDateStr()")
+    expect(src).toContain("DAY_MS")
+    // 旧实现是「每用户 20 次/小时」，且提示写着"今日"——文案与窗口不符
+    expect(src).not.toContain("MAX_ANALYZE_PER_HOUR")
+    expect(src).not.toContain('"knowledge-analyze-hour"')
   })
 
   it("chat 路由从事实源 import 会员免费额度", () => {

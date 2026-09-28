@@ -1,23 +1,32 @@
 import { NextResponse } from "next/server"
 import { createHash } from "crypto"
 import { db } from "@/lib/db"
-import { sentenceKnowledge } from "@/lib/db/schema"
+import { sentenceKnowledge, users } from "@/lib/db/schema"
 import { eq } from "drizzle-orm"
 import { getSession } from "@/lib/auth/session"
 import { checkRateLimit } from "@/lib/rate-limit"
+import { isProActive } from "@/lib/subscription"
+import { toShanghaiDateStr } from "@/lib/practice-stats"
+import {
+  DAY_MS,
+  FREE_AI_ANALYZE_PER_DAY,
+  PRO_AI_ANALYZE_PER_DAY,
+} from "@/lib/membership-benefits"
 import { KNOWLEDGE_UNCONFIGURED_CODE } from "@/lib/knowledge-failure"
 import { DEEPSEEK_MODEL, DEEPSEEK_THINKING } from "@/lib/llm"
 
 // 每次 LLM 调用都是真金白银，必须给单用户额度上限：
-// 5 次/分钟防突发，20 次/小时作为实际成本上限。
+//   5 次/分钟  —— 防突发（连点、脚本）
+//   每日额度    —— 真正的成本封顶，按会员区分，数值与价格页文案同源
+//                 （见 lib/membership-benefits）
 //
-// 这里原本还写着「checkRateLimit 的内存清理只保留 1 小时内的记录，因此更长的
-// 窗口（如每日额度）不可靠」—— 那个限制**已经不存在了**：清理现在按每个桶
-// 自己的 windowMs 过滤（见 lib/rate-limit.ts 的 Bucket.windowMs），
-// 跟读评分与 AI 私教的每日额度就是这么实现的。
-// 现在仍用 ≤1 小时的窗口，只是因为对「解析一句」这个动作够用，不再是因为实现受限。
+// 此前这里只有「20 次/小时」，折算下来一天最多 480 次、**没有任何每日封顶**；
+// 而且限流提示写的是「今日分析额度已用完」—— 文案说"今日"，窗口却只有 1 小时，
+// 用户等一小时就能继续，提示与事实不符。现在窗口与文案是一致的。
+//
+// 额度只在**真正要调用模型时**才消耗：缓存命中与未配置 key 都在这之前返回，
+// 那两种情况下不该扣用户的量。
 const MAX_ANALYZE_PER_MINUTE = 5
-const MAX_ANALYZE_PER_HOUR = 20
 
 const SYSTEM_PROMPT = `你是一个专业的英语教学助手，精通英语语法、词汇和文化背景知识。请分析给定的英语句子，只返回纯JSON，不要包含任何markdown标记或其他文字。
 
@@ -133,15 +142,33 @@ export async function POST(request: Request) {
     )
   }
 
-  const hourLimit = checkRateLimit(
-    "knowledge-analyze-hour",
-    session.userId,
-    MAX_ANALYZE_PER_HOUR,
-    3600_000,
+  // 每日额度按会员身份区分（数值与价格页文案同源，见 lib/membership-benefits）。
+  // key 里带上海日历日 —— 跨天即换新桶，额度自然重置；窗口取一天，
+  // 且必须配合 rate-limit 的「按桶窗口清理」才不会被截短成 1 小时。
+  const [viewer] = db
+    ? await db
+        .select({ isPro: users.isPro, proExpires: users.proExpires })
+        .from(users)
+        .where(eq(users.id, session.userId))
+        .limit(1)
+    : []
+  const isPro = isProActive(viewer)
+  const dailyQuota = isPro ? PRO_AI_ANALYZE_PER_DAY : FREE_AI_ANALYZE_PER_DAY
+
+  const dailyLimit = checkRateLimit(
+    "knowledge-analyze-daily",
+    `${session.userId}:${toShanghaiDateStr()}`,
+    dailyQuota,
+    DAY_MS,
   )
-  if (!hourLimit.allowed) {
+  if (!dailyLimit.allowed) {
     return NextResponse.json(
-      { error: `今日分析额度已用完，请${hourLimit.retryAfter}秒后重试` },
+      {
+        error: isPro
+          ? `今日讲解额度已用完（会员每天 ${PRO_AI_ANALYZE_PER_DAY} 次），请明天再来`
+          : `今日讲解额度已用完（每天 ${FREE_AI_ANALYZE_PER_DAY} 次），开通会员可提升至每天 ${PRO_AI_ANALYZE_PER_DAY} 次`,
+        code: "quota_exhausted",
+      },
       { status: 429 },
     )
   }

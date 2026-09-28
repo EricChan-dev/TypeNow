@@ -54,6 +54,22 @@ export const FREE_AI_CHAT_PER_DAY = 0
 export const PRO_AI_CHAT_PER_DAY = 2
 
 /**
+ * AI 句子讲解（内部实现是 /api/knowledge/analyze）的每日额度。
+ *
+ * 与上两项不同，这一项**免费用户也有**（它有全局缓存兜底：同一个句子只要有
+ * 任何人解析过，后续所有人命中缓存都不计费也不限流）。所以这里不是"免费没有"，
+ * 而是"免费够用、会员更宽"：
+ *
+ *   免费 30 次/天 —— 一个学习者一天认真读 30 句新句子的解析，已经远超正常使用；
+ *   会员 200 次/天 —— 给批量精读/刷题的人留出空间。
+ *
+ * 为什么要设每日上限：单次解析的 prompt 与响应都很长，是真金白银的调用。
+ * 此前只有「20 次/小时」的窗口 —— 折算下来一天最多 480 次，且**没有任何每日封顶**。
+ */
+export const FREE_AI_ANALYZE_PER_DAY = 30
+export const PRO_AI_ANALYZE_PER_DAY = 200
+
+/**
  * 权益的兑付方式。`kind` 决定了它能不能算作会员卖点：
  *   - `content`：内容解锁（本项目唯一真实门禁 = 每课试学句数）
  *   - `quota`  ：同一能力，会员每日次数更多（必须 pro > free）
@@ -98,6 +114,18 @@ export const PRO_BENEFITS: readonly Benefit[] = [
     label: "AI 私教助手",
     claim: `每天 ${PRO_AI_CHAT_PER_DAY} 次免费提问，超出后可用钻石`,
     gate: { kind: "quota", freePerDay: FREE_AI_CHAT_PER_DAY, proPerDay: PRO_AI_CHAT_PER_DAY },
+  },
+  {
+    id: "ai-analyze",
+    // 用户面统一叫「讲解」：内部代码里叫 analyze/解析，但那是对实现的描述。
+    // 曾经价格页写「解析」、功能介绍页写「讲解」，同一个能力两个名字。
+    label: "AI 句子讲解",
+    claim: `每天 ${PRO_AI_ANALYZE_PER_DAY} 次讲解（免费用户每天 ${FREE_AI_ANALYZE_PER_DAY} 次）`,
+    gate: {
+      kind: "quota",
+      freePerDay: FREE_AI_ANALYZE_PER_DAY,
+      proPerDay: PRO_AI_ANALYZE_PER_DAY,
+    },
   },
 ]
 
@@ -207,6 +235,13 @@ export const COMPARISON_ROWS: readonly ComparisonRow[] = [
     monthly: `每天 ${PRO_AI_CHAT_PER_DAY} 次免费`,
     yearly: `每天 ${PRO_AI_CHAT_PER_DAY} 次免费`,
     partner: `每天 ${PRO_AI_CHAT_PER_DAY} 次免费`,
+  },
+  {
+    feature: "AI 句子讲解",
+    free: `每天 ${FREE_AI_ANALYZE_PER_DAY} 次`,
+    monthly: `每天 ${PRO_AI_ANALYZE_PER_DAY} 次`,
+    yearly: `每天 ${PRO_AI_ANALYZE_PER_DAY} 次`,
+    partner: `每天 ${PRO_AI_ANALYZE_PER_DAY} 次`,
   },
   {
     feature: "间隔重复复习",
