@@ -12,6 +12,7 @@ import {
 import { cn } from "@/lib/utils"
 import { toast } from "sonner"
 import { BindWeChatQRCode } from "@/components/auth/BindWeChatQRCode"
+import { DELETION_CONFIRM_PHRASE, isConfirmPhraseValid } from "@/lib/account-deletion"
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -173,6 +174,42 @@ export function SettingsClient({ initialUser }: { initialUser: InitialUser }) {
   const [sendingCode, setSendingCode] = useState(false)
   const [codeCountdown, setCodeCountdown] = useState(0)
   const [binding, setBinding] = useState(false)
+  // 注销账号（自助）
+  const [showDeleteModal, setShowDeleteModal] = useState(false)
+  const [deleteConfirmText, setDeleteConfirmText] = useState("")
+  const [deleting, setDeleting] = useState(false)
+
+  /**
+   * 提交注销。
+   *
+   * 服务端会做三道拦截（非管理员 / 无未结佣金 / 无在途提现），失败时把原因
+   * 如实显示出来 —— 这一处不能像普通表单那样统一报"操作失败"，否则用户
+   * 根本不知道要先提现。
+   */
+  async function handleDeleteAccount() {
+    setDeleting(true)
+    try {
+      const res = await fetch("/api/user/delete", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ confirm: deleteConfirmText }),
+      })
+      const data = (await res.json().catch(() => null)) as { error?: string } | null
+      if (!res.ok) {
+        toast.error(data?.error ?? "注销失败，请稍后重试")
+        return
+      }
+      setShowDeleteModal(false)
+      toast.success("账号已注销")
+      // 会话已在服务端清空，这里把用户送回首页（refresh 让服务端组件重新取用户）
+      router.push("/")
+      router.refresh()
+    } catch {
+      toast.error("网络异常，请稍后重试")
+    } finally {
+      setDeleting(false)
+    }
+  }
   /**
    * 手机号已被另一个账号占用时的提示。
    * 用常住提示而不是 toast：toast 几秒就没了，而这条信息（"你有两个账号、需要联系客服"）
@@ -668,10 +705,99 @@ export function SettingsClient({ initialUser }: { initialUser: InitialUser }) {
           )}
         </SectionCard>
 
-        {/* Sign out hint */}
-        <div className="settings-card opacity-0 flex justify-center pt-2">
-          <p className="text-[11px] text-foreground/15">如需注销账号，请联系客服</p>
-        </div>
+        {/* 账号安全：自助注销 */}
+        <SectionCard title="账号安全">
+          <div className="flex items-center justify-between gap-4">
+            <div className="flex flex-col gap-0.5">
+              <p className="text-sm font-medium text-foreground/70">注销账号</p>
+              <p className="text-[11px] text-muted-foreground leading-relaxed">
+                清空手机号、微信绑定与个人资料，并退出所有设备。
+                此前练习记录等历史数据会去除身份信息后保留。
+              </p>
+            </div>
+            <button
+              onClick={() => {
+                setDeleteConfirmText("")
+                setShowDeleteModal(true)
+              }}
+              className="shrink-0 px-3 py-1.5 rounded-lg text-[12px] font-medium border border-red-500/40 text-red-400 hover:bg-red-500/10 transition-colors"
+            >
+              注销
+            </button>
+          </div>
+        </SectionCard>
+
+        {/* 注销确认弹窗 */}
+        {showDeleteModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            <div
+              className="absolute inset-0 bg-black/60"
+              onClick={() => !deleting && setShowDeleteModal(false)}
+            />
+            <div className="relative rounded-2xl border border-border p-6 w-full max-w-md bg-card flex flex-col gap-4">
+              <div className="flex items-center justify-between">
+                <h3 className="text-sm font-semibold text-foreground">确认注销账号</h3>
+                <button
+                  onClick={() => setShowDeleteModal(false)}
+                  disabled={deleting}
+                  className="w-7 h-7 rounded-lg bg-muted flex items-center justify-center hover:bg-border transition-colors disabled:opacity-50"
+                >
+                  <X className="h-3.5 w-3.5 text-muted-foreground" />
+                </button>
+              </div>
+
+              {/* 把"会失去什么"和"会留下什么"都写清楚：
+                  注销是不可逆的，用户有权在点之前知道边界（同一份口径见
+                  lib/account-deletion，隐私政策也按它表述） */}
+              <div className="rounded-xl bg-muted px-4 py-3 flex flex-col gap-2 text-[12px] leading-relaxed">
+                <p className="font-medium text-foreground">注销后将被清空：</p>
+                <p className="text-muted-foreground">
+                  手机号、微信绑定、昵称与头像、邀请码；生词本与句子笔记会被删除；
+                  所有设备退出登录。
+                </p>
+                <p className="font-medium text-foreground mt-1">会被保留（去除身份信息）：</p>
+                <p className="text-muted-foreground">
+                  练习记录、打卡、钻石与订单流水 —— 用于学习统计与财务凭证，不再关联到你。
+                </p>
+                <p className="font-medium text-foreground mt-1">不可恢复：</p>
+                <p className="text-muted-foreground">
+                  {initialUser.isPro && !initialUser.isPartner
+                    ? "剩余会员时长与钻石将随账号一并失效，且无法恢复。"
+                    : "账号内的钻石将清零，且无法恢复。"}
+                </p>
+              </div>
+
+              <div className="flex flex-col gap-1.5">
+                <label className="text-[12px] text-muted-foreground">
+                  请输入「{DELETION_CONFIRM_PHRASE}」以确认
+                </label>
+                <input
+                  value={deleteConfirmText}
+                  onChange={(e) => setDeleteConfirmText(e.target.value)}
+                  placeholder={DELETION_CONFIRM_PHRASE}
+                  className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground outline-none focus:border-red-500/50"
+                />
+              </div>
+
+              <div className="flex items-center justify-end gap-2">
+                <button
+                  onClick={() => setShowDeleteModal(false)}
+                  disabled={deleting}
+                  className="px-4 py-2 rounded-lg text-[13px] font-medium border border-border text-foreground/70 hover:bg-muted transition-colors disabled:opacity-50"
+                >
+                  取消
+                </button>
+                <button
+                  onClick={handleDeleteAccount}
+                  disabled={deleting || !isConfirmPhraseValid(deleteConfirmText)}
+                  className="px-4 py-2 rounded-lg text-[13px] font-semibold bg-red-500 text-white hover:bg-red-600 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  {deleting ? "注销中…" : "确认注销"}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
 
       </div>
     </div>

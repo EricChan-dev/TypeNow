@@ -71,10 +71,16 @@ export default function PrivacyPage() {
         <p>根据适用法律，您对自己的个人信息享有以下权利：</p>
         <ul className="list-disc pl-5 space-y-2">
           <li><strong>查阅与更正：</strong>您可以在个人设置页面查看和修改您的个人信息。</li>
-          <li><strong>删除：</strong>您可以通过注销账号来删除您的所有个人数据。注销后数据不可恢复。</li>
+          <li>
+            <strong>删除：</strong>您可以在「设置 → 账号安全」中<strong>自助注销</strong>账号，无需联系客服。
+            注销时会<strong>清空</strong>手机号、邮箱、微信绑定、昵称、头像与邀请码，
+            <strong>删除</strong>生词本与句子笔记，并退出全部设备的登录。
+            练习记录、打卡、钻石与订单等历史数据会<strong>去除身份关联后保留</strong>，
+            用于学习统计与财务凭证，这部分数据不再能够指向您个人。注销不可恢复。
+          </li>
           <li><strong>撤回同意：</strong>您可以通过退出登录或停止使用服务来撤回对信息收集的同意。</li>
           <li><strong>投诉：</strong>如您认为我们处理信息的方式侵犯了您的权益，您可以向相关监管部门投诉。</li>
-          <li>如需行使上述权利，请通过 typenow.cn 上的联系方式联系我们，我们将在 15 个工作日内回复。</li>
+          <li>如需行使上述权利，可通过应用内「设置 → 账号安全」自助注销，或通过 typenow.cn 上的联系方式与我们联系，我们将在 15 个工作日内回复。</li>
         </ul>
 
         <h2 className="text-lg font-semibold mt-8 mb-3">6. Cookie 及同类技术</h2>

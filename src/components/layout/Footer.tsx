@@ -16,6 +16,17 @@ const companyLinks = [
   { href: "/privacy", label: "隐私政策" },
 ]
 
+/**
+ * 页脚二维码。
+ *
+ * 改版前「公众号」与「客服」两个格子指向**同一张图**（/wechat-oa.jpeg）——
+ * 扫「客服」实际得到的是公众号，是一个会误导用户的假入口。
+ *
+ * 现在改成数据驱动：**只渲染确实有独立图片的入口**。缺图片的入口宁可不放，
+ * 也不拿另一张图顶上 —— 拿到客服二维码后在这里加一行即可。
+ */
+const QR_CODES = [{ src: "/wechat-oa.jpeg", label: "公众号" }]
+
 export function Footer() {
   return (
     <footer className="border-t border-border bg-background">
@@ -68,30 +79,20 @@ export function Footer() {
           <div className="col-span-2 lg:col-span-5 flex flex-col gap-3">
             <h4 className="text-sm font-bold text-foreground mb-1">关注我们</h4>
             <div className="flex gap-6">
-              <div className="flex flex-col items-center gap-2">
-                <div className="w-[100px] h-[100px] rounded-xl bg-card border border-border overflow-hidden">
-                  <Image
-                    src="/wechat-oa.jpeg"
-                    alt="公众号二维码"
-                    width={100}
-                    height={100}
-                    className="w-full h-full object-cover"
-                  />
+              {QR_CODES.map((qr) => (
+                <div key={qr.label} className="flex flex-col items-center gap-2">
+                  <div className="w-[100px] h-[100px] rounded-xl bg-card border border-border overflow-hidden">
+                    <Image
+                      src={qr.src}
+                      alt={`${qr.label}二维码`}
+                      width={100}
+                      height={100}
+                      className="w-full h-full object-cover"
+                    />
+                  </div>
+                  <span className="text-[12px] text-muted-foreground">{qr.label}</span>
                 </div>
-                <span className="text-[12px] text-muted-foreground">公众号</span>
-              </div>
-              <div className="flex flex-col items-center gap-2">
-                <div className="w-[100px] h-[100px] rounded-xl bg-card border border-border overflow-hidden">
-                  <Image
-                    src="/wechat-oa.jpeg"
-                    alt="客服二维码"
-                    width={100}
-                    height={100}
-                    className="w-full h-full object-cover"
-                  />
-                </div>
-                <span className="text-[12px] text-muted-foreground">客服</span>
-              </div>
+              ))}
             </div>
           </div>
         </div>
