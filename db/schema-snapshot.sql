@@ -22,10 +22,11 @@
 --     只是因为线上又来了几条埋点）。留着它，每次重新生成的 diff 里都会混进这种噪音，
 --     真正的结构改动反而容易被看漏 —— 这份文件只该记录结构。
 --
--- 生成时间：2026-09-28（00024 之后）
--- 对应迁移：00009 / 00011 ～ 00024 全部已应用（00024 analytics_events.visitor_id 于本日执行）
+-- 生成时间：2026-09-28（00025 之后）
+-- 对应迁移：00009 / 00011 ～ 00025 全部已应用
+--   · 00024 analytics_events.visitor_id（本日执行）
+--   · 00025 task_logs 每日唯一约束限定回分享任务（本日执行）
 -- ============================================================================
-
 
 /*!40101 SET @OLD_CHARACTER_SET_CLIENT=@@CHARACTER_SET_CLIENT */;
 /*!40101 SET @OLD_CHARACTER_SET_RESULTS=@@CHARACTER_SET_RESULTS */;
@@ -433,9 +434,10 @@ CREATE TABLE `task_logs` (
   `date` varchar(10) COLLATE utf8mb4_unicode_ci NOT NULL,
   `ref_id` varchar(36) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
   `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `share_day` varchar(10) COLLATE utf8mb4_unicode_ci GENERATED ALWAYS AS (if((`task_type` = _utf8mb4'share_invite'),`date`,NULL)) VIRTUAL COMMENT '仅 share_invite 有值：把「每天一次」约束限定在分享任务上（见 00025 注释）',
   PRIMARY KEY (`id`),
-  UNIQUE KEY `uk_task_user_type_date` (`user_id`,`task_type`,`date`),
-  UNIQUE KEY `uk_task_ref_type` (`task_type`,`ref_id`)
+  UNIQUE KEY `uk_task_ref_type` (`task_type`,`ref_id`),
+  UNIQUE KEY `uk_task_share_day` (`user_id`,`share_day`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 DROP TABLE IF EXISTS `tts_cache`;
@@ -638,6 +640,8 @@ CREATE TABLE `writing_entries` (
   PRIMARY KEY (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
+--
+--
 /*!40103 SET TIME_ZONE=@OLD_TIME_ZONE */;
 
 /*!40101 SET SQL_MODE=@OLD_SQL_MODE */;

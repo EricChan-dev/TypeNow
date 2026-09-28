@@ -662,9 +662,37 @@ export const taskLogs = mysqlTable(
     date: varchar("date", { length: 10 }).notNull(),
     refId: varchar("ref_id", { length: 36 }),
     createdAt: datetime("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+    /**
+     * 「当天」的影子列，**仅 share_invite 有值**（虚拟生成列，见
+     * db/migrations/00025_task_logs_daily_index.sql）。
+     *
+     * 存在的理由是修一个会静默吞掉奖励的约束：原本的
+     * `uk_task_user_type_date (user_id, task_type, date)` 对**所有** task_type
+     * 生效，于是同一邀请人同一天拉到第二个付费用户时，invite_purchase 那行会撞
+     * 唯一键，而 lib/auth/invite.ts 把它当成「已发过」直接 return ——
+     * 邀请人少 30 天、被邀请人少 20 天，且没有任何日志。
+     *
+     * 不能简单把 ref_id 加进那个键：share_invite 的 ref_id 是 NULL，而 MySQL
+     * 认为多个 NULL 互不相等，分享的每日去重会**整个失效**。所以改成只把日期
+     * 在分享任务上暴露出来，再对它建唯一索引：
+     *   share_invite → share_day = date → 每天一次照旧
+     *   invite_*     → share_day = NULL → 不再互相冲突
+     */
+    shareDay: varchar("share_day", { length: 10 }).generatedAlwaysAs(
+      sql`IF(\`task_type\` = 'share_invite', \`date\`, NULL)`,
+      { mode: "virtual" },
+    ),
   },
   (t) => [
-    uniqueIndex("uk_task_user_type_date").on(t.userId, t.taskType, t.date),
+    /**
+     * 「每天只能领一次」只作用于**分享任务**。
+     *
+     * 等价于原 `uk_task_user_type_date (user_id, task_type, date)` 在
+     * task_type = 'share_invite' 上的那一部分，而不再误伤邀请奖励。
+     * tasks/share 靠 `INSERT IGNORE` 的 affectedRows 判断今日是否已领，
+     * 依赖的就是这个索引。
+     */
+    uniqueIndex("uk_task_share_day").on(t.userId, t.shareDay),
     /**
      * 幂等键 = (类型, 被邀请人)。
      *
@@ -673,7 +701,8 @@ export const taskLogs = mysqlTable(
      * 正是「仅首购有效」要靠它兜住的那一条。
      * 改成复合键后：① 同一被邀请人每种类型各一条，注册不会被重复计；
      * ② 首购天然只会成功一次，续费再触发也插不进去 —— 这就是「仅首购」的实现。
-     * ③ share_invite 的 ref_id 为 NULL，MySQL 唯一索引允许多个 NULL，不受影响。
+     * ③ share_invite 的 ref_id 为 NULL，MySQL 唯一索引允许多个 NULL，不受影响
+     *    （分享的每日去重由 uk_task_share_day 负责）。
      */
     uniqueIndex("uk_task_ref_type").on(t.taskType, t.refId),
   ]
