@@ -3,9 +3,9 @@ import { db } from "@/lib/db"
 import { practiceRecords, sentences, users } from "@/lib/db/schema"
 import { requireAdmin } from "@/lib/admin-auth"
 import { parsePagination } from "@/lib/pagination"
-import { parseRange, rangeStart, rangeLabel } from "@/lib/admin-range"
+import { parseRangeQuery, resolveRange } from "@/lib/admin-range"
 import { maskPhone } from "@/lib/mask"
-import { desc, eq, and, gte, or, like, sql, type SQL } from "drizzle-orm"
+import { desc, eq, and, gte, lte, or, like, sql, type SQL } from "drizzle-orm"
 
 /**
  * 后台「练习记录」列表。
@@ -37,12 +37,15 @@ export async function GET(request: Request) {
   const { pageSize, offset } = parsePagination(searchParams)
   const q = (searchParams.get("q") ?? "").trim().slice(0, 64)
   const userId = (searchParams.get("userId") ?? "").trim().slice(0, 36)
-  const rawRange = searchParams.get("range")
-  const range = rawRange ? parseRange(rawRange) : null
-  const from = range ? rangeStart(range) : null
+  const rangeQuery = parseRangeQuery(searchParams)
+  const range = rangeQuery ? resolveRange(rangeQuery) : null
+  const from = range?.start ?? null
+  // 上界：预设窗口都是"到现在"，只有自定义范围才有终点
+  const to = range?.end ?? null
 
   const conditions: SQL[] = []
   if (from) conditions.push(gte(practiceRecords.createdAt, from))
+  if (to) conditions.push(lte(practiceRecords.createdAt, to))
   if (userId) conditions.push(eq(practiceRecords.userId, userId))
   if (q) {
     const matched = or(
@@ -97,6 +100,6 @@ export async function GET(request: Request) {
     })),
     total: Number(total),
     appliedRange: range,
-    appliedRangeLabel: range ? rangeLabel(range) : null,
+    appliedRangeLabel: range?.label ?? null,
   })
 }

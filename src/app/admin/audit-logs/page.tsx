@@ -26,7 +26,8 @@ import { useMemo, useState } from "react"
 import Link from "next/link"
 import { Alert, Card, Descriptions, Empty, Input, Select, Space, Table, Tag, Tooltip, Typography } from "antd"
 import { useAdminFetch } from "@/lib/admin-fetch"
-import { RANGE_OPTIONS, type StatsRange } from "@/lib/admin-range"
+import { type StatsRange } from "@/lib/admin-range"
+import { AdminRangePicker } from "@/components/admin/AdminRangePicker"
 import {
   AUDIT_ACTION_OPTIONS,
   AUDIT_TARGET_OPTIONS,
@@ -115,6 +116,9 @@ export default function AuditLogsPage() {
   const [targetType, setTargetType] = useState<string>("")
   const [adminId, setAdminId] = useState<string>("")
   const [range, setRange] = useState<StatsRange>("week")
+  // 自定义区间两端（只有 range=custom 时有值）
+  const [rangeFrom, setRangeFrom] = useState<string | null>(null)
+  const [rangeTo, setRangeTo] = useState<string | null>(null)
   const [q, setQ] = useState("")
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(20)
@@ -257,14 +261,14 @@ export default function AuditLogsPage() {
             // 已经卸任的管理员，他做过的事仍然要能查到
             options={actors.map((a) => ({ label: a.label, value: a.id }))}
           />
-          <Select
-            style={{ width: 130 }}
-            value={range}
-            onChange={(v) => {
-              setRange(v as StatsRange)
+          <AdminRangePicker
+            value={{ range, from: rangeFrom, to: rangeTo }}
+            onChange={(next) => {
+              setRange(next.range)
+              setRangeFrom(next.from)
+              setRangeTo(next.to)
               setPage(1)
             }}
-            options={RANGE_OPTIONS.map((o) => ({ label: o.label, value: o.value }))}
           />
           <Input.Search
             allowClear

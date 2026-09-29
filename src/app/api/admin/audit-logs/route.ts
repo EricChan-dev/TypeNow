@@ -3,9 +3,9 @@ import { db } from "@/lib/db"
 import { adminAuditLogs } from "@/lib/db/schema"
 import { requireAdmin } from "@/lib/admin-auth"
 import { parsePagination } from "@/lib/pagination"
-import { parseRange, rangeStart, rangeLabel } from "@/lib/admin-range"
+import { parseRangeQuery, resolveRange } from "@/lib/admin-range"
 import { AUDIT_ACTIONS, AUDIT_TARGET_TYPES } from "@/lib/admin-audit-labels"
-import { and, desc, eq, gte, like, or, sql, type SQL } from "drizzle-orm"
+import { and, desc, eq, gte, lte, like, or, sql, type SQL } from "drizzle-orm"
 
 /**
  * 后台「操作审计」列表。
@@ -49,15 +49,18 @@ export async function GET(request: Request) {
 
   // 时间范围与仪表盘/其它后台列表共用同一份定义（滚动 7/30/90 天），
   // 否则「近一周」在两个页面上会指向不同的区间
-  const rawRange = searchParams.get("range")
-  const range = rawRange ? parseRange(rawRange) : null
-  const from = range ? rangeStart(range) : null
+  const rangeQuery = parseRangeQuery(searchParams)
+  const range = rangeQuery ? resolveRange(rangeQuery) : null
+  const from = range?.start ?? null
+  // 上界：预设窗口都是"到现在"，只有自定义范围才有终点
+  const to = range?.end ?? null
 
   const conds: SQL[] = []
   if (action) conds.push(eq(adminAuditLogs.action, action))
   if (targetType) conds.push(eq(adminAuditLogs.targetType, targetType))
   if (adminId) conds.push(eq(adminAuditLogs.adminId, adminId))
   if (from) conds.push(gte(adminAuditLogs.createdAt, from))
+  if (to) conds.push(lte(adminAuditLogs.createdAt, to))
   if (q) {
     const matched = or(
       like(adminAuditLogs.adminLabel, `%${q}%`),
@@ -102,7 +105,7 @@ export async function GET(request: Request) {
     data: rows,
     total,
     // 回显生效的筛选，便于前端在"筛了但结果为空"时说明原因（而不是让人怀疑没数据）
-    applied: { action, targetType, adminId, q, range: range ?? null, rangeLabel: range ? rangeLabel(range) : null },
+    applied: { action, targetType, adminId, q, range: range?.range ?? null, rangeLabel: range?.label ?? null },
     actors: Array.from(actorMap, ([id, label]) => ({ id, label })),
   })
 }

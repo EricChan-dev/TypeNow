@@ -2,12 +2,13 @@
 
 import { useState } from "react"
 import Link from "next/link"
-import { Alert, Card, Col, Row, Segmented, Space, Spin, Tag, Typography } from "antd"
+import { Alert, Card, Col, Row, Space, Spin, Tag, Typography } from "antd"
 import { LineChartOutlined } from "@ant-design/icons"
 import EChart from "@/components/admin/EChart"
 import MetricCard from "@/components/admin/MetricCard"
 import { funnelRateOption } from "@/lib/admin-chart-options"
-import { RANGE_OPTIONS, DEFAULT_RANGE, type StatsRange } from "@/lib/admin-range"
+import { DEFAULT_RANGE, rangeQueryString, type StatsRange } from "@/lib/admin-range"
+import { AdminRangePicker } from "@/components/admin/AdminRangePicker"
 import { eventsUrl, listUrl } from "@/lib/admin-links"
 import { useAdminFetch } from "@/lib/admin-fetch"
 
@@ -139,16 +140,21 @@ function stepLinkLabel(step: FunnelStep): string {
  */
 export default function AnalyticsPage() {
   const [range, setRange] = useState<StatsRange>(DEFAULT_RANGE)
+  const [rangeFrom, setRangeFrom] = useState<string | null>(null)
+  const [rangeTo, setRangeTo] = useState<string | null>(null)
 
   const { data, loading, error } = useAdminFetch<FunnelData>(
-    `/api/admin/analytics/funnel?range=${range}`,
+    `/api/admin/analytics/funnel?${rangeQueryString({ range, from: rangeFrom, to: rangeTo })}`,
   )
 
   const rangeSegmented = (
-    <Segmented
-      value={range}
-      onChange={(v) => setRange(v as StatsRange)}
-      options={RANGE_OPTIONS.map((o) => ({ label: o.label, value: o.value }))}
+    <AdminRangePicker
+      value={{ range, from: rangeFrom, to: rangeTo }}
+      onChange={(next) => {
+        setRange(next.range)
+        setRangeFrom(next.from)
+        setRangeTo(next.to)
+      }}
     />
   )
 

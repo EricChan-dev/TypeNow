@@ -7,7 +7,7 @@
  * 第一反应是"埋点丢了"，排查成本极高。两边共用同一份 where，就不会有这个问题。
  */
 
-import { sql, and, eq, gte, inArray, isNotNull, isNull, like, or, type SQL } from "drizzle-orm"
+import { sql, and, eq, gte, lte, inArray, isNotNull, isNull, like, or, type SQL } from "drizzle-orm"
 import { analyticsEvents } from "@/lib/db/schema"
 import {
   ALLOWED_EVENTS,
@@ -15,7 +15,7 @@ import {
   EVENT_META,
   type EventCategory,
 } from "@/lib/analytics-events"
-import { parseRange, rangeStart, type StatsRange } from "@/lib/admin-range"
+import { DEFAULT_RANGE, parseRangeQuery, resolveRange, type StatsRange } from "@/lib/admin-range"
 
 export interface EventFilter {
   /** 精确事件名。非白名单值一律丢弃。 */
@@ -39,6 +39,8 @@ export interface EventFilter {
   range: StatsRange
   /** 时间起点，range=all 时为 null。 */
   from: Date | null
+  /** 时间终点，只有自定义范围与"今天"才有（预设窗口都是"到现在"）。 */
+  to: Date | null
 }
 
 export const IDENTITY_VALUES = ["all", "anonymous", "registered"] as const
@@ -52,7 +54,10 @@ function clip(raw: string | null, max: number): string | null {
 export function parseEventFilter(searchParams: URLSearchParams): EventFilter {
   const rawEvent = clip(searchParams.get("event"), 100)
   const rawCategory = clip(searchParams.get("category"), 20)
-  const range = parseRange(searchParams.get("range"))
+  // 与列表接口不同：事件页没有"不按时间筛"的选项，缺参数就按默认窗口
+  const window = resolveRange(
+    parseRangeQuery(searchParams) ?? { range: DEFAULT_RANGE, from: null, to: null },
+  )
 
   return {
     // 只接受白名单内的事件名。URL 是可控输入，drizzle 会参数化（没有注入风险），
@@ -69,8 +74,9 @@ export function parseEventFilter(searchParams: URLSearchParams): EventFilter {
       : "all",
     pageUrl: clip(searchParams.get("pageUrl"), 200),
     q: clip(searchParams.get("q"), 100),
-    range,
-    from: rangeStart(range),
+    range: window.range,
+    from: window.start,
+    to: window.end,
   }
 }
 
@@ -98,6 +104,8 @@ export function buildEventWhere(filter: EventFilter): SQL | undefined {
   const parts: SQL[] = []
 
   if (filter.from) parts.push(gte(analyticsEvents.createdAt, filter.from))
+  // 上界：预设窗口都是"到现在"，只有自定义范围才有终点
+  if (filter.to) parts.push(lte(analyticsEvents.createdAt, filter.to))
 
   if (filter.event) {
     // 具体事件优先于分类：event=click&category=payment 会互相矛盾，

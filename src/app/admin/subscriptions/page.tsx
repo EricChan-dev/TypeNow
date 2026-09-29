@@ -6,6 +6,9 @@ import Link from "next/link"
 import DrilldownBanner from "@/components/admin/DrilldownBanner"
 import { drilldownBadges, withFilter, withoutDrilldown } from "@/lib/admin-drilldown"
 import { formatAdminTime } from "@/lib/admin-time"
+import { AdminRangePicker } from "@/components/admin/AdminRangePicker"
+import { readRangeSelection } from "@/lib/admin-range-filters"
+import type { RangeSelection } from "@/lib/admin-range"
 
 /**
  * 订阅管理列表。
@@ -19,6 +22,20 @@ export default function SubscriptionsList() {
     syncWithLocation: true,
   })
 
+  /**
+   * 时间范围走 refine 的 filters（会进 URL）。此前列表页**没有任何时间控件**，
+   * 只能靠从仪表盘钻取带过来的 range —— 想自己换个区间是做不到的。
+   */
+  const rangeSelection = readRangeSelection(filters)
+  const applyRange = (next: RangeSelection) => {
+    // 先写 range，再把 from/to 落成空串（withFilter 约定：空值 = 取消该条件），
+    // 这样从"自定义"切回预设时不会残留旧的日期条件
+    let nextFilters = withFilter(filters as never, "range", next.range)
+    nextFilters = withFilter(nextFilters, "from", next.from ?? "")
+    nextFilters = withFilter(nextFilters, "to", next.to ?? "")
+    setFilters(nextFilters, "replace")
+  }
+
   return (
     <List>
       <DrilldownBanner
@@ -27,7 +44,8 @@ export default function SubscriptionsList() {
       />
 
       <div style={{ marginBottom: 16 }}>
-        <Space>
+        <Space wrap>
+          <AdminRangePicker value={rangeSelection} onChange={applyRange} />
           <Input.Search
             allowClear
             placeholder="搜索用户姓名 / 手机号"

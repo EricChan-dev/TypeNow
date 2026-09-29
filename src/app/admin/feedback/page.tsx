@@ -7,7 +7,8 @@ import {
   Segmented, Select, Space, Statistic, Table, Tag, Tooltip, Typography,
 } from "antd"
 import { useAdminFetch } from "@/lib/admin-fetch"
-import { RANGE_OPTIONS, type StatsRange } from "@/lib/admin-range"
+import { type StatsRange } from "@/lib/admin-range"
+import { AdminRangePicker } from "@/components/admin/AdminRangePicker"
 import {
   FEEDBACK_CATEGORIES,
   FEEDBACK_CATEGORY_COLORS,
@@ -72,6 +73,9 @@ export default function FeedbackPage() {
   const [status, setStatus] = useState<FeedbackStatus | "unfinished" | "all">("unfinished")
   const [category, setCategory] = useState<FeedbackCategory | "">("")
   const [range, setRange] = useState<StatsRange>("all")
+  // 自定义区间两端（只有 range=custom 时有值）
+  const [rangeFrom, setRangeFrom] = useState<string | null>(null)
+  const [rangeTo, setRangeTo] = useState<string | null>(null)
   const [q, setQ] = useState("")
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(20)
@@ -269,20 +273,14 @@ export default function FeedbackPage() {
               value: c,
             }))}
           />
-          <Select
-            style={{ width: 130 }}
-            value={range}
-            onChange={(v) => {
-              setRange(v as StatsRange)
+          <AdminRangePicker
+            value={{ range, from: rangeFrom, to: rangeTo }}
+            onChange={(next) => {
+              setRange(next.range)
+              setRangeFrom(next.from)
+              setRangeTo(next.to)
               setPage(1)
             }}
-            options={[
-              { label: "不限时间", value: "all" },
-              ...RANGE_OPTIONS.filter((o) => o.value !== "all").map((o) => ({
-                label: o.label,
-                value: o.value,
-              })),
-            ]}
           />
           <Input.Search
             allowClear

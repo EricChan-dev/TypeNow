@@ -4,8 +4,10 @@ import { Suspense, useCallback, useMemo, useState } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 import Link from "next/link"
 import {
-  Alert, Card, Col, Descriptions, Drawer, Empty, Input, Row, Segmented,
-  Select, Space, Spin, Statistic, Table, Tag, Tooltip, Typography,
+  Alert, Card, Col, Descriptions, Drawer,
+  Empty, Input, Row, Select, Space,
+  Spin, Statistic, Table, Tag, Tooltip,
+  Typography,
 } from "antd"
 import { ReloadOutlined, BookOutlined } from "@ant-design/icons"
 import EChart from "@/components/admin/EChart"
@@ -19,6 +21,7 @@ import {
   eventsByCategory,
 } from "@/lib/analytics-events"
 import { RANGE_OPTIONS, DEFAULT_RANGE, rangeLabel, type StatsRange } from "@/lib/admin-range"
+import { AdminRangePicker } from "@/components/admin/AdminRangePicker"
 import { eventDetailUrl } from "@/lib/admin-links"
 import { useAdminFetch } from "@/lib/admin-fetch"
 import {
@@ -117,6 +120,8 @@ function EventsExplorer() {
   const range = (RANGE_OPTIONS.some((o) => o.value === rangeParam)
     ? (rangeParam as StatsRange)
     : DEFAULT_RANGE)
+  const rangeFrom = searchParams.get("from")
+  const rangeTo = searchParams.get("to")
   const current = Number(searchParams.get("current") ?? "1") || 1
   const pageSize = Number(searchParams.get("pageSize") ?? "20") || 20
 
@@ -281,10 +286,16 @@ function EventsExplorer() {
           <Text type="secondary">每一条上报的原始记录，以及它聚合出来的趋势</Text>
         </div>
         <Space>
-          <Segmented
-            value={range}
-            onChange={(v) => setParam({ range: String(v) })}
-            options={RANGE_OPTIONS.map((o) => ({ label: o.label, value: o.value }))}
+          <AdminRangePicker
+            value={{ range, from: rangeFrom, to: rangeTo }}
+            onChange={(next) =>
+              // 空字符串 = 取消该参数（setParam 的约定）
+              setParam({
+                range: next.range,
+                from: next.from ?? "",
+                to: next.to ?? "",
+              })
+            }
           />
           <Tooltip title="把当前筛选重新拉一遍">
             <a

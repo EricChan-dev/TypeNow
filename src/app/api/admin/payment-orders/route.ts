@@ -4,8 +4,8 @@ import { paymentOrders, users } from "@/lib/db/schema"
 import { requireAdmin } from "@/lib/admin-auth"
 import { activeProSql } from "@/lib/subscription"
 import { parsePagination } from "@/lib/pagination"
-import { parseRange, rangeStart, rangeLabel } from "@/lib/admin-range"
-import { desc, eq, and, gte, or, like, sql, type SQL } from "drizzle-orm"
+import { parseRangeQuery, resolveRange } from "@/lib/admin-range"
+import { desc, eq, and, gte, lte, or, like, sql, type SQL } from "drizzle-orm"
 
 /**
  * 后台「支付订单」列表。
@@ -40,9 +40,11 @@ export async function GET(request: Request) {
   const { searchParams } = new URL(request.url)
   const { pageSize, offset } = parsePagination(searchParams)
   const q = (searchParams.get("q") ?? "").trim().slice(0, 64)
-  const rawRange = searchParams.get("range")
-  const range = rawRange ? parseRange(rawRange) : null
-  const from = range ? rangeStart(range) : null
+  const rangeQuery = parseRangeQuery(searchParams)
+  const range = rangeQuery ? resolveRange(rangeQuery) : null
+  const from = range?.start ?? null
+  // 上界：预设窗口都是"到现在"，只有自定义范围才有终点
+  const to = range?.end ?? null
   // 只接受 schema 里真实存在的枚举值：把任意字符串透进查询虽然会被参数化
   // （无注入风险），但会静默筛出空表，使用者分不清是"没有这类订单"还是
   // "状态名写错了"。这里的清单必须与 schema 的 mysqlEnum 完全一致，
@@ -62,6 +64,7 @@ export async function GET(request: Request) {
     if (matched) conditions.push(matched)
   }
   if (from) conditions.push(gte(paymentOrders.paidAt, from))
+  if (to) conditions.push(lte(paymentOrders.paidAt, to))
   if (status) conditions.push(eq(paymentOrders.status, status))
   const where: SQL | undefined = conditions.length > 0 ? and(...conditions) : undefined
 
@@ -107,6 +110,6 @@ export async function GET(request: Request) {
     paidFen: Number(countRow?.paidFen ?? 0),
     // 回显生效口径（同 users 接口）
     appliedRange: range,
-    appliedRangeLabel: range ? rangeLabel(range) : null,
+    appliedRangeLabel: range?.label ?? null,
   })
 }

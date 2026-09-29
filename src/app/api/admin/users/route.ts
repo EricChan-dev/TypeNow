@@ -3,13 +3,13 @@ import { db } from "@/lib/db"
 import { analyticsEvents, paymentOrders, practiceRecords, users } from "@/lib/db/schema"
 import { requireAdmin } from "@/lib/admin-auth"
 import { parsePagination } from "@/lib/pagination"
-import { parseRange, rangeStart, rangeLabel } from "@/lib/admin-range"
+import { parseRangeQuery, resolveRange } from "@/lib/admin-range"
 // 列表里显示的是**一句人话**（渠道 + 微信 scene + 首触来源）。
 // 让后端算而不是前端算：同一个摘要函数将来详情页、导出的 CSV 都要用，
 // 各算一遍就会出现三个页面三种说法。
 import { describeSignupSource } from "@/lib/signup-source"
 import { activeProSql, isProActive } from "@/lib/subscription"
-import { desc, eq, and, gte, inArray, isNotNull, or, like, sql, type SQL } from "drizzle-orm"
+import { desc, eq, and, gte, lte, inArray, isNotNull, or, like, sql, type SQL } from "drizzle-orm"
 
 /**
  * 后台「用户管理」列表。
@@ -58,9 +58,10 @@ export async function GET(request: Request) {
   const q = (searchParams.get("q") ?? "").trim().slice(0, 64)
 
   // 显式判断"参数是否存在"，而不是 parseRange（它会把缺省当成 week）
-  const rawRange = searchParams.get("range")
-  const range = rawRange ? parseRange(rawRange) : null
-  const from = range ? rangeStart(range) : null
+  const rangeQuery = parseRangeQuery(searchParams)
+  const range = rangeQuery ? resolveRange(rangeQuery) : null
+  const from = range?.start ?? null
+  const to = range?.end ?? null
   const active = searchParams.get("active") === "1"
   const trial = searchParams.get("trial") === "1"
   const proOnly = searchParams.get("pro") === "1"
@@ -73,12 +74,14 @@ export async function GET(request: Request) {
 
   // 只有"没有行为标志"时，range 才作用在注册时间上（对应「新增用户」）
   if (from && !active && !trial) conditions.push(gte(users.createdAt, from))
+  if (to && !active && !trial) conditions.push(lte(users.createdAt, to))
 
   if (trial) {
     // 没有窗口时必须退化成"领过就行"（IS NOT NULL）。
     // 这里曾经写成 `if (trial && from)`，于是 range=all 时整个条件被静默丢掉，
     // 从没领过的人（trial_claimed_at 为 NULL）也会被列出来
     conditions.push(from ? gte(users.trialClaimedAt, from) : isNotNull(users.trialClaimedAt))
+    if (to) conditions.push(lte(users.trialClaimedAt, to))
   }
 
   // 「会员」= 此刻仍然是会员，不是"标记写着 1"。过期未回收的标记会把
@@ -183,6 +186,6 @@ export async function GET(request: Request) {
     // 回显生效的口径：界面的提示条据此说明"这批数字是怎么筛出来的"，
     // 也避免接口悄悄把 range 解析成别的档位而前端无从发现
     appliedRange: range,
-    appliedRangeLabel: range ? rangeLabel(range) : null,
+    appliedRangeLabel: range?.label ?? null,
   })
 }

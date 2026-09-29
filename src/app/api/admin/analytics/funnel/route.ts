@@ -10,8 +10,8 @@ import {
 import { requireAdmin } from "@/lib/admin-auth"
 import { activeSubscriptionSql } from "@/lib/subscription"
 import { FUNNEL_STEPS } from "@/lib/analytics-events"
-import { parseRange, rangeStart, rangeLabel } from "@/lib/admin-range"
-import { eq, gte, inArray, sql } from "drizzle-orm"
+import { DEFAULT_RANGE, parseRangeQuery, resolveRange } from "@/lib/admin-range"
+import { eq, and, gte, lte, inArray, sql } from "drizzle-orm"
 
 /**
  * 首启漏斗报表（**同期群口径**，第一步例外）。
@@ -45,12 +45,25 @@ export async function GET(request: Request) {
   if (!db) return NextResponse.json({ error: "DB not configured" }, { status: 500 })
 
   const { searchParams } = new URL(request.url)
-  const range = parseRange(searchParams.get("range"))
-  const from = rangeStart(range)
+  // 这里 always 有一个窗口（缺参数就按默认），与列表接口"不给就不过滤"不同
+  const range = resolveRange(
+    parseRangeQuery(searchParams) ?? { range: DEFAULT_RANGE, from: null, to: null },
+  )
+  const from = range.start
+  const to = range.end
 
-  // cohort：该时间段注册的用户 id 子查询；range=all 时即全体
-  const cohortIds = (from
-    ? db.select({ id: users.id }).from(users).where(gte(users.createdAt, from))
+  // cohort：该时间段注册的用户 id 子查询；range=all 时即全体。
+  // 自定义区间的上界也要带上，否则"9/1~9/10"会把 9/11 之后注册的人也算进来
+  const cohortIds = (from || to
+    ? db
+        .select({ id: users.id })
+        .from(users)
+        .where(
+          and(
+            from ? gte(users.createdAt, from) : undefined,
+            to ? lte(users.createdAt, to) : undefined,
+          ),
+        )
     : db.select({ id: users.id }).from(users))
 
   /**
@@ -93,7 +106,14 @@ export async function GET(request: Request) {
     db
       .select({ n: sql<number>`COUNT(*)` })
       .from(users)
-      .where(from ? gte(users.createdAt, from) : undefined)
+      .where(
+        from || to
+          ? and(
+              from ? gte(users.createdAt, from) : undefined,
+              to ? lte(users.createdAt, to) : undefined,
+            )
+          : undefined,
+      )
       .then((r) => Number(r[0]?.n ?? 0)),
 
     db
@@ -241,18 +261,18 @@ export async function GET(request: Request) {
 
   return NextResponse.json({
     range,
-    rangeLabel: rangeLabel(range),
+    rangeLabel: range.label,
     cohortSize,
     // 第一步「访问站点」是全站流量口径，与后面的同期群不是同一个集合，
     // 这件事必须在界面上写清楚，否则"访客 100 → 注册 3"会被当成"转化率 3%"
     // 去和"注册 3 → 付费 0"对比，而两者分母根本不是一回事。
     cohortNote:
-      range === "all"
+      range.range === "all"
         ? `第一步「访问站点」是全部 ${visitors} 位独立访客（含已注册用户，按 visitor 去重）；` +
           `其后各步改成同期群口径 —— 只统计全部 ${cohortSize} 位用户中做过各步骤的人数。` +
           `两段分母不同（访客 vs 用户），不要跨段比较比率。`
-        : `第一步「访问站点」是${rangeLabel(range)}首次出现的 ${visitors} 位独立访客（含后来注册的那批人，` +
-          `按 visitor 去重，见 lib/visitor.ts）；其后各步改成同期群口径 —— 只统计「${rangeLabel(range)}注册的 ` +
+        : `第一步「访问站点」是${range.label}首次出现的 ${visitors} 位独立访客（含后来注册的那批人，` +
+          `按 visitor 去重，见 lib/visitor.ts）；其后各步改成同期群口径 —— 只统计「${range.label}注册的 ` +
           `${cohortSize} 位用户」中做过各步骤的人数。两段分母不同（访客 vs 用户），不要跨段比较比率。` +
           `刚注册的用户还没来得及付费，付费步骤天然偏低，属正常现象。`,
     acquisition: {

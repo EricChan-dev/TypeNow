@@ -1,6 +1,6 @@
 "use client"
 
-import { Card, Col, Row, Segmented, Table, Tag, Typography } from "antd"
+import { Card, Col, Row, Table, Tag, Typography } from "antd"
 import {
   UserOutlined,
   DollarOutlined,
@@ -15,7 +15,8 @@ import MetricCard from "@/components/admin/MetricCard"
 import { multiLineOption } from "@/lib/admin-chart-options"
 import { eventsUrl, listUrl } from "@/lib/admin-links"
 import { useAdminFetch } from "@/lib/admin-fetch"
-import { RANGE_OPTIONS, DEFAULT_RANGE, type StatsRange } from "@/lib/admin-range"
+import { DEFAULT_RANGE, rangeQueryString, type StatsRange } from "@/lib/admin-range"
+import { AdminRangePicker } from "@/components/admin/AdminRangePicker"
 import { formatAdminTime } from "@/lib/admin-time"
 
 const { Title, Text } = Typography
@@ -63,10 +64,15 @@ interface OrderRow {
 
 export default function AdminDashboard() {
   const [range, setRange] = useState<StatsRange>(DEFAULT_RANGE)
+  // 自定义区间的两端（只有 range=custom 时才有值）
+  const [rangeFrom, setRangeFrom] = useState<string | null>(null)
+  const [rangeTo, setRangeTo] = useState<string | null>(null)
 
   // 两个接口各自独立取数：任何一个挂掉都不影响另一半渲染。
   // 早前是 Promise.all 一起 await，一个 404 会让整页指标全空。
-  const { data, loading } = useAdminFetch<DashboardData>(`/api/admin/dashboard?range=${range}`)
+  const { data, loading } = useAdminFetch<DashboardData>(
+    `/api/admin/dashboard?${rangeQueryString({ range, from: rangeFrom, to: rangeTo })}`,
+  )
   const { data: orderData } = useAdminFetch<{ data: OrderRow[] }>(
     "/api/admin/payment-orders?pageSize=10",
   )
@@ -118,10 +124,13 @@ export default function AdminDashboard() {
     <div>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 12 }}>
         <Title level={3} style={{ margin: 0 }}>管理仪表盘</Title>
-        <Segmented
-          value={range}
-          onChange={(v) => setRange(v as StatsRange)}
-          options={RANGE_OPTIONS.map((o) => ({ label: o.label, value: o.value }))}
+        <AdminRangePicker
+          value={{ range, from: rangeFrom, to: rangeTo }}
+          onChange={(next) => {
+            setRange(next.range)
+            setRangeFrom(next.from)
+            setRangeTo(next.to)
+          }}
         />
       </div>
 

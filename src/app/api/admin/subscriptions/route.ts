@@ -3,9 +3,9 @@ import { db } from "@/lib/db"
 import { subscriptions, users } from "@/lib/db/schema"
 import { requireAdmin } from "@/lib/admin-auth"
 import { parsePagination } from "@/lib/pagination"
-import { parseRange, rangeStart, rangeLabel } from "@/lib/admin-range"
+import { parseRangeQuery, resolveRange } from "@/lib/admin-range"
 import { activeSubscriptionSql, isSubscriptionActive } from "@/lib/subscription"
-import { desc, eq, and, gte, or, like, sql, type SQL } from "drizzle-orm"
+import { desc, eq, and, gte, lte, or, like, sql, type SQL } from "drizzle-orm"
 
 /**
  * 后台「订阅管理」列表。
@@ -38,9 +38,11 @@ export async function GET(request: Request) {
   const { searchParams } = new URL(request.url)
   const { pageSize, offset } = parsePagination(searchParams)
   const q = (searchParams.get("q") ?? "").trim().slice(0, 64)
-  const rawRange = searchParams.get("range")
-  const range = rawRange ? parseRange(rawRange) : null
-  const from = range ? rangeStart(range) : null
+  const rangeQuery = parseRangeQuery(searchParams)
+  const range = rangeQuery ? resolveRange(rangeQuery) : null
+  const from = range?.start ?? null
+  // 上界：预设窗口都是"到现在"，只有自定义范围才有终点
+  const to = range?.end ?? null
   // 清单与 schema 的 subscriptions.status 枚举完全一致（没有 pending）
   const rawStatus = (searchParams.get("status") ?? "").trim().slice(0, 20)
   const status: SubStatus | "" = SUB_STATUSES.includes(rawStatus as SubStatus)
@@ -53,6 +55,7 @@ export async function GET(request: Request) {
     if (matched) conditions.push(matched)
   }
   if (from) conditions.push(gte(subscriptions.createdAt, from))
+  if (to) conditions.push(lte(subscriptions.createdAt, to))
   // status=active 的语义是**此刻仍然生效**，而不是"状态列写着 active"：
   // 到期未清理的行会一直挂着 active，仪表盘「活跃订阅」卡片与这里的
   // 钻取必须算同一个数（有 e2e 钉着这条不变量）。
@@ -99,6 +102,6 @@ export async function GET(request: Request) {
     })),
     total: Number(total),
     appliedRange: range,
-    appliedRangeLabel: range ? rangeLabel(range) : null,
+    appliedRangeLabel: range?.label ?? null,
   })
 }

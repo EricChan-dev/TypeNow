@@ -12,11 +12,11 @@ import {
   users,
 } from "@/lib/db/schema"
 import { requireAdmin } from "@/lib/admin-auth"
-import { parseRange, rangeStart, rangeLabel } from "@/lib/admin-range"
+import { DEFAULT_RANGE, parseRangeQuery, resolveRange } from "@/lib/admin-range"
 import { getCachedCount, STATS_KEYS } from "@/lib/stats-cache"
 import { userFeedback } from "@/lib/db/schema"
 import { OPEN_FEEDBACK_STATUSES } from "@/lib/feedback"
-import { and, gte, eq, inArray, sql } from "drizzle-orm"
+import { and, gte, lte, eq, inArray, sql } from "drizzle-orm"
 // 会员/订阅的"此刻是否生效"只有一份口径，见 lib/subscription
 import { activeSubscriptionSql } from "@/lib/subscription"
 
@@ -44,11 +44,21 @@ export async function GET(request: Request) {
   const database = db
 
   const { searchParams } = new URL(request.url)
-  const range = parseRange(searchParams.get("range"))
-  const from = rangeStart(range)
-  // drizzle 条件：range=all 时不加时间过滤
+  // 这里 always 有一个窗口（缺参数就按默认），与列表接口"不给就不过滤"不同
+  const range = resolveRange(
+    parseRangeQuery(searchParams) ?? { range: DEFAULT_RANGE, from: null, to: null },
+  )
+  const from = range.start
+  const to = range.end
+  // drizzle 条件：range=all 时不加时间过滤。
+  // 上界只在自定义区间（与「今天」）下存在 —— 预设窗口都是"到现在"。
   const since = <T extends { createdAt: unknown }>(col: T) =>
-    from ? gte(col.createdAt as never, from) : undefined
+    from || to
+      ? and(
+          from ? gte(col.createdAt as never, from) : undefined,
+          to ? lte(col.createdAt as never, to) : undefined,
+        )
+      : undefined
 
   const dayExpr = (col: unknown) => sql<string>`DATE(${col})`
   const trendSince = from ?? new Date(Date.now() - 90 * 86400_000)
@@ -130,8 +140,12 @@ export async function GET(request: Request) {
       })
       .from(paymentOrders)
       .where(
-        from
-          ? and(eq(paymentOrders.status, "paid"), gte(paymentOrders.paidAt, from))
+        from || to
+          ? and(
+              eq(paymentOrders.status, "paid"),
+              from ? gte(paymentOrders.paidAt, from) : undefined,
+              to ? lte(paymentOrders.paidAt, to) : undefined,
+            )
           : eq(paymentOrders.status, "paid"),
       )
       .then((r) => ({ n: Number(r[0]?.n ?? 0), fen: Number(r[0]?.fen ?? 0) })),
@@ -140,8 +154,12 @@ export async function GET(request: Request) {
       .select({ n: sql<number>`COUNT(*)` })
       .from(analyticsEvents)
       .where(
-        from
-          ? and(eq(analyticsEvents.eventType, "trial_claimed"), gte(analyticsEvents.createdAt, from))
+        from || to
+          ? and(
+              eq(analyticsEvents.eventType, "trial_claimed"),
+              from ? gte(analyticsEvents.createdAt, from) : undefined,
+              to ? lte(analyticsEvents.createdAt, to) : undefined,
+            )
           : eq(analyticsEvents.eventType, "trial_claimed"),
       )
       .then((r) => Number(r[0]?.n ?? 0)),
@@ -192,8 +210,12 @@ export async function GET(request: Request) {
       })
       .from(paymentOrders)
       .where(
-        from
-          ? and(eq(paymentOrders.status, "paid"), gte(paymentOrders.paidAt, from))
+        from || to
+          ? and(
+              eq(paymentOrders.status, "paid"),
+              from ? gte(paymentOrders.paidAt, from) : undefined,
+              to ? lte(paymentOrders.paidAt, to) : undefined,
+            )
           : eq(paymentOrders.status, "paid"),
       )
       .groupBy(dayExpr(paymentOrders.paidAt))
@@ -237,7 +259,7 @@ export async function GET(request: Request) {
 
   return NextResponse.json({
     range,
-    rangeLabel: rangeLabel(range),
+    rangeLabel: range.label,
     from: from ? from.toISOString() : null,
     activity: {
       newUsers,

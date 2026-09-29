@@ -4,7 +4,7 @@ import { userFeedback, users } from "@/lib/db/schema"
 import { requireAdmin } from "@/lib/admin-auth"
 import { activeProSql } from "@/lib/subscription"
 import { parsePagination } from "@/lib/pagination"
-import { parseRange, rangeStart, rangeLabel } from "@/lib/admin-range"
+import { parseRangeQuery, resolveRange } from "@/lib/admin-range"
 import { deletedScope } from "@/lib/soft-delete-view"
 import { maskPhone } from "@/lib/mask"
 import {
@@ -15,7 +15,7 @@ import {
   isFeedbackStatus,
   type FeedbackStatus,
 } from "@/lib/feedback"
-import { and, desc, eq, gte, inArray, like, or, sql, type SQL } from "drizzle-orm"
+import { and, desc, eq, gte, lte, inArray, like, or, sql, type SQL } from "drizzle-orm"
 
 /**
  * 后台「反馈管理」列表。
@@ -53,9 +53,11 @@ export async function GET(request: Request) {
   const rawCategory = (searchParams.get("category") ?? "").trim()
   const category = isFeedbackCategory(rawCategory) ? rawCategory : null
 
-  const rawRange = searchParams.get("range")
-  const range = rawRange ? parseRange(rawRange) : null
-  const from = range ? rangeStart(range) : null
+  const rangeQuery = parseRangeQuery(searchParams)
+  const range = rangeQuery ? resolveRange(rangeQuery) : null
+  const from = range?.start ?? null
+  // 上界：预设窗口都是"到现在"，只有自定义范围才有终点
+  const to = range?.end ?? null
 
   // 复用回收站视图模块的解析，让 ?deleted= 的行为与其它列表一致
   // （反馈不参与软删除，这里只取 normal 语义，deleted=only 时返回空）
@@ -71,6 +73,7 @@ export async function GET(request: Request) {
   if (statusFilter.length > 0) conditions.push(inArray(userFeedback.status, statusFilter))
   if (category) conditions.push(eq(userFeedback.category, category))
   if (from) conditions.push(gte(userFeedback.createdAt, from))
+  if (to) conditions.push(lte(userFeedback.createdAt, to))
   if (q) {
     const matched = or(
       like(userFeedback.content, `%${q}%`),
@@ -134,7 +137,7 @@ export async function GET(request: Request) {
     total: Number(countRows[0]?.total ?? 0),
     summary: { byStatus, unfinished, categories: [...FEEDBACK_CATEGORIES] },
     appliedRange: range,
-    appliedRangeLabel: range ? rangeLabel(range) : null,
+    appliedRangeLabel: range?.label ?? null,
   })
 }
 
