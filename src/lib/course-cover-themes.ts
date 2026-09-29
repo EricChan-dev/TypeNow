@@ -84,5 +84,90 @@ export const COVER_THEME_SLUGS: ReadonlySet<string> = new Set(
   COVER_THEME_SLOTS.map((s) => themeSlug(s.categoryKey, s.subCategoryKey)),
 )
 
-/** 每个主题的构图变体数量，必须与生成脚本里 COMPOSITIONS 的长度、以及实际文件名一致 */
+/** 每个槽位的**目标**变体数量（生成脚本按它决定要出几张） */
 export const COVER_VARIANTS_PER_THEME = 4
+
+/**
+ * 每个槽位**实际已生成**多少张变体（1~4）。
+ *
+ * ── 为什么必须有这张表，而不是一律按 4 取模 ──────────────────────────────────
+ *
+ * 生成是按「广度优先」的顺序跑的：先保证 44 个槽位都有 v1，再按课程数多少补 v2/v3/v4。
+ * 于是额度一旦耗尽，各槽位的实际张数就不一样（首次量产被迫停在
+ * 18 个槽位 1 张 / 23 个 2 张 / 3 个 4 张，见设计文档的额度记录）。
+ *
+ * 如果解析器仍然 `hash % 4 + 1`，只有 v1 的槽位里会有 3/4 的课程指向不存在的文件 ——
+ * 表现为**同一个槽位的卡片一半有图、一半是色块**，比整批没图更难解释。
+ *
+ * ── 维护方式 ────────────────────────────────────────────────────────────────
+ *
+ * 补生成变体后，跑 `npx tsx scripts/gen-course-covers.ts --step=report`，
+ * 它会打印一张可直接粘贴到这里的表。
+ * `src/__tests__/course-cover-files.test.ts` 会断言这张表与磁盘上的文件**完全一致** ——
+ * 所以忘了更新不会静默生效，测试会直接变红。
+ */
+export const COVER_VARIANT_COUNTS: Readonly<Record<string, number>> = {
+  practical__movies_stories: 4,
+  practical__classic_textbooks: 4,
+  /**
+   * 只有 1 张，且这张是从原 v4 提升上来的。
+   *
+   * 原因：首版提示词里写了十六进制色值 `#1e293b` / `#e2603f`，模型把色值当画面内容，
+   * 在这个槽位的索引卡片上渲染出「#1e2983b」「#1e6033b」这类乱码字符串，**在 220px
+   * 卡片尺寸下清晰可读**（见 .covers-build/review/suspects-cardsize.jpg）。
+   * 原 v4 恰好是唯一没有文字的（卡片全空白），所以把它提升为 v1 先顶上，
+   * 同时删掉 v2~v4，让额度恢复后用已修正的提示词重新生成。
+   */
+  practical__grammar_vocab: 1,
+  practical__listening_speaking: 2,
+  exam_prep__ielts_toefl: 2,
+  practical__daily_oral: 2,
+  practical__general: 2,
+  none__general: 2,
+  exam_prep__cet_4_6: 2,
+  practical__business_career: 2,
+  exam_prep__pte: 2,
+  exam_prep__gaokao: 2,
+  exam_prep__zhuan_sheng_ben: 2,
+  exam_prep__zhongkao: 2,
+  exam_prep__postgraduate: 2,
+  practical__travel_english: 2,
+  exam_prep__degree_english: 1,
+  exam_prep__tem_4_8: 1,
+  exam_prep__pet: 1,
+  exam_prep__gre: 1,
+  exam_prep__toeic: 1,
+  exam_prep__ket: 1,
+  exam_prep__fce: 1,
+  exam_prep__general: 1,
+  school_sync__grade_4: 2,
+  school_sync__grade_3: 2,
+  school_sync__grade_8: 2,
+  school_sync__grade_1: 2,
+  school_sync__grade_7: 2,
+  school_sync__grade_5: 2,
+  school_sync__grade_6: 2,
+  school_sync__general: 2,
+  school_sync__high_school: 2,
+  school_sync__grade_9: 2,
+  school_sync__grade_2: 1,
+  graded_reading__oxford_reading_tree: 1,
+  graded_reading__lets_go: 1,
+  graded_reading__raz: 1,
+  graded_reading__heinemann: 1,
+  school_sync__vocational: 1,
+  graded_reading__big_cat: 1,
+  graded_reading__oxford_bookworm: 1,
+  graded_reading__red_rocket: 1,
+  graded_reading__general: 1,
+}
+
+/**
+ * 某个槽位可用于轮换的变体数。
+ * 缺省为 1 而不是 4 —— 缺省值必须是「保证存在的那一张」，
+ * 否则新增槽位但忘了补图时，课程会指向不存在的文件。
+ */
+export function availableVariants(slug: string): number {
+  const n = COVER_VARIANT_COUNTS[slug]
+  return typeof n === "number" && n > 0 ? n : 1
+}

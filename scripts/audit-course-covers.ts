@@ -28,7 +28,11 @@ import path from "node:path"
 import { createConnection } from "mysql2/promise"
 
 import { resolveCourseCover, themeVariantIndex } from "@/lib/course-cover"
-import { COVER_VARIANTS_PER_THEME, themeSlug } from "@/lib/course-cover-themes"
+import {
+  COVER_VARIANTS_PER_THEME,
+  availableVariants,
+  themeSlug,
+} from "@/lib/course-cover-themes"
 
 const ROOT = path.join(__dirname, "..")
 
@@ -86,7 +90,10 @@ async function main() {
     fromTheme++
     const file = path.join(ROOT, "public", cover.src)
     if (!fs.existsSync(file)) missingFiles.push(`${c.title} → ${cover.src}`)
-    const v = themeVariantIndex(c.id)
+    // 注意取模用的是该槽位**实际可用**的变体数（不是固定的 4）——
+    // 否则统计出来的分布会与实际指向的文件对不上
+    const slug = themeSlug(c.category_key, c.sub_category_key)
+    const v = themeVariantIndex(c.id, availableVariants(slug))
     variantHistogram.set(v, (variantHistogram.get(v) ?? 0) + 1)
   }
 

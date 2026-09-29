@@ -15,7 +15,11 @@ import {
   resolveCourseCover,
   themeVariantIndex,
 } from "@/lib/course-cover"
-import { COVER_VARIANTS_PER_THEME } from "@/lib/course-cover-themes"
+import {
+  COVER_VARIANT_COUNTS,
+  COVER_VARIANTS_PER_THEME,
+  availableVariants,
+} from "@/lib/course-cover-themes"
 
 const base = { id: "course-1", categoryKey: "practical", subCategoryKey: "movies_stories" }
 
@@ -71,8 +75,53 @@ describe("resolveCourseCover · 第 2 层主题表", () => {
 
   it("主题图路径携带的变体下标与 themeVariantIndex 一致", () => {
     const r = resolveCourseCover({ ...base, coverUrl: null })
-    const expected = themeVariantIndex(base.id) + 1
+    const expected = themeVariantIndex(base.id, availableVariants("practical__movies_stories")) + 1
     if (r.kind === "image") expect(r.src).toContain(`__v${expected}.webp`)
+  })
+
+  /**
+   * 额度耗尽导致各槽位实际变体数不同（18 个槽位只有 v1，23 个有 v2，3 个有 v4）。
+   * 若解析器一律按 4 取模，只有 v1 的槽位里会有 3/4 的课程指向不存在的文件 ——
+   * 表现为同一个槽位的卡片一半有图、一半是色块。这条测试守住那个回归。
+   */
+  it("只有 1 张变体的槽位，无论 courseId 是什么都指向 v1", () => {
+    const slugs = Object.entries(COVER_VARIANT_COUNTS)
+      .filter(([, n]) => n === 1)
+      .map(([s]) => s)
+    expect(slugs.length).toBeGreaterThan(0)
+    const [slug] = slugs
+    const [cat, sub] = slug.split("__")
+    for (let i = 0; i < 40; i++) {
+      const r = resolveCourseCover({
+        id: `id-${i}`,
+        coverUrl: null,
+        categoryKey: cat === "none" ? null : cat,
+        subCategoryKey: sub === "general" ? null : sub,
+      })
+      expect(r.kind).toBe("image")
+      if (r.kind === "image") expect(r.src).toMatch(/__v1\.webp$/)
+    }
+  })
+
+  it("多变体槽位不会指向超出实际张数的变体", () => {
+    for (const [slug, count] of Object.entries(COVER_VARIANT_COUNTS)) {
+      const [cat, sub] = slug.split("__")
+      for (let i = 0; i < 30; i++) {
+        const r = resolveCourseCover({
+          id: `c-${i}`,
+          coverUrl: null,
+          categoryKey: cat === "none" ? null : cat,
+          subCategoryKey: sub === "general" ? null : sub,
+        })
+        expect(r.kind).toBe("image")
+        if (r.kind === "image") {
+          const m = r.src.match(/__v(\d+)\.webp$/)
+          expect(m, `路径格式异常：${r.src}`).toBeTruthy()
+          expect(Number(m![1])).toBeLessThanOrEqual(count)
+          expect(Number(m![1])).toBeGreaterThanOrEqual(1)
+        }
+      }
+    }
   })
 })
 

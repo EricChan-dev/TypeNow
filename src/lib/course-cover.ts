@@ -3,6 +3,7 @@ import { COURSE_CATEGORIES } from "@/types/course"
 import {
   COVER_THEME_SLUGS,
   COVER_VARIANTS_PER_THEME,
+  availableVariants,
   themeSlug,
 } from "@/lib/course-cover-themes"
 
@@ -74,19 +75,24 @@ export function getCategoryLabel(
 const COVER_BASE_PATH = "/images/courses"
 
 /**
- * 由 courseId 稳定地选出变体下标。
+ * 由 courseId 稳定地选出变体下标（0 基）。
  *
  * **必须用 courseId（稳定且唯一），不能用数组下标。** 用下标的话，用户切换排序方式
  * 或翻页后同一门课的封面就会变，看起来像封面加载错了。用 FNV-1a：实现只有几行、
  * 零依赖、分布足够均匀（单测里对 4000 个 id 断言过每个变体都不低于 10%）。
+ *
+ * `modulo` 是该槽位**实际可用**的变体数，由 `availableVariants(slug)` 给出 ——
+ * 不是固定的 4。见 COVER_VARIANT_COUNTS 的说明：额度耗尽会让各槽位张数不同，
+ * 一律按 4 取模会让同槽位的卡片一半有图、一半是色块。
  */
-export function themeVariantIndex(courseId: string): number {
+export function themeVariantIndex(courseId: string, modulo: number = COVER_VARIANTS_PER_THEME): number {
+  const m = modulo > 0 ? modulo : 1
   let h = 0x811c9dc5
   for (let i = 0; i < courseId.length; i++) {
     h ^= courseId.charCodeAt(i)
     h = Math.imul(h, 0x01000193) >>> 0
   }
-  return h % COVER_VARIANTS_PER_THEME
+  return h % m
 }
 
 export type ResolvedCover =
@@ -112,7 +118,8 @@ export function resolveCourseCover(course: CoverInput): ResolvedCover {
   // 第 2 层：主题变体表
   const slug = themeSlug(course.categoryKey, course.subCategoryKey)
   if (COVER_THEME_SLUGS.has(slug)) {
-    const variant = themeVariantIndex(course.id) + 1
+    // 只在该槽位**实际存在**的变体里轮换（见 COVER_VARIANT_COUNTS 的说明）
+    const variant = themeVariantIndex(course.id, availableVariants(slug)) + 1
     return { kind: "image", src: `${COVER_BASE_PATH}/${slug}__v${variant}.webp`, theme }
   }
 
