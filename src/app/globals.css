@@ -191,6 +191,32 @@ body {
   .animate-fadein { animation: none; }
 }
 
+/* 声纹（发音可视化）
+   高度由柱子的 scaleY 驱动，节奏错开看起来才像声纹而不是整体一起跳。
+   与播放同步靠的是 useTTSSettings 的 speaking 状态：音频 ended/error 时才置 false，
+   所以动画的起止就是真实播放的起止。 */
+@keyframes voiceprint {
+  0%, 100% { transform: scaleY(0.28); }
+  50% { transform: scaleY(1); }
+}
+.animate-voiceprint {
+  animation: voiceprint 0.9s ease-in-out infinite;
+  transform-origin: center;
+}
+
+/* 用户开启"减少动态效果"时不要抖动，但要保留"正在发声"这个信息 ——
+   换成缓慢的透明度呼吸。 */
+@keyframes voiceprint-fade {
+  0%, 100% { opacity: 0.35; }
+  50% { opacity: 1; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .animate-voiceprint {
+    animation: voiceprint-fade 1.2s ease-in-out infinite;
+    transform: scaleY(0.8);
+  }
+}
+
 /* Mobile bottom safe area (for notch devices) */
 .safe-area-bottom {
   padding-bottom: env(safe-area-inset-bottom, 0px);

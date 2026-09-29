@@ -20,6 +20,7 @@ import {
 } from "@/lib/desktop-only"
 
 import { alignWordsWithEnglish } from "@/lib/word-align"
+import { Voiceprint } from "@/components/home/learn/Voiceprint"
 
 // Flatten DB sentences: if a sentence has chunks, emit one Sentence per chunk
 function expandSentences(raw: Sentence[]): Sentence[] {
@@ -2519,6 +2520,9 @@ export function LearnClient({
           </div>
         </div>
       )}
+
+      {/* 发音声纹：放在底部导航（快捷键提示）上方。静息态是暗柱子，发声时跳动 */}
+      <Voiceprint />
 
       {/* Bottom Nav */}
       <div className="flex items-center justify-center gap-3 sm:gap-4 md:gap-8 shrink-0 px-3 sm:px-6 py-3 sm:py-4">
