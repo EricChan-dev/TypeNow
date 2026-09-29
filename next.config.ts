@@ -10,7 +10,22 @@ const securityHeaders = [
   { key: "X-Frame-Options", value: "DENY" },
   { key: "X-XSS-Protection", value: "1; mode=block" },
   { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
-  { key: "Permissions-Policy", value: "camera=(), microphone=(), geolocation=()" },
+  // camera 与 geolocation 本站不用，一律禁用；**microphone 必须是 (self)**。
+  //
+  // 这里原本写的是 `microphone=()` —— 那是对**所有来源**禁用麦克风，属于文档级
+  // 硬禁止：只要这个响应头在，`getUserMedia` 必然抛 NotAllowedError，
+  // `navigator.permissions.query({name:'microphone'})` 也恒为 denied，
+  // **无论用户在地址栏的锁图标里把麦克风设成什么都不起作用**。
+  //
+  // 后果是跟读评分（录音 → 有道语音评测）对任何人都不可用，而界面上给出的提示是
+  // "请点锁图标允许麦克风" —— 让用户去改一个改了也没用的开关。
+  // 这个头是安全头的通用模板抄来的，当时没意识到它会禁掉自家功能。
+  //
+  // `(self)` 表示只允许同源文档使用，第三方 iframe 仍被拒 —— 安全性没有损失。
+  {
+    key: "Permissions-Policy",
+    value: "camera=(), microphone=(self), geolocation=()",
+  },
   // 本站只提供 HTTPS（nginx 已把 80 端口 301 到 https）。
   // 此前没有 HSTS：用户首次以 http:// 访问时该请求不加密，可被中间人
   // 剥离后降级，登录态与验证码都会暴露在明文里。HSTS 让浏览器此后只走 HTTPS。
