@@ -21,6 +21,7 @@ import {
   type EvaluateFailureView,
   type EvaluateResult,
 } from "@/lib/pronunciation"
+import { describeMicError } from "@/lib/mic-error"
 
 /**
  * 跟读评分面板。
@@ -89,19 +90,37 @@ function detectRecordingSupport(): { ok: boolean; reason?: string } {
   return { ok: true }
 }
 
-/** 把 getUserMedia 的失败翻译成用户能照做的提示。 */
-function micErrorMessage(err: unknown): string {
+/**
+ * 读站点级的麦克风权限状态。
+ *
+ * 浏览器不支持这个查询时（Firefox / Safari 不提供 microphone）返回 "unknown"，
+ * 而不是抛错 —— 拿不到权限状态只是少一条线索，不该让整条错误提示失败。
+ */
+async function queryMicPermission(): Promise<"granted" | "denied" | "prompt" | "unknown"> {
+  try {
+    const status = await navigator.permissions?.query({ name: "microphone" as PermissionName })
+    return (status?.state as "granted" | "denied" | "prompt") ?? "unknown"
+  } catch {
+    return "unknown"
+  }
+}
+
+/**
+ * 组装诊断输入（要读一次站点权限状态），判定与文案在 lib/mic-error ——
+ * 那里是纯函数、有单测覆盖。
+ *
+ * 提示文本是用户唯一能看到的诊断信息：这一处曾经把三种不同的失败混成一句
+ * 「点锁图标允许麦克风」，而用户明明已经允许了。所以它值得被单独测。
+ */
+async function micErrorMessage(err: unknown): Promise<string> {
   const name = (err as { name?: string } | null)?.name ?? ""
-  if (name === "NotAllowedError" || name === "SecurityError") {
-    return "麦克风权限被拒绝：请点地址栏的锁图标允许麦克风后重试"
-  }
-  if (name === "NotFoundError" || name === "DevicesNotFoundError") {
-    return "没有检测到麦克风设备"
-  }
-  if (name === "NotReadableError" || name === "TrackStartError") {
-    return "麦克风被其它程序占用，请关掉后重试"
-  }
-  return "无法访问麦克风，请检查设备与浏览器权限"
+  // 原始错误名打进 console：用户截图或复述时能直接定位
+  console.error("[VoicePanel] getUserMedia 失败:", name, err)
+  return describeMicError({
+    name,
+    permission: await queryMicPermission(),
+    userAgent: navigator.userAgent,
+  })
 }
 
 /**
@@ -254,7 +273,9 @@ export function VoicePanel({ english }: { english: string }) {
         audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true },
       })
     } catch (err) {
-      toast.error(micErrorMessage(err))
+      // 需要 await：要读一次站点权限状态才能判断到底是"站点被拒"还是
+      // "站点已允许、系统层面拦住了"（见 micErrorMessage）
+      toast.error(await micErrorMessage(err))
       return
     }
 
