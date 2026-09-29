@@ -130,9 +130,16 @@ export const EVENT_META: Record<AnalyticsEvent, EventMeta> = {
     props: ["courseId", "lessonId"],
   },
   practice_complete: {
-    label: "练完一课",
+    label: "练完一句",
     category: "learning",
-    description: "一次练习结束。score 是正确率，sentences_count 是本次句数。",
+    // 这两句原先写的是「score 是正确率，sentences_count 是本次句数」，**都是错的**，
+    // 而错法很危险：真实 score 是游戏化得分（每句 500 分基准，按错字与用时扣分，
+    // 下限 100），所以报表里会看到 936、5801 这种值 —— 按"正确率"去读就成了 936%。
+    // 真实 sentences_count 是「刚练完的那句在本课内的 1 基序号」，不是本次句数。
+    // 生产数据实测（2026-09-29）确认了这一解释：同一课内序号 1,2,3… 递增，
+    // 而 score 随错字与用时下降。
+    description:
+      "每练完一句上报一次（不是「练完一课」）。score 是游戏化得分（每句基准 500，按错字与用时扣分，下限 100），**不是正确率百分比**；sentences_count 是刚练完那句在本课内的序号（1 起）。",
     props: ["score", "sentences_count", "scene"],
   },
   touch_notice_shown: {
