@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { List, CreateButton, useTable, EditButton } from "@refinedev/antd"
 import { Alert, Input, Select, Space, Spin, Table, Tag, Typography } from "antd"
 import DeleteRestoreButton from "@/components/admin/DeleteRestoreButton"
+import { formatAdminTime } from "@/lib/admin-time"
 
 const { Text } = Typography
 
@@ -189,7 +190,7 @@ export default function SentencesList() {
             dataIndex="createdAt"
             title="添加时间"
             width={170}
-            render={(v: string) => (v ? String(v).replace("T", " ").slice(0, 19) : "—")}
+            render={(v: string) => formatAdminTime(v)}
           />
         )}
         <Table.Column dataIndex="chinese" title="中文" ellipsis />

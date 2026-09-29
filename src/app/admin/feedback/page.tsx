@@ -19,6 +19,7 @@ import {
   type FeedbackCategory,
   type FeedbackStatus,
 } from "@/lib/feedback"
+import { formatAdminTime } from "@/lib/admin-time"
 
 const { Title, Text, Paragraph } = Typography
 
@@ -45,7 +46,7 @@ interface ListBody {
 }
 
 function fmtTime(v: string | null): string {
-  return v ? String(v).replace("T", " ").slice(0, 19) : "—"
+  return formatAdminTime(v)
 }
 
 /**

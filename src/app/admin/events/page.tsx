@@ -28,6 +28,7 @@ import {
   trendOption,
   type TrendPoint,
 } from "@/lib/admin-chart-options"
+import { formatAdminTime } from "@/lib/admin-time"
 
 const { Title, Text, Paragraph } = Typography
 
@@ -71,7 +72,7 @@ function fmtTime(v: string | null | undefined): string {
   // 后端返回的是 MySQL 的 "YYYY-MM-DD HH:MM:SS"（不带时区）；
   // 直接 new Date() 在 Safari 上会解析失败（不支持带空格的形式），
   // 所以原样展示，只截到秒
-  return String(v).replace("T", " ").slice(0, 19)
+  return formatAdminTime(v)
 }
 
 /** 事件下拉选项：按分类分组，显示中文名 + 原始事件名。 */

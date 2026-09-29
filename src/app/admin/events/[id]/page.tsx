@@ -9,6 +9,7 @@ import { ArrowLeftOutlined } from "@ant-design/icons"
 import { EVENT_META, eventLabel } from "@/lib/analytics-events"
 import { eventsUrl } from "@/lib/admin-links"
 import { useAdminFetch } from "@/lib/admin-fetch"
+import { formatAdminTime } from "@/lib/admin-time"
 
 const { Title, Text, Paragraph } = Typography
 
@@ -45,8 +46,7 @@ interface Detail {
 }
 
 function fmtTime(v: string | null | undefined): string {
-  if (!v) return "—"
-  return String(v).replace("T", " ").slice(0, 19)
+  return formatAdminTime(v)
 }
 
 /**

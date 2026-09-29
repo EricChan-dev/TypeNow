@@ -5,6 +5,7 @@ import { Input, Space, Table, Tag } from "antd"
 import Link from "next/link"
 import DrilldownBanner from "@/components/admin/DrilldownBanner"
 import { drilldownBadges, withFilter, withoutDrilldown } from "@/lib/admin-drilldown"
+import { formatAdminTime } from "@/lib/admin-time"
 
 /**
  * 支付订单列表。
@@ -96,13 +97,13 @@ export default function PaymentsList() {
           dataIndex="paidAt"
           title="支付时间"
           width={180}
-          render={(d: string) => (d ? new Date(d).toLocaleString("zh-CN") : "-")}
+          render={(d: string) => (d ? formatAdminTime(d) : "-")}
         />
         <Table.Column
           dataIndex="createdAt"
           title="创建时间"
           width={180}
-          render={(d: string) => (d ? new Date(d).toLocaleString("zh-CN") : "-")}
+          render={(d: string) => (d ? formatAdminTime(d) : "-")}
         />
       </Table>
     </List>

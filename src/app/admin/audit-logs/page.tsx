@@ -33,6 +33,7 @@ import {
   auditActionLabel,
   auditTargetLabel,
 } from "@/lib/admin-audit-labels"
+import { formatAdminTime } from "@/lib/admin-time"
 
 const { Title, Text } = Typography
 
@@ -57,7 +58,7 @@ interface ListBody {
 }
 
 function fmtTime(v: string | null): string {
-  return v ? String(v).replace("T", " ").slice(0, 19) : "—"
+  return formatAdminTime(v)
 }
 
 /** 目标对象的详情页链接：能跳的尽量跳，跳不了就只显示文本 */

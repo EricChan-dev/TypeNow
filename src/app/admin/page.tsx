@@ -16,6 +16,7 @@ import { multiLineOption } from "@/lib/admin-chart-options"
 import { eventsUrl, listUrl } from "@/lib/admin-links"
 import { useAdminFetch } from "@/lib/admin-fetch"
 import { RANGE_OPTIONS, DEFAULT_RANGE, type StatsRange } from "@/lib/admin-range"
+import { formatAdminTime } from "@/lib/admin-time"
 
 const { Title, Text } = Typography
 
@@ -109,7 +110,7 @@ export default function AdminDashboard() {
       dataIndex: "paidAt",
       key: "paidAt",
       width: 170,
-      render: (d: string | null) => (d ? new Date(d).toLocaleString("zh-CN") : "—"),
+      render: (d: string | null) => (d ? formatAdminTime(d) : "—"),
     },
   ]
 

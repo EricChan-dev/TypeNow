@@ -5,6 +5,7 @@ import { List, useTable } from "@refinedev/antd"
 import Link from "next/link"
 import DrilldownBanner from "@/components/admin/DrilldownBanner"
 import { drilldownBadges, withFilter, withoutDrilldown } from "@/lib/admin-drilldown"
+import { formatAdminTime } from "@/lib/admin-time"
 
 const { Text } = Typography
 
@@ -24,9 +25,15 @@ interface PracticeRow {
   english: string | null
 }
 
-/** 后端返回的是不带时区的 "YYYY-MM-DD HH:MM:SS"，原样展示（Safari 解析不了带空格的形式）。 */
+/**
+ * 时间展示统一走 lib/admin-time。
+ *
+ * 原注释写的是"后端返回不带时区的字符串，原样展示"——这个前提是错的：
+ * 接口返回 JS Date，JSON 序列化成 **UTC** 的 ISO 串，原样截取会早 8 小时
+ * （2026-09-29 就是因为这个，后台显示"练习时间早于注册时间"）。
+ */
 function fmtTime(v: string | null): string {
-  return v ? String(v).replace("T", " ").slice(0, 19) : "—"
+  return formatAdminTime(v)
 }
 
 /**

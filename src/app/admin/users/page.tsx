@@ -5,6 +5,7 @@ import { Input, Space, Table, Tag } from "antd"
 import Link from "next/link"
 import DrilldownBanner from "@/components/admin/DrilldownBanner"
 import { drilldownBadges, withFilter, withoutDrilldown } from "@/lib/admin-drilldown"
+import { formatAdminTime } from "@/lib/admin-time"
 
 /**
  * 用户管理列表。
@@ -130,7 +131,7 @@ export default function UsersList() {
           dataIndex="createdAt"
           title="注册时间"
           width={170}
-          render={(d: string) => (d ? new Date(d).toLocaleString("zh-CN") : "-")}
+          render={(d: string) => (d ? formatAdminTime(d) : "-")}
         />
         <Table.Column
           title="操作"

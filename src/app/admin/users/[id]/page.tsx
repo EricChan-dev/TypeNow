@@ -7,6 +7,7 @@ import Link from "next/link"
 import { eventLabel } from "@/lib/analytics-events"
 import { describeSignupSource } from "@/lib/signup-source"
 import { useAdminFetch } from "@/lib/admin-fetch"
+import { formatAdminTime } from "@/lib/admin-time"
 
 const { Title, Text } = Typography
 
@@ -115,7 +116,7 @@ export default function UserShow() {
       dataIndex: "createdAt",
       key: "createdAt",
       width: 170,
-      render: (d: string) => (d ? new Date(d).toLocaleString("zh-CN") : "—"),
+      render: (d: string) => (d ? formatAdminTime(d) : "—"),
     },
   ]
 
@@ -135,10 +136,10 @@ export default function UserShow() {
           </Descriptions.Item>
           <Descriptions.Item label="有效订阅">{stats?.activeSubscriptions ?? 0}</Descriptions.Item>
           <Descriptions.Item label="首次埋点">
-            {stats?.firstEventAt ? new Date(stats.firstEventAt).toLocaleString("zh-CN") : "从未上报"}
+            {stats?.firstEventAt ? formatAdminTime(stats.firstEventAt) : "从未上报"}
           </Descriptions.Item>
           <Descriptions.Item label="最后埋点">
-            {stats?.lastEventAt ? new Date(stats.lastEventAt).toLocaleString("zh-CN") : "从未上报"}
+            {stats?.lastEventAt ? formatAdminTime(stats.lastEventAt) : "从未上报"}
           </Descriptions.Item>
           <Descriptions.Item label="订单">
             <Link href={`/admin/payments?q=${encodeURIComponent(String(record.name ?? ""))}`}>
@@ -169,11 +170,11 @@ export default function UserShow() {
             )}
           </Descriptions.Item>
           <Descriptions.Item label="会员到期">
-            {record.proExpires ? new Date(record.proExpires as string).toLocaleString("zh-CN") : "-"}
+            {record.proExpires ? formatAdminTime(record.proExpires) : "-"}
           </Descriptions.Item>
           <Descriptions.Item label="体验会员领取">
             {record.trialClaimedAt
-              ? new Date(record.trialClaimedAt as string).toLocaleString("zh-CN")
+              ? formatAdminTime(record.trialClaimedAt)
               : "未领取"}
           </Descriptions.Item>
           <Descriptions.Item label="微信绑定">
@@ -183,7 +184,7 @@ export default function UserShow() {
             {record.role === "admin" ? <Tag color="purple">管理员</Tag> : <Tag>用户</Tag>}
           </Descriptions.Item>
           <Descriptions.Item label="注册时间">
-            {record.createdAt ? new Date(record.createdAt as string).toLocaleString("zh-CN") : "-"}
+            {record.createdAt ? formatAdminTime(record.createdAt) : "-"}
           </Descriptions.Item>
           {/* 注册来源：摘要是接口算好的（describeSignupSource），
               这里只把原始 JSON 折叠在下面，排查时用得上 */}
