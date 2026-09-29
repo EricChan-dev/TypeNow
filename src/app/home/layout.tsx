@@ -1,5 +1,7 @@
 import { redirect } from "next/navigation"
 import { getUser, isDbConfigured } from "@/app/actions/auth"
+import { isDevBypassSession } from "@/lib/auth/session"
+import { PHONE_BIND_PATH, needsPhoneBinding } from "@/lib/phone-gate"
 import { getActiveSubscription } from "@/lib/subscription"
 import { ConditionalTopbar } from "@/components/home/ConditionalTopbar"
 import { HomeShell } from "@/components/home/HomeShell"
@@ -16,6 +18,16 @@ export default async function HomeLayout({
 
   if (dbReady && !user) {
     redirect("/login")
+  }
+
+  // 微信登录建号时拿不到手机号，而手机号是唯一能把"微信注册的号"和"手机号注册的号"
+  // 认成同一个人的凭据 —— 不强制绑定，同一个人就会有两个账号。
+  //
+  // 闸门放在**进站之前**是刻意的：这时微信壳账号还没有任何练习数据，
+  // 撞号时只需把微信身份转到手机号账号上，不必做数据合并（系统没有那个能力）。
+  // 见 lib/phone-gate。
+  if (user && needsPhoneBinding({ phone: user.phone, devBypass: await isDevBypassSession() })) {
+    redirect(PHONE_BIND_PATH)
   }
 
   let memberTier: "trial" | "monthly" | "yearly" | "partner" | "free" = "free"

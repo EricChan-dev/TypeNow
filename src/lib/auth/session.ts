@@ -45,6 +45,22 @@ export async function getSession(): Promise<SessionInfo | null> {
   }
 }
 
+/**
+ * 当前请求是否走开发态登录旁路（cookie 值形如 dev:<userId>，且处于 development）。
+ *
+ * 单独暴露出来是给「强制绑定手机号」那道闸门用的：本地开发与 e2e 的账号
+ * 都没有手机号，不该被拦在门外（与仓库其它 dev 旁路同一种取舍）。
+ */
+export async function isDevBypassSession(): Promise<boolean> {
+  if (process.env.NODE_ENV !== "development") return false
+  try {
+    const cookieStore = await cookies()
+    return (cookieStore.get(COOKIE_NAME)?.value ?? "").startsWith("dev:")
+  } catch {
+    return false
+  }
+}
+
 export async function createSession(userId: string): Promise<string> {
   if (!db) throw new Error("Database not configured")
 

@@ -258,7 +258,9 @@ export async function GET(request: Request) {
   for (const r of dailyPaid) { const e = touch(r.date); if (e) e.revenueFen = r.fen }
 
   return NextResponse.json({
-    range,
+    // 保持原契约：range 仍是取值字符串（窗口对象另有 start/end，不在这里暴露）。
+    // 契约变化会让既有调用方与测试静默失配 —— 这是 e2e 抓到的。
+    range: range.range,
     rangeLabel: range.label,
     from: from ? from.toISOString() : null,
     activity: {
