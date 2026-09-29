@@ -4,6 +4,7 @@ import {
   COVER_THEME_SLUGS,
   COVER_VARIANTS_PER_THEME,
   availableVariants,
+  coverPool,
   themeSlug,
 } from "@/lib/course-cover-themes"
 
@@ -118,9 +119,15 @@ export function resolveCourseCover(course: CoverInput): ResolvedCover {
   // 第 2 层：主题变体表
   const slug = themeSlug(course.categoryKey, course.subCategoryKey)
   if (COVER_THEME_SLUGS.has(slug)) {
-    // 只在该槽位**实际存在**的变体里轮换（见 COVER_VARIANT_COUNTS 的说明）
-    const variant = themeVariantIndex(course.id, availableVariants(slug)) + 1
-    return { kind: "image", src: `${COVER_BASE_PATH}/${slug}__v${variant}.webp`, theme }
+    /**
+     * 在**该槽位的完整轮换池**里选（见 coverPool）：
+     * 变体够就用自己槽位的；只有 1 张时会并入同大类通用槽位的图，
+     * 避免 26 门三年级课程在列表里显示同一张公交站。
+     * 池中每一项都保证文件存在，所以这里的路径不会是死链。
+     */
+    const pool = coverPool(slug)
+    const pick = themeVariantIndex(course.id, pool.length)
+    return { kind: "image", src: `${COVER_BASE_PATH}/${pool[pick]}`, theme }
   }
 
   // 第 3 层：渐变兜底（永不出现空白封面）

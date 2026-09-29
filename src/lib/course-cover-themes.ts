@@ -171,3 +171,56 @@ export function availableVariants(slug: string): number {
   const n = COVER_VARIANT_COUNTS[slug]
   return typeof n === "number" && n > 0 ? n : 1
 }
+
+/**
+ * 每个大类里「通用」槽位的 slug，用于变体不足时借图。
+ *
+ * ── 为什么需要这个 ──────────────────────────────────────────────────────────
+ *
+ * 首次量产额度在半途耗尽，19 个槽位只剩 1 张变体。课程数多的槽位（如
+ * `school_sync__grade_3` 有 26 门课）在列表里会出现**同一张图反复出现** ——
+ * 默认「最新发布」排序下同年级课程扎堆，一眼就能看出是同一张。
+ *
+ * 补齐变体是正解，但需要额度。在补上之前，从同大类的通用槽位借几张来扩充轮换池，
+ * 能把「同一张图连续出现 5 次」变成「3 张图交替出现」。
+ *
+ * 代价要说清楚：借来的图在主题上只是**同类**、不是**同槽位**的。
+ * 例如三年级课程可能显示「校园跑道」而不是「公交站台」。判断是：
+ * 「同大类里略显通用」比「同一张图刷屏」更像正常产品。
+ *
+ * **补齐变体后应当删掉这个机制** —— 那时每个槽位都够用，借图只会降低主题贴合度。
+ */
+export const CATEGORY_GENERAL_SLUG: Readonly<Record<string, string>> = {
+  graded_reading: "graded_reading__general",
+  school_sync: "school_sync__general",
+  exam_prep: "exam_prep__general",
+  practical: "practical__general",
+  none: "none__general",
+}
+
+/**
+ * 某个槽位的**完整轮换池**（文件路径相对 `/images/courses/`）。
+ *
+ * - 变体 ≥2 张：只用自己槽位的，主题最贴合；
+ * - 只有 1 张：自己的 v1 打头，再并入同大类通用槽位的变体。
+ *
+ * 池子里每一项都保证文件存在（由 `course-cover-files.test.ts` 断言），
+ * 所以解析出来的路径不会是死链。
+ */
+export function coverPool(slug: string): string[] {
+  const own = Array.from(
+    { length: availableVariants(slug) },
+    (_, i) => `${slug}__v${i + 1}.webp`,
+  )
+  if (own.length >= 2) return own
+
+  const category = slug.split("__")[0]
+  const general = CATEGORY_GENERAL_SLUG[category]
+  if (!general || general === slug) return own
+
+  const borrowed = Array.from(
+    { length: availableVariants(general) },
+    (_, i) => `${general}__v${i + 1}.webp`,
+  )
+  return [...own, ...borrowed]
+}

@@ -68,8 +68,12 @@ function CoverImage({
       />
     )
   }
-  // eslint-disable-next-line @next/next/no-img-element
+  // 外链与 dataURL 必须用裸 img：next/image 对未登记 remotePatterns 的域名会直接抛错，
+  // 而后台的「上传封面」把图片写成 base64 dataURL。
+  // （注意：下面那行 eslint 指令必须紧贴 <img>，中间夹任何注释都会让它失效 ——
+  //   写成 return 的上一行也是无效的。）
   return (
+    // eslint-disable-next-line @next/next/no-img-element
     <img
       src={src}
       alt=""

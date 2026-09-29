@@ -80,31 +80,14 @@ describe("resolveCourseCover · 第 2 层主题表", () => {
   })
 
   /**
-   * 额度耗尽导致各槽位实际变体数不同（18 个槽位只有 v1，23 个有 v2，3 个有 v4）。
+   * 额度耗尽导致各槽位实际变体数不同（19 个只有 v1、23 个有 v2、2 个有 v4）。
    * 若解析器一律按 4 取模，只有 v1 的槽位里会有 3/4 的课程指向不存在的文件 ——
    * 表现为同一个槽位的卡片一半有图、一半是色块。这条测试守住那个回归。
    */
-  it("只有 1 张变体的槽位，无论 courseId 是什么都指向 v1", () => {
-    const slugs = Object.entries(COVER_VARIANT_COUNTS)
-      .filter(([, n]) => n === 1)
-      .map(([s]) => s)
-    expect(slugs.length).toBeGreaterThan(0)
-    const [slug] = slugs
-    const [cat, sub] = slug.split("__")
-    for (let i = 0; i < 40; i++) {
-      const r = resolveCourseCover({
-        id: `id-${i}`,
-        coverUrl: null,
-        categoryKey: cat === "none" ? null : cat,
-        subCategoryKey: sub === "general" ? null : sub,
-      })
-      expect(r.kind).toBe("image")
-      if (r.kind === "image") expect(r.src).toMatch(/__v1\.webp$/)
-    }
-  })
-
-  it("多变体槽位不会指向超出实际张数的变体", () => {
-    for (const [slug, count] of Object.entries(COVER_VARIANT_COUNTS)) {
+  it("变体 ≥2 的槽位：解析结果只落在自己槽位已声明的变体里", () => {
+    const multi = Object.entries(COVER_VARIANT_COUNTS).filter(([, n]) => n >= 2)
+    expect(multi.length).toBeGreaterThan(0)
+    for (const [slug, count] of multi) {
       const [cat, sub] = slug.split("__")
       for (let i = 0; i < 30; i++) {
         const r = resolveCourseCover({
@@ -114,14 +97,44 @@ describe("resolveCourseCover · 第 2 层主题表", () => {
           subCategoryKey: sub === "general" ? null : sub,
         })
         expect(r.kind).toBe("image")
-        if (r.kind === "image") {
-          const m = r.src.match(/__v(\d+)\.webp$/)
-          expect(m, `路径格式异常：${r.src}`).toBeTruthy()
-          expect(Number(m![1])).toBeLessThanOrEqual(count)
-          expect(Number(m![1])).toBeGreaterThanOrEqual(1)
-        }
+        if (r.kind !== "image") continue
+        const m = r.src.match(new RegExp(`/${slug}__v(\\d+)\\.webp$`))
+        expect(m, `${slug} 解析出了别的槽位的图：${r.src}`).toBeTruthy()
+        expect(Number(m![1])).toBeLessThanOrEqual(count)
+        expect(Number(m![1])).toBeGreaterThanOrEqual(1)
       }
     }
+  })
+
+  /**
+   * 只有 1 张变体的槽位会并入同大类通用槽位的图来扩充轮换池
+   * （原因见 CATEGORY_GENERAL_SLUG 的说明）。
+   * 这一条既确认「借图机制生效了」，也确认「借来的仍然是同大类的合法文件」。
+   */
+  it("变体为 1 的槽位：轮换池里有不止一张图，且全部合法", () => {
+    const singles = Object.entries(COVER_VARIANT_COUNTS).filter(([, n]) => n === 1)
+    expect(singles.length).toBeGreaterThan(0)
+
+    let totalDistinctAcrossSingles = 0
+    for (const [slug] of singles) {
+      const [cat, sub] = slug.split("__")
+      const seen = new Set<string>()
+      for (let i = 0; i < 60; i++) {
+        const r = resolveCourseCover({
+          id: `id-${i}`,
+          coverUrl: null,
+          categoryKey: cat === "none" ? null : cat,
+          subCategoryKey: sub === "general" ? null : sub,
+        })
+        expect(r.kind).toBe("image")
+        if (r.kind === "image") seen.add(r.src)
+      }
+      totalDistinctAcrossSingles += seen.size
+      // 池子里第一张必须是自己的 v1（保证主题最贴合的那张一定会被用到）
+      expect([...seen].some((s) => s.endsWith(`/${slug}__v1.webp`))).toBe(true)
+    }
+    // 若借图机制失效，每个单变体槽位只会产出 1 张图，总数 = 槽位数
+    expect(totalDistinctAcrossSingles).toBeGreaterThan(singles.length)
   })
 })
 
