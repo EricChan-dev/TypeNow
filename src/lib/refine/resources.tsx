@@ -1,19 +1,5 @@
 import type { IResourceItem } from "@refinedev/core"
-import {
-  DashboardOutlined,
-  UserOutlined,
-  FileTextOutlined,
-  DollarOutlined,
-  CrownOutlined,
-  BarChartOutlined,
-  BookOutlined,
-  UnorderedListOutlined,
-  UploadOutlined,
-  LineChartOutlined,
-  ThunderboltOutlined,
-  MessageOutlined,
-  SafetyCertificateOutlined,
-} from "@ant-design/icons"
+import { DashboardOutlined, UserOutlined, FileTextOutlined, DollarOutlined, CrownOutlined, BarChartOutlined, BookOutlined, UnorderedListOutlined, UploadOutlined, LineChartOutlined, ThunderboltOutlined, MessageOutlined, SafetyCertificateOutlined, CommentOutlined } from "@ant-design/icons"
 
 export const resources: IResourceItem[] = [
   {
@@ -58,6 +44,11 @@ export const resources: IResourceItem[] = [
     list: "/admin/practice",
     // 只读：练习记录是用户行为的历史事实，后台不应该能改
     meta: { label: "练习记录", icon: <ThunderboltOutlined /> },
+  },
+  {
+    name: "ai-chats",
+    list: "/admin/ai-chats",
+    meta: { label: "AI 对话日志", icon: <CommentOutlined /> },
   },
   {
     name: "payment-orders",

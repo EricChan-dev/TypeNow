@@ -59,6 +59,8 @@ const TABLES = [
   // 审计日志也要被清掉：夹具重置时若留着上一个用例的日志，
   // "这次操作写了哪些条"就只能靠时间戳去猜
   "admin_audit_logs",
+  // 对话日志同理：它是只增的流水，不清会让"筛出几条"变成"累计几条"
+  "ai_chat_logs",
   "analytics_events",
   "check_ins",
   "courses",

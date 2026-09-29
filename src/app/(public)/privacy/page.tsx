@@ -24,6 +24,11 @@ export default function PrivacyPage() {
           <li><strong>手机号码：</strong>用于账号注册、登录验证和账号安全保护。</li>
           <li><strong>微信账号信息：</strong>当您通过微信扫码登录时，我们会获取您的微信 OpenID 和头像昵称等基本信息。</li>
           <li><strong>用户反馈：</strong>当您联系客服或提交反馈时，我们会收集您主动提供的文字、图片等内容。</li>
+          <li>
+            <strong>AI 对话内容：</strong>当您使用「AI 私教」提问时，您的问题与 AI 的回答会被记录，
+            用于回答质量评估、故障排查与滥用防护。这部分内容仅在后台由管理员为上述目的查看，
+            不会公开展示或用于广告投放。
+          </li>
         </ul>
 
         <h3 className="text-base font-medium mt-6 mb-2">1.2 使用过程中自动收集的信息</h3>

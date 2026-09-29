@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server"
 import { getSession } from "@/lib/auth/session"
 import { db } from "@/lib/db"
-import { diamondLogs, users } from "@/lib/db/schema"
+import { aiChatLogs, diamondLogs, users } from "@/lib/db/schema"
 import { eq, and, gte, sql } from "drizzle-orm"
 import { affectedRows } from "@/lib/db/affected-rows"
 import { DEEPSEEK_MODEL, DEEPSEEK_THINKING } from "@/lib/llm"
@@ -23,6 +23,49 @@ const SYSTEM_PROMPT = `你是 TypeNow 英语学习助手"小码"，专注帮助�
 与英语学习无关的话题礼貌拒绝并引导回正题。`
 
 type ChatMessage = { role: "user" | "assistant"; content: string }
+
+/** 问题/回答的存储上限。审计要的是"能看清说了什么"，不是无限存档。 */
+const MAX_LOG_QUESTION = 2000
+const MAX_LOG_ANSWER = 8000
+
+/**
+ * 写一条对话日志。
+ *
+ * 审计是旁路：**写不进去绝不能影响对话本身**（用户已经付了钻石、答案也拿到了）。
+ * 这与 lib/admin-audit.ts 的取舍一致 —— 日志失败只留 console.error。
+ * 所以这里 await 但不抛：await 是为了让"接口返回时日志已落库"这件事成立，
+ * 便于出问题时按时间对齐。
+ */
+async function logChat(entry: {
+  userId: string
+  question: string
+  answer: string | null
+  historyCount: number
+  diamondsCost: number
+  usedFreeQuota: boolean
+  status: "ok" | "error"
+  errorMessage?: string
+  latencyMs: number
+}): Promise<void> {
+  if (!db) return
+  try {
+    await db.insert(aiChatLogs).values({
+      id: crypto.randomUUID(),
+      userId: entry.userId,
+      question: entry.question.slice(0, MAX_LOG_QUESTION),
+      answer: entry.answer === null ? null : entry.answer.slice(0, MAX_LOG_ANSWER),
+      model: DEEPSEEK_MODEL,
+      historyCount: entry.historyCount,
+      diamondsCost: entry.diamondsCost,
+      usedFreeQuota: entry.usedFreeQuota ? 1 : 0,
+      status: entry.status,
+      errorMessage: entry.errorMessage?.slice(0, 255) ?? null,
+      latencyMs: entry.latencyMs,
+    })
+  } catch (err) {
+    console.error("[chat] 对话日志写入失败（不影响本次对话）:", err)
+  }
+}
 
 export async function POST(request: Request) {
   const session = await getSession()
@@ -117,6 +160,8 @@ export async function POST(request: Request) {
   }
 
   // 扣费成功后再调用 LLM；任何失败都要把 5 钻石退还，避免用户白扣。
+  // 计时从发起 LLM 请求算起：这是"用户实际等了多久"里我们能控的那部分。
+  const llmStartedAt = Date.now()
   let reply: string
   try {
     const aiRes = await fetch("https://api.deepseek.com/v1/chat/completions", {
@@ -138,7 +183,32 @@ export async function POST(request: Request) {
 
     const aiData = await aiRes.json()
     reply = aiData.choices?.[0]?.message?.content ?? ""
+    await logChat({
+      userId,
+      question: message,
+      answer: reply,
+      historyCount: history.length,
+      diamondsCost: usedFreeQuota ? 0 : COST,
+      usedFreeQuota,
+      status: "ok",
+      latencyMs: Date.now() - llmStartedAt,
+    })
   } catch (err) {
+    // 失败也要留痕：这是"用户投诉答不出来"时唯一能查的东西。
+    // diamondsCost 记 0 —— 失败会退费，净消耗是 0；是否吃了会员免费额度看 usedFreeQuota
+    // （那条路径不退额度，所以它才是真实的代价）。
+    await logChat({
+      userId,
+      question: message,
+      answer: null,
+      historyCount: history.length,
+      diamondsCost: 0,
+      usedFreeQuota,
+      status: "error",
+      errorMessage: err instanceof Error ? err.message : String(err),
+      latencyMs: Date.now() - llmStartedAt,
+    })
+
     // 只有真的扣过费才需要退还。命中会员免费额度时一分钱都没扣，
     // 无条件退款会凭空给用户加 COST 颗钻石（典型的"越失败越赚"）。
     if (usedFreeQuota) {

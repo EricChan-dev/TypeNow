@@ -808,6 +808,57 @@ export const userFeedback = mysqlTable(
  * 2. **不建外键**：日志必须比它记录的对象活得久，被删掉的对象正是最需要审计的。
  * 3. `detail` 只写白名单字段，写入前统一脱敏（见 lib/admin-audit.ts）。
  */
+/**
+ * AI 私教对话日志（审计用）。
+ *
+ * 此前 AI 对话**完全不落库**：只有 diamond_logs 记了"扣了多少钻石"，
+ * 记不下"问了什么、答了什么"。于是出问题时无法回答任何实质问题：
+ * 用户投诉答非所问、怀疑有人在刷额度、想评估回答质量 —— 全都无从查起。
+ *
+ * 两个刻意的取舍：
+ *
+ *   1. **只记一次问答，不记整段会话**：客户端每次请求都会把最多 20 条历史
+ *      一起带上来（见 /api/chat），若按整段存取会把同一内容重复写 20 遍。
+ *      这里记下本轮的问题、回答，以及 history_count（用于判断是否是有上下文的
+ *      追问），需要还原整段会话时按 user_id + 时间顺序拼即可。
+ *   2. **问题与回答都截断存储**：question 最多 2000 字（与接口的入参上限一致），
+ *      answer 最多 8000 字。审计要的是"能看清说了什么"，不是无限存档；
+ *      不设上限等于把 TEXT 当对象存储用。
+ *
+ * ⚠️ 这里存的是用户与 AI 的对话原文，属于个人信息 —— 隐私政策里必须写明
+ * （见 app/(public)/privacy 的收集范围），不能只写"我们会记录")。
+ */
+export const aiChatLogs = mysqlTable(
+  "ai_chat_logs",
+  {
+    id: varchar("id", { length: 36 }).primaryKey().default(sql`(UUID())`),
+    userId: varchar("user_id", { length: 36 }).notNull(),
+    /** 本轮用户提问（截断至 2000 字） */
+    question: text("question").notNull(),
+    /** AI 回答（截断至 8000 字）；失败时为 NULL */
+    answer: text("answer"),
+    /** 实际使用的模型名（lib/llm 的 DEEPSEEK_MODEL） */
+    model: varchar("model", { length: 64 }),
+    /** 本轮带上来的历史条数：用于区分"首问"与"带上下文的追问" */
+    historyCount: int("history_count").notNull().default(0),
+    /** 本轮消耗的钻石；命中会员免费额度时为 0 */
+    diamondsCost: int("diamonds_cost").notNull().default(0),
+    /** 是否走了会员每日免费额度（0 钻石） */
+    usedFreeQuota: tinyint("used_free_quota").notNull().default(0),
+    status: mysqlEnum("status", ["ok", "error"]).notNull().default("ok"),
+    /** 失败原因（截断）；成功时为 NULL */
+    errorMessage: varchar("error_message", { length: 255 }),
+    /** 端到端耗时（毫秒），用于判断"慢"是不是集中在某段时间/某个人 */
+    latencyMs: int("latency_ms"),
+    createdAt: datetime("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  },
+  (t) => [
+    index("idx_ai_chat_user_created").on(t.userId, t.createdAt),
+    index("idx_ai_chat_created").on(t.createdAt),
+    index("idx_ai_chat_status_created").on(t.status, t.createdAt),
+  ]
+)
+
 export const adminAuditLogs = mysqlTable(
   "admin_audit_logs",
   {
