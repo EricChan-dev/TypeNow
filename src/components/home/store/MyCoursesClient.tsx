@@ -1,14 +1,25 @@
 "use client"
 
-import { useState, useEffect, useMemo } from "react"
+import { useState, useEffect } from "react"
 import Link from "next/link"
 import { ShoppingBag } from "lucide-react"
 import type { Course } from "@/types/course"
-import { useAcquiredCourses } from "@/lib/hooks/useAcquiredCourses"
-import { CourseCard } from "./CourseCard"
+import { CourseCard, type CourseCardStats } from "./CourseCard"
 
-function relativeTime(ts: number): string {
-  const diff = Date.now() - ts
+/**
+ * `/api/courses/mine` 返回的形状：课程行 + 卡片所需的规模/进度 + 上次练习时间。
+ *
+ * 注意这里不再需要「拉全量课程再前端筛」——过滤已在服务端完成。
+ * 原先那条路径有个真实 bug：它请求 pageSize=500，而 list 路由把 pageSize 夹到 100，
+ * 于是最新 100 门之外的课程（774 门中的 674 门）在「我的课程」里完全不可见。
+ */
+type MyCourse = Course & {
+  stats: CourseCardStats
+  lastStudiedAt: string | null
+}
+
+function relativeTime(iso: string): string {
+  const diff = Date.now() - new Date(iso).getTime()
   const mins = Math.floor(diff / 60000)
   if (mins < 1) return "刚刚"
   if (mins < 60) return `${mins}分钟前`
@@ -21,53 +32,22 @@ function relativeTime(ts: number): string {
 }
 
 export function MyCoursesClient() {
-  const { acquiredIds } = useAcquiredCourses()
-  const [allCourses, setAllCourses] = useState<Course[]>([])
-  const [studyHistory, setStudyHistory] = useState<Record<string, number>>({})
+  const [myCourses, setMyCourses] = useState<MyCourse[]>([])
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState(false)
 
   useEffect(() => {
     setLoading(true)
-    fetch("/api/courses/list?pageSize=500")
+    // 服务端已按 lastStudiedAt 倒序返回，前端不再排序，也不再读 localStorage
+    fetch("/api/courses/mine")
       .then((r) => r.json())
-      .then((json) => { if (json.data) setAllCourses(json.data as Course[]) })
+      .then((json: { data?: MyCourse[] }) => {
+        if (json.data) setMyCourses(json.data)
+        else setLoadError(true)
+      })
       .catch(() => setLoadError(true))
       .finally(() => setLoading(false))
   }, [])
-
-  useEffect(() => {
-    let local: Record<string, number> = {}
-    try {
-      const raw = localStorage.getItem("typenow_study_history")
-      if (raw) local = JSON.parse(raw)
-    } catch {}
-    setStudyHistory(local)
-
-    fetch("/api/user/progress")
-      .then((r) => r.json())
-      .then((json: { data?: { courseId: string; lastStudiedAt: string }[] }) => {
-        if (!json.data) return
-        const merged = { ...local }
-        for (const row of json.data) {
-          const ts = new Date(row.lastStudiedAt).getTime()
-          if (!merged[row.courseId] || ts > merged[row.courseId]) {
-            merged[row.courseId] = ts
-          }
-        }
-        setStudyHistory(merged)
-      })
-      .catch(() => {})
-  }, [])
-
-  // My Courses = acquired OR studied, sorted by last studied (most recent first)
-  const myCourses = useMemo(() => {
-    const studiedIds = new Set(Object.keys(studyHistory))
-    const allMyIds = new Set([...acquiredIds, ...studiedIds])
-    return allCourses
-      .filter((c) => allMyIds.has(c.id))
-      .sort((a, b) => (studyHistory[b.id] ?? 0) - (studyHistory[a.id] ?? 0))
-  }, [allCourses, studyHistory, acquiredIds])
 
   return (
     <div className="px-6 lg:px-10 xl:px-14 py-6">
@@ -101,11 +81,11 @@ export function MyCoursesClient() {
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
           {myCourses.map((course) => (
             <div key={course.id} className="relative">
-              <CourseCard course={course} />
-              {studyHistory[course.id] && (
+              <CourseCard course={course} variant="mine" stats={course.stats} />
+              {course.lastStudiedAt && (
                 <div className="absolute top-2 right-2 z-10 pointer-events-none">
                   <span className="inline-block rounded-full bg-background/80 backdrop-blur-sm border border-border px-2 py-0.5 text-[10px] text-foreground/60 leading-relaxed">
-                    {relativeTime(studyHistory[course.id])}学过
+                    {relativeTime(course.lastStudiedAt)}学过
                   </span>
                 </div>
               )}
