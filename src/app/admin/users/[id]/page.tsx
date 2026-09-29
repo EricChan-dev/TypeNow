@@ -224,6 +224,7 @@ export default function UserShow() {
             onClick: () => setEventFilter(r.eventType),
             style: { cursor: "pointer" },
           })}
+          scroll={{ x: "max-content" }}
         />
       </Card>
     </div>

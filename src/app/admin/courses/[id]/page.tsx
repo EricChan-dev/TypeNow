@@ -286,6 +286,7 @@ export default function CourseDetailPage() {
     { dataIndex: "summary", title: "简介", ellipsis: true, render: (v: string | null) => v ?? "-" },
     {
       title: "操作",
+      fixed: "right" as const,
       width: 160,
       render: (_: unknown, record: Lesson) => (
         <Space onClick={(e) => e.stopPropagation()}>
@@ -368,6 +369,7 @@ export default function CourseDetailPage() {
                 onClick: () => router.push(`/admin/courses/${id}/lessons/${record.id}`),
                 style: { cursor: "pointer" },
               })}
+              scroll={{ x: "max-content" }}
             />
           </Card>
         </Col>

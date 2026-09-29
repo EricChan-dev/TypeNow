@@ -241,6 +241,7 @@ export default function MaterialsPage() {
                 </div>
               ),
             }}
+            scroll={{ x: "max-content" }}
           />
         </Card>
       )}

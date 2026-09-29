@@ -157,6 +157,7 @@ export default function CoursesList() {
           onClick: () => router.push(`/admin/courses/${String(record.id)}`),
           style: { cursor: "pointer" },
         })}
+        scroll={{ x: "max-content" }}
       >
         <Table.Column
           dataIndex="coverUrl"
@@ -218,6 +219,7 @@ export default function CoursesList() {
         <Table.Column
           title="操作"
           width={160}
+          fixed="right"
           render={(_: unknown, record: CourseRow) => (
             <Space onClick={(e) => e.stopPropagation()}>
               <Button

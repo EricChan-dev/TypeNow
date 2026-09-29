@@ -288,6 +288,7 @@ export default function EventDetailPage() {
             size="small"
             pagination={false}
             rowClassName={(row) => (row.isCurrent ? "ant-table-row-selected" : "")}
+            scroll={{ x: "max-content" }}
           />
         )}
       </Card>

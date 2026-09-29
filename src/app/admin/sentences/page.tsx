@@ -175,6 +175,9 @@ export default function SentencesList() {
       <Table
         {...tableProps}
         rowKey="id"
+        // 列多时不再挤压：x 取 max-content 让每列按内容所需宽度展开，
+        // 超宽由表格自己横向滚动（配合下方操作列的 fixed="right"）。
+        scroll={{ x: "max-content" }}
         locale={{
           emptyText: lessonId ? "该课时下没有匹配的句子" : "暂无句子",
         }}
@@ -205,6 +208,8 @@ export default function SentencesList() {
         <Table.Column
           title="操作"
           width={120}
+          // 横向滚动时操作列固定在右侧，始终点得到
+          fixed="right"
           render={(_, record: { id: string; deletedAt?: string | null }) => (
             <Space>
               <EditButton recordItemId={record.id} hideText size="small" />

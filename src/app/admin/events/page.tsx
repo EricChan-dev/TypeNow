@@ -514,6 +514,7 @@ function EventsExplorer() {
             onClick: () => router.push(eventDetailUrl(row.id)),
             style: { cursor: "pointer" },
           })}
+          scroll={{ x: "max-content" }}
         />
       </Card>
 

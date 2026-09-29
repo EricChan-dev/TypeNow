@@ -123,7 +123,9 @@ export default function LessonsList() {
         />
       </Space>
 
-      <Table {...tableProps} rowKey="id">
+      <Table {...tableProps} rowKey="id"
+        scroll={{ x: "max-content" }}
+      >
         <Table.Column
           dataIndex="title"
           title="课时名称"
@@ -153,6 +155,7 @@ export default function LessonsList() {
         <Table.Column
           title="操作"
           width={160}
+          fixed="right"
           render={(_, record: { id: string; deletedAt?: string | null }) => (
             <Space>
               <EditButton recordItemId={record.id} hideText size="small" />

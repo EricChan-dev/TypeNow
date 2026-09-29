@@ -43,7 +43,9 @@ export default function PaymentsList() {
         </Space>
       </div>
 
-      <Table {...tableProps} rowKey="id">
+      <Table {...tableProps} rowKey="id"
+        scroll={{ x: "max-content" }}
+      >
         <Table.Column
           title="用户"
           key="user"

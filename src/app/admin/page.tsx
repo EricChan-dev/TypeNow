@@ -339,6 +339,7 @@ export default function AdminDashboard() {
           pagination={false}
           size="small"
           locale={{ emptyText: "暂无订单" }}
+          scroll={{ x: "max-content" }}
         />
       </Card>
     </div>

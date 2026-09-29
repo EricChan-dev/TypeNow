@@ -210,6 +210,7 @@ export default function FeedbackPage() {
     },
     {
       title: "操作",
+      fixed: "right" as const,
       key: "actions",
       width: 210,
       render: (_: unknown, r: Row) => (
@@ -367,6 +368,7 @@ export default function FeedbackPage() {
             setPageSize(s)
           },
         }}
+        scroll={{ x: "max-content" }}
       />
 
       <Modal

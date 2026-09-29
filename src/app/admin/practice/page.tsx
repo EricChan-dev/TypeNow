@@ -66,7 +66,9 @@ export default function PracticeRecordsList() {
         />
       </div>
 
-      <Table {...tableProps} rowKey="id">
+      <Table {...tableProps} rowKey="id"
+        scroll={{ x: "max-content" }}
+      >
         <Table.Column
           dataIndex="createdAt"
           title="练习时间"

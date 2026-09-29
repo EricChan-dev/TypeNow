@@ -330,6 +330,7 @@ export default function AuditLogsPage() {
             setPageSize(s)
           },
         }}
+        scroll={{ x: "max-content" }}
       />
     </div>
   )
