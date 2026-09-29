@@ -38,6 +38,17 @@ export function CourseDetailClient({ courseId }: CourseDetailClientProps) {
   const [lessons, setLessons] = useState<LessonRow[]>([])
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState(false)
+  /**
+   * 图片加载失败时退回渐变色块。
+   * 第 2 层（主题变体表）只根据 slug 是否在 44 个合法槽位里就拼出路径，
+   * 无法知道文件此刻是否真在磁盘上；没有这个兜底，文件缺失的表现是破图 +
+   * alt 文本溢出，比色块难看得多。与 CourseCard 里同一处兜底对应。
+   *
+   * 必须和其它 useState 放在一起、且在下面三个提前 return **之前** ——
+   * 放到 return 之后会违反 hooks 规则：loading 由 true 变 false 时
+   * 组件会多调用一个 hook，React 直接抛「Rendered more hooks than …」。
+   */
+  const [coverFailed, setCoverFailed] = useState(false)
   const { isAcquired, acquire } = useAcquiredCourses()
 
   useEffect(() => {
@@ -106,15 +117,28 @@ export function CourseDetailClient({ courseId }: CourseDetailClientProps) {
       {/* Header Card */}
       <div className="rounded-2xl border border-border bg-card overflow-hidden mb-6 flex flex-col sm:flex-row">
         {/* Cover */}
-        {cover.kind === "image" ? (
+        {cover.kind === "image" && !coverFailed ? (
           <div className="relative sm:w-[280px] lg:w-[320px] shrink-0 aspect-[16/10] sm:aspect-auto overflow-hidden">
             {/* 本地图片走 next/image；外链与后台传的 base64 dataURL 走裸 img
-                （next/image 对未登记 remotePatterns 的域名会直接抛错） */}
+                （next/image 对未登记 remotePatterns 的域名会直接抛错）。
+                alt 用空串：标题就在紧邻的右侧，重复朗读对读屏用户是噪音。 */}
             {cover.src.startsWith("/") ? (
-              <Image src={cover.src} alt={course.title} fill sizes="320px" className="object-cover" />
+              <Image
+                src={cover.src}
+                alt=""
+                fill
+                sizes="320px"
+                className="object-cover"
+                onError={() => setCoverFailed(true)}
+              />
             ) : (
               // eslint-disable-next-line @next/next/no-img-element
-              <img src={cover.src} alt={course.title} className="absolute inset-0 h-full w-full object-cover" />
+              <img
+                src={cover.src}
+                alt=""
+                onError={() => setCoverFailed(true)}
+                className="absolute inset-0 h-full w-full object-cover"
+              />
             )}
             {course.source === "official" && (
               <span className="absolute top-3 left-3 rounded-full bg-foreground/15 backdrop-blur-sm px-2.5 py-0.5 text-[10px] font-medium text-foreground/90">

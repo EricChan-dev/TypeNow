@@ -1,5 +1,6 @@
 "use client"
 
+import { useState } from "react"
 import Link from "next/link"
 import Image from "next/image"
 import { Users } from "lucide-react"
@@ -43,21 +44,39 @@ function formatLearnerCount(n: number): string {
  * 懒加载、按 `sizes` 下发合适尺寸。外链与 dataURL 走裸 img ——
  * `next/image` 对未在 `next.config.ts` 的 `remotePatterns` 里登记的域名会直接抛错，
  * 而后台的「上传封面」是把图片转成 base64 dataURL 写进 `courses.cover_url`。
+ *
+ * `alt` 用空串：课程标题就在紧邻的下方，重复朗读一遍对读屏用户是噪音。
  */
-function CoverImage({ src, alt, sizes }: { src: string; alt: string; sizes: string }) {
+function CoverImage({
+  src,
+  sizes,
+  onError,
+}: {
+  src: string
+  sizes: string
+  onError: () => void
+}) {
   if (src.startsWith("/")) {
     return (
       <Image
         src={src}
-        alt={alt}
+        alt=""
         fill
         sizes={sizes}
+        onError={onError}
         className="object-cover transition-transform duration-300 group-hover:scale-[1.03]"
       />
     )
   }
   // eslint-disable-next-line @next/next/no-img-element
-  return <img src={src} alt={alt} className="absolute inset-0 h-full w-full object-cover" />
+  return (
+    <img
+      src={src}
+      alt=""
+      onError={onError}
+      className="absolute inset-0 h-full w-full object-cover"
+    />
+  )
 }
 
 /**
@@ -113,6 +132,17 @@ export function CourseCard({ course, variant = "discover", stats }: CourseCardPr
   const cover = resolveCourseCover(course)
   const categoryLabel = getCategoryLabel(course.categoryKey, course.subCategoryKey)
 
+  /**
+   * 图片加载失败时退回渐变色块。
+   *
+   * 为什么需要：第 2 层（主题变体表）是**乐观返回路径**的 —— 它只根据 slug 是否在
+   * 44 个合法槽位里就拼出图片路径，无法知道那个文件此刻是否真的在磁盘上。
+   * 没有这个兜底，文件缺失（部署漏传 public/、生成中断、手工删图）的表现是
+   * 一张破图：`alt` 文本会直接溢出到卡片上，比色块难看得多。
+   * 有了它，「三层降级，永不出现空白封面」才是真的 —— 而不是只在代码里成立。
+   */
+  const [coverFailed, setCoverFailed] = useState(false)
+
   // 5 列布局时卡片约 220px；sizes 必须按断点如实声明，否则 next/image 会下发过大的图
   const sizes =
     "(max-width: 639px) 100vw, (max-width: 767px) 50vw, (max-width: 1023px) 33vw, (max-width: 1279px) 25vw, 20vw"
@@ -122,6 +152,7 @@ export function CourseCard({ course, variant = "discover", stats }: CourseCardPr
     stats && stats.lessonCount > 0
       ? Math.min(100, Math.round((stats.completedLessons / stats.lessonCount) * 100))
       : 0
+  const showImage = cover.kind === "image" && !coverFailed
 
   return (
     <Link
@@ -135,8 +166,8 @@ export function CourseCard({ course, variant = "discover", stats }: CourseCardPr
         每一张图的明暗，而 176 张的构图不受控（见设计文档 D7）。
       */}
       <div className={cn("relative overflow-hidden", isMine ? "aspect-[16/10]" : "aspect-[3/2]")}>
-        {cover.kind === "image" ? (
-          <CoverImage src={cover.src} alt={course.title} sizes={sizes} />
+        {showImage && cover.kind === "image" ? (
+          <CoverImage src={cover.src} sizes={sizes} onError={() => setCoverFailed(true)} />
         ) : (
           <GradientCover
             theme={cover.theme}
