@@ -1,35 +1,12 @@
 import { redirect } from "next/navigation"
-import { getUser, isDbConfigured } from "@/app/actions/auth"
-import { isDevBypassSession } from "@/lib/auth/session"
-import { needsPhoneBinding } from "@/lib/phone-gate"
-import { BindPhoneGate } from "@/components/auth/BindPhoneGate"
 
 /**
- * 强制绑定手机号的落地页。
+ * 旧的绑定落地页，现在只做兼容跳转。
  *
- * 刻意放在 /home 之外：闸门在 home/layout 里，若这个页面也在 /home 下，
- * 未绑定的用户会被无限重定向到自己。
- *
- * 三种进入情况：
- *   · 未登录 → 回 /login
- *   · 已绑定手机号 → 直接进 /home（避免收藏了旧链接的人卡在这里）
- *   · 未绑定 → 渲染表单
+ * 绑定手机号已改成全局弹窗（挂在 home/layout 上，见 components/auth/BindPhoneModal）：
+ * 它是"做某件事之前的一道手续"，不是目的地 —— 独立页会把用户从当前上下文里拽走。
+ * 保留这条路由只是为了让已经发出去的链接不 404。
  */
-export const metadata = { title: "绑定手机号 · TypeNow" }
-
-export default async function BindPhonePage() {
-  const dbReady = await isDbConfigured()
-  const user = await getUser()
-
-  if (dbReady && !user) redirect("/login")
-
-  if (user && !needsPhoneBinding({ phone: user.phone, devBypass: await isDevBypassSession() })) {
-    redirect("/home")
-  }
-
-  return (
-    <main className="min-h-screen flex items-center justify-center px-4 py-12">
-      <BindPhoneGate />
-    </main>
-  )
+export default function BindPhonePage() {
+  redirect("/home")
 }

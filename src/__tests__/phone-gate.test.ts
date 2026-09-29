@@ -6,7 +6,8 @@
  * 比让人工介入糟得多。所以这里把闸门逐条钉住。
  */
 import { describe, it, expect } from "vitest"
-import { decideBindCollision, needsPhoneBinding, PHONE_BIND_PATH } from "@/lib/phone-gate"
+import * as mod from "@/lib/phone-gate"
+import { decideBindCollision, needsPhoneBinding } from "@/lib/phone-gate"
 
 const base = {
   currentUserId: "shell",
@@ -31,9 +32,10 @@ describe("needsPhoneBinding", () => {
     expect(needsPhoneBinding({ phone: null, devBypass: true })).toBe(false)
   })
 
-  it("落地路径是 /home 之外的一个独立页（否则会被重定向到自己）", () => {
-    expect(PHONE_BIND_PATH).toBe("/bind-phone")
-    expect(PHONE_BIND_PATH.startsWith("/home")).toBe(false)
+  it("拦截方式不含「跳转」语义：改为盖弹窗后不再有落地路径", () => {
+    // 这条断言是给未来的人看的：曾经用 redirect 到一个独立页，
+    // 结果是「正在看的课/句都被拽走，绑完还得自己找回来」。现在是全局弹窗。
+    expect(Object.keys(mod)).not.toContain("PHONE_BIND_PATH")
   })
 })
 

@@ -21,9 +21,6 @@
  * 所以 currentHasPracticeData 是硬闸门，不能省。
  */
 
-/** 需要绑定手机号时重定向到这里。它必须能带着会话访问（否则会死循环）。 */
-export const PHONE_BIND_PATH = "/bind-phone"
-
 export function needsPhoneBinding(input: {
   phone: string | null | undefined
   /**

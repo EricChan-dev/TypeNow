@@ -1,7 +1,8 @@
 import { redirect } from "next/navigation"
 import { getUser, isDbConfigured } from "@/app/actions/auth"
 import { isDevBypassSession } from "@/lib/auth/session"
-import { PHONE_BIND_PATH, needsPhoneBinding } from "@/lib/phone-gate"
+import { needsPhoneBinding } from "@/lib/phone-gate"
+import { BindPhoneModal } from "@/components/auth/BindPhoneModal"
 import { getActiveSubscription } from "@/lib/subscription"
 import { ConditionalTopbar } from "@/components/home/ConditionalTopbar"
 import { HomeShell } from "@/components/home/HomeShell"
@@ -23,12 +24,14 @@ export default async function HomeLayout({
   // 微信登录建号时拿不到手机号，而手机号是唯一能把"微信注册的号"和"手机号注册的号"
   // 认成同一个人的凭据 —— 不强制绑定，同一个人就会有两个账号。
   //
-  // 闸门放在**进站之前**是刻意的：这时微信壳账号还没有任何练习数据，
-  // 撞号时只需把微信身份转到手机号账号上，不必做数据合并（系统没有那个能力）。
-  // 见 lib/phone-gate。
-  if (user && needsPhoneBinding({ phone: user.phone, devBypass: await isDevBypassSession() })) {
-    redirect(PHONE_BIND_PATH)
-  }
+  // 这里只算出"要不要拦"，不在这里跳转：拦的方式是**盖一层不可关闭的弹窗**
+  // （见下方渲染）。做成弹窗而不是独立页，是因为绑手机号是"做某件事之前的一道
+  // 手续"，不是目的地 —— 独立页会把用户从当前上下文里拽走，绑完还得自己找回来。
+  //
+  // 仍然拦在"进站之前"：这时微信壳账号还没有任何练习数据，撞号时只需把微信身份
+  // 转到手机号账号上，不必做数据合并（系统没有那个能力）。见 lib/phone-gate。
+  const mustBindPhone =
+    !!user && needsPhoneBinding({ phone: user.phone, devBypass: await isDevBypassSession() })
 
   let memberTier: "trial" | "monthly" | "yearly" | "partner" | "free" = "free"
   if (user) {
@@ -62,6 +65,7 @@ export default async function HomeLayout({
         <ExpiryBanner memberTier={serverUser.member_tier} proExpires={serverUser.pro_expires} />
       )}
       <HomeShell isPartner={!!(serverUser?.is_partner)}>{children}</HomeShell>
+      {mustBindPhone && <BindPhoneModal />}
       {serverUser && (
         <ExpiryWarningModal
           memberTier={serverUser.member_tier}
