@@ -79,3 +79,6 @@ db-backup/
 
 # 封面方案样例图（临时工作产物）
 cover-samples/
+
+# 封面生成中间产物（PNG 原始图，只留 WebP 进仓库）
+.covers-build/
