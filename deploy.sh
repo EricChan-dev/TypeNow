@@ -151,4 +151,47 @@ mv "$STAGING_DIR" .next
 log "重启 PM2..."
 pm2 restart typenow 2>&1 | tee -a "$LOG_FILE"
 
+# ─────────────────────────────────────────────────────────────
+# 安装主动触达的 crontab（生命周期消息扫描）
+#
+# 为什么放在部署脚本里，而不是"在服务器上手工配一次"：
+#   本仓库此前没有任何定时任务，这是第一处。手工配置的问题是**它不会跟着
+#   代码走** —— 换机器、重装、或新建环境时会静默失效，而且失效没有任何提示
+#   （cron 不跑 = 不报错），只有对比「应触达 vs 实际发出」时才会发现。
+#   写在这里，任何一次部署都会把它带上去。
+#
+# 幂等：先按标记行删除旧的，再追加。重复部署不会堆积多条。
+# 失败不中止部署：定时任务装不上不该让整个发布失败（应用本身是好的）。
+# ─────────────────────────────────────────────────────────────
+CRON_MARK="# typenow-lifecycle-scan"
+
+# 密钥在**部署时**从 .env.local 读出来写进 crontab，而不是让 cron 每次运行时
+# 去 grep 一遍文件 —— 后者一旦格式变动（多空格、加引号）就会静默失效，
+# 而"定时任务不跑"是没有任何报错的失败模式。
+# 写进 crontab 与放在 .env.local 是同一信任级别（都属于 admin）。
+CRON_SECRET_VALUE="$(grep -E '^CRON_SECRET=' /home/admin/TypeNow/.env.local 2>/dev/null | head -1 | cut -d= -f2- | tr -d '"'"'"' ')"
+if [ -z "$CRON_SECRET_VALUE" ]; then
+  log "警告：.env.local 里没有 CRON_SECRET，crontab 仍会安装但请求会被拒绝（接口 fail-closed）。"
+  log "      主动触达要真正生效，需要：① 配置 CRON_SECRET ② 配置 LIFECYCLE_ENABLED=true ③ 部署"
+fi
+
+# 响应写进日志：§11.8 的「到期前触达率」要靠它对比"应触达 vs 实际发出"。
+# 每条响应只有几百字节（计数汇总），一年约几百 KB。
+CRON_URL="https://typenow.cn/api/internal/lifecycle-scan"
+CRON_LOG="/home/admin/TypeNow/lifecycle-scan.log"
+
+log "安装主动触达 crontab..."
+{
+  # 保留与本次无关的其他 crontab 条目，只替换带标记的那条（幂等，不会堆积）
+  crontab -l 2>/dev/null | grep -v "api/internal/lifecycle-scan"
+  # marker 必须作为**行尾注释**出现在 crontab 文本里：
+  #   · 对 cron 来说是 shell 注释，运行时被忽略，不会污染日志
+  #   · 对我们的 grep 来说是幂等标记
+  # 放在 `>> $CRON_LOG` 之后会被 shell 当成 echo 的参数（写进日志），那是个坑。
+  # 另外 crontab 里 `%` 有特殊含义，date 的格式串必须写成 \%F \%T。
+  echo "0 10,19 * * * date '+\%F \%T' >> $CRON_LOG; curl -fsS -X POST -H 'x-cron-secret: $CRON_SECRET_VALUE' $CRON_URL >> $CRON_LOG 2>&1 $CRON_MARK"
+} | crontab - 2>&1 | tee -a "$LOG_FILE" \
+  && log "crontab 已更新（每天 10:00 与 19:00 各扫描一次，日志 $CRON_LOG）" \
+  || log "警告：crontab 安装失败（不影响应用本身，但主动触达不会自动运行）"
+
 log "=== 部署完成 ==="

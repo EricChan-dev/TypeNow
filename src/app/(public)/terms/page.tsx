@@ -76,7 +76,29 @@ export default function TermsPage() {
           <li>因本协议产生的争议，双方应友好协商解决；协商不成的，任何一方均可向我们所在地有管辖权的人民法院提起诉讼。</li>
         </ul>
 
-        <h2 className="text-lg font-semibold mt-8 mb-3">9. 其他</h2>
+        <h2 className="text-lg font-semibold mt-8 mb-3">9. 服务通知</h2>
+        <ul className="list-disc pl-5 space-y-2">
+          <li>
+            为帮助你管理会员与学习进度，我们可能通过微信公众号消息或短信向你发送
+            <strong>服务通知</strong>，例如会员（含体验会员）到期提醒、学习提醒，
+            以及与服务运行直接相关的变更通知。
+          </li>
+          <li>
+            这类通知<strong>不含促销与营销内容</strong>。我们不会发送营销短信，
+            也不会以奖励诱导你关注公众号。
+          </li>
+          <li>
+            你可以随时在「设置」中关闭服务通知，或按短信内的退订指令、
+            在公众号内发送「退订」来退订。退订后我们不再向你发送上述通知，
+            但<strong>不影响你的账号与已验证的会员权益</strong>。
+          </li>
+          <li>
+            短信通知的发送时段受服务商限制，通常为 8:00–20:00；
+            我们对通知频率也设有上限，以避免过度打扰。
+          </li>
+        </ul>
+
+        <h2 className="text-lg font-semibold mt-8 mb-3">10. 其他</h2>
         <ul className="list-disc pl-5 space-y-2">
           <li>本协议中的任何条款无论因何种原因部分无效，其余条款仍有效并对双方具有约束力。</li>
           <li>我们有权根据需要更新本协议，更新后的协议一经发布即生效。重大变更我们将通过合理方式通知用户。</li>

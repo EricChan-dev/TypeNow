@@ -21,11 +21,16 @@ interface LessonOption {
  * （sort_order 是课内顺序，全局排会把 16,891 个课时的第 1 句混在一起），
  * 而且没有可用索引，每次首屏都要全表 filesort（实测 0.9s，冷缓存 5.3s）。
  *
- * 现在**必须先选课时**才能按课内顺序浏览和搜索：
- *   - 选了课时 → 该课时的句子按课内顺序列出来（平均 27 行，毫秒级），
- *     搜索也只在这个课时内进行，并额外显示课内序号列。
- *   - 没选课时 → 显示"最近添加的句子"（唯一在全局意义上有效的顺序），
- *     搜索框禁用并说明原因。
+ * 现在两条路各有分工：
+ *   - **选了课时** → 该课时的句子按课内顺序列出来（平均 27 行，毫秒级），
+ *     搜索在这个课时内做精确子串匹配，并额外显示课内序号列。
+ *   - **没选课时** → 显示"最近添加的句子"（唯一在全局意义上有效的顺序），
+ *     搜索走**全文索引**做全库模糊匹配（见 db/migrations/00031）。
+ *
+ * 全库搜索此前是被**拒绝**的（接口 400）：`chinese LIKE '%词%'` 要扫 46 万行 /
+ * 2.9GB，2026-09-29 生产实测 5.67~12.41 秒。加了 FULLTEXT ngram 索引之后才开放。
+ * 它有两个硬限制（分词长度=2），所以搜索框下方的提示与空结果文案都由
+ * lib/sentence-search.ts 生成 —— 与接口共用同一个纯函数，不重复一份规则。
  *
  * 为什么是「可搜索的课时下拉」而不是课程 → 课时两级联动：课程 775 个、
  * 课时 16,891 个，两级都要服务端搜索才可用；而按课时标题搜索一次就能定位，
@@ -40,6 +45,11 @@ export default function SentencesList() {
   // 当前课时来自 refine 的 filters（URL 里带着它，刷新/分享都还在）
   const lessonId = useMemo(() => {
     const f = (filters ?? []).find((x) => "field" in x && String(x.field) === "lessonId")
+    return f && "value" in f ? String(f.value ?? "") : ""
+  }, [filters])
+
+  const searchTerm = useMemo(() => {
+    const f = (filters ?? []).find((x) => "field" in x && String(x.field) === "q")
     return f && "value" in f ? String(f.value ?? "") : ""
   }, [filters])
 
@@ -137,10 +147,9 @@ export default function SentencesList() {
         />
         <Input.Search
           allowClear
-          // 没选课时不让搜：全库模糊搜索要扫 46 万行 / 2.9GB
-          // （2026-09-29 生产实测 5.7~12.4 秒；带课时范围只要 2.7 毫秒）
-          disabled={!lessonId}
-          placeholder={lessonId ? "在本课时内搜索中文或英文" : "请先选择课时"}
+          // 带课时 → 精确子串（走索引，2.7 毫秒）；不带课时 → 全库全文索引。
+          defaultValue={searchTerm}
+          placeholder={lessonId ? "在本课时内搜索中文或英文" : "全库搜索（中文 ≥2 字 / 英文 ≥3 字母）"}
           style={{ width: 320 }}
           onSearch={(value) => setOne("q", value.trim())}
         />
@@ -161,14 +170,27 @@ export default function SentencesList() {
           style={{ marginBottom: 16 }}
           type="info"
           showIcon
-          message="当前显示「最近添加的句子」"
+          message={
+            searchTerm
+              ? "全库搜索结果（不限课时）"
+              : "当前显示「最近添加的句子」"
+          }
           description={
             <Space direction="vertical" size={2}>
               <Text>
                 句子的 <Text code>sort_order</Text> 是课内顺序，不是全局序号，
                 所以全局按它排序没有意义（会把每一课的第 1 句混在一起）。
+                <Text strong>按课内顺序浏览请先在上方选择课时。</Text>
               </Text>
-              <Text>要按课内顺序浏览或搜索，请在上方先选择课时。</Text>
+              <Text>
+                不选课时可以搜索<Text strong>纯中文</Text>关键词（走全文索引{" "}
+                <Text code>ft_sentences_search</Text>，中文至少 2 个字）。
+              </Text>
+              <Text type="secondary">
+                英文、以及中英混合的关键词请先选课时再搜：实测全文索引对英文
+                既会多匹配也会少匹配，返回不可靠的结果比拒绝更糟；
+                课时内用的是精确匹配，中英文都准确。
+              </Text>
             </Space>
           }
         />
@@ -181,7 +203,11 @@ export default function SentencesList() {
         // 超宽由表格自己横向滚动（配合下方操作列的 fixed="right"）。
         scroll={{ x: "max-content" }}
         locale={{
-          emptyText: lessonId ? "该课时下没有匹配的句子" : "暂无句子",
+          emptyText: lessonId
+            ? "该课时下没有匹配的句子"
+            : searchTerm
+              ? "全库没有匹配的句子"
+              : "暂无句子",
         }}
       >
         {lessonId ? (

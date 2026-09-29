@@ -1,0 +1,113 @@
+-- 00031_sentence_search.sql
+-- 全库句子模糊搜索：sentences 增加 search_text 生成列 + FULLTEXT ngram 索引
+--
+-- ── 要支持的功能 ────────────────────────────────────────────────────────────
+--
+-- 后台「句子管理」原先**强制先选课时**才能搜索：`chinese LIKE '%词%'` 是前导
+-- 通配符，B-tree 索引用不上。2026-09-29 在生产库（461,933 行 / 数据 2.9GB）
+-- 用 SHOW PROFILES 实测服务端耗时：
+--
+--     带 lesson_id + LIKE          → 0.0027 秒
+--     全库 LIKE '%天气%'           → 12.41 秒
+--     全库 LIKE '%中华人民共和国%'  →  5.67 秒
+--
+-- 所以全库搜索必须走全文索引。本迁移就是为它准备的结构。
+--
+-- ── 为什么是「一个拼接列 + 一个索引」────────────────────────────────────────
+--
+-- 直觉做法是给 chinese / english 各建一个 FULLTEXT，然后
+-- `MATCH(chinese) ... OR MATCH(english) ...`。**这个写法会让索引完全失效**，
+-- 在本机 MySQL 8.0.46 用 15 万行实测过：
+--
+--     MATCH(chinese) 单独           → possible_keys=ft_zh,        key=ft_zh
+--     MATCH(chinese) OR MATCH(eng)  → possible_keys=NULL, rows=148451（全表扫）
+--     UNION 塞进 IN (...)           → 退化为 DEPENDENT SUBQUERY + index PRIMARY 全索引扫
+--
+-- 合成一列后查询里永远只有一个 MATCH，优化器能正常用索引（实测 type=fulltext）。
+--
+-- 它同时保证了覆盖面：生产库有 **435 条句子的 `english` 里含中文**。
+-- 若索引只建在 `chinese` 上，用中文关键词就搜不到这些句子。
+-- 拼接列让一个索引同时覆盖两列，语义等价于旧的
+-- `chinese LIKE ? OR english LIKE ?`（中文关键词实测命中数一致）。
+--
+-- ⚠️⚠️ **实测发现：ngram 全文索引只对纯中文可靠，对英文不可靠。**
+-- 所以在代码层（src/lib/sentence-search.ts）**只允许纯中文关键词走这条路**，
+-- 纯英文与中英混合一律拒绝并要求先选课时。实测数据（MATCH 带引号短语 vs 全表 LIKE）：
+--
+--     James   MATCH 4414  / LIKE   94    ← 多 47 倍（命中的句子只含 am/me/es）
+--     jame    MATCH 68640 / LIKE   94    ← 多 730 倍
+--     det.    MATCH 44621 / LIKE  217    ← 多 205 倍
+--     与Allen MATCH 1331  / LIKE    0    ← LIKE 一条都没有，却凭空造出 1331 条
+--     jam     MATCH    0  / LIKE    4    ← 明明有包含关系却一条都不返回
+--
+-- 受控实验（4 行内容已知的表）复现：`"james"` 带引号短语返回第 1、2、3 行，
+-- 而第 2、3 行根本不含 james。**引号短语对 ASCII 不强制相邻，对中文强制。**
+-- 纯中文关键词实测 7/7 与 LIKE 完全一致（天气/学习英语/动物保护/来吧/第一位的…）。
+--
+-- 若以后要做英文全库搜索：可再加一个**默认解析器**的 FULLTEXT 索引，查询时用
+-- `FORCE INDEX` 指定它（临时库已验证 `FORCE INDEX (ft_words)` 下 james→1、games→2）。
+-- 代价是 drizzle 无法注入 FORCE INDEX，那条路径得写裸 SQL。本次刻意没做。
+--
+-- ── 已知限制（代码里必须如实告知用户，不能静默返回空）──────────────────────
+--
+-- 本机实测行为（MySQL 8.0.46，ngram_token_size=2、innodb_ft_min_token_size=3、
+-- innodb_ft_enable_stopword=ON）：
+--
+--   · **单字必然搜不到**：`MATCH ... AGAINST('"天"')` = 0 条，而 `LIKE '%天%'`
+--     命中全部。→ src/lib/sentence-search.ts 会拒绝长度 < 2 的关键词。
+--   · **英文整体不可靠**（见上面的实测表）→ 纯英文与中英混合一律拒绝，
+--     要求先选课时用 LIKE 精确匹配。
+--   · 中文是**子串/短语**语义：`"天气很好"` 实测 18 条，与 LIKE 一致。
+--
+-- ── 执行注意（这是一次**表重建**，不是普通加列）────────────────────────────
+--
+-- · 加 STORED 生成列必须 ALGORITHM=COPY，即整表重建（3.07GB）。
+--   重建期间**写入被阻塞**（读取可用）。当前站点几乎无流量，影响可接受；
+--   但不要在业务高峰期执行。
+-- · 需要额外磁盘：新表副本约 3.1GB + 全文索引约 0.3~0.5GB。
+--   实测服务器 `/` 40G、可用 24G，够用。
+-- · 实测把 ADD COLUMN 与 ADD FULLTEXT 放在**同一条 ALTER** 里只需一遍扫描；
+--   拆成两条会多一次全表重建。所以下面写成一条。
+-- · 本文件**不可重复执行**（ADD COLUMN 不是幂等的）。重复执行会报
+--   `ERROR 1060 Duplicate column name`，这比静默跳过好。
+
+ALTER TABLE sentences
+  ADD COLUMN search_text TEXT
+    GENERATED ALWAYS AS (CONCAT(chinese, ' ', english)) STORED
+    COMMENT '全库模糊搜索用：chinese + 空格 + english。配套 FULLTEXT ngram 索引，见 00031',
+  ADD FULLTEXT INDEX ft_sentences_search (search_text) WITH PARSER ngram;
+
+-- ── 执行后校验 ──────────────────────────────────────────────────────────────
+--
+-- ① 列与索引都在，且列是 STORED（不是 VIRTUAL —— VIRTUAL 上不允许建 FULLTEXT）：
+--
+--   SELECT COLUMN_NAME, COLUMN_TYPE, EXTRA FROM information_schema.COLUMNS
+--    WHERE TABLE_SCHEMA='typenow' AND TABLE_NAME='sentences' AND COLUMN_NAME='search_text';
+--   -- 期望 EXTRA = 'STORED GENERATED'
+--
+--   SELECT INDEX_NAME, INDEX_TYPE FROM information_schema.STATISTICS
+--    WHERE TABLE_SCHEMA='typenow' AND TABLE_NAME='sentences'
+--      AND INDEX_NAME='ft_sentences_search' LIMIT 1;
+--   -- 期望 INDEX_TYPE='FULLTEXT'
+--
+-- ② 索引真的被用上（不能是全表扫）：
+--
+--   EXPLAIN SELECT id FROM sentences
+--    WHERE MATCH(search_text) AGAINST('"天气"' IN BOOLEAN MODE);
+--   -- 期望 key='ft_sentences_search'、type='fulltext'、rows 远小于 461933
+--
+-- ③ 语义与旧口径一致（两个数应当相同）：
+--
+--   SELECT COUNT(*) FROM sentences WHERE MATCH(search_text) AGAINST('"天气"' IN BOOLEAN MODE);
+--   SELECT COUNT(*) FROM sentences WHERE chinese LIKE '%天气%' OR english LIKE '%天气%';
+--
+-- ④ 行数未变：
+--
+--   SELECT COUNT(*) FROM sentences;   -- 应为 461933（2026-09-29 的基线）
+--
+-- ── 与 e2e 测试库的关系 ────────────────────────────────────────────────────
+--
+-- drizzle 的索引 API 只支持 btree/hash，**表达不了 FULLTEXT + ngram 解析器**，
+-- 所以 `drizzle-kit push` 建出的 e2e 库只有列、没有索引。e2e 侧由
+-- tests/e2e/helpers/db.ts 的 ensureSentenceSearchIndex() 补建（幂等），
+-- 在 global-setup 里调用。两处 DDL 必须保持一致。

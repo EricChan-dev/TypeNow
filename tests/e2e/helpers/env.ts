@@ -22,6 +22,14 @@ export const TEST_DB_URL =
   "mysql://root:typenow_test_pw@127.0.0.1:3399/typenow_test"
 
 export const E2E_PORT = Number(process.env.E2E_PORT ?? 3311)
+
+/**
+ * e2e 专用的 CRON_SECRET。
+ *
+ * 用它而不是随机值，是为了让测试能写出"错误密钥 → 403"这条断言 ——
+ * 那正是这个接口最重要的一条安全性质（fail-closed + 常量时间比较）。
+ */
+export const E2E_CRON_SECRET = "e2e-cron-secret-not-for-production"
 export const E2E_BASE_URL = `http://127.0.0.1:${E2E_PORT}`
 
 /** 断言目标库确实是本机测试库。任何拼装错误的 DATABASE_URL 都在此终止。 */
@@ -66,6 +74,17 @@ const BLANKED_KEYS = [
   "ALIYUN_ACCESS_KEY_SECRET",
   "ALIYUN_SMS_SIGN_NAME",
   "ALIYUN_SMS_TEMPLATE_CODE",
+  // 主动触达（生命周期消息）：模板/短信凭据一并屏蔽。
+  // 这意味着 e2e 里所有发送都会走 not_configured 分支 —— **不会真的骚扰任何人**，
+  // 同时能验证"占位 → 发送 → 落 skipped"这条完整链路。
+  "ALIYUN_SMS_NOTIFY_SIGN_NAME",
+  "ALIYUN_SMS_NOTIFY_TEMPLATE_CODE",
+  "WECHAT_TEMPLATE_TRIAL_EXPIRING",
+  "WECHAT_TEMPLATE_TRIAL_EXPIRED",
+  "WECHAT_TEMPLATE_MONTHLY_EXPIRING",
+  "WECHAT_TEMPLATE_YEARLY_EXPIRING",
+  "WECHAT_TEMPLATE_YEARLY_EXPIRED",
+  "WECHAT_TEMPLATE_REGISTERED_NO_TRIAL",
   // 监控 / 上传（避免构建期或运行期外呼）
   "SENTRY_AUTH_TOKEN",
   "SENTRY_DSN",
@@ -91,6 +110,34 @@ export function buildE2eEnv(): NodeJS.ProcessEnv {
 
   // 空串（而非 delete）才是屏蔽手段：键一旦存在，Next 就不会再用 .env.local 的值
   for (const key of BLANKED_KEYS) env[key] = ""
+
+  // 主动触达扫描接口需要这两个才能被测到：
+  //   · CRON_SECRET 用一个测试专用值（线上必须是随机长串，且不得复用其他密钥）
+  //   · LIFECYCLE_ENABLED 默认是关闭的（fail-closed），e2e 必须显式打开
+  env.CRON_SECRET = E2E_CRON_SECRET
+  env.LIFECYCLE_ENABLED = "true"
+
+  // 给**部分**场景配置"假模板 ID"。
+  //
+  // 这不是为了绕过校验，而是让两条路径都能被测到：
+  //   · 配了假 ID → usableChannels 认为模板渠道可用 → 走"占位 → 尝试发送 →
+  //     因公众号凭据缺失而落 skipped"这条完整链路（幂等性只能在这里验）
+  //   · 没配 ID（YEARLY_* 刻意留空）→ 渠道不可用 → **不占位**，
+  //     这条路径同样必须验：模板批下来之前占位会永久吃掉那次到期提醒
+  // 两条路径都不会产生真实网络调用（WECHAT_OA_* 已被清空）。
+  env.WECHAT_TEMPLATE_TRIAL_EXPIRING = "e2e-dummy-template"
+  env.WECHAT_TEMPLATE_TRIAL_EXPIRED = "e2e-dummy-template"
+  env.WECHAT_TEMPLATE_MONTHLY_EXPIRING = "e2e-dummy-template"
+  env.WECHAT_TEMPLATE_REGISTERED_NO_TRIAL = "e2e-dummy-template"
+
+  // 独立构建产物目录。
+  //
+  // Next 16 用 `<distDir>/dev/lock` 判定"同目录是否已有 dev 实例"，发现就**拒绝启动**。
+  // 本地往往有一个正在跑的 `next dev`（例如 DSH Desktop 内嵌的那个，占着 3000），
+  // 于是 e2e 永远起不来。指向别的 distDir 后两把锁互不相干，可以并存 ——
+  // 顺带也避免了 e2e 的编译产物与本地 dev 的产物互相覆盖。
+  // 复用 deploy.sh 同一个环境变量（见 next.config.ts 的 distDir）。
+  env.TYPENOW_DIST_DIR = ".next-e2e"
 
   // 明确锁死测试端口，避免与本地 dev（3000）或线上端口冲突
   env.PORT = String(E2E_PORT)

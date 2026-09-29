@@ -325,6 +325,97 @@ export async function sendOACustomerMessage(
   }
 }
 
+// ─── OA template message (模板消息) ───────────────────────────────────────────
+
+/**
+ * 主动触达的发送结果。
+ *
+ * 刻意区分 `not_configured` 与其他失败：模板 ID 还没申请下来（§11.6 第 2 条，
+ * 微信侧要审 1–3 天）是**预期内**的状态，调用方应当记 `skipped` 而不是 `failed`，
+ * 否则扫描路由每天会把同一个"失败"重试两遍，日志里全是噪声，
+ * 真正的失败反而看不见。
+ */
+export type OASendOutcome =
+  | { ok: true }
+  | { ok: false; reason: "not_configured" | "failed"; error: string }
+
+/**
+ * 发送公众号模板消息。
+ *
+ * 与客服消息（sendOACustomerMessage）的关键差别在**时效窗口**：
+ *   · 客服消息：只有用户 48 小时内与公众号有交互才能发
+ *   · 模板消息：**没有窗口限制**，已关注公众号即可发 —— 这是"到期提醒"的主力渠道
+ *
+ * ⚠️ **只能发服务通知，不能承载营销内容**（微信《运营规范》）。
+ * 文案由 lib/lifecycle-scenarios.ts 统一生成，那里有一条单测专门守营销词。
+ * 违规会被驳回，严重时处罚账号接口权限 —— 那整套触达体系就没了。
+ *
+ * @param templateId 公众号后台申请的模板 ID
+ * @param url        点击模板消息跳转的地址（转化落在这个页面里，不放在消息里）
+ */
+export async function sendOATemplateMessage(
+  openid: string,
+  templateId: string,
+  data: Record<string, string>,
+  url?: string
+): Promise<OASendOutcome> {
+  if (!templateId) {
+    return { ok: false, reason: "not_configured", error: "模板 ID 未配置" }
+  }
+  if (!isWeChatOAConfigured()) {
+    return { ok: false, reason: "not_configured", error: "公众号未配置" }
+  }
+
+  try {
+    const token = await getOAGlobalAccessToken()
+    const res = await fetch(
+      `https://api.weixin.qq.com/cgi-bin/message/template/send?access_token=${token}`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          touser: openid,
+          template_id: templateId,
+          ...(url ? { url } : {}),
+          // 微信要求每个字段形如 { value: "..." }，颜色可选（这里统一用默认色，
+          // 不为了好看去指定颜色 —— 模板消息的观感由平台模板决定）
+          data: Object.fromEntries(
+            Object.entries(data).map(([k, v]) => [k, { value: v }])
+          ),
+        }),
+      }
+    )
+
+    if (!res.ok) {
+      return { ok: false, reason: "failed", error: `HTTP ${res.status}` }
+    }
+
+    const payload = await res.json()
+    if (isWechatError(payload)) {
+      // 常见错误码：
+      //   40037 模板 ID 无效 → 配置错了，属于 not_configured 而非可重试的失败
+      //   43004 用户未关注公众号 → 预期内，不该重试
+      const errcode = (payload as WechatErrorResponse).errcode
+      const errmsg = (payload as WechatErrorResponse).errmsg
+      const notConfigured = errcode === 40037
+      console.error("[WeChat] sendOATemplateMessage failed:", errcode, errmsg)
+      return {
+        ok: false,
+        reason: notConfigured ? "not_configured" : "failed",
+        error: `${errcode}: ${errmsg}`,
+      }
+    }
+
+    return { ok: true }
+  } catch (err) {
+    return {
+      ok: false,
+      reason: "failed",
+      error: err instanceof Error ? err.message : String(err),
+    }
+  }
+}
+
 // ─── OA temporary QR code with scene ───────────────────────────────────────────
 
 interface OACreateQrCodeResponse {

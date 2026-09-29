@@ -26,6 +26,8 @@ interface InitialUser {
   isPartner: boolean
   proExpires: string | null
   memberTier: MemberTier
+  /** 是否已退订服务通知（见 privacy §2.1 / terms §9 的承诺） */
+  notifyOptedOut: boolean
 }
 
 interface Sub {
@@ -152,6 +154,15 @@ function SubRow({ sub }: { sub: Sub }) {
 // ─── Main Component ───────────────────────────────────────────────────────────
 
 export function SettingsClient({ initialUser }: { initialUser: InitialUser }) {
+  /**
+   * 服务通知开关。
+   *
+   * 隐私政策 §2.1 与用户协议 §9 都写了「可以随时在设置中关闭服务通知」——
+   * 这个开关就是那句话的落点。改动它之前先想清楚：删掉这个开关会让那两句
+   * 变成对用户的虚假陈述，而不只是少一个功能。
+   */
+  const [notifyOptedOut, setNotifyOptedOut] = useState(initialUser.notifyOptedOut)
+  const [notifySaving, setNotifySaving] = useState(false)
   const router = useRouter()
   const [name, setName] = useState(initialUser.name ?? "")
   const [avatarPreview, setAvatarPreview] = useState<string | null>(null)
@@ -676,6 +687,59 @@ export function SettingsClient({ initialUser }: { initialUser: InitialUser }) {
               </Link>
             </>
           )}
+        </SectionCard>
+
+        {/* 消息通知退订 —— privacy §2.1 与 terms §9 承诺的开关 */}
+        <SectionCard title="消息通知">
+          <div className="flex items-center justify-between gap-4">
+            <div className="min-w-0">
+              <p className="text-sm font-medium text-foreground">接收服务通知</p>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                会员到期提醒、学习提醒等。不含促销与营销内容。
+              </p>
+            </div>
+            <button
+              role="switch"
+              aria-checked={!notifyOptedOut}
+              aria-label="接收服务通知"
+              disabled={notifySaving}
+              onClick={async () => {
+                const next = !notifyOptedOut
+                setNotifySaving(true)
+                // 乐观更新：开关要立刻响应，失败再回滚 —— 否则点了没反应像坏了
+                setNotifyOptedOut(!next)
+                try {
+                  const res = await fetch("/api/user/notify-preferences", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ opted_out: !next }),
+                  })
+                  if (!res.ok) throw new Error(`HTTP ${res.status}`)
+                  const json = (await res.json()) as { opted_out: boolean }
+                  setNotifyOptedOut(json.opted_out)
+                  toast.success(json.opted_out ? "已关闭服务通知" : "已开启服务通知")
+                } catch {
+                  setNotifyOptedOut(next)
+                  toast.error("设置失败，请稍后重试")
+                } finally {
+                  setNotifySaving(false)
+                }
+              }}
+              className={`relative shrink-0 h-6 w-11 rounded-full transition-colors disabled:opacity-50 ${
+                !notifyOptedOut ? "bg-accent" : "bg-foreground/20"
+              }`}
+            >
+              <span
+                className={`absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition-all ${
+                  !notifyOptedOut ? "left-[22px]" : "left-0.5"
+                }`}
+              />
+            </button>
+          </div>
+          <p className="text-xs text-muted-foreground/60">
+            关闭后不会再收到上述通知，不影响账号与已验证的会员权益。
+            也可以回复短信中的退订指令，或在公众号内发送「退订」。
+          </p>
         </SectionCard>
 
         {/* Subscription history */}

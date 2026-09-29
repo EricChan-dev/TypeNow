@@ -105,6 +105,45 @@ export async function truncateAll(): Promise<void> {
   }
 }
 
+/**
+ * 补建 `sentences` 的 FULLTEXT ngram 索引（幂等）。
+ *
+ * ── 为什么 e2e 要单独做这一步 ──────────────────────────────────────────────
+ *
+ * 生产结构由 `db/migrations/00031_sentence_search.sql` 建立，而 e2e 测试库由
+ * `drizzle-kit push` 从 `schema.ts` 生成。drizzle 的索引 API 只支持
+ * `btree | hash`，**表达不了 `FULLTEXT ... WITH PARSER ngram`** ——
+ * 所以 push 出来的库只有 `search_text` 生成列，没有索引。
+ * 没有索引时 `MATCH ... AGAINST` 会直接报
+ * `ERROR 1191: Can't find FULLTEXT index matching the column list`，
+ * 而不是静默降级，所以漏建会立刻暴露（这点比排序规则那种静默漂移好）。
+ *
+ * ⚠️ 这里与迁移文件里的 DDL 必须保持一致。改一处就要改另一处。
+ * 不能靠 shared SQL 文件合并：迁移是给人手工执行的、带注释的文档，
+ * 而这里是每次 e2e 都要跑的幂等代码，两者的形态本来就不一样。
+ */
+export async function ensureSentenceSearchIndex(): Promise<void> {
+  const conn = await getPool().getConnection()
+  try {
+    const [rows] = await conn.query<(import("mysql2").RowDataPacket & { n: number })[]>(
+      `SELECT COUNT(*) AS n FROM information_schema.STATISTICS
+        WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'sentences'
+          AND INDEX_NAME = 'ft_sentences_search'`
+    )
+    if (Number(rows[0]?.n ?? 0) > 0) return
+
+    // 索引已存在时不能重复建（MySQL 没有 CREATE INDEX IF NOT EXISTS），
+    // 所以先查 information_schema。TRUNCATE 不会删索引，正常情况下只建一次。
+    await conn.query(
+      `ALTER TABLE sentences
+         ADD FULLTEXT INDEX ft_sentences_search (search_text) WITH PARSER ngram`
+    )
+    console.log("[e2e] 已补建 sentences 全文索引 ft_sentences_search")
+  } finally {
+    conn.release()
+  }
+}
+
 // ─── 固定夹具 ID ────────────────────────────────────────────────────────────
 // 全部写死 UUID 形态的常量，测试里可直接引用，失败时可从日志一眼认出。
 export const FIXTURE = {

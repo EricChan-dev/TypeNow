@@ -13,7 +13,7 @@ import {
   index,
   uniqueIndex,
 } from "drizzle-orm/mysql-core"
-import { sql } from "drizzle-orm"
+import { sql, type SQL } from "drizzle-orm"
 
 // ─── Users (replaces Supabase auth.users + profiles) ─────────────────────────
 export const users = mysqlTable(
@@ -50,6 +50,29 @@ export const users = mysqlTable(
     referralLockedUntil: datetime("referral_locked_until"),
     isPartner: tinyint("is_partner").notNull().default(0),
     partnerAgreedAt: datetime("partner_agreed_at"),
+    /**
+     * 退订主动触达的时间；**非 NULL = 已退订**。
+     *
+     * 用时间戳而不是 tinyint 标志位：合规场景下「何时退订的」比「是否退订」更有用
+     * （客服问询、投诉举证都要这个时间点）。
+     *
+     * ⚠️ 所有发送路径的入口都必须检查它，不允许被任何逻辑绕过 —— 见 lib/notify.ts。
+     * 用时间戳而不是布尔还能顺带回答「退订之后有没有再发过」，那是投诉时的第一个问题。
+     */
+    notifyOptOutAt: datetime("notify_opt_out_at"),
+    /**
+     * 上一次会员到期时刻。
+     *
+     * ⚠️ **这一列存在的原因是另一个函数会丢信息**：`lib/subscription.ts` 的
+     * `checkAndExpirePro()` 在会员过期时把 `proExpires` 置为 NULL。于是
+     * 「用户过期后回过站」和「从未有过会员」在 users 表里长得一模一样，
+     * 而「已到期挽回」消息恰恰要找前者 —— 那批人正是最该被挽回的。
+     *
+     * 因此 `checkAndExpirePro` 在清空 proExpires 的同一处记下它。
+     * 判断「会员何时到期」用 `COALESCE(proExpires, lastExpiryAt)`：
+     * 有效会员取前者（未来时间），已过期取后者。
+     */
+    lastExpiryAt: datetime("last_expiry_at"),
     /**
      * 钻石余额。**付费货币**。
      *
@@ -282,6 +305,44 @@ export const sentences = mysqlTable(
     /** 软删除标记，语义见 courses.deletedAt / deletedBatch。NULL = 正常。 */
     deletedAt: datetime("deleted_at", { fsp: 3 }),
     deletedBatch: varchar("deleted_batch", { length: 36 }),
+
+    /**
+     * 全库模糊搜索用的拼接列（STORED）：`chinese + ' ' + english`。
+     *
+     * ── 为什么要有这一列 ────────────────────────────────────────────────────
+     *
+     * 后台「句子管理」要支持不带课时范围的全库搜索。`chinese LIKE '%词%'` 是
+     * 前导通配符，B-tree 索引用不上 —— 2026-09-29 在生产库实测 5.67~12.41 秒
+     * （461,933 行 / 数据 2.9GB）。所以必须走全文索引。
+     *
+     * ── 为什么是「一列」而不是「两列各一个索引」────────────────────────────
+     *
+     * 给 chinese / english 各建一个 FULLTEXT 再 `MATCH(a) OR MATCH(b)` 会让索引
+     * **完全失效**（实测 possible_keys=NULL、rows=148451 全表扫）；把 UNION 塞进
+     * `IN (...)` 也会退化成 DEPENDENT SUBQUERY + 全索引扫。合成一列后查询里永远
+     * 只有一个 MATCH，优化器能正常用索引。
+     *
+     * 它还保证覆盖面：生产库有 **435 条句子的 `english` 里含中文**，
+     * 索引只建在 `chinese` 上就搜不到它们。
+     *
+     * ⚠️ **ngram 全文索引只对纯中文可靠**。实测对英文既多匹配也少匹配
+     * （James 4414 vs 94、与Allen 1331 vs 0、jam 0 vs 4），所以
+     * src/lib/sentence-search.ts 只允许纯中文关键词走这条路，
+     * 纯英文与中英混合都要求先选课时。证据见该模块的注释与 00031 的实测表。
+     *
+     * ⚠️ 不能用 VIRTUAL：MySQL 不允许在虚拟生成列上建 FULLTEXT
+     * （`ERROR 3106: 'Fulltext index on virtual generated column' is not supported`）。
+     * ⚠️ 类型必须是 TEXT 而不是 VARCHAR(N)：拼接后最长实测 3641 字符，
+     * 有 3 条超过 1000 —— 用 VARCHAR(1001) 会在这几行上报错。
+     *
+     * 查询构造见 src/lib/sentence-search.ts；索引见
+     * db/migrations/00031_sentence_search.sql（**drizzle 的索引 API 表达不了
+     * FULLTEXT + ngram 解析器**，所以索引只存在于迁移里，schema.ts 只有列）。
+     */
+    searchText: text("search_text").generatedAlwaysAs(
+      (): SQL => sql`CONCAT(${sentences.chinese}, ' ', ${sentences.english})`,
+      { mode: "stored" },
+    ),
   },
   (t) => [
     index("idx_sentences_lesson_id").on(t.lessonId),
@@ -661,6 +722,79 @@ export const coinLogs = mysqlTable(
     index("idx_coin_logs_user_created").on(t.userId, t.createdAt),
     // 每月兑换上限的计数：(user_id, date) + type 过滤
     index("idx_coin_logs_user_date").on(t.userId, t.date),
+  ]
+)
+
+// ─── Notifications (主动触达 / 生命周期消息) ─────────────────────────────────
+/**
+ * 主动触达的发送记录。设计见 docs/business-model.md §11，结构见
+ * db/migrations/00032_lifecycle_notifications.sql。
+ *
+ * 这张表同时承担三件事，**不是**单纯的日志：
+ *
+ *  1. **幂等**：`uk_notification (user_id, scenario, channel)` 保证
+ *     「同一用户 + 同一场景 + 同一渠道只发一次」，由数据库约束而不是代码判空。
+ *     发送前先 INSERT 占位，靠 affectedRows 判定是否抢到了这次机会 ——
+ *     与 `lib/trial.ts` 的 trial_claimed_at 同一个模式。
+ *  2. **频次上限**：「每人每周最多 2 条」要按 (user_id, created_at) 统计，
+ *     所以有 idx_notifications_user_created。
+ *  3. **失败重试**：status='failed' + attempts 上限，扫描路由据此补发。
+ *
+ * `scenario` 用 varchar 而不是 enum：§11.3 的场景矩阵有十几条且会不断增加，
+ * 每加一条都 ALTER enum 不划算。取值清单的唯一事实源在
+ * src/lib/lifecycle-scenarios.ts（由单测保证代码与数据一致）。
+ */
+export const notifications = mysqlTable(
+  "notifications",
+  {
+    id: varchar("id", { length: 36 }).primaryKey().default(sql`(UUID())`),
+    userId: varchar("user_id", { length: 36 }).notNull(),
+    /** 场景键，见 lib/lifecycle-scenarios.ts 的 LIFECYCLE_SCENARIOS */
+    scenario: varchar("scenario", { length: 50 }).notNull(),
+    /** 渠道。三者的能力与限制（成本、时效窗口、内容限制）见 §11.2 */
+    channel: mysqlEnum("channel", ["template", "customer_service", "sms"]).notNull(),
+    /**
+     * pending：已占位、尚未发送（先占位再发送，防并发重复）
+     * sent：发送成功
+     * failed：发送失败，可被重试扫描拾起（attempts 有上限）
+     * skipped：因**预期内**原因跳过（模板未配置、未关注公众号、退订），不算失败、不重试
+     */
+    status: mysqlEnum("status", ["pending", "sent", "failed", "skipped"])
+      .notNull()
+      .default("pending"),
+    title: varchar("title", { length: 200 }),
+    body: text("body"),
+    /** 失败原因，截断到 500，避免冗余堆栈把表撑大 */
+    error: varchar("error", { length: 500 }),
+    attempts: int("attempts").notNull().default(0),
+    /**
+     * 周期标识 —— 唯一键的第三列，**不能省**。
+     *
+     * 取值随场景语义而定：到期类 = 到期日（"2026-09-30"）；每日类（连胜提醒）=
+     * 当日日期；一次性类（领体验后未练习）= 空串。
+     *
+     * ⚠️ §11.5 ③ 原设计的键是 `(user_id, scenario, channel)`，有两处需要修正：
+     *
+     * ① **channel 不该在键里**：它是"送达方式"而不是"这条消息的身份"。
+     *    放进键会允许同一场景在同一周期内发三条（模板/客服/短信各一条），
+     *    恰好制造出我们要避免的骚扰。渠道降级应当是**更新同一行**。
+     * ② **必须多加一个周期维度**：否则年卡用户收到一次「到期前 7 天」并续费后，
+     *    明年的同一组合会被唯一键**永久挡住**，他再也收不到续费提醒 —— 且静默无日志。
+     *
+     * 最终的键：`(user_id, scenario, period_key)`。
+     */
+    periodKey: varchar("period_key", { length: 50 }).notNull().default(""),
+    sentAt: datetime("sent_at"),
+    createdAt: datetime("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+    updatedAt: datetime("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  },
+  (t) => [
+    // ★ 幂等的全部安全性所在（三列：不含 channel），见上面 periodKey 的说明
+    uniqueIndex("uk_notification").on(t.userId, t.scenario, t.periodKey),
+    // 频次统计：「该用户最近 N 天发了几条」
+    index("idx_notifications_user_created").on(t.userId, t.createdAt),
+    // 失败重试扫描：status='failed' 且 attempts 未超上限
+    index("idx_notifications_status").on(t.status, t.createdAt),
   ]
 )
 

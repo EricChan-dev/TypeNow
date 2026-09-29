@@ -22,6 +22,7 @@ export function serverLog(): string {
 
 async function waitForReady(timeoutMs = 120_000): Promise<void> {
   const deadline = Date.now() + timeoutMs
+  let lastStatus = 0
   while (Date.now() < deadline) {
     if (child?.exitCode != null) {
       throw new Error(
@@ -32,13 +33,25 @@ async function waitForReady(timeoutMs = 120_000): Promise<void> {
       const res = await fetch(`${E2E_BASE_URL}/api/courses/list?pageSize=1`, {
         signal: AbortSignal.timeout(5000),
       })
-      if (res.status < 500) return
+      lastStatus = res.status
+      // ⚠️ 必须要求 **200**，不能只判 `status < 500`。
+      //
+      // 曾经判的是 `< 500`，于是"服务端对所有路由返回 404"也会被当成就绪
+      // （404 < 500），测试照常开跑，然后炸出 470 个 `expected 404 to be 200` ——
+      // 真正的原因（.next-e2e 里的 dev 构建缓存坏了）被淹没在噪声里。
+      // 404 只可能意味着"路由没编译出来"，那不是就绪。
+      if (res.status === 200) return
     } catch {
       // 还没起来
     }
     await new Promise((r) => setTimeout(r, 500))
   }
-  throw new Error(`[e2e] 等待服务端就绪超时。日志尾部：\n${logBuffer.slice(-3000)}`)
+  throw new Error(
+    `[e2e] 等待服务端就绪超时（最后一次探测状态码 ${lastStatus || "无响应"}）。\n` +
+      `如果状态码是 404：多半是 .next-e2e 里的 dev 构建缓存坏了。` +
+      `删掉它重跑即可：  rm -rf .next-e2e\n` +
+      `日志尾部：\n${logBuffer.slice(-3000)}`
+  )
 }
 
 export async function startServer(): Promise<void> {

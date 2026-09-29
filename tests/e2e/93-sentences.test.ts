@@ -152,16 +152,119 @@ describe("句子列表：按课时范围浏览", () => {
   })
 })
 
-describe("句子列表：搜索必须带课时范围", () => {
-  it("只给 q 不给 lessonId → 400 且说明原因（不是让使用者等 25 秒）", async () => {
+describe("句子列表：课时内精确搜索 + 全库全文搜索", () => {
+  it("不给 lessonId 也能搜全库（走全文索引，不再 400）", async () => {
     const admin = ApiClient.asUser(await makeAdmin())
+    await insertSentence(FIXTURE.lessonA1, 1, "全库搜索能命中这一句", "global search hits this")
+    await insertSentence(FIXTURE.lessonB1, 1, "这一句不该被命中", "nope")
+
+    const res = await admin.get<SentencesBody>(
+      `/api/admin/sentences?q=${encodeURIComponent("全库搜索")}&pageSize=20`,
+    )
+    expect(res.status).toBe(200)
+    expect(res.body.total).toBe(1)
+    expect(res.body.data[0].chinese).toBe("全库搜索能命中这一句")
+    // 有搜索条件时 total 必须精确计数，不能复用「全表未删除总数」那个缓存
+    expect(res.body.totalIsCached).toBe(false)
+  })
+
+  it("单字关键词 → 400 并说明（全文分词长度是 2，搜不到；绝不能静默返回空）", async () => {
+    // 实测 MATCH ... AGAINST('"天"') = 0 条，而 LIKE '%天%' 命中全部。
+    // 静默返回空会让管理员以为库里没有 —— 所以必须报错并给出替代路径。
+    const admin = ApiClient.asUser(await makeAdmin())
+    await insertSentence(FIXTURE.lessonA1, 1, "含天字的句子", "has the character")
+
     const res = await admin.get<{ error: string; code?: string }>(
-      "/api/admin/sentences?q=hello&pageSize=20",
+      `/api/admin/sentences?q=${encodeURIComponent("天")}&pageSize=20`,
     )
     expect(res.status).toBe(400)
-    expect(res.body.code).toBe("scope_required")
-    // 错误信息必须能指导下一步动作，而不是只说"失败"
+    expect(res.body.code).toBe("query_too_short")
+    // 错误信息要能指导下一步：说明长度下限，并指向"先选课时"
+    expect(res.body.error).toMatch(/2/)
     expect(res.body.error).toMatch(/课时/)
+  })
+
+  it("同一个单字，选了课时就能搜到（课时内是 LIKE 精确子串，没有分词限制）", async () => {
+    const admin = ApiClient.asUser(await makeAdmin())
+    await insertSentence(FIXTURE.lessonA1, 1, "含天字的句子", "has the character")
+
+    const res = await admin.get<SentencesBody>(
+      `/api/admin/sentences?lessonId=${FIXTURE.lessonA1}&q=${encodeURIComponent("天")}&pageSize=20`,
+    )
+    expect(res.status).toBe(200)
+    // 不写死条数：夹具里本来就有含「天」的句子，写死会让这条测试依赖夹具内容。
+    // 要断言的是"单字在课时内**能**搜到"（与全库那条 400 形成对照）。
+    expect(res.body.data.map((x) => x.chinese)).toContain("含天字的句子")
+  })
+
+  it("★ 中文关键词能同时命中 chinese 与 english 两列（拼接列的存在理由）", async () => {
+    // 「一个拼接列 + 一个索引」这个设计对**中文**场景仍然必要：
+    // 生产库有 435 条句子的 english 里含中文，若只搜 chinese 列会漏掉它们。
+    // 而给两列各建一个 FULLTEXT 再用 OR 连接会让索引完全失效（见 00031）。
+    const admin = ApiClient.asUser(await makeAdmin())
+    // 关键词只出现在 english 列里
+    await insertSentence(FIXTURE.lessonA1, 1, "完全无关的中文", "这句英文里混了特殊关键词")
+    await insertSentence(FIXTURE.lessonB1, 1, "另一句无关的", "nothing special here")
+
+    const res = await admin.get<SentencesBody>(
+      `/api/admin/sentences?q=${encodeURIComponent("特殊关键词")}&pageSize=20`,
+    )
+    expect(res.status).toBe(200)
+    expect(res.body.total).toBe(1)
+    expect(res.body.data[0].english).toContain("特殊关键词")
+  })
+
+  it("★ 纯英文关键词 → 400（实测全文索引对英文不可靠，宁可拒绝也不返回错结果）", async () => {
+    // 生产库实测（MATCH 带引号短语 vs LIKE 全表）：
+    //   James 4414 vs 94（多 47 倍，命中的句子只含 am/me/es）
+    //   jam      0 vs 4（明明有包含关系却一条不返回）
+    // 受控实验复现：4 行数据里 "james" 返回第 1、2、3 行，而 2、3 行不含 james。
+    const admin = ApiClient.asUser(await makeAdmin())
+    await insertSentence(FIXTURE.lessonA1, 1, "来吧Robbie，我们赶紧走", "Come on, let us go")
+
+    const res = await admin.get<{ error: string; code?: string }>(
+      "/api/admin/sentences?q=Robbie&pageSize=20",
+    )
+    expect(res.status).toBe(400)
+    expect(res.body.code).toBe("query_not_cjk")
+    // 说明必须给出替代路径（选课时后精确匹配），而不是只说失败
+    expect(res.body.error).toContain("课时")
+    expect(res.body.error).toContain("纯中文")
+  })
+
+  it("★ 中英混合关键词 → 400，且原因与纯英文区分开", async () => {
+    // 生产实测：与Allen → MATCH 1331 条，而 LIKE 是 0 条（凭空造出假结果）
+    const admin = ApiClient.asUser(await makeAdmin())
+    const res = await admin.get<{ error: string; code?: string }>(
+      `/api/admin/sentences?q=${encodeURIComponent("与Allen")}&pageSize=20`,
+    )
+    expect(res.status).toBe(400)
+    expect(res.body.code).toBe("query_mixed")
+  })
+
+  it("英文关键词选了课时就能精确搜到（课时内是 LIKE，没有分词限制）", async () => {
+    const admin = ApiClient.asUser(await makeAdmin())
+    await insertSentence(FIXTURE.lessonA1, 1, "来吧Robbie，我们赶紧走", "Come on, let us go")
+
+    const res = await admin.get<SentencesBody>(
+      `/api/admin/sentences?lessonId=${FIXTURE.lessonA1}&q=Robbie&pageSize=20`,
+    )
+    expect(res.status).toBe(200)
+    expect(res.body.data.map((x) => x.chinese)).toContain("来吧Robbie，我们赶紧走")
+  })
+
+  it("课时内搜索转义 LIKE 通配符：搜 % 不该命中该课时全部句子", async () => {
+    // 原先没转义 —— 搜 `%` 会变成「匹配任意」，看起来像"搜索没生效"。
+    const admin = ApiClient.asUser(await makeAdmin())
+    await insertSentence(FIXTURE.lessonA1, 1, "百分之百", "hundred percent")
+    await insertSentence(FIXTURE.lessonA1, 2, "另一句", "another")
+
+    const res = await admin.get<SentencesBody>(
+      `/api/admin/sentences?lessonId=${FIXTURE.lessonA1}&q=${encodeURIComponent("%")}&pageSize=50`,
+    )
+    expect(res.status).toBe(200)
+    // 没有句子含字面量 % → 应为 0 条；不转义会命中该课时的全部 2 句
+    expect(res.body.total).toBe(0)
   })
 
   it("同时给 q 和 lessonId → 在该课时内搜索中文", async () => {

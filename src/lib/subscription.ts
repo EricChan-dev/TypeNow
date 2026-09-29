@@ -283,7 +283,13 @@ export async function checkAndExpirePro(userId: string): Promise<boolean> {
 
     await db
       .update(users)
-      .set({ isPro: 0, proExpires: null })
+      // ⚠️ `lastExpiryAt` 不是顺手加的字段，缺了它「会员已到期挽回」就发不出去。
+      //
+      // 这一行把 proExpires 清成 NULL，而 NULL 与"从未有过会员"在库里长得一样。
+      // 主动触达体系要按"该用户的会员何时到期"挑人（见 lib/notify.ts 与 00032），
+      // 清空前不留底，那批**过期后回过站、发现自己练不了了**的用户就永远查不出来 ——
+      // 而他们恰恰是最该被挽回的一批。所以清空与留底必须是同一次 UPDATE。
+      .set({ isPro: 0, proExpires: null, lastExpiryAt: user.proExpires })
       .where(eq(users.id, userId))
 
     return true

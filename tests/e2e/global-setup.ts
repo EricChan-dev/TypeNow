@@ -1,5 +1,5 @@
 import { assertTestDatabase, TEST_DB_URL, E2E_BASE_URL } from "./helpers/env"
-import { getPool, closePool, seedFixtures } from "./helpers/db"
+import { getPool, closePool, seedFixtures, ensureSentenceSearchIndex } from "./helpers/db"
 import { startServer, stopServer } from "./helpers/server"
 
 /**
@@ -21,6 +21,9 @@ export async function setup(): Promise<() => Promise<void>> {
   }
 
   await seedFixtures()
+  // 补建 FULLTEXT 索引：drizzle 表达不了 `FULLTEXT ... WITH PARSER ngram`，
+  // 所以 push 出来的库只有 search_text 生成列、没有索引（见 helpers/db.ts）。
+  await ensureSentenceSearchIndex()
   await startServer()
 
   console.log(`[e2e] 服务端就绪：${E2E_BASE_URL}（测试库 ${TEST_DB_URL}）`)

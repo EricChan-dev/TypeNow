@@ -1,4 +1,5 @@
 import type { Metadata } from "next"
+import Link from "next/link"
 
 export const metadata: Metadata = {
   title: "隐私政策 - TypeNow",
@@ -51,9 +52,40 @@ export default function PrivacyPage() {
           <li>提供、维护和优化打字练习、智能复习、AI 训练等核心功能；</li>
           <li>分析学习数据，生成个性化学习报告和改进建议；</li>
           <li>保障账号安全，检测和防范异常登录及作弊行为；</li>
-          <li>向您发送与产品相关的重要通知（如服务更新、活动信息等）；</li>
+          <li>
+            向您发送<strong>服务通知</strong>（会员到期提醒、学习提醒、服务变更等）。
+            <strong>我们不发送营销短信。</strong>服务通知的说明与退订方式见第 2.1 节；
+          </li>
           <li>改进产品体验，进行数据分析和用户画像研究（以去标识化形式）。</li>
         </ul>
+
+        <h3 className="text-base font-medium mt-6 mb-2">2.1 服务通知与退订</h3>
+        <p className="mb-2">
+          为帮助你管理会员与学习进度，我们可能通过<strong>微信公众号消息</strong>或
+          <strong>短信</strong>向你发送以下<strong>服务通知</strong>：
+        </p>
+        <ul className="list-disc pl-5 space-y-2">
+          <li>会员（含体验会员）即将到期或已到期提醒；</li>
+          <li>学习提醒（如已领取体验会员但尚未开始练习）；</li>
+          <li>与服务运行直接相关的变更通知（如功能调整、协议更新）。</li>
+        </ul>
+        <p className="mt-3">
+          <strong>这类通知不含促销与营销内容</strong>，内容以你本人的会员状态与学习记录为限。
+          我们不会向你发送营销短信，也不会以奖励诱导你关注公众号。
+        </p>
+        <p className="mt-3">
+          <strong>如何退订：</strong>你可以随时在
+          <Link href="/home/settings" className="text-[#1E40AF] hover:underline mx-0.5">
+            「设置」
+          </Link>
+          中关闭服务通知，或回复短信中的退订指令、在公众号内发送「退订」。
+          退订后我们不会再向你发送上述通知，但<strong>不影响账号与已验证的会员权益</strong>，
+          也不会影响你继续使用本服务。
+        </p>
+        <p className="mt-3">
+          我们也会对发送频率作出限制（同一用户每周最多 2 条非到期类通知），
+          避免对你的打扰。
+        </p>
 
         <h2 className="text-lg font-semibold mt-8 mb-3">3. 信息的存储与保护</h2>
         <ul className="list-disc pl-5 space-y-2">

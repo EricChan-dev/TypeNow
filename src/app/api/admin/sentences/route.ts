@@ -9,6 +9,7 @@ import { logAdminAction, sentenceAuditLabel } from "@/lib/admin-audit"
 import { parsePagination } from "@/lib/pagination"
 import { getCachedCount, invalidateCachedCount, STATS_KEYS } from "@/lib/stats-cache"
 import { eq, like, or, and, sql, asc, desc, type SQL } from "drizzle-orm"
+import { analyzeSearchTerm, rejectMessage, toBooleanPhrase } from "@/lib/sentence-search"
 
 /**
  * 后台「句子管理」列表。
@@ -46,6 +47,15 @@ import { eq, like, or, and, sql, asc, desc, type SQL } from "drizzle-orm"
  * 写操作会失效总数缓存：否则列表与仪表盘上的总数在 10 分钟 TTL 内不含
  * 刚加的这一句，看起来像"保存没生效"。
  */
+/**
+ * 转义 LIKE 通配符。
+ * 不转义时管理员搜 `%` 会命中该课时下**全部**句子、`_` 会变成单字符通配 ——
+ * 看起来像"搜索没生效"。courses/list 早就有这个函数，这里原先漏了。
+ */
+function escapeLike(value: string): string {
+  return value.replace(/[\\%_]/g, (m) => `\\${m}`)
+}
+
 export async function GET(request: Request) {
   const auth = await requireAdmin()
   if (auth instanceof NextResponse) return auth
@@ -65,27 +75,53 @@ export async function GET(request: Request) {
   ).trim()
   const lessonId = (searchParams.get("lessonId") ?? "").trim()
 
+  // ── 搜索的两条路径 ────────────────────────────────────────────────────────
+  //
+  // · **带课时范围** → `LIKE '%词%'`。单课平均 27 行、走 idx_sentences_lesson_sort，
+  //   实测 0.0027 秒，是**精确子串**语义，中英文都准确。
+  // · **不带课时范围** → 走全文索引 `ft_sentences_search`（ngram，见 00031），
+  //   实测 0.0031 秒（旧口径全表 LIKE 要 3.19~12.41 秒）。
+  //
+  // 但 ngram 全文索引**只对纯中文可靠**。生产库逐词对照过：纯中文 7/7 与 LIKE
+  // 完全一致；一旦掺入 ASCII 就既多匹配也少匹配（James 多 47 倍、与Allen 凭空
+  // 造出 1331 条、jam 少匹配到 0 条）。所以纯英文与中英混合一律拒绝 ——
+  // 返回不可靠的结果比拒绝更糟，管理员会据此误判"库里没有这句话"。
+  // 完整证据见 src/lib/sentence-search.ts 的模块注释。
+  let fulltextTerm: string | null = null
+
   if (search && !lessonId) {
-    return NextResponse.json(
-      {
-        error:
-          "全库搜索要扫描 46 万行句子（2026-09-29 实测 5.7~12.4 秒），" +
-          "请先选择题库中的课时再搜索。",
-        code: "scope_required",
-      },
-      { status: 400 },
-    )
+    const analysis = analyzeSearchTerm(search)
+    if (!analysis.globalSearchable) {
+      return NextResponse.json(
+        { error: rejectMessage(analysis), code: `query_${analysis.reason}` },
+        { status: 400 },
+      )
+    }
+    fulltextTerm = analysis.term
   }
 
   const view = deletedScope(searchParams.get("deleted"))
   const conditions: SQL[] = [deletedCondition(view, aliveSentence, deletedSentence)]
   if (lessonId) conditions.push(eq(sentences.lessonId, lessonId))
   if (search) {
-    const matched = or(
-      like(sentences.chinese, `%${search}%`),
-      like(sentences.english, `%${search}%`),
-    )
-    if (matched) conditions.push(matched)
+    if (fulltextTerm) {
+      // 参数化为**引号短语**（BOOLEAN MODE）：语义等价 LIKE '%词%'，
+      // 而裸词在 BOOLEAN MODE 下是各 bigram 取或，会多返回结果。
+      // 见 src/lib/sentence-search.ts。
+      conditions.push(
+        sql`MATCH(${sentences.searchText}) AGAINST(${toBooleanPhrase(fulltextTerm)} IN BOOLEAN MODE)`,
+      )
+    } else {
+      // 课时内搜索：转义 LIKE 通配符。
+      // 原先没转义，管理员搜 `%` 会命中该课全部句子、搜 `_` 会变成单字符通配 ——
+      // courses/list 早就转义了，这里漏了。
+      const escaped = escapeLike(search)
+      const matched = or(
+        like(sentences.chinese, `%${escaped}%`),
+        like(sentences.english, `%${escaped}%`),
+      )
+      if (matched) conditions.push(matched)
+    }
   }
   const where = and(...conditions)
 
