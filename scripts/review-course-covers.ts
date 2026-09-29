@@ -38,10 +38,22 @@ const cwdRequire = createRequire(path.join(ROOT, "scripts", ".resolve-anchor.cjs
 const nextRequire = createRequire(cwdRequire.resolve("next/package.json"))
 const sharp = nextRequire("sharp") as typeof import("sharp")
 
-/** 水彩组 = 儿童/校园向的那两个大类，与生成脚本的风格分流必须一致 */
-function styleOfSlug(slug: string): "water" | "flat" {
-  const cat = slug.split("__")[0]
-  return cat === "graded_reading" || cat === "school_sync" ? "water" : "flat"
+/**
+ * 风格按**变体号**判定，不再按大类。
+ *
+ * 第一版是「一个大类一种风格」，所以按大类分组是对的；第二版改成
+ * 「每个槽位的 v1/v2/v3 分别是扁平/水彩/3D 卡通」，再按大类分组就会把
+ * 三种风格混在一组里算统计量，均值与标准差都没意义（实测把 72 张标成 flat、
+ * 60 张标成 water，而这两组里各自混着三种风格）。
+ *
+ * 变体号与风格的对应关系写死在生成脚本的 SCENES 里，这里用同一套约定。
+ */
+type StyleGroup = "v1-flat" | "v2-water" | "v3-toon"
+
+function styleOfName(name: string): StyleGroup {
+  if (name.endsWith("__v1")) return "v1-flat"
+  if (name.endsWith("__v2")) return "v2-water"
+  return "v3-toon"
 }
 
 const THUMB_W = 360
@@ -63,7 +75,7 @@ function cellSvg(label: string, w: number, h: number): Buffer {
 
 interface Stat {
   name: string
-  style: "water" | "flat"
+  style: StyleGroup
   /** 平均饱和度 0~1（HSV 的 S） */
   saturation: number
   /** 平均明度 0~1（HSV 的 V） */
@@ -74,7 +86,7 @@ interface Stat {
   warmRatio: number
 }
 
-async function analyse(file: string, name: string, style: "water" | "flat"): Promise<Stat> {
+async function analyse(file: string, name: string, style: StyleGroup): Promise<Stat> {
   // 缩到 96px 再统计：足够稳定，且避免对 1440px 原图逐像素循环。
   // removeAlpha 保证恒为 3 通道，下面的下标运算才不用按 channels 分支。
   const { data, info } = await sharp(file)
@@ -139,13 +151,13 @@ function std(xs: number[]): number {
 async function main() {
   fs.mkdirSync(OUT_DIR, { recursive: true })
 
-  const names: { name: string; file: string; style: "water" | "flat"; slug: string }[] = []
+  const names: { name: string; file: string; style: StyleGroup; slug: string }[] = []
   for (const slot of COVER_THEME_SLOTS) {
     const slug = themeSlug(slot.categoryKey, slot.subCategoryKey)
     for (let v = 1; v <= 4; v++) {
       const name = `${slug}__v${v}`
       const file = path.join(COVER_DIR, `${name}.webp`)
-      if (fs.existsSync(file)) names.push({ name, file, style: styleOfSlug(slug), slug })
+      if (fs.existsSync(file)) names.push({ name, file, style: styleOfName(name), slug })
     }
   }
   console.log(`找到 ${names.length} 张已转码的封面`)
@@ -155,7 +167,7 @@ async function main() {
   for (const it of names) stats.push(await analyse(it.file, it.name, it.style))
   fs.writeFileSync(path.join(OUT_DIR, "stats.json"), JSON.stringify(stats, null, 2))
 
-  for (const style of ["flat", "water"] as const) {
+  for (const style of ["v1-flat", "v2-water", "v3-toon"] as const) {
     const group = stats.filter((s) => s.style === style)
     if (!group.length) continue
     console.log(`\n[${style}] ${group.length} 张`)
@@ -173,7 +185,7 @@ async function main() {
   }
 
   // ── 2. 接触印相表 ──────────────────────────────────────────────────────────
-  for (const style of ["flat", "water"] as const) {
+  for (const style of ["v1-flat", "v2-water", "v3-toon"] as const) {
     const group = names.filter((n) => n.style === style)
     for (let s = 0; s < Math.ceil(group.length / PER_SHEET); s++) {
       const chunk = group.slice(s * PER_SHEET, (s + 1) * PER_SHEET)

@@ -84,8 +84,14 @@ export const COVER_THEME_SLUGS: ReadonlySet<string> = new Set(
   COVER_THEME_SLOTS.map((s) => themeSlug(s.categoryKey, s.subCategoryKey)),
 )
 
-/** 每个槽位的**目标**变体数量（生成脚本按它决定要出几张） */
-export const COVER_VARIANTS_PER_THEME = 4
+/**
+ * 每个槽位的**目标**变体数量。
+ *
+ * 2026-09-29 第二版量产从 4 改为 3：需求方反馈「太雷同」，改为让每个槽位的三张图
+ * 分别用扁平 / 水彩 / 3D 卡通三种风格 + 三个不同场景，用风格与人物差异换取观感多样性。
+ * 20 元额度 ÷ 0.14 元/张 ≈ 142 张，44×3=132 张是留有余量的选择。
+ */
+export const COVER_VARIANTS_PER_THEME = 3
 
 /**
  * 每个槽位**实际已生成**多少张变体（1~4）。
@@ -107,8 +113,8 @@ export const COVER_VARIANTS_PER_THEME = 4
  * 所以忘了更新不会静默生效，测试会直接变红。
  */
 export const COVER_VARIANT_COUNTS: Readonly<Record<string, number>> = {
-  practical__movies_stories: 4,
-  practical__classic_textbooks: 4,
+  practical__movies_stories: 3,
+  practical__classic_textbooks: 3,
   /**
    * 只有 1 张，且这张是从原 v4 提升上来的。
    *
@@ -118,48 +124,48 @@ export const COVER_VARIANT_COUNTS: Readonly<Record<string, number>> = {
    * 原 v4 恰好是唯一没有文字的（卡片全空白），所以把它提升为 v1 先顶上，
    * 同时删掉 v2~v4，让额度恢复后用已修正的提示词重新生成。
    */
-  practical__grammar_vocab: 1,
-  practical__listening_speaking: 2,
-  exam_prep__ielts_toefl: 2,
-  practical__daily_oral: 2,
-  practical__general: 2,
-  none__general: 2,
-  exam_prep__cet_4_6: 2,
-  practical__business_career: 2,
-  exam_prep__pte: 2,
-  exam_prep__gaokao: 2,
-  exam_prep__zhuan_sheng_ben: 2,
-  exam_prep__zhongkao: 2,
-  exam_prep__postgraduate: 2,
-  practical__travel_english: 2,
-  exam_prep__degree_english: 1,
-  exam_prep__tem_4_8: 1,
-  exam_prep__pet: 1,
-  exam_prep__gre: 1,
-  exam_prep__toeic: 1,
-  exam_prep__ket: 1,
-  exam_prep__fce: 1,
-  exam_prep__general: 1,
-  school_sync__grade_4: 2,
-  school_sync__grade_3: 2,
-  school_sync__grade_8: 2,
-  school_sync__grade_1: 2,
-  school_sync__grade_7: 2,
-  school_sync__grade_5: 2,
-  school_sync__grade_6: 2,
-  school_sync__general: 2,
-  school_sync__high_school: 2,
-  school_sync__grade_9: 2,
-  school_sync__grade_2: 1,
-  graded_reading__oxford_reading_tree: 1,
-  graded_reading__lets_go: 1,
-  graded_reading__raz: 1,
-  graded_reading__heinemann: 1,
-  school_sync__vocational: 1,
-  graded_reading__big_cat: 1,
-  graded_reading__oxford_bookworm: 1,
-  graded_reading__red_rocket: 1,
-  graded_reading__general: 1,
+  practical__grammar_vocab: 3,
+  practical__listening_speaking: 3,
+  exam_prep__ielts_toefl: 3,
+  practical__daily_oral: 3,
+  practical__general: 3,
+  none__general: 3,
+  exam_prep__cet_4_6: 3,
+  practical__business_career: 3,
+  exam_prep__pte: 3,
+  exam_prep__gaokao: 3,
+  exam_prep__zhuan_sheng_ben: 3,
+  exam_prep__zhongkao: 3,
+  exam_prep__postgraduate: 3,
+  practical__travel_english: 3,
+  exam_prep__degree_english: 3,
+  exam_prep__tem_4_8: 3,
+  exam_prep__pet: 3,
+  exam_prep__gre: 3,
+  exam_prep__toeic: 3,
+  exam_prep__ket: 3,
+  exam_prep__fce: 3,
+  exam_prep__general: 3,
+  school_sync__grade_4: 3,
+  school_sync__grade_3: 3,
+  school_sync__grade_8: 3,
+  school_sync__grade_1: 3,
+  school_sync__grade_7: 3,
+  school_sync__grade_5: 3,
+  school_sync__grade_6: 3,
+  school_sync__general: 3,
+  school_sync__high_school: 3,
+  school_sync__grade_9: 3,
+  school_sync__grade_2: 3,
+  graded_reading__oxford_reading_tree: 3,
+  graded_reading__lets_go: 3,
+  graded_reading__raz: 3,
+  graded_reading__heinemann: 3,
+  school_sync__vocational: 3,
+  graded_reading__big_cat: 3,
+  graded_reading__oxford_bookworm: 3,
+  graded_reading__red_rocket: 3,
+  graded_reading__general: 3,
 }
 
 /**

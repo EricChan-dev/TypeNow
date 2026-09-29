@@ -11,6 +11,7 @@ import { describe, it, expect } from "vitest"
 import {
   COVER_THEME_SLOTS,
   COVER_THEME_SLUGS,
+  COVER_VARIANT_COUNTS,
   COVER_VARIANTS_PER_THEME,
   themeSlug,
 } from "@/lib/course-cover-themes"
@@ -46,8 +47,20 @@ describe("COVER_THEME_SLOTS · 与生产库一致的 44 个槽位", () => {
     expect(COVER_THEME_SLUGS.has("exam_prep__general")).toBe(true)
   })
 
-  it("变体数量为 4", () => {
-    expect(COVER_VARIANTS_PER_THEME).toBe(4)
+  /**
+   * 第二版量产把变体数从 4 改为 3：需求方反馈封面「太雷同」，改为让每个槽位的三张图
+   * 分别用扁平 / 水彩 / 3D 卡通三种风格 + 三个不同场景。这个数字必须与
+   * 生成脚本里每个槽位的场景条目数、以及磁盘上的文件数三方一致。
+   */
+  it("变体数量为 3", () => {
+    expect(COVER_VARIANTS_PER_THEME).toBe(3)
+  })
+
+  it("每个槽位声明的变体数都不超过目标变体数", () => {
+    for (const [slug, n] of Object.entries(COVER_VARIANT_COUNTS)) {
+      expect(n, `${slug} 声明的变体数超过目标`).toBeLessThanOrEqual(COVER_VARIANTS_PER_THEME)
+      expect(n, `${slug} 声明的变体数至少为 1`).toBeGreaterThanOrEqual(1)
+    }
   })
 
   it("分类分布与设计文档一致：扁平 24 个、水彩 20 个", () => {

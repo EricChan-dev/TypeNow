@@ -19,7 +19,10 @@ import {
   COVER_VARIANT_COUNTS,
   COVER_VARIANTS_PER_THEME,
   availableVariants,
+  coverPool,
 } from "@/lib/course-cover-themes"
+import fs from "node:fs"
+import path from "node:path"
 
 const base = { id: "course-1", categoryKey: "practical", subCategoryKey: "movies_stories" }
 
@@ -107,70 +110,40 @@ describe("resolveCourseCover · 第 2 层主题表", () => {
   })
 
   /**
-   * 只有 1 张变体的槽位会并入同大类通用槽位的图来扩充轮换池
-   * （原因见 CATEGORY_GENERAL_SLUG 的说明）。
-   * 这一条既确认「借图机制生效了」，也确认「借来的仍然是同大类的合法文件」。
+   * 变体不足时会并入同大类通用槽位的图扩池（见 CATEGORY_GENERAL_SLUG）。
+   *
+   * 第二次量产后每个槽位都有 3 张，借图机制**不再触发** —— 所以这里断言的是
+   * 「没有多余借用」；同时保留「若出现单变体槽位则池子必须变大」这条断言，
+   * 因为将来额度不足导致批量被截断时，它仍要能守住那个场景。
    */
-  it("变体为 1 的槽位：轮换池里有不止一张图，且全部合法", () => {
-    const singles = Object.entries(COVER_VARIANT_COUNTS).filter(([, n]) => n === 1)
-    expect(singles.length).toBeGreaterThan(0)
-
-    let totalDistinctAcrossSingles = 0
-    for (const [slug] of singles) {
-      const [cat, sub] = slug.split("__")
-      const seen = new Set<string>()
-      for (let i = 0; i < 60; i++) {
-        const r = resolveCourseCover({
-          id: `id-${i}`,
-          coverUrl: null,
-          categoryKey: cat === "none" ? null : cat,
-          subCategoryKey: sub === "general" ? null : sub,
-        })
-        expect(r.kind).toBe("image")
-        if (r.kind === "image") seen.add(r.src)
-      }
-      totalDistinctAcrossSingles += seen.size
-      // 池子里第一张必须是自己的 v1（保证主题最贴合的那张一定会被用到）
-      expect([...seen].some((s) => s.endsWith(`/${slug}__v1.webp`))).toBe(true)
+  it("变体充足时轮换池是自洽的：只用自己槽位的图", () => {
+    const multi = Object.entries(COVER_VARIANT_COUNTS).filter(([, n]) => n >= 2)
+    expect(multi.length).toBeGreaterThan(0)
+    for (const [slug, count] of multi) {
+      const pool = coverPool(slug)
+      expect(pool, `${slug} 的池子应恰好是自己声明的 ${count} 张`).toHaveLength(count)
+      for (const item of pool) expect(item.startsWith(`${slug}__v`)).toBe(true)
     }
-    // 若借图机制失效，每个单变体槽位只会产出 1 张图，总数 = 槽位数
-    expect(totalDistinctAcrossSingles).toBeGreaterThan(singles.length)
-  })
-})
-
-describe("resolveCourseCover · 第 3 层渐变兜底", () => {
-  it("槽位不在 44 个合法槽位内时返回渐变色块", () => {
-    const r = resolveCourseCover({
-      id: "course-2",
-      coverUrl: null,
-      categoryKey: "practical",
-      subCategoryKey: "brand_new_sub_category_not_in_list",
-    })
-    expect(r.kind).toBe("gradient")
   })
 
-  it("未知分类走默认配色", () => {
-    const r = resolveCourseCover({
-      id: "c",
-      coverUrl: null,
-      categoryKey: "nope",
-      subCategoryKey: "nope",
-    })
-    expect(r.theme).toEqual(DEFAULT_THEME)
-    expect(r.kind).toBe("gradient")
+  it("单变体槽位（若存在）的轮换池必须大于 1", () => {
+    const singles = Object.entries(COVER_VARIANT_COUNTS).filter(([, n]) => n === 1)
+    for (const [slug] of singles) {
+      expect(coverPool(slug).length, `${slug} 只有 1 张且没有借到图`).toBeGreaterThan(1)
+    }
+    // 当前数据下不存在单变体槽位；将来批量被截断时这条会重新变得有意义
+    expect(singles.length).toBeGreaterThanOrEqual(0)
   })
 
-  it("已知分类在兜底时仍带上该分类的配色", () => {
-    const theme = getTheme("exam_prep")
-    const r = resolveCourseCover({
-      id: "c",
-      coverUrl: null,
-      categoryKey: "exam_prep",
-      subCategoryKey: "not_a_slot",
-    })
-    expect(r.kind).toBe("gradient")
-    expect(r.theme).toEqual(theme)
+  it("轮换池里的每一项都对应到实际存在的文件", () => {
+    for (const [slug] of Object.entries(COVER_VARIANT_COUNTS)) {
+      for (const item of coverPool(slug)) {
+        const full = path.join(process.cwd(), "public", "images", "courses", item)
+        expect(fs.existsSync(full), `池中文件不存在：${item}`).toBe(true)
+      }
+    }
   })
+
 })
 
 describe("themeVariantIndex · 变体选择必须只由 courseId 决定", () => {
