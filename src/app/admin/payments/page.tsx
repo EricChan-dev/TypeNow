@@ -1,6 +1,7 @@
 "use client"
 
 import { List, useTable } from "@refinedev/antd"
+import { memberTierLabel } from "@/lib/pricing"
 import { Input, Space, Table, Tag } from "antd"
 import Link from "next/link"
 import DrilldownBanner from "@/components/admin/DrilldownBanner"
@@ -81,9 +82,10 @@ export default function PaymentsList() {
           dataIndex="plan"
           title="方案"
           width={100}
-          render={(p: string) =>
-            p === "monthly" ? "月度会员" : p === "yearly" ? "年度会员" : "合伙人"
-          }
+          // 档位名走 lib/pricing 的唯一事实源：原先这里手写了三个分支，
+          // 加季度档时会静默漏掉（显示成"合伙人"），而终端用户看不到这个页面，
+          // 所以这种漂移不会被发现。终身档现在叫「终身会员」。
+          render={(p: string) => memberTierLabel(p)}
         />
         <Table.Column
           dataIndex="amount"

@@ -8,6 +8,7 @@ import { ConditionalTopbar } from "@/components/home/ConditionalTopbar"
 import { HomeShell } from "@/components/home/HomeShell"
 import { ExpiryWarningModal } from "@/components/home/ExpiryWarningModal"
 import { ExpiryBanner } from "@/components/home/ExpiryBanner"
+import { CHECK_IN_GOAL_DEFAULT } from "@/lib/coins"
 
 export default async function HomeLayout({
   children,
@@ -54,7 +55,11 @@ export default async function HomeLayout({
         member_tier: memberTier,
         pro_expires: user.proExpires?.toISOString() ?? null,
         diamonds: user.diamonds ?? 0,
-        check_in_goal: user.checkInGoal ?? 50,
+        coins: user.coins ?? 0,
+        // 打卡目标＝当日练习句数（语义见 lib/coins.ts）。
+        // 默认值必须与后端同源，否则「还没设置过目标的用户」在前端会看到一个
+        // 与接口判定不一致的门槛。
+        check_in_goal: user.checkInGoal ?? CHECK_IN_GOAL_DEFAULT,
       }
     : null
 
@@ -64,7 +69,7 @@ export default async function HomeLayout({
       {serverUser && (
         <ExpiryBanner memberTier={serverUser.member_tier} proExpires={serverUser.pro_expires} />
       )}
-      <HomeShell isPartner={!!(serverUser?.is_partner)}>{children}</HomeShell>
+      <HomeShell>{children}</HomeShell>
       {mustBindPhone && <BindPhoneModal />}
       {serverUser && (
         <ExpiryWarningModal

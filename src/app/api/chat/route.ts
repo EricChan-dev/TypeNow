@@ -7,8 +7,9 @@ import { affectedRows } from "@/lib/db/affected-rows"
 import { DEEPSEEK_MODEL, DEEPSEEK_THINKING } from "@/lib/llm"
 import { checkRateLimit } from "@/lib/rate-limit"
 import { isProActive } from "@/lib/subscription"
+import { ensureDailyMemberGrant } from "@/lib/member-grant"
 import { toShanghaiDateStr } from "@/lib/practice-stats"
-import { DAY_MS, PRO_AI_CHAT_PER_DAY } from "@/lib/membership-benefits"
+import { DAY_MS, FREE_AI_CHAT_PER_DAY, PRO_AI_CHAT_PER_DAY } from "@/lib/membership-benefits"
 
 const COST = 5
 /** 单条消息（含历史）字符上限，防止超大提示词造成成本失控。 */
@@ -74,6 +75,15 @@ export async function POST(request: Request) {
   const database = db
   const userId = session.userId
 
+  // 会员每日赠钻的**兜底触发**。主触发点是 /api/auth/me（每次进站都会打到），
+  // 但用户可能挂着一整天不刷新页面 —— 那会在跨过零点后出现「明明有赠钻却扣不了」
+  // 的假性钻石不足。这里再补一次，成本是一次索引查询 + 大多数情况下
+  // INSERT IGNORE 命中唯一键直接返回。
+  await ensureDailyMemberGrant(userId).catch((e) => {
+    // 赠钻失败不该阻断对话：下面的扣费逻辑会照常判断余额。
+    console.error("[chat] 会员每日赠钻失败（不影响本次对话）:", e)
+  })
+
   let body: { message?: unknown; history?: unknown }
   try {
     body = await request.json()
@@ -121,12 +131,22 @@ export async function POST(request: Request) {
     .where(eq(users.id, userId))
     .limit(1)
   const isPro = isProActive(viewer)
+  // 免费用户与会员**都有**每日免费额度，只是额度不同（2026-09-29 修正）。
+  //
+  // 此前这里是 `isPro && checkRateLimit(..., PRO_AI_CHAT_PER_DAY, ...)`，
+  // 而 FREE_AI_CHAT_PER_DAY 是 0 —— 那是一次误抄：句乐部的「每日 2 次免费提问」
+  // 本来是全用户共享的，我们把那个 2 抄到了 PRO 上、把免费设成了 0，
+  // 结果是免费用户一次都用不了、会员也只有 2 次。
+  //
+  // 桶名按身份区分：若共用同一个 key，两类用户的计数会互相污染
+  // （免费用户用完 3 次后升级会员，会立刻继承那 3 次已用计数）。
+  const dailyFreeQuota = isPro ? PRO_AI_CHAT_PER_DAY : FREE_AI_CHAT_PER_DAY
   const usedFreeQuota =
-    isPro &&
+    dailyFreeQuota > 0 &&
     checkRateLimit(
-      "chat-member-free-daily",
+      isPro ? "chat-member-free-daily" : "chat-free-daily",
       `${userId}:${toShanghaiDateStr()}`,
-      PRO_AI_CHAT_PER_DAY,
+      dailyFreeQuota,
       DAY_MS,
     ).allowed
 

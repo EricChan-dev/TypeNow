@@ -9,11 +9,10 @@ import { Moon, Sun, User, Settings, Crown, LogOut, ChevronRight, Handshake, Mess
 import { trackThemeToggle } from "@/lib/analytics"
 import { signOutAction } from "@/app/actions/auth"
 import { cn } from "@/lib/utils"
-import { DiamondRulesModal } from "@/components/home/DiamondRulesModal"
+import { CoinRulesModal } from "@/components/home/CoinRulesModal"
+import type { MemberTier } from "@/lib/pricing"
 import { GlobalSettingsModal } from "@/components/home/GlobalSettingsModal"
 import { FeedbackModal } from "@/components/home/FeedbackModal"
-
-type MemberTier = "trial" | "monthly" | "yearly" | "partner" | "free"
 
 interface TierConfig {
   label: string
@@ -39,13 +38,19 @@ const TIER_CONFIG: Record<MemberTier, TierConfig> = {
     className: "bg-blue-500/20 text-blue-500 border border-blue-400/60",
     avatarRing: "ring-2 ring-offset-2 ring-blue-500 ring-offset-background",
   },
+  quarterly: {
+    label: "季度会员",
+    className: "bg-cyan-500/20 text-cyan-500 border border-cyan-400/60",
+    avatarRing: "ring-2 ring-offset-2 ring-cyan-500 ring-offset-background",
+  },
   yearly: {
     label: "年度会员",
     className: "bg-violet-500/20 text-violet-500 border border-violet-400/60",
     avatarRing: "ring-2 ring-offset-2 ring-violet-500 ring-offset-background",
   },
   partner: {
-    label: "永久会员·合伙人",
+    // 语义已收窄为「终身会员」：2026-09-29 合规改造把推广资格从该商品解绑
+    label: "终身会员",
     className: "border text-white",
     style: {
       background: "linear-gradient(135deg, #b45309 0%, #d97706 60%, #f59e0b 100%)",
@@ -86,7 +91,10 @@ interface UserProfile {
   is_partner: boolean
   level: number
   member_tier: MemberTier
+  /** 钻石（付费货币）：会员每日赠送，用于 AI 助手 / 语音评测的超额消耗 */
   diamonds: number
+  /** 金币（免费货币）：学习获得，可兑换会员天数与道具 */
+  coins: number
 }
 
 export interface ServerUser {
@@ -98,6 +106,7 @@ export interface ServerUser {
   level: number
   member_tier?: MemberTier
   diamonds?: number
+  coins?: number
   check_in_goal?: number
 }
 
@@ -118,8 +127,9 @@ export function UserActions({ serverUser, variant = "public" }: UserActionsProps
     level: serverUser.level,
     member_tier: serverUser.member_tier ?? "free",
     diamonds: serverUser.diamonds ?? 0,
+    coins: serverUser.coins ?? 0,
   } : null)
-  const [diamondRulesOpen, setDiamondRulesOpen] = useState(false)
+  const [coinRulesOpen, setCoinRulesOpen] = useState(false)
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [feedbackOpen, setFeedbackOpen] = useState(false)
   const [loading, setLoading] = useState(!serverUser)
@@ -144,7 +154,7 @@ export function UserActions({ serverUser, variant = "public" }: UserActionsProps
     fetch("/api/auth/me")
       .then((r) => r.json())
       .then(({ user: u }) => {
-        if (u) setUser({ ...u, is_partner: !!u.is_partner, member_tier: u.member_tier ?? "free" })
+        if (u) setUser({ ...u, is_partner: !!u.is_partner, member_tier: u.member_tier ?? "free", coins: u.coins ?? 0 })
         setLoading(false)
       })
       .catch(() => setLoading(false))
@@ -220,22 +230,33 @@ export function UserActions({ serverUser, variant = "public" }: UserActionsProps
               <Link href="/home/membership" className="shrink-0">
                 <TierBadge tier={user.member_tier} size="sm" />
               </Link>
-              {!user.is_partner && (
-                <Link
-                  href="/home/partner"
-                  className="hidden sm:inline-flex items-center gap-1.5 rounded-full bg-amber-500/10 border border-amber-500/30 px-3 py-1 text-[12px] font-semibold text-amber-500 hover:bg-amber-500/20 transition-colors whitespace-nowrap"
-                >
-                  <Handshake className="h-3.5 w-3.5 shrink-0" />
-                  推广赚佣金
-                </Link>
-              )}
+              {/* 推广入口对**所有**用户展示。2026-09-29 合规改造后推广资格免费开放，
+                  不再与 ¥499 终身会员绑定（见 lib/membership-benefits 的
+                  PROMOTER_BENEFITS），所以这里没有 `is_partner` 条件。 */}
+              <Link
+                href="/home/partner"
+                className="hidden sm:inline-flex items-center gap-1.5 rounded-full bg-amber-500/10 border border-amber-500/30 px-3 py-1 text-[12px] font-semibold text-amber-500 hover:bg-amber-500/20 transition-colors whitespace-nowrap"
+              >
+                <Handshake className="h-3.5 w-3.5 shrink-0" />
+                推广赚佣金
+              </Link>
+              {/* 金币是用户主动积累、可兑换会员天数的免费货币，放主位并可点击看规则 */}
               <button
-                onClick={() => setDiamondRulesOpen(true)}
+                onClick={() => setCoinRulesOpen(true)}
+                title="金币：学习获得，可兑换会员天数"
                 className="hidden sm:flex items-center gap-1 px-2 py-1 rounded-lg hover:bg-accent/20 transition-colors text-sm font-semibold text-foreground/70 hover:text-foreground"
+              >
+                <span>🪙</span>
+                <span>{user.coins}</span>
+              </button>
+              {/* 钻石只由会员每日赠送、用于 AI 助手，所以是非交互展示 */}
+              <span
+                title="钻石：会员每日赠送，用于 AI 助手与语音评测"
+                className="hidden sm:flex items-center gap-1 px-2 py-1 text-sm font-semibold text-foreground/50"
               >
                 <span>💎</span>
                 <span>{user.diamonds}</span>
-              </button>
+              </span>
             </>
           )}
 
@@ -291,12 +312,12 @@ export function UserActions({ serverUser, variant = "public" }: UserActionsProps
                       <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />
                     </Link>
                   )}
-                  {!user.is_partner && (
-                    <Link href="/home/partner" onClick={() => setDropdownOpen(false)} className="flex items-center justify-between px-4 py-2.5 text-sm text-foreground hover:bg-muted transition-colors">
-                      <span className="flex items-center gap-3"><Handshake className="h-4 w-4 text-amber-500" />加入合伙人，最高赚 50%</span>
-                      <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />
-                    </Link>
-                  )}
+                  {/* 推广入口对所有人开放（2026-09-29 合规改造），
+                      文案也只描述"按真实付费金额拿佣金"，不承诺收益。 */}
+                  <Link href="/home/partner" onClick={() => setDropdownOpen(false)} className="flex items-center justify-between px-4 py-2.5 text-sm text-foreground hover:bg-muted transition-colors">
+                    <span className="flex items-center gap-3"><Handshake className="h-4 w-4 text-amber-500" />免费加入推广计划</span>
+                    <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />
+                  </Link>
                 </div>
                 <div className="border-t border-border pt-1">
                   <button onClick={handleLogout} className="flex items-center gap-3 w-full px-4 py-2.5 text-sm text-muted-foreground hover:bg-muted transition-colors">
@@ -320,7 +341,7 @@ export function UserActions({ serverUser, variant = "public" }: UserActionsProps
         </Link>
       )}
 
-      <DiamondRulesModal open={diamondRulesOpen} onClose={() => setDiamondRulesOpen(false)} />
+      <CoinRulesModal open={coinRulesOpen} onClose={() => setCoinRulesOpen(false)} />
       <FeedbackModal open={feedbackOpen} onClose={() => setFeedbackOpen(false)} />
       <GlobalSettingsModal
         open={settingsOpen}

@@ -2,8 +2,9 @@ import { NextResponse } from "next/server"
 import { db } from "@/lib/db"
 import { courses } from "@/lib/db/schema"
 import { aliveCourse } from "@/lib/soft-delete"
-import { eq, and, like, sql, desc } from "drizzle-orm"
+import { eq, and, like, sql, desc, inArray, isNull } from "drizzle-orm"
 import type { SortMode } from "@/types/course"
+import { gradesOfStage, isUngradedStage } from "@/lib/textbook-taxonomy"
 
 /** 把查询串转成整数；解析失败或非有限值一律回退默认，避免 NaN 进 SQL。 */
 function toInt(raw: string | null, fallback: number): number {
@@ -33,11 +34,36 @@ export async function GET(request: Request) {
     const subCategoryKey = searchParams.get("subCategoryKey")
     const search = searchParams.get("search")?.trim()
     const sortMode = (searchParams.get("sortMode") ?? "latest") as SortMode
+    // ── 教材同步的两个维度（见 lib/textbook-taxonomy）────────────────────────
+    //   stage          —— 学段，映射成一组 sub_category_key（「全部年级」时用）
+    //   textbookVersion —— 教材版本，对应 courses.textbook_version
+    // 年级本身复用既有的 subCategoryKey（具体某个年级时用它更精确）。
+    const stage = searchParams.get("stage")
+    const textbookVersion = searchParams.get("textbookVersion")
 
     // 软删除的课程对学习者不可见（见 lib/soft-delete）
     const conditions = [eq(courses.isPublished, 1), aliveCourse]
     if (categoryKey && categoryKey !== "all") conditions.push(eq(courses.categoryKey, categoryKey))
-    if (subCategoryKey) conditions.push(eq(courses.subCategoryKey, subCategoryKey))
+    if (subCategoryKey) {
+      conditions.push(eq(courses.subCategoryKey, subCategoryKey))
+    } else if (stage) {
+      if (isUngradedStage(stage)) {
+        // 「未分级」= sub_category_key IS NULL。生产库有 11 门这样的课，
+        // 不给入口就等于它们从教材同步页里凭空消失。
+        conditions.push(isNull(courses.subCategoryKey))
+      } else {
+        // 「全部年级」：展开成该学段的年级集合。
+        // 未知 stage 会得到空数组 —— 这时必须返回空结果，**不能**退化成"不加条件"，
+        // 否则一个拼错的 URL 会把整个课程库倒出来。
+        const grades = gradesOfStage(stage)
+        conditions.push(
+          inArray(courses.subCategoryKey, grades.length > 0 ? [...grades] : ["__none__"]),
+        )
+      }
+    }
+    if (textbookVersion) {
+      conditions.push(eq(courses.textbookVersion, textbookVersion))
+    }
     if (search) {
       conditions.push(like(courses.title, `%${escapeLike(search)}%`))
     }

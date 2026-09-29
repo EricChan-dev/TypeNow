@@ -20,6 +20,7 @@ import {
 } from "@/lib/desktop-only"
 
 import { alignWordsWithEnglish } from "@/lib/word-align"
+import { sentenceCoinReward } from "@/lib/coins"
 import { Voiceprint } from "@/components/home/learn/Voiceprint"
 
 // Flatten DB sentences: if a sentence has chunks, emit one Sentence per chunk
@@ -702,15 +703,18 @@ export function LearnClient({
     consecutivePerfectRef.current = newStreak
     const durationSeconds = Math.max(1, Math.round((Date.now() - sentenceStartTimeRef.current) / 1000))
 
-    let earned = 5
-    let variant: FeedbackVariant = "great"
-    if (isPerfect) {
-      if (newStreak >= 2) { earned = 5 + Math.min(newStreak, 20); variant = "combo" }
-      else { variant = "perfect" }
-    }
+    // 奖励改成**金币**（2026-09-29 双货币拆分）：每句 +1、完美 +2。
+    //
+    // 金额**不再**随连击递增 —— 金币是准现金（1000 金币 = 1 天会员），
+    // 沿用钻石时代「连击越高给越多（最高 25）」的力度会直接把兑换门槛刷穿。
+    // 连击仍然展示（variant = combo）并照旧记进流水，因为它是有效的学习反馈。
+    const earned = sentenceCoinReward(isPerfect)
+    const variant: FeedbackVariant = isPerfect
+      ? (newStreak >= 2 ? "combo" : "perfect")
+      : "great"
     setFeedback((p) => ({ trigger: p.trigger + 1, variant, streak: newStreak, earned }))
 
-    fetch("/api/diamonds/earn", {
+    fetch("/api/coins/earn", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ type: "sentence", refId: parentId, streak: newStreak, perfect: isPerfect, durationSeconds }),
@@ -1608,11 +1612,11 @@ export function LearnClient({
     })
   }, [activeWordIndex])
 
-  // Show completion modal when all sentences done + earn lesson diamonds
+  // Show completion modal when all sentences done + earn lesson coins
   useEffect(() => {
     if (!isFinished) return
     setShowCompletionModal(true)
-    fetch("/api/diamonds/earn", {
+    fetch("/api/coins/earn", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ type: "lesson_complete", refId: lessonId }),

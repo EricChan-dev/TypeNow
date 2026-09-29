@@ -25,28 +25,29 @@ describe("sliceForTrial · 会员", () => {
 })
 
 describe("sliceForTrial · 非会员", () => {
-  it("默认只放行前 3 句，并标记还有更多", () => {
+  it("默认只放行前 5 句，并标记还有更多", () => {
     const r = sliceForTrial(many, false)
-    expect(r.visible).toEqual(["s1", "s2", "s3"])
+    expect(r.visible).toEqual(["s1", "s2", "s3", "s4", "s5"])
     expect(r.trial).toEqual({ limit: FREE_TRIAL_SENTENCES, truncated: true })
   })
 
   it("句子数正好等于上限 → truncated 为 false（没有更多可藏）", () => {
-    const r = sliceForTrial(["s1", "s2", "s3"], false)
-    expect(r.visible).toEqual(["s1", "s2", "s3"])
-    expect(r.trial).toEqual({ limit: 3, truncated: false })
+    const all = ["s1", "s2", "s3", "s4", "s5"]
+    const r = sliceForTrial(all, false)
+    expect(r.visible).toEqual(all)
+    expect(r.trial).toEqual({ limit: FREE_TRIAL_SENTENCES, truncated: false })
   })
 
   it("句子数少于上限 → 全部放行且不标记截断", () => {
     const r = sliceForTrial(["s1", "s2"], false)
     expect(r.visible).toEqual(["s1", "s2"])
-    expect(r.trial).toEqual({ limit: 3, truncated: false })
+    expect(r.trial).toEqual({ limit: FREE_TRIAL_SENTENCES, truncated: false })
   })
 
   it("空课时 → 空数组，不抛异常", () => {
     const r = sliceForTrial([], false)
     expect(r.visible).toEqual([])
-    expect(r.trial).toEqual({ limit: 3, truncated: false })
+    expect(r.trial).toEqual({ limit: FREE_TRIAL_SENTENCES, truncated: false })
   })
 
   it("核心不变量：非会员拿到的句数永远不超过 limit", () => {

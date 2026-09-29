@@ -4,43 +4,62 @@ import { useState } from "react"
 import { useRouter } from "next/navigation"
 import { toast } from "sonner"
 import Link from "next/link"
-import { Infinity, TrendingUp, Zap, Wallet } from "lucide-react"
+import { Share2, TrendingUp, Wallet, Zap } from "lucide-react"
 
 const highlights = [
   {
-    icon: Infinity,
-    title: "永久免费学习",
-    desc: "终身解锁全部会员功能，无需再续费",
-    color: "text-sky-400",
-    bg: "bg-sky-400/10",
-    border: "border-sky-400/20",
-  },
-  {
     icon: TrendingUp,
-    title: "高额佣金分成",
-    desc: "首次 50%，续费 30%，90天归因窗口",
+    title: "按成交金额计佣",
+    desc: "首次 50%、窗口期续费 30%，按被推荐人的实际付费金额计算",
     color: "text-emerald-400",
     bg: "bg-emerald-400/10",
     border: "border-emerald-400/20",
   },
   {
     icon: Wallet,
-    title: "随时极速提现",
-    desc: "¥50起随时申请，实时到账微信零钱",
+    title: "满 ¥50 可提现",
+    desc: "申请后转账至微信零钱，需先绑定微信",
     color: "text-amber-400",
     bg: "bg-amber-400/10",
     border: "border-amber-400/20",
   },
   {
-    icon: Zap,
+    icon: Share2,
     title: "专属推广素材",
-    desc: "邀请链接、二维码海报、话术一键生成",
+    desc: "邀请链接、二维码海报一键生成",
     color: "text-purple-400",
     bg: "bg-purple-400/10",
     border: "border-purple-400/20",
   },
+  {
+    icon: Zap,
+    title: "免费加入",
+    desc: "不收取任何费用，没有加盟费、保证金或指定礼包",
+    color: "text-sky-400",
+    bg: "bg-sky-400/10",
+    border: "border-sky-400/20",
+  },
 ]
 
+/**
+ * 推广中心 · 加入页。
+ *
+ * ── 2026-09-29 合规改造（改这个文件之前先读）────────────────────────────────
+ *
+ * 这一页此前是「¥399 合伙人开通页」：正中央一张价格卡，按钮写"立即开通合伙人"。
+ * 那正是《禁止传销条例》第七条(二)「变相入门费」在**经营对象**层面的呈现 ——
+ * 用户付钱买到的是"发展他人加入的资格"。
+ *
+ * 现在改成**免费加入**：
+ *   · 没有任何价格、没有付款入口；
+ *   · 唯一的动作是"同意《推广合作协议》" → POST /api/partner/join
+ *     → 写入 partner_agreed_at（这是合规检查要看的留档证据）；
+ *   · 措辞严格限定为"按被推荐人的**实际付费金额**获得佣金"，
+ *     不出现"零风险""躺赚""月入过万""团队""下线"等词（禁用词清单见
+ *     docs/distribution-compliance.md 第七节）。
+ *
+ * ⚠️ 不要在这一页重新加入任何付费门槛或收益承诺。
+ */
 export default function PartnerJoin() {
   const router = useRouter()
   const [agreed, setAgreed] = useState(false)
@@ -48,21 +67,16 @@ export default function PartnerJoin() {
 
   async function handleJoin() {
     if (!agreed) {
-      toast.error("请先同意合伙人协议")
+      toast.error("请先阅读并同意《推广合作协议》")
       return
     }
     setLoading(true)
     try {
-      const res = await fetch("/api/payment/create-order", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ plan: "partner" }),
-      })
+      const res = await fetch("/api/partner/join", { method: "POST" })
       const data = await res.json()
-      if (!res.ok) throw new Error(data.error || "创建订单失败")
-      router.push(
-        `/home/store/checkout?out_trade_no=${data.out_trade_no}&plan=partner&code_url=${encodeURIComponent(data.code_url)}`
-      )
+      if (!res.ok) throw new Error(data.error || "加入失败")
+      toast.success("已加入推广计划")
+      router.refresh()
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "操作失败")
     } finally {
@@ -77,7 +91,7 @@ export default function PartnerJoin() {
         disabled={loading}
         className="w-full py-3.5 rounded-2xl bg-amber-500 hover:bg-amber-400 disabled:opacity-40 text-black font-bold text-base transition-colors"
       >
-        {loading ? "处理中..." : "立即开通合伙人"}
+        {loading ? "处理中..." : "免费加入推广计划"}
       </button>
       <label className="flex items-start gap-2.5 cursor-pointer">
         <input
@@ -89,13 +103,13 @@ export default function PartnerJoin() {
         <span className="text-muted-foreground text-[11px] leading-relaxed">
           我已阅读并同意{" "}
           <Link href="/partner-agreement" target="_blank" className="text-amber-400 underline underline-offset-2 hover:text-amber-300">
-            《合伙人推广合作协议》
+            《推广合作协议》
           </Link>
-          ，了解分销规则、冷静期及违规处理条款
+          ，了解佣金计算方式、冷静期与违规处理条款
         </span>
       </label>
       <p className="text-muted-foreground/50 text-[11px] text-center">
-        仅限单级分销，不支持多层分佣 · 付款后享永久权益
+        仅单级推广：A 推荐 B，A 按 B 的实际付费金额获得佣金；B 再推荐 C，A 不从 C 获得任何收益
       </p>
     </div>
   )
@@ -108,15 +122,17 @@ export default function PartnerJoin() {
       </div>
 
       {/* Main content — add bottom padding on mobile to clear sticky bar */}
-      <div className="px-4 sm:px-6 py-6 pb-[180px] md:pb-8 max-w-5xl mx-auto">
+      <div className="px-4 sm:px-6 py-6 pb-[200px] md:pb-8 max-w-5xl mx-auto">
 
         {/* Header row */}
         <div className="mb-6">
           <div className="inline-flex items-center gap-2 rounded-full bg-amber-500/10 border border-amber-500/30 px-3.5 py-1 text-xs font-medium text-amber-400 mb-3">
-            合伙人专属计划
+            免费加入 · 无需付费
           </div>
-          <h1 className="text-2xl sm:text-3xl font-bold">边学英语，边赚真金白银</h1>
-          <p className="text-muted-foreground text-sm mt-1">一次加入 · 永久权益 · 随时提现</p>
+          <h1 className="text-2xl sm:text-3xl font-bold">分享给朋友，按实际成交拿佣金</h1>
+          <p className="text-muted-foreground text-sm mt-1">
+            任何注册用户都可以加入，不收取任何费用
+          </p>
         </div>
 
         {/* Two-column layout on desktop */}
@@ -125,19 +141,7 @@ export default function PartnerJoin() {
           {/* Left column */}
           <div className="flex flex-col gap-4 md:w-[44%]">
 
-            {/* Price card */}
-            <div className="relative overflow-hidden bg-gradient-to-br from-amber-500/20 via-orange-500/10 to-transparent border border-amber-500/30 rounded-2xl p-5">
-              <div className="absolute top-0 right-0 w-32 h-32 bg-amber-500/5 rounded-full -translate-y-1/2 translate-x-1/2 blur-2xl" />
-              <div className="text-amber-400 text-xs font-semibold mb-2">合伙人终身会员</div>
-              <div className="flex items-baseline gap-1 mb-1">
-                <span className="text-muted-foreground text-sm">¥</span>
-                <span className="text-4xl font-extrabold text-foreground">399</span>
-                <span className="text-muted-foreground text-sm ml-1">一次性</span>
-              </div>
-              <p className="text-muted-foreground/70 text-xs">含全部会员权限 · 永久有效 · 无隐藏费用</p>
-            </div>
-
-            {/* Commission structure */}
+            {/* 佣金结构（替代原来的价格卡） */}
             <div className="bg-muted/40 border border-border rounded-2xl p-4">
               <div className="text-muted-foreground text-[11px] font-semibold uppercase tracking-wider mb-3">
                 佣金结构（注册后 90 天归因窗口内）
@@ -154,8 +158,22 @@ export default function PartnerJoin() {
                 </div>
               </div>
               <p className="text-muted-foreground/50 text-[10px] text-center mt-2.5">
-                90 天外付款不产生佣金 · 冷静期 15 天后佣金生效
+                佣金以被推荐人的实际付费金额为计算依据，不以发展人员数量计酬 ·
+                90 天外付款不产生佣金 · 冷静期 15 天后佣金可提现
               </p>
+            </div>
+
+            {/* 合规说明：主动声明规则，是检查时最有用的东西 */}
+            <div className="bg-muted/40 border border-border rounded-2xl p-4">
+              <div className="text-muted-foreground text-[11px] font-semibold uppercase tracking-wider mb-2">
+                推广规则
+              </div>
+              <ul className="text-[11px] text-muted-foreground space-y-1.5 leading-relaxed">
+                <li>· 免费加入，不收取加盟费、保证金、培训费，也不需要购买任何礼包</li>
+                <li>· 仅单级推广，不存在多层级或团队计酬</li>
+                <li>· 佣金按实际成交金额计算，退款或撤单会同步冲正</li>
+                <li>· 佣金收入需依法申报纳税，平台按规定履行扣缴与报送义务</li>
+              </ul>
             </div>
           </div>
 

@@ -1,0 +1,73 @@
+-- 00029_quarterly_plan.sql
+-- 定价补齐季度档：subscriptions.plan 与 payment_orders.plan 增加 'quarterly'
+--
+-- ── 背景 ────────────────────────────────────────────────────────────────────
+--
+-- 四档定价（2026-09-29 决策）：月 ¥29 / 季 ¥79 / 年 ¥199 / 终身 ¥499
+-- （原价分别为 ¥39 / ¥109 / ¥299 / ¥699，**原价是真实的续费价**，
+--  首期优惠只给新用户首次购买 —— 见 src/lib/pricing.ts 的文件头说明）。
+--
+-- 此前只有 monthly / yearly / partner 三档，¥29 与 ¥199 之间是空的：
+-- 用户要么接受 30 天，要么一次性付一年，中间没有台阶。
+--
+-- ── 枚举值追加在末尾 ────────────────────────────────────────────────────────
+--
+-- 与 00013 的约定一致：追加末位值只需改元数据，不必重建表；插在中间会让已有行的
+-- 枚举序号含义变化，需要重写全表。所以顺序是
+--   ('monthly','yearly','partner','quarterly')  ← quarterly 在最后
+-- src/lib/db/schema.ts 里的顺序与这里**必须完全一致**，否则 drizzle-kit push
+-- 生成的测试库会与生产出现无意义的结构差异（这正是 00013 记录过的坑）。
+--
+-- 注意：产品展示顺序（月/季/年/终身）由 src/lib/pricing.ts 的 PLANS 数组决定，
+-- 与数据库枚举顺序无关 —— 不要去为了让「SHOW CREATE TABLE 好看」而重建表。
+--
+-- ── partner 这个 key 为什么不改名 ───────────────────────────────────────────
+--
+-- 它的语义在 2026-09-29 已变为**纯「终身会员」**：推广资格从该商品解绑，
+-- 佣金对所有注册用户免费开放（见 docs/distribution-compliance.md）。
+-- 名字保留是刻意的取舍：一次横跨 DB 枚举 + 列名 + 约 10 处 UI 引用的纯重命名，
+-- 会让同一轮改动多出一个高风险、零用户价值的机械变更。
+-- 用户可见文案一律用 lib/pricing.ts 的 `label`（「终身会员」），不出现「合伙人」。
+--
+-- ── 安全性 ──────────────────────────────────────────────────────────────────
+--
+-- 纯扩展：只加值、不删值、不改已有值的顺序。
+--   · 存量行（monthly / yearly / partner）的枚举序号不变，数据零风险；
+--   · 旧代码在新枚举下照常工作（它只用那三个值）；
+--   · 新代码在旧枚举下会在插入 'quarterly' 时报错 —— 所以**先执行本 DDL 再部署代码**。
+--
+-- 实测两表都很小（subscriptions / payment_orders 均为个位数到几十行），
+-- 即便需要重建也瞬时完成。
+--
+-- ── 幂等性 ──────────────────────────────────────────────────────────────────
+--
+-- MODIFY COLUMN 重复执行不会报错（结果收敛到同一状态），可以安全重跑。
+--
+-- ── 校验 ────────────────────────────────────────────────────────────────────
+--
+--   SHOW COLUMNS FROM subscriptions  LIKE 'plan';
+--   SHOW COLUMNS FROM payment_orders LIKE 'plan';
+--     -- 两者的 Type 都应为 enum('monthly','yearly','partner','quarterly')
+--
+--   -- 存量数据是否完好（不应出现空值或 0）
+--   SELECT plan, COUNT(*) FROM subscriptions  GROUP BY plan;
+--   SELECT plan, COUNT(*) FROM payment_orders GROUP BY plan;
+--
+-- ── 回滚 ────────────────────────────────────────────────────────────────────
+--
+--   -- ⚠️ 先确认没有 quarterly 的行，否则会丢数据：
+--   SELECT COUNT(*) FROM subscriptions  WHERE plan = 'quarterly';
+--   SELECT COUNT(*) FROM payment_orders WHERE plan = 'quarterly';
+--
+--   ALTER TABLE subscriptions
+--     MODIFY COLUMN plan ENUM('monthly','yearly','partner') NOT NULL;
+--   ALTER TABLE payment_orders
+--     MODIFY COLUMN plan ENUM('monthly','yearly','partner') NOT NULL;
+--
+-- 是否需要手动执行：需要（仓库没有迁移执行器，见 db/README.md）。
+
+ALTER TABLE subscriptions
+  MODIFY COLUMN plan ENUM('monthly','yearly','partner','quarterly') NOT NULL;
+
+ALTER TABLE payment_orders
+  MODIFY COLUMN plan ENUM('monthly','yearly','partner','quarterly') NOT NULL;

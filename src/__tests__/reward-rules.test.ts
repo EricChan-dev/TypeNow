@@ -12,6 +12,7 @@
  */
 import { describe, it, expect } from "vitest"
 import { FREE_TRIAL_SENTENCES } from "@/lib/free-trial"
+import { COIN_COURSE_COMPLETE, COIN_LESSON_COMPLETE } from "@/lib/coins"
 import {
   COURSE_COMPLETE_REWARD,
   LESSON_COMPLETE_REWARD,
@@ -21,9 +22,17 @@ import {
 } from "@/lib/reward-rules"
 
 describe("奖励额度常量", () => {
-  it("与历史额度一致（改这个数会让线上流水对不上）", () => {
-    expect(LESSON_COMPLETE_REWARD).toBe(30)
+  it("单位是金币，额度为 课时 20 / 课程 100（2026-09-29 由钻石改为金币）", () => {
+    // 原值 30 / 100 是**钻石**口径。双货币拆分后练习奖励改发金币，
+    // 课时额度同时下调到 20 —— 金币是准现金（1000 金币 ≈ 1 天会员），
+    // 不能沿用钻石时代那种"随手给 30、100"的力度。
+    expect(LESSON_COMPLETE_REWARD).toBe(20)
     expect(COURSE_COMPLETE_REWARD).toBe(100)
+  })
+
+  it("与 lib/coins.ts 同源（不得各写一份数）", () => {
+    expect(LESSON_COMPLETE_REWARD).toBe(COIN_LESSON_COMPLETE)
+    expect(COURSE_COMPLETE_REWARD).toBe(COIN_COURSE_COMPLETE)
   })
 })
 

@@ -1,12 +1,12 @@
 "use client"
 
 import { useState, useEffect, useRef } from "react"
+import type { MemberTier } from "@/lib/pricing"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { X } from "lucide-react"
 import { isImmersivePracticeRoute } from "@/lib/immersive-route"
 
-type MemberTier = "trial" | "monthly" | "yearly" | "partner" | "free"
 
 interface ExpiryBannerProps {
   memberTier: MemberTier

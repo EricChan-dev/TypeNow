@@ -2,8 +2,8 @@
  * 链路三之二：打卡、钻石、任务、统计与词典
  *
  * 这些接口此前完全没有自动化覆盖，但都是首页/归档页/任务中心直接依赖的用户可见功能：
- *   - 打卡门槛（今日钻石 >= goal 才允许）
- *   - 钻石发放（句子/课时/课程三种来源、满分连击加成的口径与封顶）
+ *   - 打卡门槛（**今日练习句数** >= goal 才允许；2026-09-29 由"今日钻石"改口径）
+ *   - 金币发放（句子/课时/课程三种来源；练习奖励已由钻石改发金币）
  *   - 分享任务（同一上海日历日只能领一次）
  *   - 首页统计、归档统计、任务状态
  *   - 词典查询与句子解析缓存
@@ -16,26 +16,47 @@ import { ApiClient } from "./helpers/api"
 import { FIXTURE, seedFixtures, q, one } from "./helpers/db"
 import { insertUser, insertPractice } from "./helpers/factories"
 import { insertCourse, insertLesson, insertSentence } from "./helpers/content"
+import { FREE_TRIAL_SENTENCES } from "@/lib/free-trial"
 
-async function setDiamonds(userId: string, amount: number): Promise<void> {
-  await q("UPDATE users SET diamonds = ? WHERE id = ?", [amount, userId])
+/**
+ * 直接写一条金币流水（用于构造"首页统计/任务状态"这类只关心汇总的场景）。
+ *
+ * 注意 `date` 列是上海日历日的字符串：容器以 --default-time-zone=+08:00 启动，
+ * 所以 DATE(?) 就是上海日期，与路由里的 today 同源。
+ */
+async function insertCoinLog(userId: string, amount: number, type: string, date?: Date): Promise<void> {
+  const at = date ?? new Date()
+  await q(
+    `INSERT INTO coin_logs (id, user_id, amount, type, date, created_at)
+     VALUES (UUID(), ?, ?, ?, DATE(?), ?)`,
+    [userId, amount, type, at, at]
+  )
 }
 
-async function insertDiamondLog(userId: string, amount: number, type: string, date?: Date): Promise<void> {
-  await q(
-    `INSERT INTO diamond_logs (id, user_id, amount, type, created_at)
-     VALUES (UUID(), ?, ?, ?, ?)`,
-    [userId, amount, type, date ?? new Date()]
-  )
+/**
+ * 造 N 句「今天已练过」的记录（每句各不相同）。
+ *
+ * 打卡门槛现在是**当日练习句数**（去重到句子），所以「造钻石」那套写法已经无效 ——
+ * 必须真的写入 practice_records。date 可覆盖，用于验证"昨天的练习不计入今天"。
+ */
+async function seedPracticedSentences(userId: string, n: number, date?: Date): Promise<string[]> {
+  const ids: string[] = []
+  for (let i = 0; i < n; i++) {
+    const { sentenceId } = await insertSentence()
+    await insertPractice(userId, sentenceId, date ? { createdAt: date } : {})
+    ids.push(sentenceId)
+  }
+  return ids
 }
 
 /**
  * 造一个「已练完」的课时 / 课程：1 门已发布课程 + 1 个课时 + N 句，
  * 并按需写入练习记录。
  *
- * 为什么非会员只练前 3 句就算「练完」：/api/courses/sentences 对非会员
+ * 为什么非会员练前 N 句就算「练完」：/api/courses/sentences 对非会员
  * 只下发前 FREE_TRIAL_SENTENCES 句，完成门槛必须与下发口径同源
- * （见 src/lib/reward-rules.ts）。insertUser 默认 isPro=0，故默认门槛是 3。
+ * （见 src/lib/reward-rules.ts）。insertUser 默认 isPro=0，故门槛就是那个常量
+ * （2026-09-29 由 3 提到 5 —— 这里刻意引用常量而不是写死数字，避免再次漂移）。
  *
  * 这是 lesson_complete / course_complete 能领到奖的**唯一**合法前态 ——
  * 此前这两个奖励不校验 refId 与练习记录，随机字符串即可无限领奖。
@@ -57,7 +78,7 @@ async function seedCompletedLesson(
     })
     sentenceIds.push(sentenceId)
   }
-  const practiced = opts.practiced ?? Math.min(total, 3)
+  const practiced = opts.practiced ?? Math.min(total, FREE_TRIAL_SENTENCES)
   for (let i = 0; i < practiced; i++) {
     await insertPractice(userId, sentenceIds[i])
   }
@@ -73,88 +94,128 @@ describe("打卡 /api/home/check-in", () => {
     expect((await ApiClient.anonymous().post("/api/home/check-in")).status).toBe(401)
   })
 
-  it("今日钻石不足门槛 → 403 need_more_diamonds，并回传差额信息", async () => {
-    const userId = await insertUser({ name: "钻石不足" })
-    await q("UPDATE users SET check_in_goal = 50 WHERE id = ?", [userId])
-    await insertDiamondLog(userId, 10, "sentence")
+  it("今日练习句数不足门槛 → 403 need_more_practice，并回传差额信息", async () => {
+    // 2026-09-29 起门槛是「当日练习句数」，不再是「当日钻石数」——
+    // 后者在练习奖励改发金币后会恒为 0，导致打卡永久失败。
+    const userId = await insertUser({ name: "练习不足" })
+    await q("UPDATE users SET check_in_goal = 10 WHERE id = ?", [userId])
+    await seedPracticedSentences(userId, 3)
 
     const res = await ApiClient.asUser(userId).post<{
       error: string
-      todayDiamonds: number
+      todaySentences: number
       checkInGoal: number
+      remaining: number
     }>("/api/home/check-in")
     expect(res.status).toBe(403)
-    expect(res.body.error).toBe("need_more_diamonds")
-    expect(res.body.todayDiamonds).toBe(10)
-    expect(res.body.checkInGoal).toBe(50)
+    expect(res.body.error).toBe("need_more_practice")
+    expect(res.body.todaySentences).toBe(3)
+    expect(res.body.checkInGoal).toBe(10)
+    expect(res.body.remaining).toBe(7)
 
     const row = await one("SELECT id FROM check_ins WHERE user_id = ?", [userId])
     expect(row).toBeUndefined()
   })
 
-  it("达到门槛 → 打卡成功，连续天数从 1 开始", async () => {
+  it("达到门槛 → 打卡成功，连续天数从 1 开始，并发放金币", async () => {
     const userId = await insertUser({ name: "达标用户" })
-    await q("UPDATE users SET check_in_goal = 50 WHERE id = ?", [userId])
-    await insertDiamondLog(userId, 50, "lesson_complete")
+    await q("UPDATE users SET check_in_goal = 10 WHERE id = ?", [userId])
+    await seedPracticedSentences(userId, 10)
 
     const res = await ApiClient.asUser(userId).post<{
       success: boolean
       streakDays: number
       alreadyCheckedIn: boolean
+      coinsEarned: number
+      totalCoins: number
     }>("/api/home/check-in")
     expect(res.status).toBe(200)
     expect(res.body.success).toBe(true)
     expect(res.body.streakDays).toBe(1)
     expect(res.body.alreadyCheckedIn).toBe(false)
+    // 连续第 1 天 = 基数 10
+    expect(res.body.coinsEarned).toBe(10)
+    expect(res.body.totalCoins).toBe(10)
+
+    const log = await one<{ amount: number; type: string }>(
+      "SELECT amount, type FROM coin_logs WHERE user_id = ? ORDER BY created_at DESC LIMIT 1",
+      [userId]
+    )
+    expect(log?.type).toBe("check_in")
+    expect(Number(log?.amount)).toBe(10)
   })
 
-  it("重复打卡同一天：幂等，不产生第二行，streak 不叠加", async () => {
+  it("重复打卡同一天：幂等，不产生第二行，不重复发金币", async () => {
     const userId = await insertUser({ name: "重复打卡" })
     await q("UPDATE users SET check_in_goal = 10 WHERE id = ?", [userId])
-    await insertDiamondLog(userId, 10, "sentence")
+    await seedPracticedSentences(userId, 10)
 
     const api = ApiClient.asUser(userId)
-    const first = await api.post<{ streakDays: number; alreadyCheckedIn: boolean }>("/api/home/check-in")
-    const second = await api.post<{ streakDays: number; alreadyCheckedIn: boolean }>("/api/home/check-in")
+    const first = await api.post<{ streakDays: number; alreadyCheckedIn: boolean; coinsEarned: number }>("/api/home/check-in")
+    const second = await api.post<{ streakDays: number; alreadyCheckedIn: boolean; coinsEarned: number }>("/api/home/check-in")
 
     expect(first.body.alreadyCheckedIn).toBe(false)
     expect(second.body.alreadyCheckedIn).toBe(true)
     expect(first.body.streakDays).toBe(1)
     expect(second.body.streakDays).toBe(1)
+    // 第二次不再发金币（幂等靠 check_ins 的唯一键）
+    expect(first.body.coinsEarned).toBe(10)
+    expect(second.body.coinsEarned).toBe(0)
 
     const cnt = await one<{ c: number }>("SELECT COUNT(*) AS c FROM check_ins WHERE user_id = ?", [userId])
     expect(Number(cnt?.c)).toBe(1)
+
+    const coinCnt = await one<{ c: number; total: number }>(
+      "SELECT COUNT(*) AS c, COALESCE(SUM(amount),0) AS total FROM coin_logs WHERE user_id = ? AND type = 'check_in'",
+      [userId]
+    )
+    expect(Number(coinCnt?.c)).toBe(1)
+    expect(Number(coinCnt?.total)).toBe(10)
   })
 
-  it("连续打卡：昨天也打过 → streakDays = 2", async () => {
+  it("连续打卡：昨天也打过 → streakDays = 2，且奖励按连击递增", async () => {
     const userId = await insertUser({ name: "连续打卡" })
     await q("UPDATE users SET check_in_goal = 10 WHERE id = ?", [userId])
-    await insertDiamondLog(userId, 10, "sentence")
+    await seedPracticedSentences(userId, 10)
     await q("INSERT INTO check_ins (id, user_id, date) VALUES (UUID(), ?, DATE_SUB(CURDATE(), INTERVAL 1 DAY))", [
       userId,
     ])
 
-    const res = await ApiClient.asUser(userId).post<{ streakDays: number }>("/api/home/check-in")
+    const res = await ApiClient.asUser(userId).post<{ streakDays: number; coinsEarned: number }>("/api/home/check-in")
     expect(res.body.streakDays).toBe(2)
+    // 连续第 2 天 = 10 + 2 = 12
+    expect(res.body.coinsEarned).toBe(12)
   })
 
-  it("门槛按「上海日历日」统计：昨天的钻石不计入今天", async () => {
-    const userId = await insertUser({ name: "跨日钻石" })
+  it("门槛按「上海日历日」统计：昨天的练习不计入今天", async () => {
+    const userId = await insertUser({ name: "跨日练习" })
     await q("UPDATE users SET check_in_goal = 10 WHERE id = ?", [userId])
-    await insertDiamondLog(userId, 100, "sentence", new Date(Date.now() - 36 * 3600_000))
+    await seedPracticedSentences(userId, 10, new Date(Date.now() - 36 * 3600_000))
 
     const res = await ApiClient.asUser(userId).post<{
       error: string
-      todayDiamonds: number
+      todaySentences: number
     }>("/api/home/check-in")
     expect(res.status).toBe(403)
-    expect(res.body.todayDiamonds).toBe(0)
+    expect(res.body.todaySentences).toBe(0)
+  })
+
+  it("同一句反复练只算一句（门槛要的是真学，不是刷同一句）", async () => {
+    const userId = await insertUser({ name: "刷同一句" })
+    await q("UPDATE users SET check_in_goal = 3 WHERE id = ?", [userId])
+    const { sentenceId } = await insertSentence()
+    for (let i = 0; i < 5; i++) await insertPractice(userId, sentenceId)
+
+    const res = await ApiClient.asUser(userId).post<{ todaySentences: number }>("/api/home/check-in")
+    expect(res.body.todaySentences).toBe(1)
+    // 只有 1 句 < 门槛 3 → 不该打上卡
+    expect(res.status).toBe(403)
   })
 })
 
-describe("钻石发放 /api/diamonds/earn", () => {
+describe("金币发放 /api/coins/earn", () => {
   it("未登录 → 401；type 非法 / 缺 refId → 400", async () => {
-    expect((await ApiClient.anonymous().post("/api/diamonds/earn", { type: "sentence", refId: "x" })).status).toBe(401)
+    expect((await ApiClient.anonymous().post("/api/coins/earn", { type: "sentence", refId: "x" })).status).toBe(401)
 
     const api = ApiClient.asUser(FIXTURE.userFree)
     for (const body of [
@@ -164,47 +225,47 @@ describe("钻石发放 /api/diamonds/earn", () => {
       { type: "sentence", refId: "" },
       { type: "sentence", refId: 123 },
     ]) {
-      expect((await api.post("/api/diamonds/earn", body)).status).toBe(400)
+      expect((await api.post("/api/coins/earn", body)).status).toBe(400)
     }
   })
 
   it("sentence：没有本人练习记录 → 403，不发钻石", async () => {
     const userId = await insertUser({ name: "没练过" })
-    const res = await ApiClient.asUser(userId).post<{ error: string }>("/api/diamonds/earn", {
+    const res = await ApiClient.asUser(userId).post<{ error: string }>("/api/coins/earn", {
       type: "sentence",
       refId: "00000000-0000-4000-8000-0000000000ff",
     })
     expect(res.status).toBe(403)
     expect(res.body.error).toBe("未找到练习记录，无法发放奖励")
 
-    const user = await one<{ diamonds: number }>("SELECT diamonds FROM users WHERE id = ?", [userId])
-    expect(Number(user?.diamonds)).toBe(0)
+    const user = await one<{ coins: number }>("SELECT coins FROM users WHERE id = ?", [userId])
+    expect(Number(user?.coins)).toBe(0)
   })
 
-  it("sentence：有错题 → 5 颗；满分且无连击 → 也是 5 颗", async () => {
+  it("sentence：有错题 → 1 枚；满分 → 2 枚（金币，不再是钻石）", async () => {
     const userId = await insertUser({ name: "基础奖励" })
     const { sentenceId } = await insertSentence()
 
     await insertPractice(userId, sentenceId, { mistakes: 2 })
-    const flawed = await ApiClient.asUser(userId).post<{ earned: number; totalDiamonds: number }>(
-      "/api/diamonds/earn",
+    const flawed = await ApiClient.asUser(userId).post<{ earned: number; totalCoins: number }>(
+      "/api/coins/earn",
       { type: "sentence", refId: sentenceId }
     )
-    expect(flawed.body.earned).toBe(5)
-    expect(flawed.body.totalDiamonds).toBe(5)
+    expect(flawed.body.earned).toBe(1)
+    expect(flawed.body.totalCoins).toBe(1)
 
-    // 另一个句子，满分但前面没有连续满分记录 → streak=1 → 5 颗
+    // 另一个句子，满分 → 2 枚
     const second = await insertSentence()
     await insertPractice(userId, second.sentenceId, { mistakes: 0 })
-    const perfect = await ApiClient.asUser(userId).post<{ earned: number; totalDiamonds: number }>(
-      "/api/diamonds/earn",
+    const perfect = await ApiClient.asUser(userId).post<{ earned: number; totalCoins: number }>(
+      "/api/coins/earn",
       { type: "sentence", refId: second.sentenceId }
     )
-    expect(perfect.body.earned).toBe(5)
-    expect(perfect.body.totalDiamonds).toBe(10)
+    expect(perfect.body.earned).toBe(2)
+    expect(perfect.body.totalCoins).toBe(3)
   })
 
-  it("sentence：连续满分给加成，且封顶 20（5 + min(streak,20)）", async () => {
+  it("sentence：连击**不再**提高额度（固定 1/2），但 streak 仍照实记录", async () => {
     const userId = await insertUser({ name: "连击用户" })
     const ids: string[] = []
     for (let i = 0; i < 4; i++) {
@@ -218,58 +279,61 @@ describe("钻石发放 /api/diamonds/earn", () => {
       await insertPractice(userId, ids[i], { mistakes: 0, score: 10, createdAt: new Date(base + i * 1000) })
     }
 
-    const res = await ApiClient.asUser(userId).post<{ earned: number }>("/api/diamonds/earn", {
+    const res = await ApiClient.asUser(userId).post<{ earned: number }>("/api/coins/earn", {
       type: "sentence",
       refId: ids[3],
     })
-    // streak = 4 → 5 + min(4,20) = 9
-    expect(res.body.earned).toBe(9)
+    // 2026-09-29 起金额与连击解耦：满分就是 2 枚。
+    // 理由：金币是准现金（1000 金币 = 1 天会员），沿用钻石时代"连击越高给越多
+    // （最高 25）"的力度会把兑换门槛直接刷穿。
+    expect(res.body.earned).toBe(2)
 
     const log = await one<{ streak: number; amount: number }>(
-      "SELECT streak, amount FROM diamond_logs WHERE user_id = ? ORDER BY created_at DESC LIMIT 1",
+      "SELECT streak, amount FROM coin_logs WHERE user_id = ? ORDER BY created_at DESC LIMIT 1",
       [userId]
     )
+    // streak 仍然记录下来（教学反馈 + 审计），只是不再影响金额
     expect(Number(log?.streak)).toBe(4)
-    expect(Number(log?.amount)).toBe(9)
+    expect(Number(log?.amount)).toBe(2)
   })
 
-  it("lesson_complete → 30；course_complete → 100（须真实练完）", async () => {
+  it("lesson_complete → 20；course_complete → 100（须真实练完）", async () => {
     const userId = await insertUser({ name: "课时课程奖励" })
     const api = ApiClient.asUser(userId)
     const { courseId, lessonId } = await seedCompletedLesson(userId)
 
-    const lesson = await api.post<{ earned: number; totalDiamonds: number }>("/api/diamonds/earn", {
+    const lesson = await api.post<{ earned: number; totalCoins: number }>("/api/coins/earn", {
       type: "lesson_complete",
       refId: lessonId,
     })
-    expect(lesson.body.earned).toBe(30)
+    expect(lesson.body.earned).toBe(20)
 
-    const course = await api.post<{ earned: number; totalDiamonds: number }>("/api/diamonds/earn", {
+    const course = await api.post<{ earned: number; totalCoins: number }>("/api/coins/earn", {
       type: "course_complete",
       refId: courseId,
     })
     expect(course.body.earned).toBe(100)
-    expect(course.body.totalDiamonds).toBe(130)
+    expect(course.body.totalCoins).toBe(120)
   })
 
   it("回归：不存在的 refId 一律 403，不发钻石", async () => {
     const userId = await insertUser({ name: "伪造refId" })
     const api = ApiClient.asUser(userId)
 
-    const lesson = await api.post("/api/diamonds/earn", {
+    const lesson = await api.post("/api/coins/earn", {
       type: "lesson_complete",
       refId: "lesson-1",
     })
     expect(lesson.status).toBe(403)
 
-    const course = await api.post("/api/diamonds/earn", {
+    const course = await api.post("/api/coins/earn", {
       type: "course_complete",
       refId: "course-1",
     })
     expect(course.status).toBe(403)
 
-    const user = await one<{ diamonds: number }>("SELECT diamonds FROM users WHERE id = ?", [userId])
-    expect(Number(user?.diamonds)).toBe(0)
+    const user = await one<{ coins: number }>("SELECT coins FROM users WHERE id = ?", [userId])
+    expect(Number(user?.coins)).toBe(0)
   })
 
   it("回归：课时/课程为真但一句都没练 → 403（原漏洞可无限领奖）", async () => {
@@ -277,13 +341,13 @@ describe("钻石发放 /api/diamonds/earn", () => {
     const api = ApiClient.asUser(userId)
     const { courseId, lessonId } = await seedCompletedLesson(userId, { practiced: 0 })
 
-    const lesson = await api.post("/api/diamonds/earn", {
+    const lesson = await api.post("/api/coins/earn", {
       type: "lesson_complete",
       refId: lessonId,
     })
     expect(lesson.status).toBe(403)
 
-    const course = await api.post("/api/diamonds/earn", {
+    const course = await api.post("/api/coins/earn", {
       type: "course_complete",
       refId: courseId,
     })
@@ -292,12 +356,12 @@ describe("钻石发放 /api/diamonds/earn", () => {
     // 换一串随机 refId 反复领，也一颗都拿不到：去重键含 refId，
     // 若 refId 不被校验，这里每一次都会成功（原漏洞的形状）。
     for (let i = 0; i < 5; i++) {
-      await api.post("/api/diamonds/earn", { type: "lesson_complete", refId: `rand-${i}` })
-      await api.post("/api/diamonds/earn", { type: "course_complete", refId: `rand-c-${i}` })
+      await api.post("/api/coins/earn", { type: "lesson_complete", refId: `rand-${i}` })
+      await api.post("/api/coins/earn", { type: "course_complete", refId: `rand-c-${i}` })
     }
 
-    const user = await one<{ diamonds: number }>("SELECT diamonds FROM users WHERE id = ?", [userId])
-    expect(Number(user?.diamonds)).toBe(0)
+    const user = await one<{ coins: number }>("SELECT coins FROM users WHERE id = ?", [userId])
+    expect(Number(user?.coins)).toBe(0)
   })
 
   it("回归：课时未练满（会员口径）→ 403；练满 → 通过", async () => {
@@ -306,7 +370,7 @@ describe("钻石发放 /api/diamonds/earn", () => {
     // 会员门槛是整课 5 句（非会员才是 3 句），先只练 3 句
     const { lessonId, sentenceIds } = await seedCompletedLesson(userId, { sentences: 5, practiced: 3 })
 
-    const short = await api.post("/api/diamonds/earn", {
+    const short = await api.post("/api/coins/earn", {
       type: "lesson_complete",
       refId: lessonId,
     })
@@ -316,35 +380,35 @@ describe("钻石发放 /api/diamonds/earn", () => {
     await insertPractice(userId, sentenceIds[3])
     await insertPractice(userId, sentenceIds[4])
 
-    const full = await api.post<{ earned: number }>("/api/diamonds/earn", {
+    const full = await api.post<{ earned: number }>("/api/coins/earn", {
       type: "lesson_complete",
       refId: lessonId,
     })
-    expect(full.body.earned).toBe(30)
+    expect(full.body.earned).toBe(20)
   })
 
-  it("同一天同一 refId 重复领取 → alreadyClaimed，钻石不重复增加", async () => {
+  it("同一天同一 refId 重复领取 → alreadyClaimed，金币不重复增加", async () => {
     const userId = await insertUser({ name: "重复领取" })
     const api = ApiClient.asUser(userId)
     const { lessonId } = await seedCompletedLesson(userId)
 
-    const first = await api.post<{ earned: number; alreadyClaimed: boolean }>("/api/diamonds/earn", {
+    const first = await api.post<{ earned: number; alreadyClaimed: boolean }>("/api/coins/earn", {
       type: "lesson_complete",
       refId: lessonId,
     })
-    expect(first.body.earned).toBe(30)
+    expect(first.body.earned).toBe(20)
     expect(first.body.alreadyClaimed).toBe(false)
 
-    const second = await api.post<{ earned: number; alreadyClaimed: boolean; totalDiamonds: number }>(
-      "/api/diamonds/earn",
+    const second = await api.post<{ earned: number; alreadyClaimed: boolean; totalCoins: number }>(
+      "/api/coins/earn",
       { type: "lesson_complete", refId: lessonId }
     )
     expect(second.body.earned).toBe(0)
     expect(second.body.alreadyClaimed).toBe(true)
-    expect(second.body.totalDiamonds).toBe(30)
+    expect(second.body.totalCoins).toBe(20)
 
     const cnt = await one<{ c: number }>(
-      "SELECT COUNT(*) AS c FROM diamond_logs WHERE user_id = ? AND ref_id = ?",
+      "SELECT COUNT(*) AS c FROM coin_logs WHERE user_id = ? AND ref_id = ?",
       [userId, lessonId]
     )
     expect(Number(cnt?.c)).toBe(1)
@@ -357,7 +421,7 @@ describe("钻石发放 /api/diamonds/earn", () => {
 
     const results = await Promise.all(
       Array.from({ length: 5 }, () =>
-        api.post<{ earned: number; alreadyClaimed: boolean }>("/api/diamonds/earn", {
+        api.post<{ earned: number; alreadyClaimed: boolean }>("/api/coins/earn", {
           type: "course_complete",
           refId: courseId,
         })
@@ -366,8 +430,8 @@ describe("钻石发放 /api/diamonds/earn", () => {
     const earnedCount = results.filter((r) => r.body.earned === 100).length
     expect(earnedCount).toBe(1)
 
-    const user = await one<{ diamonds: number }>("SELECT diamonds FROM users WHERE id = ?", [userId])
-    expect(Number(user?.diamonds)).toBe(100)
+    const user = await one<{ coins: number }>("SELECT coins FROM users WHERE id = ?", [userId])
+    expect(Number(user?.coins)).toBe(100)
   })
 
   it("durationSeconds 非法一律落 NULL，超长被截断到 24 小时", async () => {
@@ -377,41 +441,42 @@ describe("钻石发放 /api/diamonds/earn", () => {
     const first = await seedCompletedLesson(userId)
     const second = await seedCompletedLesson(userId)
 
-    const invalid = await api.post("/api/diamonds/earn", {
+    const invalid = await api.post("/api/coins/earn", {
       type: "course_complete",
       refId: first.courseId,
       durationSeconds: "abc",
     })
     expect(invalid.status).toBe(200)
     const bad = await one<{ duration_seconds: number | null }>(
-      "SELECT duration_seconds FROM diamond_logs WHERE ref_id = ?",
+      "SELECT duration_seconds FROM coin_logs WHERE ref_id = ?",
       [first.courseId]
     )
     expect(bad?.duration_seconds).toBeNull()
 
-    await api.post("/api/diamonds/earn", {
+    await api.post("/api/coins/earn", {
       type: "course_complete",
       refId: second.courseId,
       durationSeconds: 999_999,
     })
     const long = await one<{ duration_seconds: number }>(
-      "SELECT duration_seconds FROM diamond_logs WHERE ref_id = ?",
+      "SELECT duration_seconds FROM coin_logs WHERE ref_id = ?",
       [second.courseId]
     )
     expect(Number(long?.duration_seconds)).toBe(24 * 60 * 60)
   })
 
-  it("todayDiamonds / todayDurationSeconds 按上海日历日汇总", async () => {
+  it("todayCoins / todayDurationSeconds 按上海日历日汇总", async () => {
     const userId = await insertUser({ name: "今日汇总" })
-    await insertDiamondLog(userId, 7, "sentence", new Date(Date.now() - 36 * 3600_000)) // 昨天
-    await insertDiamondLog(userId, 3, "sentence", new Date())
+    await insertCoinLog(userId, 7, "sentence", new Date(Date.now() - 36 * 3600_000)) // 昨天
+    await insertCoinLog(userId, 3, "sentence", new Date())
     const { courseId } = await seedCompletedLesson(userId)
 
-    const res = await ApiClient.asUser(userId).post<{ todayDiamonds: number }>("/api/diamonds/earn", {
+    const res = await ApiClient.asUser(userId).post<{ todayCoins: number }>("/api/coins/earn", {
       type: "course_complete",
       refId: courseId,
     })
-    expect(res.body.todayDiamonds).toBe(103)
+    // 昨天那 7 枚不计入；今天 3 + 课程 100 = 103
+    expect(res.body.todayCoins).toBe(103)
   })
 })
 
@@ -421,7 +486,7 @@ describe("分享任务 /api/tasks/share 与 /api/tasks/status", () => {
     expect((await ApiClient.anonymous().get("/api/tasks/status")).status).toBe(401)
   })
 
-  it("首次分享得 10 钻石，重复分享不再发放", async () => {
+  it("首次分享得 5 枚金币，重复分享不再发放", async () => {
     const userId = await insertUser({ name: "分享用户", inviteCode: "SHARE001" })
     const api = ApiClient.asUser(userId)
 
@@ -432,18 +497,18 @@ describe("分享任务 /api/tasks/share 与 /api/tasks/status", () => {
     const second = await api.post<Record<string, unknown>>("/api/tasks/share")
     expect(second.status).toBe(200)
 
-    const user = await one<{ diamonds: number }>("SELECT diamonds FROM users WHERE id = ?", [userId])
-    expect(Number(user?.diamonds)).toBe(10)
+    const user = await one<{ coins: number }>("SELECT coins FROM users WHERE id = ?", [userId])
+    expect(Number(user?.coins)).toBe(5)
   })
 
-  it("并发分享：只会发一次 10 钻石", async () => {
+  it("并发分享：只会发一次 5 枚金币", async () => {
     const userId = await insertUser({ name: "并发分享" })
     const api = ApiClient.asUser(userId)
 
     await Promise.all(Array.from({ length: 5 }, () => api.post("/api/tasks/share")))
 
-    const user = await one<{ diamonds: number }>("SELECT diamonds FROM users WHERE id = ?", [userId])
-    expect(Number(user?.diamonds)).toBe(10)
+    const user = await one<{ coins: number }>("SELECT coins FROM users WHERE id = ?", [userId])
+    expect(Number(user?.coins)).toBe(5)
     const cnt = await one<{ c: number }>(
       "SELECT COUNT(*) AS c FROM task_logs WHERE user_id = ? AND task_type = 'share_invite'",
       [userId]
@@ -451,13 +516,13 @@ describe("分享任务 /api/tasks/share 与 /api/tasks/status", () => {
     expect(Number(cnt?.c)).toBe(1)
   })
 
-  it("任务状态：打卡/分享/邀请数/邀请码/钻石数各项口径", async () => {
+  it("任务状态：打卡/分享/邀请数/邀请码/金币数各项口径", async () => {
     const userId = await insertUser({ name: "任务状态", inviteCode: "STATUS01", isPro: 1 })
-    await q("UPDATE users SET diamonds = 88 WHERE id = ?", [userId])
+    await q("UPDATE users SET coins = 88 WHERE id = ?", [userId])
     await q("INSERT INTO check_ins (id, user_id, date) VALUES (UUID(), ?, CURDATE())", [userId])
     await q(
       `INSERT INTO task_logs (id, user_id, task_type, reward_type, reward_amount, date)
-       VALUES (UUID(), ?, 'share_invite', 'diamond', 10, CURDATE())`,
+       VALUES (UUID(), ?, 'share_invite', 'coin', 5, CURDATE())`,
       [userId]
     )
     await q(
@@ -471,14 +536,14 @@ describe("分享任务 /api/tasks/share 与 /api/tasks/status", () => {
       share: boolean
       inviteTotal: number
       inviteCode: string | null
-      diamonds: number
+      coins: number
     }>("/api/tasks/status")
     expect(res.status).toBe(200)
     expect(res.body.checkIn).toBe(true)
     expect(res.body.share).toBe(true)
     expect(res.body.inviteTotal).toBe(1)
     expect(res.body.inviteCode).toBe("STATUS01")
-    expect(res.body.diamonds).toBe(88)
+    expect(res.body.coins).toBe(88)
   })
 
   it("任务状态：什么都没做时全为否，且只看得到自己的记录", async () => {
@@ -490,12 +555,12 @@ describe("分享任务 /api/tasks/share 与 /api/tasks/status", () => {
       checkIn: boolean
       share: boolean
       inviteTotal: number
-      diamonds: number
+      coins: number
     }>("/api/tasks/status")
     expect(res.body.checkIn).toBe(false)
     expect(res.body.share).toBe(false)
     expect(res.body.inviteTotal).toBe(0)
-    expect(res.body.diamonds).toBe(0)
+    expect(res.body.coins).toBe(0)
   })
 })
 
@@ -507,7 +572,9 @@ describe("统计 /api/home/stats 与 /api/archive/stats", () => {
 
   it("home/stats：总数、今日、连续天数、待复习数与目标", async () => {
     const userId = await insertUser({ name: "统计用户" })
-    await q("UPDATE users SET check_in_goal = 60 WHERE id = ?", [userId])
+    // 打卡目标的合法区间是 1~50（见 lib/coins.ts 的 clampCheckInGoal），
+    // 旧值 60 属"钻石数"时代，在新语义下会被夹到 50。
+    await q("UPDATE users SET check_in_goal = 25 WHERE id = ?", [userId])
 
     const { sentenceId } = await insertSentence()
     await insertPractice(userId, sentenceId, { mistakes: 0, score: 10 })
@@ -525,7 +592,7 @@ describe("统计 /api/home/stats 与 /api/archive/stats", () => {
       pendingReviews: number
       checkInGoal: number
       checkedInToday: boolean
-      todayDiamonds: number
+      todaySentences: number
     }>("/api/home/stats")
 
     expect(res.status).toBe(200)
@@ -533,7 +600,7 @@ describe("统计 /api/home/stats 与 /api/archive/stats", () => {
     expect(res.body.todayCount).toBe(1)
     expect(res.body.streakDays).toBe(1)
     expect(res.body.pendingReviews).toBe(1)
-    expect(res.body.checkInGoal).toBe(60)
+    expect(res.body.checkInGoal).toBe(25)
     expect(res.body.checkedInToday).toBe(true)
   })
 
@@ -554,7 +621,7 @@ describe("统计 /api/home/stats 与 /api/archive/stats", () => {
     expect(res.body.streakDays).toBe(0)
     expect(res.body.pendingReviews).toBe(0)
     expect(res.body.checkedInToday).toBe(false)
-    // heatmap 是「日期 → 钻石」的对象，不是数组
+    // heatmap 是「日期 → 当日获得金币」的对象，不是数组
     expect(res.body.heatmap).toEqual({})
     expect(Array.isArray(res.body.weekly)).toBe(true)
   })

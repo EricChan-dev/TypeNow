@@ -272,8 +272,8 @@ async function main() {
     const anonRecord = await call("POST", "/api/practice/record", { body: { sentenceId: "x" } })
     eq("未登录 POST /api/practice/record → 401", anonRecord.status, 401)
 
-    const anonEarn = await call("POST", "/api/diamonds/earn", { body: { type: "sentence", refId: "x" } })
-    eq("未登录 POST /api/diamonds/earn → 401", anonEarn.status, 401)
+    const anonEarn = await call("POST", "/api/coins/earn", { body: { type: "sentence", refId: "x" } })
+    eq("未登录 POST /api/coins/earn → 401", anonEarn.status, 401)
 
     const me = await call("GET", "/api/auth/me", { cookie })
     eq("已登录 GET /api/auth/me → 200", me.status, 200)
@@ -365,7 +365,7 @@ async function main() {
     eq("weekly 末项练习数 = 11", weekly[weekly.length - 1]?.count, 11)
     eq("weekly 其余 6 天为 0", weekly.slice(0, 6).reduce((a, b) => a + b.count, 0), 0)
 
-    // 热力图口径来自 diamond_logs，此时还没发钻石，应为空
+    // 热力图口径来自 coin_logs，此时还没发金币，应为空
     const heatmapBefore = (stats.json?.heatmap as Record<string, number> | undefined) ?? {}
     eq("发放奖励前 heatmap 为空", Object.keys(heatmapBefore).length, 0)
 
@@ -389,8 +389,8 @@ async function main() {
     const stats2 = await call("GET", "/api/home/stats", { cookie })
     eq("pendingReviews = 3", stats2.json?.pendingReviews, 3)
 
-    // ── F. 钻石发放由服务端权威推导 ─────────────────────────────────────────
-    section("[F] 钻石发放 — 服务端权威推导，不可伪造")
+    // ── F. 金币发放由服务端权威推导 ─────────────────────────────────────────
+    section("[F] 金币发放 — 服务端权威推导，不可伪造")
     // 把「最近一条练习记录」钉成一个确定的非满分记录，从而锁定 streak=1。
     // 需要这一步是因为 practice_records.created_at 是秒级 DATETIME：同一秒内写入的
     // 多条记录 ORDER BY created_at DESC 顺序不稳定，而 perfect streak 恰恰依赖这个顺序
@@ -398,12 +398,12 @@ async function main() {
     await sleep(1100)
     await call("POST", "/api/practice/record", { cookie, body: { sentenceId: ids[8], mistakes: 5 } })
 
-    const earn1 = await call("POST", "/api/diamonds/earn", {
+    const earn1 = await call("POST", "/api/coins/earn", {
       cookie,
       body: { type: "sentence", refId: ids[0], durationSeconds: 42 },
     })
     eq("已练习的句子可领奖 → 200", earn1.status, 200)
-    eq("首句满分奖励 = 5", earn1.json?.earned, 5)
+    eq("首句满分奖励 = 2（金币；连击不再加成）", earn1.json?.earned, 2)
     eq("首次领取 alreadyClaimed = false", earn1.json?.alreadyClaimed, false)
 
     warn(
@@ -411,21 +411,21 @@ async function main() {
       "perfect streak 与首页「最近学习」都依赖 ORDER BY created_at DESC；秒内并发写入时会取到任意顺序",
     )
 
-    const earn2 = await call("POST", "/api/diamonds/earn", {
+    const earn2 = await call("POST", "/api/coins/earn", {
       cookie,
       body: { type: "sentence", refId: ids[0] },
     })
     eq("同一句重复领取 earned = 0", earn2.json?.earned, 0)
     eq("同一句重复领取 alreadyClaimed = true", earn2.json?.alreadyClaimed, true)
 
-    // 旧实现直接采信请求体里的 perfect/streak，可无限刷钻石
-    const forgedEarn = await call("POST", "/api/diamonds/earn", {
+    // 旧实现直接采信请求体里的 perfect/streak，可无限刷奖励
+    const forgedEarn = await call("POST", "/api/coins/earn", {
       cookie,
       body: { type: "sentence", refId: ids[1], perfect: true, streak: 999 },
     })
-    eq("伪造 streak=999 不生效（仍为 5）", forgedEarn.json?.earned, 5)
+    eq("伪造 streak=999 不生效（仍为 2）", forgedEarn.json?.earned, 2)
 
-    const noRecord = await call("POST", "/api/diamonds/earn", {
+    const noRecord = await call("POST", "/api/coins/earn", {
       cookie,
       body: { type: "sentence", refId: crypto.randomUUID() },
     })
@@ -436,7 +436,7 @@ async function main() {
     // 真实客户端在同一个提交里并发发出 record 和 earn，且都不 await，
     // 所以「领奖」可能比「落库」早到。服务端用 0.8s 重试窗口兜住它。
     const raceId = ids[9]
-    const earnPromise = call("POST", "/api/diamonds/earn", {
+    const earnPromise = call("POST", "/api/coins/earn", {
       cookie,
       body: { type: "sentence", refId: raceId },
     })
@@ -448,7 +448,7 @@ async function main() {
     const [raceEarn, raceRecord] = await Promise.all([earnPromise, recordPromise])
     eq("竞态下练习记录仍成功", raceRecord.status, 200)
     eq("竞态下领奖仍成功（重试窗口生效）→ 200", raceEarn.status, 200)
-    gt("竞态下确实发出了钻石", Number(raceEarn.json?.earned ?? 0), 0)
+    gt("竞态下确实发出了金币", Number(raceEarn.json?.earned ?? 0), 0)
 
     // ── H. 付费墙 ───────────────────────────────────────────────────────────
     section("[H] 付费墙 — 免费用户必须被挡在课程外")

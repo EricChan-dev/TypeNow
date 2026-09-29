@@ -6,6 +6,7 @@ import { X, Send, Bot, Loader2, Gem } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { isImmersivePracticeRoute } from "@/lib/immersive-route"
 import { subscribeOpenAiChat } from "@/lib/ai-chat"
+import { FREE_AI_CHAT_PER_DAY, MEMBER_DAILY_DIAMONDS } from "@/lib/membership-benefits"
 
 interface Message {
   role: "user" | "assistant"
@@ -113,7 +114,13 @@ export function AiChatWidget() {
       if (res.status === 402 || data.error === "diamond_insufficient") {
         setMessages((prev) => [
           ...prev,
-          { role: "assistant", content: "💎 钻石不足，去练习打字赚钻石吧！每完成一句可获得钻石。" },
+          {
+            role: "assistant",
+            // 2026-09-29 双货币拆分后，**练习不再产出钻石**（改发金币），
+            // 所以旧文案「去练习打字赚钻石」已经是一条错误指引 —— 用户照做也拿不到。
+            // 钻石现在只有两个来源：会员每日赠送、未来充值。
+            content: `💎 今天的免费问答次数和钻石都用完了。钻石由会员每天赠送（${MEMBER_DAILY_DIAMONDS} 颗/天），开通会员后可以继续提问；免费用户每天有 ${FREE_AI_CHAT_PER_DAY} 次免费问答。`,
+          },
         ])
         return
       }

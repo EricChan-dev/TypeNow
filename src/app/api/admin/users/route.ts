@@ -109,6 +109,7 @@ export async function GET(request: Request) {
         role: users.role,
         level: users.level,
         diamonds: users.diamonds,
+        coins: users.coins,
         isPartner: users.isPartner,
         referredBy: users.referredBy,
         wechatOpenid: users.wechatOpenid,

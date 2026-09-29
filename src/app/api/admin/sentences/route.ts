@@ -30,11 +30,18 @@ import { eq, like, or, and, sql, asc, desc, type SQL } from "drizzle-orm"
  *
  * 搜索（`q`）**必须带课时范围**：
  *   `chinese LIKE '%词%'` 是前导通配符，B-tree 索引用不上。带 lessonId 时只扫
- *   那一课的几十行；不带时要在 46 万行 / 2.9GB 上全表扫（实测 1.3s 起，
- *   生僻词或冷缓存会到 25s 以上，还会把这台共享机器的 I/O 打满）。
- *   所以这里直接拒绝并说明原因，而不是让人对着转圈等 25 秒 ——
- *   真正的全库模糊搜索需要 FULLTEXT + ngram 分词，那是另一次改动
- *   （见 db/migrations/00015 的说明）。
+ *   那一课的几十行；不带时要在 46 万行 / 2.9GB 上全表扫。
+ *
+ *   2026-09-29 在生产库用 SHOW PROFILES 实测服务端耗时：
+ *     带 lesson_id + LIKE          → 0.0027 秒
+ *     全库 LIKE '%天气%'           → 12.41 秒
+ *     全库 LIKE '%中华人民共和国%'  →  5.67 秒
+ *   （早先记为「1.3 秒起」偏乐观，5.67 秒才是下界。EXPLAIN 确认 type=ALL。）
+ *
+ *   所以这里直接拒绝并说明原因，而不是让人对着转圈等十几秒 ——
+ *   真正的全库模糊搜索需要 FULLTEXT + ngram 分词，那是另一次需要维护窗口的改动
+ *   （见 db/migrations/00015 的说明，以及 docs/TODO.md §三 里的坑：
+ *   `ngram_token_size=2` 意味着单字搜索仍不走索引，且必须用 BOOLEAN MODE）。
  *
  * 写操作会失效总数缓存：否则列表与仪表盘上的总数在 10 分钟 TTL 内不含
  * 刚加的这一句，看起来像"保存没生效"。
@@ -62,7 +69,8 @@ export async function GET(request: Request) {
     return NextResponse.json(
       {
         error:
-          "全库搜索会扫描 46 万行句子（实测 1.3~25 秒），请先选择题库中的课时再搜索。",
+          "全库搜索要扫描 46 万行句子（2026-09-29 实测 5.7~12.4 秒），" +
+          "请先选择题库中的课时再搜索。",
         code: "scope_required",
       },
       { status: 400 },

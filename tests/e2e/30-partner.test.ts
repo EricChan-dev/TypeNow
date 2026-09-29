@@ -31,7 +31,7 @@ beforeEach(async () => {
 })
 
 describe("合伙人看板 /api/partner/dashboard", () => {
-  it("未登录 → 401；非合伙人 → 403", async () => {
+  it("未登录 → 401；未加入推广计划的注册用户 → 403（门禁是协议同意，不是付费）", async () => {
     expect((await ApiClient.anonymous().get("/api/partner/dashboard")).status).toBe(401)
     expect(
       (await ApiClient.asUser(FIXTURE.userFree).get("/api/partner/dashboard")).status
@@ -93,7 +93,7 @@ describe("合伙人看板 /api/partner/dashboard", () => {
 })
 
 describe("佣金明细 /api/partner/commissions", () => {
-  it("未登录 → 401；非合伙人 → 403", async () => {
+  it("未登录 → 401；未加入推广计划的注册用户 → 403（门禁是协议同意，不是付费）", async () => {
     expect((await ApiClient.anonymous().get("/api/partner/commissions")).status).toBe(401)
     expect(
       (await ApiClient.asUser(FIXTURE.userFree).get("/api/partner/commissions")).status
@@ -132,7 +132,7 @@ describe("佣金明细 /api/partner/commissions", () => {
 })
 
 describe("提现 /api/partner/withdraw", () => {
-  it("未登录 → 401；非合伙人 → 403", async () => {
+  it("未登录 → 401；未加入推广计划的注册用户 → 403（门禁是协议同意，不是付费）", async () => {
     expect(
       (await ApiClient.anonymous().post("/api/partner/withdraw", { amount: 5000 })).status
     ).toBe(401)
@@ -285,7 +285,7 @@ describe("提现 /api/partner/withdraw", () => {
 })
 
 describe("提现记录 /api/partner/withdrawals", () => {
-  it("未登录 → 401；非合伙人 → 403", async () => {
+  it("未登录 → 401；未加入推广计划的注册用户 → 403（门禁是协议同意，不是付费）", async () => {
     expect((await ApiClient.anonymous().get("/api/partner/withdrawals")).status).toBe(401)
     expect(
       (await ApiClient.asUser(FIXTURE.userFree).get("/api/partner/withdrawals")).status

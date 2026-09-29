@@ -1,0 +1,79 @@
+-- 00030_textbook_version.sql
+-- 教材同步：courses 增加 textbook_version（教材版本）
+--
+-- ── 要支持的功能 ────────────────────────────────────────────────────────────
+--
+-- 「教材同步」页面要让用户按 **学段 → 年级 → 版本** 三级筛选课程。
+-- 实测生产库（2026-09-29，已发布 774 门课）：
+--   · 中小学同步（category_key='school_sync'） 194 门，年级维度**已经存在**
+--     （sub_category_key = grade_1 … grade_9 / high_school / vocational）
+--   · 版本维度**不存在字段**，但它其实一直写在课程标题里：
+--       【人教版】一年级上册【PEP课本同步】
+--       【译林版】三年级上册【课本同步】
+--       【外研版 三起点】三年级上册【课本同步】
+--     标题含版本关键词的有 114/194 门（59%），其余 80 门无法可靠归类。
+--
+-- ── 为什么只加一列、不加 textbook_stage ─────────────────────────────────────
+--
+-- 学段（小学/初中/高中）**可以从 sub_category_key 派生**：
+--   grade_1..grade_6 → 小学；grade_7..grade_9 → 初中；high_school → 高中。
+-- 映射表放在 src/lib/textbook-taxonomy.ts。
+--
+-- 再存一列 textbook_stage 会形成「同一事实存两处」，而冗余列迟早与主来源漂移 ——
+-- 本仓库已经因为这类问题栽过（practice_sessions 的恢复下标 vs user_course_progress
+-- 的累计句数，两个数含义不同却被当成一个用，表现为"点继续练习白屏"）。
+--
+-- ── 为什么**不加索引** ──────────────────────────────────────────────────────
+--
+-- courses 只有 774 行，且该表**此前就没有任何索引** —— 现有的课程广场按
+-- category_key / sub_category_key 筛选一直是无索引全表扫描，在这个量级完全没问题。
+--
+-- 加索引只会带来一个副作用：schema.ts 里 courses 用的是两参数 `mysqlTable(name, columns)`
+-- 形式（没有索引定义的位置），要在 schema 里同步就得把它改写成三参数形式；
+-- 而 e2e 的库是 drizzle-kit push 从 schema.ts 生成的 —— 一旦两处索引定义不一致，
+-- 测试库与生产就出现结构漂移，而这类漂移 e2e **永远抓不到**（00021 记录过这个教训）。
+-- 收益为零、风险非零，所以不建。将来课程数量级变化时再单独评估。
+--
+-- ── collation ───────────────────────────────────────────────────────────────
+--
+-- 新列在**已有表**上，刻意**不写 COLLATE**，让它继承 courses 的表级排序规则
+-- （实测 utf8mb4_unicode_ci）。理由与 00028 的 grant_day 相同：
+-- 新表才需要显式声明（00021），已有表上的新列继承本表规则才是正确意图，
+-- 显式写死反而造成与 drizzle-kit push 建出的测试库之间的无意义结构差异。
+--
+-- 该列只用于筛选（与字符串字面量比较），不参与跨表 JOIN，所以继承足够。
+--
+-- ── 数据回填 ────────────────────────────────────────────────────────────────
+--
+-- 本迁移**只加列**，不回填。回填走脚本，因为它是需要人工抽检的判断过程：
+--
+--   pnpm tsx scripts/backfill-textbook-version.ts           # dry-run，产出对照清单 JSON
+--   pnpm tsx scripts/backfill-textbook-version.ts --apply   # 确认清单后再写库
+--
+-- 规则（见 src/lib/textbook-taxonomy.ts）：优先解析标题里的【】括号，其次全文关键词，
+-- **都匹配不到就写 'other'，不做猜测** —— 猜错会让用户在错误的教材版本下练习，
+-- 比筛不出来更糟。
+--
+-- ── 幂等性 ──────────────────────────────────────────────────────────────────
+--
+-- ADD COLUMN 重复执行会报错，属预期，只需执行一次。
+--
+-- ── 校验 ────────────────────────────────────────────────────────────────────
+--
+--   SHOW COLUMNS FROM courses LIKE 'textbook_version';   -- varchar(50), NULL
+--
+--   -- 回填后（--apply）：
+--   SELECT textbook_version, COUNT(*) FROM courses
+--   WHERE is_published = 1 AND deleted_at IS NULL AND category_key = 'school_sync'
+--   GROUP BY textbook_version ORDER BY COUNT(*) DESC;
+--     -- 应看到各版本 + other，且总数为 194
+--
+-- ── 回滚 ────────────────────────────────────────────────────────────────────
+--
+--   ALTER TABLE courses DROP COLUMN textbook_version;
+--
+-- 是否需要手动执行：需要（仓库没有迁移执行器，见 db/README.md）。
+
+ALTER TABLE courses
+  ADD COLUMN textbook_version VARCHAR(50) NULL
+    COMMENT '教材版本（人教版/译林版/外研版…）。认不出的写 other，不猜测。见 00030 与 lib/textbook-taxonomy.ts';

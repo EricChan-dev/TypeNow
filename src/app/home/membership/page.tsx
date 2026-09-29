@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation"
+import { memberTierLabel, type MemberTier } from "@/lib/pricing"
 import Link from "next/link"
 import Image from "next/image"
 import { getUser } from "@/app/actions/auth"
@@ -6,20 +7,11 @@ import { getActiveSubscription } from "@/lib/subscription"
 import { Crown, CalendarDays, ChevronRight, Handshake } from "lucide-react"
 import { MembershipHistory } from "./MembershipHistory"
 
-type MemberTier = "trial" | "monthly" | "yearly" | "partner" | "free"
-
-const TIER_LABELS: Record<MemberTier, string> = {
-  free: "普通用户",
-  trial: "体验会员",
-  monthly: "月度会员",
-  yearly: "年度会员",
-  partner: "永久会员·合伙人",
-}
-
 const TIER_COLORS: Record<MemberTier, string> = {
   free: "bg-muted text-muted-foreground border border-transparent",
   trial: "bg-amber-500/20 text-amber-500 border border-amber-400/60",
   monthly: "bg-blue-500/20 text-blue-500 border border-blue-400/60",
+  quarterly: "bg-cyan-500/20 text-cyan-500 border border-cyan-400/60",
   yearly: "bg-violet-500/20 text-violet-500 border border-violet-400/60",
   partner: "text-primary-foreground border",
 }
@@ -37,7 +29,7 @@ export default async function MembershipPage() {
   if (user.isPartner) memberTier = "partner"
   else if (user.isPro) {
     const sub = await getActiveSubscription(user.id)
-    memberTier = (sub?.plan as "monthly" | "yearly") ?? "trial"
+    memberTier = (sub?.plan as "monthly" | "quarterly" | "yearly") ?? "trial"
   }
 
   const isPartner = memberTier === "partner"
@@ -72,7 +64,7 @@ export default async function MembershipPage() {
               {memberTier !== "free" && (
                 <Image src="/VIP.png" alt="VIP" width={13} height={13} className="shrink-0" />
               )}
-              {TIER_LABELS[memberTier]}
+              {memberTierLabel(memberTier)}
             </span>
           </div>
         </div>
@@ -137,24 +129,24 @@ export default async function MembershipPage() {
         </div>
       )}
 
-      {/* Partner CTA */}
-      {!isPartner && (
-        <Link
-          href="/home/partner"
-          className="flex items-center justify-between rounded-2xl border border-amber-500/30 bg-amber-500/5 p-5 hover:bg-amber-500/10 transition-colors group"
-        >
-          <div className="flex items-center gap-3">
-            <div className="flex items-center justify-center w-9 h-9 rounded-xl bg-amber-500/15">
-              <Handshake className="h-5 w-5 text-amber-500" />
-            </div>
-            <div>
-              <p className="text-sm font-semibold text-foreground">加入合伙人计划</p>
-              <p className="text-xs text-muted-foreground mt-0.5">推广赚佣金，最高 50%</p>
-            </div>
+      {/* 推广入口：对**所有**用户展示（2026-09-29 合规改造后推广资格免费开放，
+          与是否持有终身会员无关）。文案只描述"按实际成交拿佣金"，不承诺收益，
+          也不再用「合伙人」这个暗示付费身份的说法。 */}
+      <Link
+        href="/home/partner"
+        className="flex items-center justify-between rounded-2xl border border-amber-500/30 bg-amber-500/5 p-5 hover:bg-amber-500/10 transition-colors group"
+      >
+        <div className="flex items-center gap-3">
+          <div className="flex items-center justify-center w-9 h-9 rounded-xl bg-amber-500/15">
+            <Handshake className="h-5 w-5 text-amber-500" />
           </div>
-          <ChevronRight className="h-4 w-4 text-muted-foreground group-hover:text-amber-500 transition-colors" />
-        </Link>
-      )}
+          <div>
+            <p className="text-sm font-semibold text-foreground">免费加入推广计划</p>
+            <p className="text-xs text-muted-foreground mt-0.5">按被推荐人的实际付费金额获得佣金</p>
+          </div>
+        </div>
+        <ChevronRight className="h-4 w-4 text-muted-foreground group-hover:text-amber-500 transition-colors" />
+      </Link>
 
       {/* Subscription history */}
       <div className="rounded-2xl border border-border bg-card p-6 space-y-4">

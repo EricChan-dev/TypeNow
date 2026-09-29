@@ -235,14 +235,18 @@ export async function seedFixtures(): Promise<void> {
   }
 
   const future = "2099-01-01 00:00:00"
+  // partner_agreed_at 是「免费主动同意《推广合作协议》」的留档时间戳。
+  // 2026-09-29 合规改造后，推广相关接口的门禁依据就是它（不再看 is_partner）——
+  // 因为「付费才能推广」命中《禁止传销条例》第七条(二)。
+  // 所以夹具里的推广方必须带上它，否则所有推广接口都会 403。
   await q(
-    `INSERT INTO users (id, phone, name, is_pro, pro_expires, is_partner, invite_code, referred_by, diamonds, total_score, level)
+    `INSERT INTO users (id, phone, name, is_pro, pro_expires, is_partner, partner_agreed_at, invite_code, referred_by, diamonds, total_score, level)
      VALUES
-     (?, '13800000001', '普通用户', 0, NULL, 0, 'FREEEE01', NULL, 0, 0, 1),
-     (?, '13800000002', '会员用户', 1, ?, 0, 'PROUSER1', NULL, 0, 0, 1),
-     (?, '13800000003', '合伙人',   1, ?, 1, ?, NULL, 0, 0, 1),
-     (?, '13800000004', '被邀请人', 0, NULL, 0, 'INVITEE1', ?, 0, 0, 1),
-     (?, '13800000005', '买家',     0, NULL, 0, 'BUYER001', ?, 0, 0, 1)`,
+     (?, '13800000001', '普通用户', 0, NULL, 0, NULL,    'FREEEE01', NULL, 0, 0, 1),
+     (?, '13800000002', '会员用户', 1, ?,    0, NULL,    'PROUSER1', NULL, 0, 0, 1),
+     (?, '13800000003', '合伙人',   1, ?,    1, NOW(),   ?,          NULL, 0, 0, 1),
+     (?, '13800000004', '被邀请人', 0, NULL, 0, NULL,    'INVITEE1', ?,    0, 0, 1),
+     (?, '13800000005', '买家',     0, NULL, 0, NULL,    'BUYER001', ?,    0, 0, 1)`,
     [
       FIXTURE.userFree,
       FIXTURE.userPro,
@@ -267,6 +271,7 @@ const USER_ID_TABLES = [
   "user_course_progress",
   "check_ins",
   "diamond_logs",
+  "coin_logs",
   "payment_orders",
   "subscriptions",
   "verification_codes",

@@ -107,7 +107,7 @@ export default function UsersList() {
         />
         <Table.Column
           dataIndex="isPartner"
-          title="合伙人"
+          title="终身会员"
           width={80}
           render={(p: boolean) => (p ? <Tag color="gold">是</Tag> : <Tag>—</Tag>)}
         />
@@ -130,6 +130,9 @@ export default function UsersList() {
         <Table.Column dataIndex="eventCount" title="埋点数" width={90} />
         <Table.Column dataIndex="paidOrderCount" title="已付订单" width={90} />
         <Table.Column dataIndex="diamonds" title="钻石" width={80} />
+        {/* 金币是 2026-09-29 引入的免费货币，后台必须能看到 —— 它是准现金
+            （1000 金币 = 1 天会员），客服排查"为什么兑换不了"时要看它 */}
+        <Table.Column dataIndex="coins" title="金币" width={80} />
         <Table.Column
           dataIndex="referredBy"
           title="邀请人"

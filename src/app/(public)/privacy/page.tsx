@@ -80,7 +80,7 @@ export default function PrivacyPage() {
             <strong>删除：</strong>您可以在「设置 → 账号安全」中<strong>自助注销</strong>账号，无需联系客服。
             注销时会<strong>清空</strong>手机号、邮箱、微信绑定、昵称、头像与邀请码，
             <strong>删除</strong>生词本与句子笔记，并退出全部设备的登录。
-            练习记录、打卡、钻石与订单等历史数据会<strong>去除身份关联后保留</strong>，
+            练习记录、打卡、钻石、金币与订单等历史数据会<strong>去除身份关联后保留</strong>，
             用于学习统计与财务凭证，这部分数据不再能够指向您个人。注销不可恢复。
           </li>
           <li><strong>撤回同意：</strong>您可以通过退出登录或停止使用服务来撤回对信息收集的同意。</li>

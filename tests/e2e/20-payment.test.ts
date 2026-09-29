@@ -115,11 +115,20 @@ describe("下单 /api/payment/create-order", () => {
     const res = await api.post<{ out_trade_no: string }>("/api/payment/create-order", {
       plan: "yearly",
     })
-    const row = await one<{ diff: number }>(
-      "SELECT TIMESTAMPDIFF(MINUTE, created_at, expires_at) AS diff FROM payment_orders WHERE out_trade_no = ?",
+    const row = await one<{ diffSec: number }>(
+      "SELECT TIMESTAMPDIFF(SECOND, created_at, expires_at) AS diffSec FROM payment_orders WHERE out_trade_no = ?",
       [res.body.out_trade_no]
     )
-    expect(Number(row?.diff)).toBe(120)
+    // 断言**秒级精确值**，而不是分钟。
+    //
+    // 原来断言 TIMESTAMPDIFF(MINUTE, ...) === 120，它会随机变成 119：
+    // 那时 expires_at 用应用进程的 Date.now() 算，created_at 是数据库的
+    // CURRENT_TIMESTAMP —— 两个钟，中间还夹着一次 INSERT 的往返延迟。
+    // 延迟跨过整秒边界时，截断结果就少 1 分钟。
+    //
+    // 现在 expires_at 走同一条 INSERT 语句里的 NOW()，与列默认值同源，
+    // 差值应当**恰好**是 7200 秒。秒级断言能立刻发现有人改回两个时钟的写法。
+    expect(Number(row?.diffSec)).toBe(7200)
   })
 })
 
@@ -388,26 +397,28 @@ describe("支付回调 /api/payment/notify", () => {
     )
     expect(log?.task_type).toBe("invite_purchase")
     expect(log?.reward_type).toBe("trial_days")
-    // rewardAmount 记的是记录归属人（邀请人）拿到的天数
-    expect(Number(log?.reward_amount)).toBe(30)
+    // rewardAmount 记的是记录归属人（邀请人）拿到的天数。
+    // 2026-09-29 起年卡首购双方各 +7 天（原为邀请人 30 / 被邀请人 20）——
+    // 原值一次年卡首购就送出 50 天会员，会让"拉人"比"卖课"更划算。
+    expect(Number(log?.reward_amount)).toBe(7)
     expect(log?.ref_id).toBe(FIXTURE.userBuyer)
 
-    // 邀请人 +30 天（年卡）
+    // 邀请人 +7 天（年卡）
     const afterInviter = await one<{ d: Date }>(
       "SELECT pro_expires AS d FROM users WHERE id = ?",
       [FIXTURE.userPartner]
     )
     const inviterDeltaDays =
       (new Date(afterInviter!.d).getTime() - new Date(before!.d).getTime()) / 86400_000
-    expect(Math.round(inviterDeltaDays)).toBe(30)
+    expect(Math.round(inviterDeltaDays)).toBe(7)
 
-    // 被邀请人 +20 天（年卡）。首购本身开通 365 天，叠加后约 385 天。
+    // 被邀请人 +7 天（年卡）。首购本身开通 365 天，叠加后约 372 天。
     const invitee = await one<{ days: number }>(
       "SELECT TIMESTAMPDIFF(DAY, NOW(), pro_expires) AS days FROM users WHERE id = ?",
       [FIXTURE.userBuyer]
     )
-    expect(Number(invitee?.days)).toBeGreaterThanOrEqual(383)
-    expect(Number(invitee?.days)).toBeLessThanOrEqual(385)
+    expect(Number(invitee?.days)).toBeGreaterThanOrEqual(370)
+    expect(Number(invitee?.days)).toBeLessThanOrEqual(372)
 
     // 「仅首次购买有效，续费不触发」：再买一单，邀请人的到期时间一分不动。
     const { outTradeNo: renewTradeNo } = await insertPendingOrder(FIXTURE.userBuyer, "yearly", 19900)

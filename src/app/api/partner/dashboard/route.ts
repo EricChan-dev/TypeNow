@@ -10,14 +10,29 @@ export async function GET() {
   const session = await getSession()
   if (!session) return NextResponse.json({ error: "请先登录" }, { status: 401 })
 
-  const [partner] = await db
-    .select({ isPartner: users.isPartner, inviteCode: users.inviteCode, wechatOpenid: users.wechatOpenid })
+  // 门禁依据是**免费主动同意《推广合作协议》**（partner_agreed_at），不是付费。
+  //
+  // 改造前这里看 `is_partner`（= 买过 ¥499），等于「付费才能取得推广资格」，
+  // 命中《禁止传销条例》第七条(二)。同意协议免费，所以拿它当门禁安全。
+  //
+  // 这里仍要查 inviteCode / wechatOpenid：**邀请码在注册时就已经为每个人生成**
+  // （见 api/auth/verify-code 等三处），也就是说推广工具一直对全量用户可用 ——
+  // 过去缺的只是「佣金准入」这一道门。这也正是本次改动量很小的原因。
+  const [promoter] = await db
+    .select({
+      partnerAgreedAt: users.partnerAgreedAt,
+      inviteCode: users.inviteCode,
+      wechatOpenid: users.wechatOpenid,
+    })
     .from(users)
     .where(eq(users.id, session.userId))
     .limit(1)
 
-  if (!partner?.isPartner) {
-    return NextResponse.json({ error: "您还不是合伙人" }, { status: 403 })
+  if (!promoter) {
+    return NextResponse.json({ error: "账号不存在" }, { status: 403 })
+  }
+  if (!promoter.partnerAgreedAt) {
+    return NextResponse.json({ error: "请先加入推广计划" }, { status: 403 })
   }
 
   // Thaw cooling commissions that have passed available_at
@@ -74,8 +89,8 @@ export async function GET() {
     )
 
   return NextResponse.json({
-    inviteCode: partner.inviteCode,
-    hasWechat: !!partner.wechatOpenid,
+    inviteCode: promoter.inviteCode,
+    hasWechat: !!promoter.wechatOpenid,
     totalEarned,
     available,
     cooling,

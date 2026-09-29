@@ -340,7 +340,7 @@ describe("验证码登录/注册 /api/auth/verify-code", () => {
     expect(Number(days?.d)).toBeGreaterThan(95)
   })
 
-  it("带有效 ref_code 注册：绑定邀请人，被邀请人得 7 天，邀请人不得天数（仅记账）", async () => {
+  it("带有效 ref_code 注册：绑定邀请人，被邀请人得 5 天，邀请人不得天数（仅记账）", async () => {
     const partnerId = await insertUser({
       name: "邀请人",
       isPartner: 1,
@@ -398,13 +398,16 @@ describe("验证码登录/注册 /api/auth/verify-code", () => {
     expect(Number(log?.reward_amount)).toBe(0)
     expect(log?.ref_id).toBe(newUser?.id)
 
-    // 被邀请人拿受邀专属的 7 天体验会员（比自己去领的 5 天更多）
+    // 被邀请人拿受邀专属的体验会员。2026-09-29 起：受邀 5 天、主动领取 3 天
+    // （原为 7 天 / 5 天，数值整体收紧；但"受邀比自领更多"这条关系必须保留，
+    //  否则没有人有动力走邀请链接）
     const inviteeHours = await one<{ d: number }>(
       "SELECT TIMESTAMPDIFF(HOUR, NOW(), pro_expires) AS d FROM users WHERE id = ?",
       [newUser?.id]
     )
-    expect(Number(inviteeHours?.d)).toBeGreaterThan(166)
-    expect(Number(inviteeHours?.d)).toBeLessThanOrEqual(168)
+    // INVITE_REGISTER_DAYS = 5 → 120 小时，留一点执行耗时余量
+    expect(Number(inviteeHours?.d)).toBeGreaterThan(118)
+    expect(Number(inviteeHours?.d)).toBeLessThanOrEqual(120)
   })
 
   it("ref_code 不存在或格式不对：不绑定邀请人，也不报错", async () => {
@@ -519,7 +522,7 @@ describe("会话与账号状态 /api/auth/me", () => {
    * 因此它必须同时满足三件事：能领、只能领一次、且绝不覆盖已有的付费权益。
    */
   describe("体验会员领取", () => {
-    it("未领过的非会员可领取 5 天", async () => {
+    it("未领过的非会员可领取 3 天", async () => {
       const userId = await insertUser({ name: "待领取", isPro: 0, proExpires: null })
 
       const res = await ApiClient.asUser(userId).post<{ success: boolean; days: number }>(
@@ -527,7 +530,7 @@ describe("会话与账号状态 /api/auth/me", () => {
       )
       expect(res.status).toBe(200)
       expect(res.body.success).toBe(true)
-      expect(res.body.days).toBe(5)
+      expect(res.body.days).toBe(3)
 
       const row = await one<{ is_pro: number; hours: number; trial_claimed_at: Date | null }>(
         "SELECT is_pro, TIMESTAMPDIFF(HOUR, NOW(), pro_expires) AS hours, trial_claimed_at FROM users WHERE id = ?",
@@ -535,9 +538,9 @@ describe("会话与账号状态 /api/auth/me", () => {
       )
       expect(row?.is_pro).toBe(1)
       expect(row?.trial_claimed_at).not.toBeNull()
-      // 5 天 = 120 小时，留一点执行耗时余量
-      expect(Number(row?.hours)).toBeGreaterThan(118)
-      expect(Number(row?.hours)).toBeLessThanOrEqual(120)
+      // TRIAL_DAYS = 3 → 72 小时，留一点执行耗时余量
+      expect(Number(row?.hours)).toBeGreaterThan(70)
+      expect(Number(row?.hours)).toBeLessThanOrEqual(72)
     })
 
     it("已领过再领：409，且会员时长不被刷新", async () => {
@@ -562,9 +565,9 @@ describe("会话与账号状态 /api/auth/me", () => {
       expect(new Date(after!.d).getTime()).toBe(new Date(first!.d).getTime())
     })
 
-    it("当前是有效会员时不可领：409，且到期时间不被砍成 5 天", async () => {
+    it("当前是有效会员时不可领：409，且到期时间不被砍成 3 天", async () => {
       // 这是最危险的一种误用：trial_claimed_at 是新列，存量付费会员全为 NULL，
-      // 若不拦，一次调用就会把年卡的 pro_expires 覆盖成「今天 + 5 天」。
+      // 若不拦，一次调用就会把年卡的 pro_expires 覆盖成「今天 + 3 天」。
       const yearly = new Date(Date.now() + 300 * 86400_000)
       const userId = await insertUser({
         name: "年卡会员",
@@ -580,7 +583,7 @@ describe("会话与账号状态 /api/auth/me", () => {
         "SELECT TIMESTAMPDIFF(DAY, NOW(), pro_expires) AS days, trial_claimed_at FROM users WHERE id = ?",
         [userId]
       )
-      // 仍然是年卡，没有被砍成 5 天
+      // 仍然是年卡，没有被砍成 3 天
       expect(Number(row?.days)).toBeGreaterThan(295)
     })
 

@@ -7,7 +7,7 @@ import { AuthLink } from "@/components/layout/AuthLink"
 export const metadata: Metadata = {
   title: "功能介绍 - TypeNow",
   description:
-    "TypeNow 能做什么：中译英打字练习、间隔重复复习、点词详情与 AI 句子讲解、学习统计、合伙人推广。每条能力都注明已知边界。",
+    "TypeNow 能做什么：中译英打字练习、间隔重复复习、点词详情与 AI 句子讲解、学习统计、推广计划。每条能力都注明已知边界。",
 }
 
 /**

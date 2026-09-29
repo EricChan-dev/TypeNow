@@ -10,6 +10,7 @@ import {
   getSfxEnabledSnapshot,
   getSfxEnabledServerSnapshot,
 } from "@/lib/sfx"
+import { CHECK_IN_GOAL_MAX, CHECK_IN_GOAL_MIN } from "@/lib/coins"
 
 interface Props {
   open: boolean
@@ -124,33 +125,35 @@ export function GlobalSettingsModal({ open, onClose, initialGoal = 50, onSaved }
             {activeTab === "checkin" && (
               <div className="flex flex-col gap-5">
                 <div>
-                  <h3 className="font-semibold text-foreground mb-1">每日签到钻石目标</h3>
+                  <h3 className="font-semibold text-foreground mb-1">每日打卡目标（练习句数）</h3>
                   <p className="text-sm text-muted-foreground">
-                    当天获得的钻石达到此数量后，才可完成签到打卡
+                    当天练习的句子数达到此数量后，即可完成签到打卡
                   </p>
                 </div>
 
                 <div className="flex flex-col gap-3">
                   <div className="flex items-center justify-between">
                     <span className="text-sm text-muted-foreground">目标值</span>
-                    <span className="text-2xl font-black text-violet-400">{goal} 💎</span>
+                    <span className="text-2xl font-black text-violet-400">{goal} 句</span>
                   </div>
 
+                  {/* 区间取自 lib/coins.ts：旧范围 10~300 是"钻石数"时代的口径，
+                      在新语义（练习句数）下 300 句等于把打卡关掉。 */}
                   <input
                     type="range"
-                    min={10}
-                    max={300}
-                    step={5}
+                    min={CHECK_IN_GOAL_MIN}
+                    max={CHECK_IN_GOAL_MAX}
+                    step={1}
                     value={goal}
                     onChange={(e) => setGoal(Number(e.target.value))}
                     className="w-full accent-violet-500"
                   />
 
                   <div className="flex justify-between text-[11px] text-muted-foreground/60">
-                    <span>轻松 (10)</span>
-                    <span>均衡 (100)</span>
-                    <span>进阶 (200)</span>
-                    <span>挑战 (300)</span>
+                    <span>轻松 ({CHECK_IN_GOAL_MIN})</span>
+                    <span>日常 (10)</span>
+                    <span>认真 (25)</span>
+                    <span>挑战 ({CHECK_IN_GOAL_MAX})</span>
                   </div>
                 </div>
 
@@ -159,7 +162,8 @@ export function GlobalSettingsModal({ open, onClose, initialGoal = 50, onSaved }
                   style={{ background: "rgba(99,102,241,0.08)", border: "1px solid rgba(99,102,241,0.2)" }}
                 >
                   <p className="text-[13px] text-foreground/70 leading-relaxed">
-                    💡 练习 <strong className="text-violet-400">{Math.ceil(goal / 5)}</strong> 句以上（含连击加成）可达成目标
+                    💡 打卡要求的是**当天练习的句子数**（同一句重复练不重复计数）。
+                    打卡成功可获得金币奖励，连续打卡每天更多。
                   </p>
                 </div>
 

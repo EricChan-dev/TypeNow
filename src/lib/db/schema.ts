@@ -50,8 +50,36 @@ export const users = mysqlTable(
     referralLockedUntil: datetime("referral_locked_until"),
     isPartner: tinyint("is_partner").notNull().default(0),
     partnerAgreedAt: datetime("partner_agreed_at"),
+    /**
+     * 钻石余额。**付费货币**。
+     *
+     * 只能由会员每日赠送（`diamond_logs.type = 'member_grant'`）或未来充值获得，
+     * 只用于**消耗型能力**（AI 助手、语音评测超出每日免费额度之后）—— 那是
+     * 真金白银的外部调用，所以必须严格限量。数值见 lib/membership-benefits.ts。
+     */
     diamonds: int("diamonds").notNull().default(0),
-    checkInGoal: int("check_in_goal").notNull().default(50),
+    /**
+     * 金币余额。**免费货币**。
+     *
+     * 只能靠学习行为获得（练习 / 课时 / 课程 / 打卡 / 分享），用于兑换会员天数与道具，
+     * **永远不能换 AI 调用**。产出与兑换数值见 lib/coins.ts（唯一事实源）。
+     *
+     * 两种货币用途严格不交叉是刻意设计（句乐部验证过的做法）：金币之所以可以敞开
+     * 发放，正因为它不触碰任何按量计费的服务。一旦让金币能买 AI 调用，
+     * 免费用户就重新获得了无上限的成本敞口。
+     */
+    coins: int("coins").notNull().default(0),
+    /**
+     * 每日打卡目标 —— **当日练习句数**（对应句乐部的「打卡目标，默认 10 个练习点」）。
+     *
+     * ⚠️ 语义在 2026-09-29 变更过：此前它被当成「当日获得的钻石数」，
+     * 于是练习奖励改发金币后当日钻石恒为 0、**打卡永久失败且不报错**。
+     *
+     * 用**学习量**而不是货币量做门槛有两个好处：既避免「打卡奖励依赖打卡是否成立」
+     * 的循环，也无法用登录之类的零成本动作绕过。
+     * 取值区间与夹取逻辑见 lib/coins.ts 的 `clampCheckInGoal`。
+     */
+    checkInGoal: int("check_in_goal").notNull().default(10),
     /**
      * 注册渠道（可筛可 GROUP BY 的那根主轴）。取值见 lib/signup-source.ts 的
      * SIGNUP_CHANNELS。存量行为 NULL —— 那时的来源无法从数据库还原。
@@ -124,6 +152,21 @@ export const courses = mysqlTable("courses", {
   sourceAvatar: text("source_avatar"),
   categoryKey: varchar("category_key", { length: 100 }),
   subCategoryKey: varchar("sub_category_key", { length: 100 }),
+  /**
+   * 教材版本（人教版 / 译林版 / 外研版 …）。
+   *
+   * 与 `subCategoryKey` 是**两个正交维度**：后者在「中小学同步」下表达**年级**
+   * （grade_1 … grade_9 / high_school），这里表达**教材版本**。
+   * 用户要的「学段 → 年级 → 版本」三级筛选，就是这两个字段的组合，
+   * 所以刻意**不**新增冗余的 `textbook_stage` 列 —— 学段可由 subCategoryKey 派生，
+   * 而冗余列迟早会与它漂移（本仓库已经因为「同一事实存两处」栽过，
+   * 见 practice_sessions 的恢复下标注释）。
+   *
+   * 取值与「学段/年级」的映射见 lib/textbook-taxonomy.ts。
+   * 认不出版本的课程写 `other`，**不做猜测** —— 猜错会让用户在错误的版本下练习，
+   * 那比筛不出来更糟。
+   */
+  textbookVersion: varchar("textbook_version", { length: 50 }),
   learnerCount: int("learner_count").notNull().default(0),
   usageCount: int("usage_count").notNull().default(0),
   isPublished: tinyint("is_published").notNull().default(0),
@@ -319,7 +362,7 @@ export const paymentOrders = mysqlTable(
   {
     id: varchar("id", { length: 36 }).primaryKey().default(sql`(UUID())`),
     userId: varchar("user_id", { length: 36 }).notNull(),
-    plan: mysqlEnum("plan", ["monthly", "yearly", "partner"]).notNull(),
+    plan: mysqlEnum("plan", ["monthly", "yearly", "partner", "quarterly"]).notNull(),
     amount: int("amount").notNull(),
     outTradeNo: varchar("out_trade_no", { length: 64 }).notNull().unique(),
     transactionId: varchar("transaction_id", { length: 64 }),
@@ -345,7 +388,7 @@ export const subscriptions = mysqlTable(
   {
     id: varchar("id", { length: 36 }).primaryKey().default(sql`(UUID())`),
     userId: varchar("user_id", { length: 36 }).notNull(),
-    plan: mysqlEnum("plan", ["monthly", "yearly", "partner"]).notNull(),
+    plan: mysqlEnum("plan", ["monthly", "yearly", "partner", "quarterly"]).notNull(),
     status: mysqlEnum("status", ["active", "cancelled", "expired"])
       .notNull()
       .default("active"),
@@ -521,14 +564,103 @@ export const diamondLogs = mysqlTable(
     userId: varchar("user_id", { length: 36 }).notNull(),
     amount: int("amount").notNull(),
     durationSeconds: int("duration_seconds"),
-    type: mysqlEnum("type", ["sentence", "lesson_complete", "course_complete", "share_invite", "chat"]).notNull(),
+    /**
+     * 来源类型。
+     *
+     * `member_grant` 是 2026-09-29 新增的：**会员每日赠送的钻石**。
+     *
+     * 其余值（sentence / lesson_complete / course_complete / share_invite）是历史遗留 ——
+     * 练习奖励已改为发**金币**（见 coin_logs），这些值不再写入，但**保留在 enum 里**：
+     * 存量行还在，删值会让老流水无法解释（枚举少一个值，历史记录就变成非法数据）。
+     */
+    type: mysqlEnum("type", [
+      "sentence",
+      "lesson_complete",
+      "course_complete",
+      "share_invite",
+      "chat",
+      "member_grant",
+    ]).notNull(),
     refId: varchar("ref_id", { length: 36 }),
     streak: int("streak").notNull().default(0),
+    /**
+     * 每日赠送的幂等键，**仅 member_grant 有值**（上海日历日 "YYYY-MM-DD"）。
+     *
+     * 「一天只发一次」由 `uk_diamond_grant_day` 这个**唯一索引**兜住，而不是靠
+     * 代码先查后写 —— 并发下先查后写会发两份。MySQL 唯一索引允许多个 NULL，
+     * 所以其余类型的行（grant_day 为 NULL）不受影响。
+     *
+     * 这与 task_logs.share_day 是同一套手法（见 db/migrations/00025）。
+     */
+    grantDay: varchar("grant_day", { length: 10 }),
     createdAt: datetime("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
   },
   (t) => [
     index("idx_diamond_logs_user_id").on(t.userId),
     index("idx_diamond_logs_user_created").on(t.userId, t.createdAt),
+    // 会员每日赠钻的幂等键：只对 member_grant 生效（其余行 grant_day 为 NULL）
+    uniqueIndex("uk_diamond_grant_day").on(t.userId, t.grantDay),
+  ]
+)
+
+// ─── Coin Logs（免费货币：金币） ───────────────────────────────────────────────
+/**
+ * 金币流水。
+ *
+ * 与 `diamond_logs` 的分工是刻意的，也是整个双货币设计的关键：
+ *
+ *   钻石 —— 对应真金白银的外部调用（AI 助手 / 语音评测），必须严格限量；
+ *   金币 —— 只对应站内的会员天数与道具，**不产生任何现金成本**，所以可以敞开发。
+ *
+ * `amount` 用正负表示收支：正 = 获得，负 = 消耗；`type` 区分具体来源/用途。
+ *
+ * 兑换会员天数有**每月上限**（lib/coins.ts 的 `MAX_MEMBER_DAYS_PER_MONTH`），
+ * 判定在服务端按「该用户当月 `type='redeem_membership'` 的条数」完成 ——
+ * 所以这里对 (user_id, date) 建了索引。**这个上限必须服务端强制**：
+ * 前端拦等于没拦，而金币是准现金（1000 金币 ≈ 1 天会员 ≈ ¥0.97）。
+ *
+ * 幂等：赠币动作各自有天然幂等键（打卡靠 check_ins 的 uk_user_date、
+ * 练习/课时/课程靠 ref_id、赠钻靠 uk_diamond_grant_day），
+ * 所以这张表不需要再加唯一索引 —— 加错了反而会误伤「同一课重复练」这类正常行为。
+ */
+export const coinLogs = mysqlTable(
+  "coin_logs",
+  {
+    id: varchar("id", { length: 36 }).primaryKey().default(sql`(UUID())`),
+    userId: varchar("user_id", { length: 36 }).notNull(),
+    amount: int("amount").notNull(),
+    type: mysqlEnum("type", [
+      "check_in",
+      "sentence",
+      "lesson_complete",
+      "course_complete",
+      "share_invite",
+      "redeem_membership",
+      "redeem_item",
+    ]).notNull(),
+    /** 关联对象（句子/课时/课程 id），用于排查「这笔金币是哪来的」。 */
+    refId: varchar("ref_id", { length: 36 }),
+    /**
+     * 本次练习耗时（秒），仅 sentence 有意义；服务端裁剪到 24 小时以内。
+     *
+     * 为什么放在这里而不是 practice_records：练习时长**只在领奖请求里上报**
+     * （客户端在句子完成时把 durationSeconds 一起发过来，见 LearnClient），
+     * practice_records 根本没有这一列。此前它记在 diamond_logs 上，双货币拆分后
+     * 练习奖励改发金币，所以跟着搬到这里 —— 否则首页热力图的学习时长会变成 0。
+     * （e2e 的 factories.ts 里专门有一条注释提醒过这件事。）
+     */
+    durationSeconds: int("duration_seconds"),
+    /** 打卡时的连续天数快照；仅 check_in 有意义。用来解释「这笔为什么是 12 而不是 10」。 */
+    streak: int("streak").notNull().default(0),
+    /** 上海日历日 "YYYY-MM-DD"。每日统计与「每月兑换上限」的计数都基于它。 */
+    date: varchar("date", { length: 10 }).notNull(),
+    createdAt: datetime("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  },
+  (t) => [
+    index("idx_coin_logs_user_id").on(t.userId),
+    index("idx_coin_logs_user_created").on(t.userId, t.createdAt),
+    // 每月兑换上限的计数：(user_id, date) + type 过滤
+    index("idx_coin_logs_user_date").on(t.userId, t.date),
   ]
 )
 
@@ -649,7 +781,7 @@ export const taskLogs = mysqlTable(
     id: varchar("id", { length: 36 }).primaryKey().default(sql`(UUID())`),
     userId: varchar("user_id", { length: 36 }).notNull(),
     taskType: mysqlEnum("task_type", ["share_invite", "invite_register", "invite_purchase"]).notNull(),
-    rewardType: mysqlEnum("reward_type", ["diamond", "trial_days"]).notNull(),
+    rewardType: mysqlEnum("reward_type", ["diamond", "trial_days", "coin"]).notNull(),
     /**
      * 这条记录里 **userId（邀请人）本人** 获得的天数。
      *
@@ -903,6 +1035,7 @@ export type PartnerRiskFlag = typeof partnerRiskFlags.$inferSelect
 export type UserCourseProgress = typeof userCourseProgress.$inferSelect
 export type PracticeSession = typeof practiceSessions.$inferSelect
 export type DiamondLog = typeof diamondLogs.$inferSelect
+export type CoinLog = typeof coinLogs.$inferSelect
 export type WordDictionaryCache = typeof wordDictionaryCache.$inferSelect
 export type WordbookItem = typeof wordbookItems.$inferSelect
 export type UserNote = typeof userNotes.$inferSelect

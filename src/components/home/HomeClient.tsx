@@ -22,6 +22,7 @@ import { WelcomeTrialModal } from "@/components/home/WelcomeTrialModal"
 import { DailyTasks } from "@/components/home/DailyTasks"
 import { PaymentSuccessModal } from "@/components/payment/PaymentSuccessModal"
 import { toShanghaiDateStr } from "@/lib/practice-stats"
+import { CHECK_IN_GOAL_DEFAULT } from "@/lib/coins"
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -47,7 +48,7 @@ interface StatsData {
     studiedAt: string
   }[]
   checkInDatesThisMonth: string[]
-  todayDiamonds: number
+  todaySentences: number
   checkInGoal: number
   weekly: { date: string; count: number }[]
 }
@@ -288,7 +289,7 @@ function MonthlyHeatmap({ heatmap, heatmapDuration }: { heatmap: Record<string, 
                 background: cell.count > 0 ? getHeatColor(cell.count) : "var(--heat-empty)",
                 color: cell.count > 0 ? "var(--heat-cell-text)" : "var(--heat-cell-text-empty)",
               }}
-              title={cell.count > 0 ? `${cell.count} 颗钻石 · 学了 ${formatDuration(heatmapDuration[cell.date ?? ""] ?? 0)}` : (cell.date ?? "")}
+              title={cell.count > 0 ? `${cell.count} 金币 · 学了 ${formatDuration(heatmapDuration[cell.date ?? ""] ?? 0)}` : (cell.date ?? "")}
             >
               {cell.day}
             </div>
@@ -590,8 +591,8 @@ export function HomeClient({ name }: HomeClientProps) {
   const [checkedIn, setCheckedIn] = useState(false)
   const [streak, setStreak] = useState(0)
   const [checkInDatesThisMonth, setCheckInDatesThisMonth] = useState<string[]>([])
-  const [todayDiamonds, setTodayDiamonds] = useState(0)
-  const [checkInGoal, setCheckInGoal] = useState(50)
+  const [todaySentences, setTodaySentences] = useState(0)
+  const [checkInGoal, setCheckInGoal] = useState(CHECK_IN_GOAL_DEFAULT)
   const [checkInRulesOpen, setCheckInRulesOpen] = useState(false)
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [checkInVersion, setCheckInVersion] = useState(0)
@@ -610,8 +611,8 @@ export function HomeClient({ name }: HomeClientProps) {
       setCheckedIn(d.checkedInToday)
       setStreak(d.streakDays)
       setCheckInDatesThisMonth(d.checkInDatesThisMonth ?? [])
-      setTodayDiamonds(d.todayDiamonds ?? 0)
-      setCheckInGoal(d.checkInGoal ?? 50)
+      setTodaySentences(d.todaySentences ?? 0)
+      setCheckInGoal(d.checkInGoal ?? CHECK_IN_GOAL_DEFAULT)
     } catch (e) {
       console.error(e)
       setStats(null)
@@ -659,7 +660,7 @@ export function HomeClient({ name }: HomeClientProps) {
 
   const handleCheckIn = useCallback(async () => {
     if (checkedIn || checkingIn) return
-    if (todayDiamonds < checkInGoal) {
+    if (todaySentences < checkInGoal) {
       setCheckInRulesOpen(true)
       return
     }
@@ -668,8 +669,8 @@ export function HomeClient({ name }: HomeClientProps) {
       const res = await fetch("/api/home/check-in", { method: "POST" })
       const data = await res.json()
       if (res.status === 403 && data.error === "need_more_diamonds") {
-        const remaining = (data.checkInGoal ?? checkInGoal) - (data.todayDiamonds ?? todayDiamonds)
-        toast.error(`还差 ${remaining} 颗钻石才能签到`)
+        const remaining = (data.checkInGoal ?? checkInGoal) - (data.todaySentences ?? todaySentences)
+        toast.error(`还差 ${remaining} 句才能签到`)
         return
       }
       if (data.success) {
@@ -700,7 +701,7 @@ export function HomeClient({ name }: HomeClientProps) {
     } finally {
       setCheckingIn(false)
     }
-  }, [checkedIn, checkingIn, todayDiamonds, checkInGoal])
+  }, [checkedIn, checkingIn, todaySentences, checkInGoal])
 
   const today = new Date()
   const greetings = ["早上好", "上午好", "下午好", "晚上好"]
@@ -863,20 +864,20 @@ export function HomeClient({ name }: HomeClientProps) {
                   disabled={checkedIn || checkingIn}
                   aria-label={
                     checkedIn ? "已签到" :
-                    !checkedIn && todayDiamonds < checkInGoal ? `钻石不足，还差 ${checkInGoal - todayDiamonds} 颗` :
+                    !checkedIn && todaySentences < checkInGoal ? `还需练 ${checkInGoal - todaySentences} 句` :
                     "签到打卡"
                   }
                   className={cn(
                     "flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold transition-all duration-300 shrink-0",
                     checkedIn
                       ? "cursor-default bg-cyan-100 text-cyan-800 border border-cyan-300 dark:bg-cyan-900/40 dark:text-cyan-200 dark:border-cyan-700"
-                      : !checkedIn && todayDiamonds < checkInGoal
+                      : !checkedIn && todaySentences < checkInGoal
                       ? "cursor-pointer opacity-70 border"
                       : "text-white hover:opacity-90 active:scale-95"
                   )}
                   style={checkedIn
                     ? undefined
-                    : !checkedIn && todayDiamonds < checkInGoal
+                    : !checkedIn && todaySentences < checkInGoal
                     ? { background: "var(--muted)", borderColor: "var(--border)", color: "var(--muted-foreground)" }
                     : { background: "linear-gradient(135deg, #7c3aed, #a855f7)", border: "1px solid #6d28d9", boxShadow: "0 0 18px #7c3aed50" }
                   }
@@ -896,7 +897,7 @@ export function HomeClient({ name }: HomeClientProps) {
               <div>
                 <div className="flex items-center gap-2 mb-1.5">
                   <span className="text-sm font-semibold text-foreground/70">
-                    💎 {todayDiamonds} / {checkInGoal}
+                    📝 {todaySentences} / {checkInGoal} 句
                   </span>
                   <button
                     onClick={() => setCheckInRulesOpen(true)}
@@ -905,9 +906,9 @@ export function HomeClient({ name }: HomeClientProps) {
                     <HelpCircle className="h-3.5 w-3.5" />
                   </button>
                   <div className="flex-1" />
-                  {!checkedIn && todayDiamonds < checkInGoal && (
+                  {!checkedIn && todaySentences < checkInGoal && (
                     <span className="text-[11px] text-muted-foreground/60">
-                      还差 {checkInGoal - todayDiamonds} 颗可签到
+                      还差 {checkInGoal - todaySentences} 句可签到
                     </span>
                   )}
                 </div>
@@ -915,8 +916,8 @@ export function HomeClient({ name }: HomeClientProps) {
                   <div
                     className="h-full rounded-full transition-all duration-500"
                     style={{
-                      width: `${Math.min(100, (todayDiamonds / checkInGoal) * 100)}%`,
-                      background: todayDiamonds >= checkInGoal
+                      width: `${Math.min(100, (todaySentences / checkInGoal) * 100)}%`,
+                      background: todaySentences >= checkInGoal
                         ? "linear-gradient(90deg, #22c55e, #16a34a)"
                         : "linear-gradient(90deg, #7c3aed, #a855f7)",
                     }}
@@ -1058,7 +1059,7 @@ export function HomeClient({ name }: HomeClientProps) {
       <CheckInRulesModal
         open={checkInRulesOpen}
         onClose={() => setCheckInRulesOpen(false)}
-        todayDiamonds={todayDiamonds}
+        todaySentences={todaySentences}
         checkInGoal={checkInGoal}
         onOpenSettings={() => setSettingsOpen(true)}
       />

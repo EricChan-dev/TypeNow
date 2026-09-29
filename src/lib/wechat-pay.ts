@@ -1,5 +1,8 @@
 import { randomUUID, createSign, createVerify, createDecipheriv } from "crypto"
 import { readFileSync } from "fs"
+// 定价与商品名的唯一事实源。放在 lib/pricing 而不是这里：
+// 那个模块是纯函数且要同时被客户端价格页使用，不能反向依赖本文件的支付依赖。
+import { findPlan, planAmount, type PlanKey } from "@/lib/pricing"
 
 const WECHAT_PAY_HOST = "https://api.mch.weixin.qq.com"
 
@@ -73,7 +76,8 @@ function buildAuthHeader(
 }
 
 export interface CreateOrderParams {
-  plan: "monthly" | "yearly" | "partner"
+  /** 档位 key，取值见 lib/pricing 的 PlanKey（含季度档） */
+  plan: PlanKey
   outTradeNo: string
   description: string
   amount: number
@@ -647,16 +651,30 @@ export function generateOutTradeNo(): string {
   return `TYPENOW-${ts}-${rand}`
 }
 
-export function getPlanAmount(plan: "monthly" | "yearly" | "partner"): number {
-  if (plan === "monthly") return 2900
-  if (plan === "yearly") return 19900
-  return 39900 // partner lifetime
+/**
+ * 下单金额（分）。
+ *
+ * 价格唯一来源是 lib/pricing。`isFirstPurchase` **必须由服务端**根据
+ * 「该用户是否已有已支付订单」推导（见 api/payment/create-order），
+ * 绝不接受客户端传入 —— 那等于把定价权交给浏览器。
+ *
+ * 未知档位返回 null，由调用方拒绝，而不是回落到某个默认价。
+ */
+export function getPlanAmount(plan: string, isFirstPurchase: boolean): number | null {
+  return planAmount(plan, isFirstPurchase)
 }
 
-export function getPlanDescription(plan: "monthly" | "yearly" | "partner"): string {
-  if (plan === "monthly") return "TypeNow 月度会员"
-  if (plan === "yearly") return "TypeNow 年度会员"
-  return "TypeNow 合伙人终身会员"
+/**
+ * 微信支付订单商品名（会出现在用户的账单里）。
+ *
+ * 终身档**刻意不叫「合伙人」**：2026-09-29 合规改造后该商品只是终身会员，
+ * 不含任何推广权益（推广资格对所有注册用户免费开放）。把纯消费商品写成
+ * 「合伙人」，等于在用户账单上把一个身份资格当商品卖 —— 正是要消除的表述。
+ */
+export function getPlanDescription(plan: string): string {
+  const spec = findPlan(plan)
+  if (!spec) return "TypeNow 会员"
+  return `TypeNow ${spec.label}`
 }
 
 export interface TransferResult {
@@ -676,7 +694,7 @@ export async function wechatTransferBatch(params: {
   const body = {
     appid: params.appId,
     out_batch_no: params.outBatchNo,
-    batch_name: "合伙人佣金提现",
+    batch_name: "TypeNow 推广佣金提现",
     batch_remark: params.remark,
     total_amount: params.amount,
     total_num: 1,

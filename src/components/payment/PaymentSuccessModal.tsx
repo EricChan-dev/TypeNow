@@ -4,11 +4,9 @@ import { useEffect, useState } from "react"
 import { useSearchParams } from "next/navigation"
 import { CheckCircle2, PartyPopper } from "lucide-react"
 
-const PLAN_NAMES: Record<string, string> = {
-  monthly: "月度会员",
-  yearly: "年度会员",
-  partner: "合伙人会员",
-}
+// 档位名走唯一事实源（lib/pricing）：加季度档时才不会漏，
+// 且终身档不再叫「合伙人会员」（推广资格已从该商品解绑）。
+import { memberTierLabel } from "@/lib/pricing"
 
 export function PaymentSuccessModal() {
   const searchParams = useSearchParams()
@@ -24,7 +22,7 @@ export function PaymentSuccessModal() {
 
   if (!visible || !paymentPlan) return null
 
-  const planName = PLAN_NAMES[paymentPlan] || "会员"
+  const planName = memberTierLabel(paymentPlan) || "会员"
 
   function handleClose() {
     setVisible(false)

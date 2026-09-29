@@ -3,12 +3,9 @@ import { subscriptions, users, partnerCommissions, paymentOrders as paymentOrder
 import { eq, and, lte, desc, ne, sql, count as sqlCount, type SQL } from "drizzle-orm"
 import { randomInt, randomUUID } from "crypto"
 import { CommissionWriteError, classifyCommissionWriteError } from "@/lib/commission-safety"
-
-function getPlanDurationDays(plan: "monthly" | "yearly" | "partner"): number {
-  if (plan === "monthly") return 30
-  if (plan === "yearly") return 365
-  return 365 * 99 // partner: effectively permanent (2099)
-}
+// 时长与价格的唯一事实源都在 lib/pricing —— 加一档只改那里一处。
+// 此前时长映射写在本文件、价格写在 lib/wechat-pay，加档要改两处、很容易漏。
+import { planDurationDays, type PlanKey } from "@/lib/pricing"
 
 /**
  * 生成邀请码。
@@ -119,13 +116,24 @@ async function triggerCommission(
   const ATTRIBUTION_WINDOW_MS = 90 * 24 * 60 * 60 * 1000
   if (!buyer.createdAt || orderTime - new Date(buyer.createdAt).getTime() > ATTRIBUTION_WINDOW_MS) return
 
+  // ── 推广资格在 2026-09-29 已与付费解绑：任何注册用户都能拿佣金 ──────────────
+  //
+  // ⚠️ 下面这两行是《禁止传销条例》第七条(二)「变相入门费」在**数据层的唯一落点**。
+  //
+  // 改动前它是 `if (!partner || !partner.isPartner) return`，语义是"付过 ¥399 合伙人
+  // 才能拿现金佣金"——这正是当初九个审查要件里**唯一命中**的那个，而且是权重最高的：
+  // 交费取得的是"发展他人加入的资格"，命中七(二)；而单级直推只让人通过七(三)。
+  //
+  // 现在推广资格对全部注册用户开放，付费档只剩学习权益。
+  // **不要再把任何付费条件加回这里** —— 那会立刻恢复原来的法律风险，
+  // 而且是在用户完全看不见的地方。依据见 docs/distribution-compliance.md。
   const [partner] = await db
-    .select({ id: users.id, isPartner: users.isPartner })
+    .select({ id: users.id })
     .from(users)
     .where(eq(users.id, buyer.referredBy))
     .limit(1)
 
-  if (!partner || !partner.isPartner) return
+  if (!partner) return
 
   // 「首购」只看真正结算过的佣金。被退款扣回的记录（clawed_back）等于从没
   // 结算过：如果把它也算进去，被邀请人退款后重新购买会被判成续费，佣金从 50%
@@ -171,13 +179,13 @@ async function triggerCommission(
 
 export async function activateSubscription(
   userId: string,
-  plan: "monthly" | "yearly" | "partner",
+  plan: PlanKey,
   paymentOrderId?: string,
   orderAmount?: number
 ) {
   if (!db) throw new Error("Database not configured")
 
-  const days = getPlanDurationDays(plan)
+  const days = planDurationDays(plan)
 
   // Idempotency: if this payment order was already processed, skip duplicate activation
   if (paymentOrderId) {

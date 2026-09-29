@@ -2,12 +2,11 @@
 
 import { usePathname, useRouter } from "next/navigation"
 import { useEffect, useState } from "react"
-import { LayoutDashboard, BookOpen, ShoppingBag, Trophy, Sparkles, TrendingUp, BookMarked, BookText, FileText, Newspaper } from "lucide-react"
+import { LayoutDashboard, BookOpen, ShoppingBag, Trophy, Sparkles, TrendingUp, BookMarked, BookText, FileText, Newspaper, GraduationCap } from "lucide-react"
 import { cn } from "@/lib/utils"
 
 interface HomeSidebarProps {
   collapsed: boolean
-  isPartner?: boolean
   onNavigate?: () => void
 }
 
@@ -18,7 +17,7 @@ interface SidebarItem {
   badge?: number | null
 }
 
-export function HomeSidebar({ collapsed, isPartner, onNavigate }: HomeSidebarProps) {
+export function HomeSidebar({ collapsed, onNavigate }: HomeSidebarProps) {
   const pathname = usePathname()
   const router = useRouter()
   const [dueCount, setDueCount] = useState(0)
@@ -39,6 +38,7 @@ export function HomeSidebar({ collapsed, isPartner, onNavigate }: HomeSidebarPro
         { key: "/home", label: "首页", icon: LayoutDashboard },
         { key: "/home/courses", label: "我的课程", icon: BookOpen },
         { key: "/home/store", label: "课程广场", icon: ShoppingBag },
+        { key: "/home/textbook", label: "教材同步", icon: GraduationCap },
       ],
     },
     {
@@ -103,11 +103,15 @@ export function HomeSidebar({ collapsed, isPartner, onNavigate }: HomeSidebarPro
           </div>
         ))}
 
-        {/* 合伙人入口 */}
+        {/* 推广入口：2026-09-29 合规改造后对**所有注册用户免费开放** ——
+            不再区分"是否合伙人"，也不再要求先买 ¥499 终身会员。
+            改造前这里根据 isPartner 显示「推广中心 / 加入合伙人」两个分支，
+            两者都暗示"付费才有推广身份"，正是要消除的表述。
+            文案只描述「按实际成交拿佣金」，不承诺收益。 */}
         <div className="mt-4 pt-4 border-t border-border">
           <button
             onClick={() => { onNavigate?.(); setTimeout(() => router.push("/home/partner"), 100) }}
-            title={collapsed ? (isPartner ? "推广中心" : "加入合伙人") : undefined}
+            title={collapsed ? "推广中心" : undefined}
             className={cn(
               "flex items-center gap-3 w-full rounded-lg text-sm font-medium transition-all duration-200 border",
               collapsed ? "justify-center px-0 py-3" : "px-3 py-3",
@@ -117,26 +121,16 @@ export function HomeSidebar({ collapsed, isPartner, onNavigate }: HomeSidebarPro
             )}
           >
             <TrendingUp className={cn("h-[18px] w-[18px] shrink-0", isPartnerActive ? "text-amber-500" : "")} />
-            {isPartner ? (
-              <span className={cn(
-                "transition-opacity duration-200 flex flex-col items-start gap-0.5 leading-tight",
-                collapsed ? "opacity-0 w-0 overflow-hidden" : "opacity-100"
-              )}>
-                <span className="flex items-center gap-2">
-                  推广中心
-                  <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-red-500 text-white leading-none">0门槛</span>
-                </span>
-                <span className="text-[11px] text-muted-foreground/60 leading-none">分享即可赚佣金</span>
+            <span className={cn(
+              "transition-opacity duration-200 flex flex-col items-start gap-0.5 leading-tight",
+              collapsed ? "opacity-0 w-0 overflow-hidden" : "opacity-100"
+            )}>
+              <span className="flex items-center gap-2">
+                推广中心
+                <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-red-500 text-white leading-none">免费</span>
               </span>
-            ) : (
-              <span className={cn(
-                "transition-opacity duration-200 flex items-center gap-2",
-                collapsed ? "opacity-0 w-0 overflow-hidden" : "opacity-100"
-              )}>
-                加入合伙人
-                <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-red-500 text-white leading-none">NEW</span>
-              </span>
-            )}
+              <span className="text-[11px] text-muted-foreground/60 leading-none">按实际成交拿佣金</span>
+            </span>
           </button>
         </div>
       </nav>

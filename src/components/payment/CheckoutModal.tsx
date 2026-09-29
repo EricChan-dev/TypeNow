@@ -5,9 +5,12 @@ import { X, Clock, Sparkles } from "lucide-react"
 import QRCode from "qrcode"
 import { cn } from "@/lib/utils"
 import { trackSubscribeSuccess } from "@/lib/analytics"
+// 档位名与定价从唯一事实源取，不在组件里写死分支 ——
+// 这里原本是 monthly / yearly / 合伙人 三分支，加季度档时必然漏改。
+import { findPlan, type PlanKey } from "@/lib/pricing"
 
 interface CheckoutModalProps {
-  plan: "monthly" | "yearly"
+  plan: PlanKey
   onClose: () => void
   onSuccess: (plan: string) => void
 }
@@ -96,7 +99,7 @@ export function CheckoutModal({ plan, onClose, onSuccess }: CheckoutModalProps) 
   // Create order on mount
   useEffect(() => { createOrder() }, [createOrder])
 
-  const planName = plan === "monthly" ? "月度会员" : plan === "yearly" ? "年度会员" : "合伙人"
+  const planName = findPlan(plan)?.label ?? "会员"
   const amountYuan = orderInfo?.amount ? (orderInfo.amount / 100).toFixed(2) : "—"
   const hrs = Math.floor(countdown / 3600)
   const mins = Math.floor((countdown % 3600) / 60)

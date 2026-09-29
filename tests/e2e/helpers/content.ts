@@ -40,13 +40,29 @@ export async function insertSentence(
 
 /** 造一条课程。默认已发布，方便直接出现在课程广场。 */
 export async function insertCourse(
-  opts: { title?: string; isPublished?: number } = {}
+  opts: {
+    title?: string
+    isPublished?: number
+    /** 分类轴（教材同步用 categoryKey='school_sync' + subCategoryKey=年级） */
+    categoryKey?: string | null
+    subCategoryKey?: string | null
+    /** 教材版本（见 src/lib/textbook-taxonomy.ts）；null 表示尚未回填 */
+    textbookVersion?: string | null
+  } = {}
 ): Promise<{ courseId: string }> {
   const courseId = crypto.randomUUID()
   await q(
-    `INSERT INTO courses (id, title, description, source, source_name, is_published, learner_count, usage_count)
-     VALUES (?, ?, 'e2e 临时课程', 'official', '官方', ?, 0, 0)`,
-    [courseId, opts.title ?? "e2e 临时课程", opts.isPublished ?? 1]
+    `INSERT INTO courses (id, title, description, source, source_name, is_published,
+                          learner_count, usage_count, category_key, sub_category_key, textbook_version)
+     VALUES (?, ?, 'e2e 临时课程', 'official', '官方', ?, 0, 0, ?, ?, ?)`,
+    [
+      courseId,
+      opts.title ?? "e2e 临时课程",
+      opts.isPublished ?? 1,
+      opts.categoryKey ?? null,
+      opts.subCategoryKey ?? null,
+      opts.textbookVersion ?? null,
+    ]
   )
   return { courseId }
 }

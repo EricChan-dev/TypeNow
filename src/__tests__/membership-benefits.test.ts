@@ -4,12 +4,19 @@
  * 存在的理由：价格页曾经把权益在 4 处各写一份，漂移出「7 条里 4 条是代码里
  * 不存在的功能」。这份测试把当时的具体错误固化成回归约束：
  *
- *   1. 会员卖点必须**真的只给会员**（gate 为 content 或 quota 且 pro > free）；
+ *   1. 会员卖点必须**真的只给会员**（gate 为 content / grant / quota 且 pro > free）；
  *      "人人都有"的能力写进会员清单就是误导 —— 那正是 FSRS / 音素级 / AI 私教
  *      三条的性质。
  *   2. 额度数字必须**只有一份**：接口强制用的常量与文案渲染用的是同一份，
  *      因此这里同时断言路由确实从事实源 import，而不是自己写了个数。
  *   3. 已知的假宣称关键词不得重新出现（它们曾真实上线过）。
+ *
+ * **2026-09-29 新增第 4 条：推广权益不得回到付费档里。**
+ * 此前 `PARTNER_BENEFITS` 把「邀请链接 / 佣金 / 提现 / 看板」整体挂在 ¥399 商品上，
+ * 等于在商品说明里承诺「付费买到推广与赚钱资格」—— 命中《禁止传销条例》
+ * 第七条(二) 的「变相入门费」，而且是在**经营对象**层面。
+ * 现在拆成 LIFETIME_BENEFITS（学习权益）+ PROMOTER_BENEFITS（免费，人人可加入），
+ * 由本文件最后一组测试看住这个结构不许退化。
  *
  * 顺带守住一条工程约束：本模块**不许**引入 db/drizzle —— 价格页是客户端组件，
  * 拖进服务端依赖会污染浏览器 bundle。
@@ -18,26 +25,39 @@ import { describe, it, expect } from "vitest"
 import fs from "node:fs"
 import path from "node:path"
 import {
+  COMPARISON_NOTE,
   COMPARISON_ROWS,
   FREE_AI_ANALYZE_PER_DAY,
   FREE_AI_CHAT_PER_DAY,
   FREE_PRONUNCIATION_PER_DAY,
   INCLUDED_FOR_EVERYONE,
+  LIFETIME_BENEFITS,
+  MEMBER_DAILY_DIAMONDS,
   NOT_APPLICABLE,
-  PARTNER_BENEFITS,
   PRO_AI_ANALYZE_PER_DAY,
   PRO_AI_CHAT_PER_DAY,
   PRO_BENEFITS,
   PRO_PRONUNCIATION_PER_DAY,
+  PROMOTER_BENEFITS,
 } from "@/lib/membership-benefits"
 
 const ROOT = process.cwd()
 const read = (p: string) => fs.readFileSync(path.join(ROOT, p), "utf8")
 
+/** 对比表的六列。新增列时这里会漏掉并让「字段齐全」测试失败——这是刻意的。 */
+const COLUMNS = ["free", "monthly", "quarterly", "yearly", "lifetime"] as const
+
 describe("额度常量", () => {
   it("会员额度严格高于免费额度（否则不构成差异化，不能当卖点）", () => {
     expect(PRO_PRONUNCIATION_PER_DAY).toBeGreaterThan(FREE_PRONUNCIATION_PER_DAY)
     expect(PRO_AI_CHAT_PER_DAY).toBeGreaterThan(FREE_AI_CHAT_PER_DAY)
+    expect(PRO_AI_ANALYZE_PER_DAY).toBeGreaterThan(FREE_AI_ANALYZE_PER_DAY)
+  })
+
+  it("免费用户的 AI 助手额度必须 > 0（2026-09-29 修正：原为 0，是误抄句乐部）", () => {
+    // 句乐部的「每日 2 次免费提问」是给所有人的；我们把 2 抄到了 PRO 上、
+    // 把免费设成 0，导致免费用户一次都用不了。这条看住它不许回退。
+    expect(FREE_AI_CHAT_PER_DAY).toBeGreaterThan(0)
   })
 
   it("额度都是正整数", () => {
@@ -46,6 +66,9 @@ describe("额度常量", () => {
       PRO_PRONUNCIATION_PER_DAY,
       FREE_AI_CHAT_PER_DAY,
       PRO_AI_CHAT_PER_DAY,
+      FREE_AI_ANALYZE_PER_DAY,
+      PRO_AI_ANALYZE_PER_DAY,
+      MEMBER_DAILY_DIAMONDS,
     ]) {
       expect(Number.isInteger(n)).toBe(true)
       expect(n).toBeGreaterThanOrEqual(0)
@@ -66,15 +89,14 @@ describe("PRO_BENEFITS · 会员卖点必须真的只给会员", () => {
     expect(PRO_BENEFITS.length).toBeGreaterThan(0)
   })
 
-  it("gate 只能是 content 或「pro > free 的 quota」", () => {
+  it("gate 只能是 content / grant / lifetime，或「pro > free 的 quota」", () => {
     for (const b of PRO_BENEFITS) {
       if (b.gate.kind === "quota") {
         expect(b.gate.proPerDay).toBeGreaterThan(b.gate.freePerDay)
         continue
       }
-      // quota 之外只允许 content（真实内容门禁）与 partner；
       // 若出现"人人都有"的权益，说明它被错当成会员卖点了。
-      expect(["content", "partner"]).toContain(b.gate.kind)
+      expect(["content", "grant", "lifetime"]).toContain(b.gate.kind)
     }
   })
 
@@ -95,6 +117,15 @@ describe("PRO_BENEFITS · 会员卖点必须真的只给会员", () => {
       if (b.gate.freePerDay > 0) {
         expect(`${b.label} ${b.claim}`).toContain(String(b.gate.freePerDay))
       }
+    }
+  })
+
+  it("赠钻类权益的文案里的数字与常量一致", () => {
+    const grants = PRO_BENEFITS.filter((b) => b.gate.kind === "grant")
+    expect(grants.length).toBeGreaterThan(0)
+    for (const b of grants) {
+      if (b.gate.kind !== "grant") continue
+      expect(`${b.label} ${b.claim}`).toContain(String(b.gate.diamondsPerDay))
     }
   })
 
@@ -127,7 +158,8 @@ describe("PRO_BENEFITS · 会员卖点必须真的只给会员", () => {
     const banned = ["FSRS", "音素级", "报告导出", "自定义上传", "专属徽章", "听说读写"]
     const allText = [
       ...PRO_BENEFITS.map((b) => `${b.label} ${b.claim}`),
-      ...PARTNER_BENEFITS.map((b) => `${b.label} ${b.claim}`),
+      ...LIFETIME_BENEFITS.map((b) => `${b.label} ${b.claim}`),
+      ...PROMOTER_BENEFITS.map((b) => `${b.label} ${b.claim}`),
       ...COMPARISON_ROWS.map((r) => r.feature),
     ].join(" ")
     for (const word of banned) {
@@ -146,13 +178,21 @@ describe("PRO_BENEFITS · 会员卖点必须真的只给会员", () => {
 })
 
 describe("COMPARISON_ROWS · 对比表", () => {
-  it("每行 5 个字段都齐全（含免费列）", () => {
+  it("每行 6 个字段都齐全（含免费列与季度列）", () => {
     expect(COMPARISON_ROWS.length).toBeGreaterThan(0)
     for (const r of COMPARISON_ROWS) {
-      for (const key of ["feature", "free", "monthly", "yearly", "partner"] as const) {
+      expect(typeof r.feature).toBe("string")
+      expect(r.feature.length).toBeGreaterThan(0)
+      for (const key of COLUMNS) {
         expect(typeof r[key]).toBe("string")
         expect(r[key].length).toBeGreaterThan(0)
       }
+    }
+  })
+
+  it("已不再有 partner 列（列名要表达语义，不能被误读成卖推广资格）", () => {
+    for (const r of COMPARISON_ROWS) {
+      expect((r as unknown as Record<string, unknown>).partner).toBeUndefined()
     }
   })
 
@@ -167,20 +207,83 @@ describe("COMPARISON_ROWS · 对比表", () => {
     const row = (feature: string) => COMPARISON_ROWS.find((r) => r.feature === feature)
     expect(row("跟读评分")?.free).toContain(String(FREE_PRONUNCIATION_PER_DAY))
     expect(row("跟读评分")?.monthly).toContain(String(PRO_PRONUNCIATION_PER_DAY))
+    expect(row("AI 私教助手")?.free).toContain(String(FREE_AI_CHAT_PER_DAY))
     expect(row("AI 私教助手")?.monthly).toContain(String(PRO_AI_CHAT_PER_DAY))
   })
 
-  it("月度与年度功能一致（只差时长与价格），合伙人另加推广权益", () => {
+  it("月/季/年三档功能一致（只差时长与价格）", () => {
     for (const r of COMPARISON_ROWS) {
       if (r.feature === "会员有效期" || r.feature === "价格") continue
+      expect(r.monthly).toBe(r.quarterly)
       expect(r.monthly).toBe(r.yearly)
     }
   })
 
+  it("价格行必须同时写出首期价与标准价（原价不写出来就是虚构原价）", () => {
+    const price = COMPARISON_ROWS.find((r) => r.feature === "价格")
+    expect(price).toBeDefined()
+    // 三档订阅写「续费」，终身档没有续费这回事，写「老用户」——
+    // 把终身档也标成续费会是一句假话。
+    for (const key of ["monthly", "quarterly", "yearly"] as const) {
+      expect(price?.[key]).toContain("续费")
+    }
+    expect(price?.lifetime).toContain("老用户")
+    expect(price?.lifetime).not.toContain("续费")
+  })
+})
+
+/**
+ * 2026-09-29 合规改造的回归护栏。
+ *
+ * 这一组是整个文件里最重要的：它保证「付费＝取得推广资格」这个结构
+ * 不会以任何形式复活 —— 无论是改回数据表、还是改文案。
+ */
+describe("合规结构：推广权益必须与付费档彻底分离", () => {
+  it("对比表里不得出现任何推广/佣金/提现行", () => {
+    const features = COMPARISON_ROWS.map((r) => r.feature).join(" ")
+    for (const word of ["佣金", "提现", "邀请", "推广", "返佣"]) {
+      expect(features).not.toContain(word)
+    }
+  })
+
+  it("付费档的权益文案里不得出现「佣金」", () => {
+    const paidText = [
+      ...PRO_BENEFITS.map((b) => `${b.label} ${b.claim}`),
+      ...LIFETIME_BENEFITS.map((b) => `${b.label} ${b.claim}`),
+    ].join(" ")
+    expect(paidText).not.toContain("佣金")
+  })
+
+  it("LIFETIME_BENEFITS 只有 lifetime gate，不含任何 promoter gate", () => {
+    expect(LIFETIME_BENEFITS.length).toBeGreaterThan(0)
+    for (const b of LIFETIME_BENEFITS) {
+      expect(b.gate.kind).toBe("lifetime")
+    }
+  })
+
+  it("PROMOTER_BENEFITS 全部是 promoter gate（免费权益，与套餐无关）", () => {
+    expect(PROMOTER_BENEFITS.length).toBeGreaterThan(0)
+    for (const b of PROMOTER_BENEFITS) {
+      expect(b.gate.kind).toBe("promoter")
+    }
+  })
+
   it("提现口径是「全额」而不是「¥50 起」（后者与 partner/withdraw 不符）", () => {
-    const withdraw = COMPARISON_ROWS.find((r) => r.feature === "提现")
-    expect(withdraw?.partner).toContain("全额")
-    expect(withdraw?.partner).not.toContain("¥50")
+    const withdraw = PROMOTER_BENEFITS.find((b) => b.id === "promoter-withdraw")
+    expect(withdraw?.claim).toContain("全额")
+    expect(withdraw?.claim).not.toContain("¥50")
+  })
+
+  it("佣金口径写的是「按实际成交金额」，不是按人数", () => {
+    // 计酬依据是销售额而非人头数，这是 2013 年两高一部《意见》第 5 条划的线。
+    const first = PROMOTER_BENEFITS.find((b) => b.id === "promoter-commission-first")
+    expect(first?.claim).toContain("实际成交金额")
+  })
+
+  it("对比表下方的说明必须点明「推广与付费档无关」", () => {
+    expect(COMPARISON_NOTE).toContain("免费")
+    expect(COMPARISON_NOTE).toContain("推广")
+    expect(COMPARISON_NOTE).not.toContain("合伙人会员额外获得推广权益")
   })
 })
 
@@ -194,8 +297,10 @@ describe("事实源本身", () => {
       .join("\n")
     expect(importLines).not.toContain("@/lib/db")
     expect(importLines).not.toContain("drizzle")
-    // 当前唯一允许的依赖是纯常量的 free-trial
+    // 允许的依赖都是纯常量模块
     expect(importLines).toContain("@/lib/free-trial")
+    expect(importLines).toContain("@/lib/pricing")
+    expect(importLines).toContain("@/lib/coins")
   })
 
   it("额度类权益的文案确实被价格页/首页消费（不是只写在测试里）", () => {
@@ -205,6 +310,21 @@ describe("事实源本身", () => {
       "src/app/(public)/pricing/page.tsx",
     ]) {
       expect(read(p)).toContain("membership-benefits")
+    }
+  })
+
+  it("PARTNER_BENEFITS 不得再被导出或被消费（它表达的正是「付费买推广身份」）", () => {
+    // 只查**导出与消费**，不查字符串是否出现：在说明性注释里提到旧名字是有价值的
+    // （它解释了这次合规改造为什么发生），把注释也算违规会让测试逼着人删掉理由。
+    expect(read("src/lib/membership-benefits.ts")).not.toMatch(
+      /export\s+(const|type|interface)\s+PARTNER_BENEFITS/,
+    )
+    for (const p of [
+      "src/components/pricing/PricingClient.tsx",
+      "src/app/(public)/page.tsx",
+      "src/app/(public)/pricing/page.tsx",
+    ]) {
+      expect(read(p)).not.toContain("PARTNER_BENEFITS")
     }
   })
 })
@@ -232,10 +352,12 @@ describe("接口与文案同源（防漂移的核心）", () => {
     expect(src).not.toContain('"knowledge-analyze-hour"')
   })
 
-  it("chat 路由从事实源 import 会员免费额度", () => {
+  it("chat 路由从事实源 import 免费与会员两档额度", () => {
     const src = read("src/app/api/chat/route.ts")
     expect(src).toContain("@/lib/membership-benefits")
     expect(src).toContain("PRO_AI_CHAT_PER_DAY")
+    // 免费额度也要走同一份常量，否则免费用户的门槛会各写一份
+    expect(src).toContain("FREE_AI_CHAT_PER_DAY")
   })
 
   it("rate-limit 的清理按桶窗口，而不是硬编码的 1 小时", () => {

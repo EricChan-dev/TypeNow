@@ -137,7 +137,8 @@ export default function SentencesList() {
         />
         <Input.Search
           allowClear
-          // 没选课时不让搜：全库模糊搜索要扫 46 万行 / 2.9GB（实测 1.3~25 秒）
+          // 没选课时不让搜：全库模糊搜索要扫 46 万行 / 2.9GB
+          // （2026-09-29 生产实测 5.7~12.4 秒；带课时范围只要 2.7 毫秒）
           disabled={!lessonId}
           placeholder={lessonId ? "在本课时内搜索中文或英文" : "请先选择课时"}
           style={{ width: 320 }}

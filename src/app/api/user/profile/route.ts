@@ -3,6 +3,7 @@ import { getSession } from "@/lib/auth/session"
 import { db } from "@/lib/db"
 import { users } from "@/lib/db/schema"
 import { eq } from "drizzle-orm"
+import { CHECK_IN_GOAL_MAX, CHECK_IN_GOAL_MIN, clampCheckInGoal } from "@/lib/coins"
 
 export async function PUT(request: NextRequest) {
   try {
@@ -37,11 +38,20 @@ export async function PUT(request: NextRequest) {
   }
 
   if (typeof checkInGoal === "number") {
-    const goal = Math.round(checkInGoal)
-    if (goal < 10 || goal > 300) {
-      return NextResponse.json({ error: "签到目标须在 10~300 之间" }, { status: 400 })
+    // 打卡目标＝**当日练习句数**（语义见 lib/coins.ts）。
+    // 区间必须取自那里，不能在本文件再写一份 —— 旧实现的 10~300 是"钻石数"
+    // 时代的区间，在新语义下 300 句意味着"今天要练 300 句"，等于把打卡关掉。
+    if (
+      !Number.isFinite(checkInGoal) ||
+      checkInGoal < CHECK_IN_GOAL_MIN ||
+      checkInGoal > CHECK_IN_GOAL_MAX
+    ) {
+      return NextResponse.json(
+        { error: `打卡目标须在 ${CHECK_IN_GOAL_MIN}~${CHECK_IN_GOAL_MAX} 句之间` },
+        { status: 400 },
+      )
     }
-    updates.checkInGoal = goal
+    updates.checkInGoal = clampCheckInGoal(checkInGoal)
   }
 
   if (Object.keys(updates).length === 0) {

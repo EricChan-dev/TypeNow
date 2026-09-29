@@ -35,7 +35,7 @@ export async function GET() {
         eq(taskLogs.userId, session.userId),
         eq(taskLogs.taskType, "invite_purchase"),
       )),
-    db.select({ inviteCode: users.inviteCode, diamonds: users.diamonds }).from(users)
+    db.select({ inviteCode: users.inviteCode, diamonds: users.diamonds, coins: users.coins }).from(users)
       .where(eq(users.id, session.userId))
       .limit(1),
   ])
@@ -46,6 +46,10 @@ export async function GET() {
     inviteTotal: inviteRows[0]?.total ?? 0,
     invitePaidTotal: invitePaidRows[0]?.total ?? 0,
     inviteCode: userRow[0]?.inviteCode ?? null,
+    // 任务奖励自 2026-09-29 起发**金币**（免费货币），所以 coins 是任务视角的主货币。
+    // diamonds 仍然回传：它没有消失，只是来源改成了"会员每日赠送"，
+    // 而且 AI 助手要花它 —— 前端其它地方仍在展示钻石余额。
+    coins: userRow[0]?.coins ?? 0,
     diamonds: userRow[0]?.diamonds ?? 0,
   })
 }

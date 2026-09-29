@@ -8,7 +8,7 @@ import {
   sentences,
   lessons,
   courses,
-  diamondLogs,
+  coinLogs,
   users,
 } from "@/lib/db/schema"
 import { eq, and, gte, desc, sql, count } from "drizzle-orm"
@@ -18,6 +18,7 @@ import {
   shiftShanghaiDate,
   toShanghaiDateStr,
 } from "@/lib/practice-stats"
+import { CHECK_IN_GOAL_DEFAULT } from "@/lib/coins"
 
 export async function GET() {
   const session = await getSession()
@@ -26,7 +27,9 @@ export async function GET() {
 
   const userId = session.userId
   const today = toShanghaiDateStr()
-  const yearAgo = new Date(Date.now() - 365 * 24 * 60 * 60 * 1000)
+  // 热力图按 coin_logs.date（VARCHAR 'YYYY-MM-DD'）过滤，所以用日期串比较，
+  // 不再用 created_at 的时间戳 —— ISO 日期串的字典序与时间序一致。
+  const yearAgoDate = shiftShanghaiDate(today, -365)
 
   // 全站统一 Asia/Shanghai 口径：DATETIME 以 +08:00 墙上时间存储（见 lib/db），
   // 所以 DATE(created_at) 直接就是上海日历日，签到 / streak / 热力图 / 练习量同源。
@@ -43,7 +46,6 @@ export async function GET() {
     checkInResult,
     lastStudiedResult,
     checkInsThisMonthResult,
-    todayDiamondResult,
     userGoalResult,
     recentPracticesResult,
     weeklyResult,
@@ -82,21 +84,28 @@ export async function GET() {
         )
       ),
 
-    // Heatmap: diamonds by date for last 365 days
+    // Heatmap: 每日获得的金币与练习时长，最近 365 天。
+    //
+    // 2026-09-29 数据源由 diamond_logs 改为 coin_logs：练习奖励已改发金币，
+    // 而热力图表达的是**学习活跃度**，跟着奖励货币走才不会变成空白。
+    // 响应字段名（heatmap / heatmapDuration）保持不变，所以前端无需改动。
+    //
+    // 练习时长也只记在这一张表上（practice_records 没有 duration_seconds 列，
+    // 时长是在领奖请求里上报的），两个指标必须同源才不会一个有一个没有。
     db
       .select({
-        date: sql<string>`DATE(${diamondLogs.createdAt})`,
-        diamonds: sql<number>`COALESCE(SUM(${diamondLogs.amount}), 0)`,
-        duration: sql<number>`COALESCE(SUM(${diamondLogs.durationSeconds}), 0)`,
+        date: coinLogs.date,
+        coins: sql<number>`COALESCE(SUM(${coinLogs.amount}), 0)`,
+        duration: sql<number>`COALESCE(SUM(${coinLogs.durationSeconds}), 0)`,
       })
-      .from(diamondLogs)
+      .from(coinLogs)
       .where(
         and(
-          eq(diamondLogs.userId, userId),
-          gte(diamondLogs.createdAt, yearAgo)
+          eq(coinLogs.userId, userId),
+          gte(coinLogs.date, yearAgoDate)
         )
       )
-      .groupBy(sql`DATE(${diamondLogs.createdAt})`),
+      .groupBy(coinLogs.date),
 
     // Check-in dates for last 400 days (for streak calc)
     db
@@ -134,18 +143,11 @@ export async function GET() {
         )
       ),
 
-    // Today's diamond total
-    db
-      .select({ total: sql<number>`COALESCE(SUM(${diamondLogs.amount}), 0)` })
-      .from(diamondLogs)
-      .where(
-        and(
-          eq(diamondLogs.userId, userId),
-          sql`DATE(${diamondLogs.createdAt}) = ${today}`
-        )
-      ),
-
-    // User's check-in goal
+    // User's check-in goal（打卡目标＝当日练习句数，语义见 lib/coins.ts）
+    //
+    // 这里**不再**单独查「今日钻石数」：打卡门槛已改为练习句数，而今日句数就是
+    // 上面的 todayResult，没必要再查一遍；也不该再暴露一个会误导人的钻石口径
+    // （前端据此显示"还差 N 颗💎"会与实际门槛完全对不上）。
     db
       .select({ checkInGoal: users.checkInGoal })
       .from(users)
@@ -193,7 +195,7 @@ export async function GET() {
   const heatmap: Record<string, number> = {}
   const heatmapDuration: Record<string, number> = {}
   for (const row of heatmapResult) {
-    heatmap[row.date] = Number(row.diamonds)
+    heatmap[row.date] = Number(row.coins)
     heatmapDuration[row.date] = Number(row.duration)
   }
 
@@ -213,8 +215,9 @@ export async function GET() {
     : null
 
   const checkInDatesThisMonth = checkInsThisMonthResult.map((r) => r.date)
-  const todayDiamonds = Number(todayDiamondResult[0]?.total ?? 0)
-  const checkInGoal = userGoalResult[0]?.checkInGoal ?? 50
+  // 打卡进度＝今日练习句数 / 打卡目标（目标语义见 lib/coins.ts：练习句数，非货币）
+  const todaySentences = Number(todayResult[0]?.cnt ?? 0)
+  const checkInGoal = userGoalResult[0]?.checkInGoal ?? CHECK_IN_GOAL_DEFAULT
 
   // Deduplicate by (courseId, lessonId), keeping the latest
   const seenKey = new Set<string>()
@@ -247,7 +250,7 @@ export async function GET() {
     lastStudied,
     recentPractices,
     checkInDatesThisMonth,
-    todayDiamonds,
+    todaySentences,
     checkInGoal,
   })
 }

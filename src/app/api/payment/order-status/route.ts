@@ -41,7 +41,7 @@ export async function GET(request: Request) {
           if (affectedRows(updateResult) > 0) {
             await activateSubscription(
               session.userId,
-              order.plan as "monthly" | "yearly" | "partner",
+              order.plan as "monthly" | "quarterly" | "yearly" | "partner",
               order.id,
               order.amount
             )

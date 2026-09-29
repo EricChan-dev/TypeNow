@@ -8,8 +8,17 @@
  * 它既是转化设计，也是防拖库的防线，不应该只靠 route 里一行 slice 口头保证。
  */
 
-/** 非会员每课可免费试学的句数。 */
-export const FREE_TRIAL_SENTENCES = 3
+/**
+ * 非会员每课可免费试学的句数。
+ *
+ * 从 3 提到 5（2026-09-29 决策）：这一屏是**唯一的转化决策点**（第 6 句起要付费），
+ * 而 3 句不足以让用户判断「这个产品对我有没有用」，也凑不出一次完整练习的成就感。
+ * 5 句约 2–3 分钟，刚好形成一次完整体验又不伤内容价值。
+ *
+ * 这个数字同时决定了价格页文案（见 lib/membership-benefits 的 PRO_BENEFITS
+ * 与 COMPARISON_ROWS 都引用它），所以只能从这里改一处。
+ */
+export const FREE_TRIAL_SENTENCES = 5
 
 export interface TrialInfo {
   /** 免费句数上限 */

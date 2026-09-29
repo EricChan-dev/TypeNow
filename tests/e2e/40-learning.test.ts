@@ -10,6 +10,7 @@ import { describe, it, expect, beforeEach } from "vitest"
 import { ApiClient } from "./helpers/api"
 import { FIXTURE, seedFixtures, q, one } from "./helpers/db"
 import { insertUser } from "./helpers/factories"
+import { FREE_TRIAL_SENTENCES } from "@/lib/free-trial"
 
 beforeEach(async () => {
   await seedFixtures()
@@ -141,9 +142,10 @@ describe("句子列表 /api/courses/sentences", () => {
     }
   })
 
-  it("非会员只拿到每课前 3 句试学，而不是 403", async () => {
+  it("非会员只拿到每课前 N 句试学，而不是 403", async () => {
     // 原先非会员在这里被直接 403，用户还没体验到核心价值就先撞收费墙。
-    // 现在改为放行每课前 3 句（对齐句乐部「每课程包可试学前几节」）。
+    // 现在放行每课前 FREE_TRIAL_SENTENCES 句（对齐句乐部「每课程包可试学前几节」），
+    // 该常量 2026-09-29 由 3 提到 5 —— 断言一律引用它，避免再次漂移。
     const res = await ApiClient.asUser(FIXTURE.userFree).get<{
       sentences: Array<{ id: string }>
       trial: { limit: number; truncated: boolean } | null
@@ -151,9 +153,10 @@ describe("句子列表 /api/courses/sentences", () => {
 
     expect(res.status).toBe(200)
     // 内容泄露边界：句子是付费内容，非会员拿到的句数永远不超过 limit
-    expect(res.body.sentences.length).toBeLessThanOrEqual(3)
-    expect(res.body.trial).toEqual({ limit: 3, truncated: false })
-    // 且必须是最前面 3 句（按 sort_order），不能是任意子集
+    expect(res.body.sentences.length).toBeLessThanOrEqual(FREE_TRIAL_SENTENCES)
+    // 夹具本课只有 3 句 < 上限 → 全放行且不标记截断
+    expect(res.body.trial).toEqual({ limit: FREE_TRIAL_SENTENCES, truncated: false })
+    // 且必须是最前面几句（按 sort_order），不能是任意子集
     expect(res.body.sentences.map((s) => s.id)).toEqual([
       FIXTURE.sentA1Plain,
       FIXTURE.sentA1Curly,
@@ -161,12 +164,15 @@ describe("句子列表 /api/courses/sentences", () => {
     ])
   })
 
-  it("非会员遇到超过 3 句的课时：仍只给 3 句并标记 truncated；会员不受限", async () => {
-    // 夹具里没有超过 3 句的课时，这里补两句构造「还有更多」的场景。
+  it("非会员遇到超过上限的课时：只给 N 句并标记 truncated；会员不受限", async () => {
+    // 夹具本课有 3 句，试学上限是 5 句 —— 必须补到**超过**上限才能构造出「还有更多」。
+    // 这里补 4 句凑到 7 句。
     // 必须插「可用句」（题干含中文、答案可输入），否则会被 usableSentenceSql 过滤掉。
     const extra = [
       { id: "e2e-trial-extra-1", chinese: "今天天气很好。", english: "The weather is nice today.", sortOrder: 3 },
       { id: "e2e-trial-extra-2", chinese: "我喜欢读书。", english: "I like reading books.", sortOrder: 4 },
+      { id: "e2e-trial-extra-3", chinese: "他昨天去了公园。", english: "He went to the park yesterday.", sortOrder: 5 },
+      { id: "e2e-trial-extra-4", chinese: "我们下周见面。", english: "We will meet next week.", sortOrder: 6 },
     ]
     for (const s of extra) {
       const wordCount = s.english.split(/\s+/).filter(Boolean).length
@@ -191,18 +197,18 @@ describe("句子列表 /api/courses/sentences", () => {
     }>(`/api/courses/sentences?lessonId=${FIXTURE.lessonA1}`)
 
     expect(free.status).toBe(200)
-    expect(free.body.sentences).toHaveLength(3)
-    // truncated 是前端展示付费引导的依据：不标出来用户会以为本课只有 3 句
-    expect(free.body.trial).toEqual({ limit: 3, truncated: true })
+    expect(free.body.sentences).toHaveLength(FREE_TRIAL_SENTENCES)
+    // truncated 是前端展示付费引导的依据：不标出来用户会以为本课只有这几句
+    expect(free.body.trial).toEqual({ limit: FREE_TRIAL_SENTENCES, truncated: true })
 
-    // 会员不受试学限制，能看到全部 5 句，且不带 trial
+    // 会员不受试学限制，能看到全部 7 句，且不带 trial
     const pro = await ApiClient.asUser(FIXTURE.userPro).get<{
       sentences: unknown[]
       trial: unknown
     }>(`/api/courses/sentences?lessonId=${FIXTURE.lessonA1}`)
 
     expect(pro.status).toBe(200)
-    expect(pro.body.sentences).toHaveLength(5)
+    expect(pro.body.sentences).toHaveLength(7)
     expect(pro.body.trial).toBeNull()
   })
 

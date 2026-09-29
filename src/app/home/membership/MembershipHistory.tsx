@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react"
 import { Loader2 } from "lucide-react"
+import { memberTierLabel } from "@/lib/pricing"
 
 interface SubRecord {
   id: string
@@ -11,12 +12,8 @@ interface SubRecord {
   expiresAt: string
 }
 
-const PLAN_LABELS: Record<string, string> = {
-  monthly: "月度会员",
-  yearly: "年度会员",
-  partner: "永久会员",
-  trial: "体验会员",
-}
+// 档位名走唯一事实源（lib/pricing）。此前这里自己写了一份映射，漏了季度档，
+// 而且 partner 被写成「永久会员」—— 它现在只是终身会员（推广资格已解绑）。
 
 const STATUS_LABELS: Record<string, { label: string; className: string }> = {
   active: { label: "生效中", className: "text-green-600 dark:text-green-400" },
@@ -62,7 +59,7 @@ export function MembershipHistory() {
         return (
           <div key={row.id} className="flex items-center justify-between py-3 first:pt-0 last:pb-0">
             <div>
-              <p className="text-sm font-medium text-foreground">{PLAN_LABELS[row.plan] ?? row.plan}</p>
+              <p className="text-sm font-medium text-foreground">{memberTierLabel(row.plan)}</p>
               <p className="text-xs text-muted-foreground mt-0.5">
                 {formatDate(row.startsAt)} → {row.expiresAt ? formatDate(row.expiresAt) : "永久"}
               </p>

@@ -19,17 +19,25 @@ export async function POST(request: Request) {
   const session = await getSession()
   if (!session) return NextResponse.json({ error: "请先登录" }, { status: 401 })
 
-  const [partner] = await db
-    .select({ isPartner: users.isPartner, wechatOpenid: users.wechatOpenid })
+  // 门禁依据是**免费主动同意《推广合作协议》**（partner_agreed_at），不是付费 ——
+  // 「付费才能取得推广资格」命中《禁止传销条例》第七条(二)。
+  //
+  // 另外提现**必须**已绑定微信：那是收款账户要求，不是资格门槛
+  // （没有 openid 就无法用商家转账打款）。
+  const [promoter] = await db
+    .select({ partnerAgreedAt: users.partnerAgreedAt, wechatOpenid: users.wechatOpenid })
     .from(users)
     .where(eq(users.id, session.userId))
     .limit(1)
 
-  if (!partner?.isPartner) {
-    return NextResponse.json({ error: "您还不是合伙人" }, { status: 403 })
+  if (!promoter) {
+    return NextResponse.json({ error: "账号不存在" }, { status: 403 })
+  }
+  if (!promoter.partnerAgreedAt) {
+    return NextResponse.json({ error: "请先加入推广计划" }, { status: 403 })
   }
 
-  if (!partner.wechatOpenid) {
+  if (!promoter.wechatOpenid) {
     return NextResponse.json({ error: "请先绑定微信账号以接收转账" }, { status: 400 })
   }
 
@@ -139,9 +147,9 @@ export async function POST(request: Request) {
     const { batchId } = await wechatTransferBatch({
       appId,
       outBatchNo,
-      openid: partner.wechatOpenid,
+      openid: promoter.wechatOpenid,
       amount: lockedAmount,
-      remark: "TypeNow 合伙人佣金提现",
+      remark: "TypeNow 推广佣金提现",
     })
     transferDone = true
 
@@ -149,7 +157,7 @@ export async function POST(request: Request) {
       id: requestId,
       partnerId: session.userId,
       amount: lockedAmount,
-      wechatOpenid: partner.wechatOpenid,
+      wechatOpenid: promoter.wechatOpenid,
       partnerTradeNo: outBatchNo,
       wxTransferId: batchId,
       status: "completed",
@@ -191,7 +199,7 @@ export async function POST(request: Request) {
           id: requestId,
           partnerId: session.userId,
           amount: lockedAmount,
-          wechatOpenid: partner.wechatOpenid,
+          wechatOpenid: promoter.wechatOpenid,
           partnerTradeNo: outBatchNo,
           status: "processing",
           failReason: UNCERTAIN_WITHDRAW_REASON,
@@ -225,7 +233,7 @@ export async function POST(request: Request) {
           id: requestId,
           partnerId: session.userId,
           amount: lockedAmount,
-          wechatOpenid: partner.wechatOpenid,
+          wechatOpenid: promoter.wechatOpenid,
           partnerTradeNo: outBatchNo,
           status: "failed",
           failReason,

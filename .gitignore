@@ -64,6 +64,15 @@ deploy.log
 # 课程内容体检产物（每次 `pnpm run audit:content --json` 重新生成）
 content-audit.json
 
+# 教材版本回填产物（每次 `npx tsx scripts/backfill-textbook-version.ts` 重新生成）。
+# 与 content-audit.json 同理：内容由课程标题推导而来，按需重跑即可。
+# 它里面有两份**需要人工判断**的清单（无年级的课、疑似非教材同步的课），
+# 判断完就该重新生成 —— 把过期清单留在仓库里反而会误导下一个人。
+content-textbook-version.json
+
 # 数据清理脚本导出的「已删除内容」安全网（不可逆删除前留底，本地留存即可）
 content-deleted/
 db-backup/
+
+# 头脑风暴可视化会话产物（本地临时）
+.superpowers/

@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useRef, useEffect, useCallback } from "react"
+import { memberTierLabel, type MemberTier } from "@/lib/pricing"
 import Link from "next/link"
 import { useSearchParams, useRouter } from "next/navigation"
 import { animate, stagger } from "animejs"
@@ -15,8 +16,6 @@ import { BindWeChatQRCode } from "@/components/auth/BindWeChatQRCode"
 import { DELETION_CONFIRM_PHRASE, isConfirmPhraseValid } from "@/lib/account-deletion"
 
 // ─── Types ────────────────────────────────────────────────────────────────────
-
-type MemberTier = "trial" | "monthly" | "yearly" | "partner" | "free"
 
 interface InitialUser {
   name: string | null
@@ -42,23 +41,19 @@ interface Sub {
 const TIER_LABEL: Record<MemberTier, string> = {
   trial:   "试用会员",
   monthly: "月度会员",
+  quarterly: "季度会员",
   yearly:  "年度会员",
-  partner: "永久会员",
+  partner: "终身会员",
   free:    "普通用户",
 }
 
 const TIER_STYLE: Record<MemberTier, React.CSSProperties> = {
   trial:   { background: "rgba(251,191,36,0.12)", borderColor: "rgba(251,191,36,0.3)", color: "#fbbf24" },
   monthly: { background: "rgba(96,165,250,0.12)", borderColor: "rgba(96,165,250,0.3)", color: "#60a5fa" },
+  quarterly: { background: "rgba(34,211,238,0.12)", borderColor: "rgba(34,211,238,0.3)", color: "#22d3ee" },
   yearly:  { background: "rgba(167,139,250,0.12)", borderColor: "rgba(167,139,250,0.3)", color: "#a78bfa" },
   partner: { background: "linear-gradient(135deg,rgba(251,191,36,0.2),rgba(234,179,8,0.1))", borderColor: "rgba(251,191,36,0.45)", color: "#fde047", boxShadow: "0 0 8px rgba(251,191,36,0.2)" },
   free:    { background: "var(--surface)", borderColor: "var(--border)", color: "var(--muted-foreground)" },
-}
-
-const PLAN_LABEL: Record<string, string> = {
-  monthly: "月度会员",
-  yearly:  "年度会员",
-  partner: "合伙人（永久）",
 }
 
 const STATUS_CONFIG: Record<string, { label: string; className: string }> = {
@@ -141,7 +136,7 @@ function SubRow({ sub }: { sub: Sub }) {
   return (
     <div className="flex items-center justify-between py-3 border-b border-border last:border-0">
       <div>
-        <p className="text-sm font-medium text-foreground/70">{PLAN_LABEL[sub.plan]}</p>
+        <p className="text-sm font-medium text-foreground/70">{memberTierLabel(sub.plan)}</p>
         <p className="text-[11px] text-muted-foreground/60 mt-0.5 font-mono">
           {fmtDate(sub.startsAt)}
           {isPartner ? " · 永久" : ` — ${fmtDate(sub.expiresAt)}`}
@@ -757,13 +752,13 @@ export function SettingsClient({ initialUser }: { initialUser: InitialUser }) {
                 </p>
                 <p className="font-medium text-foreground mt-1">会被保留（去除身份信息）：</p>
                 <p className="text-muted-foreground">
-                  练习记录、打卡、钻石与订单流水 —— 用于学习统计与财务凭证，不再关联到你。
+                  练习记录、打卡、钻石、金币与订单流水 —— 用于学习统计与财务凭证，不再关联到你。
                 </p>
                 <p className="font-medium text-foreground mt-1">不可恢复：</p>
                 <p className="text-muted-foreground">
                   {initialUser.isPro && !initialUser.isPartner
-                    ? "剩余会员时长与钻石将随账号一并失效，且无法恢复。"
-                    : "账号内的钻石将清零，且无法恢复。"}
+                    ? "剩余会员时长、钻石与金币将随账号一并失效，且无法恢复。"
+                    : "账号内的钻石与金币将清零，且无法恢复。"}
                 </p>
               </div>
 

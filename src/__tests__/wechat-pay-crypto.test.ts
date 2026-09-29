@@ -48,7 +48,7 @@ describe("decryptAesGcm", () => {
   })
 
   it("支持中文内容且 associated_data 为空", () => {
-    const payload = JSON.stringify({ description: "TypeNow 合伙人终身会员" })
+    const payload = JSON.stringify({ description: "TypeNow 终身会员" })
     const cipher = createCipheriv(
       "aes-256-gcm",
       Buffer.from(API_V3_KEY, "utf-8"),

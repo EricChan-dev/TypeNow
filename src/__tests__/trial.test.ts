@@ -1,11 +1,15 @@
 /**
  * 体验会员（src/lib/trial.ts + src/lib/trial-days.ts）。
  *
- * 存在的理由：体验会员从「注册无条件送 3 天」改成「未受邀用户主动领取 5 天」，
+ * 存在的理由：体验会员从「注册无条件送 3 天」改成「未受邀用户主动领取」，
  * 而领取是一次性权益 —— 这里看住两件事：
  *   1. 天数只有一个来源（服务端授予与客户端文案不会各说各话）；
  *   2. 注册时「受邀自动领取」必须同时写上 trial_claimed_at，
  *      否则受邀用户会在自动拿到之后**再手动领一次**，等于发两份。
+ *
+ * 天数在 2026-09-29 由 5 调回 3：试学句数同时从 3 提到 5，价值前置做足之后，
+ * 体验会员不再需要靠拉长天数补价值感。断言刻意写成引用 TRIAL_DAYS，
+ * 这样下次调数值只需要改一处常量。
  *
  * claimTrial 本身依赖数据库（条件更新 + affectedRows），不在单测范围；
  * 它的幂等性由 SQL 的 WHERE 条件保证，见 db/migrations/00012_trial_claim.sql。
@@ -16,8 +20,8 @@ import { TRIAL_DAYS, trialExpiryFrom, trialGrantFields } from "@/lib/trial"
 const DAY_MS = 24 * 60 * 60 * 1000
 
 describe("TRIAL_DAYS", () => {
-  it("为 5 天", () => {
-    expect(TRIAL_DAYS).toBe(5)
+  it("为 3 天", () => {
+    expect(TRIAL_DAYS).toBe(3)
   })
 })
 
@@ -33,9 +37,9 @@ describe("trialExpiryFrom", () => {
   })
 
   it("跨月也算得对（用固定时间戳避免时区/月末陷阱）", () => {
-    // 2026-01-30T00:00:00Z + 5 天 = 2026-02-04T00:00:00Z
+    // 2026-01-30T00:00:00Z + 3 天 = 2026-02-02T00:00:00Z
     const jan30 = Date.UTC(2026, 0, 30)
-    expect(trialExpiryFrom(jan30).toISOString()).toBe("2026-02-04T00:00:00.000Z")
+    expect(trialExpiryFrom(jan30).toISOString()).toBe("2026-02-02T00:00:00.000Z")
   })
 })
 

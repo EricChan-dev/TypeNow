@@ -10,6 +10,7 @@ const pageTitles: Record<string, string> = {
   "/home": "首页",
   "/home/courses": "我的课程",
   "/home/store": "课程广场",
+  "/home/textbook": "教材同步",
   "/home/feed": "动态广场",
   "/home/archive": "学习档案",
   "/home/leaderboard": "排行榜",
@@ -17,11 +18,11 @@ const pageTitles: Record<string, string> = {
   "/home/wordbook": "单词本",
   "/home/notes": "笔记本",
   "/home/settings": "设置",
-  "/home/partner": "合伙人中心",
+  "/home/partner": "推广中心",
   "/home/membership": "会员中心",
 }
 
-export function HomeShell({ children, isPartner }: { children: React.ReactNode; isPartner?: boolean }) {
+export function HomeShell({ children }: { children: React.ReactNode }) {
   const [collapsed, setCollapsed] = useState(false)
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const pathname = usePathname()
@@ -37,7 +38,7 @@ export function HomeShell({ children, isPartner }: { children: React.ReactNode; 
     <div className="flex flex-1 min-h-0">
       {/* Desktop sidebar */}
       <div className="hidden lg:block">
-        <HomeSidebar collapsed={collapsed} isPartner={!!isPartner} />
+        <HomeSidebar collapsed={collapsed} />
       </div>
 
       {/* Mobile slide-over sidebar */}
@@ -45,7 +46,7 @@ export function HomeShell({ children, isPartner }: { children: React.ReactNode; 
         <div className="lg:hidden fixed inset-0 z-40">
           <div className="absolute inset-0 bg-background/80 backdrop-blur-sm" onClick={() => setMobileMenuOpen(false)} />
           <div className="relative w-[240px] h-full">
-            <HomeSidebar collapsed={false} isPartner={!!isPartner} onNavigate={() => setMobileMenuOpen(false)} />
+            <HomeSidebar collapsed={false} onNavigate={() => setMobileMenuOpen(false)} />
           </div>
         </div>
       )}

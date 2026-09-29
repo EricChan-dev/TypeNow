@@ -14,9 +14,18 @@
  */
 
 import { FREE_TRIAL_SENTENCES } from "@/lib/free-trial"
+import { COIN_COURSE_COMPLETE, COIN_LESSON_COMPLETE } from "@/lib/coins"
 
-export const LESSON_COMPLETE_REWARD = 30
-export const COURSE_COMPLETE_REWARD = 100
+/**
+ * 完成奖励的额度。**单位是金币**（免费货币），不再是钻石 ——
+ * 2026-09-29 双货币拆分后，练习 / 课时 / 课程奖励一律发金币
+ * （钻石改为只由会员每日赠送，用于 AI 与语音评测的超额消耗）。
+ *
+ * 数值定义在 lib/coins.ts（唯一事实源），这里只做语义别名 ——
+ * 同一笔奖励在两个地方各写一个数，迟早会漂移。
+ */
+export const LESSON_COMPLETE_REWARD = COIN_LESSON_COMPLETE
+export const COURSE_COMPLETE_REWARD = COIN_COURSE_COMPLETE
 
 /**
  * 「练完一节课」需要练过的句数。

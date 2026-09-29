@@ -159,6 +159,7 @@ export default function UserShow() {
           <Descriptions.Item label="等级">{(record.level as number) || 1}</Descriptions.Item>
           <Descriptions.Item label="总分">{(record.totalScore as number) || 0}</Descriptions.Item>
           <Descriptions.Item label="钻石">{(record.diamonds as number) || 0}</Descriptions.Item>
+          <Descriptions.Item label="金币">{(record.coins as number) || 0}</Descriptions.Item>
           <Descriptions.Item label="邀请码">{(record.inviteCode as string) || "-"}</Descriptions.Item>
           <Descriptions.Item label="会员状态">
             {record.isPro ? (

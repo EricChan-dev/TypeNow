@@ -1,8 +1,9 @@
 /**
  * 「邀请有礼」天数制的规则层（纯函数，无数据库依赖）。
  *
- * 参考句乐部的双轨设计：佣金制（星火计划，对应我们的合伙人 partner_commissions）
+ * 参考句乐部的双轨设计：佣金制（星火计划，对应我们的 partner_commissions）
  * 与天数制（邀请有礼）**并行、互不冲突**。本文件只管天数制。
+ * （2026-09-29 合规改造后，佣金制已解绑为「所有注册用户均可加入」，与套餐无关。）
  *
  * 句乐部的规则（官方帮助文档）：
  *   - 好友注册：好友获得 7 天体验会员（仅限首次注册）
@@ -11,19 +12,27 @@
  *   - 好友需在建立邀请关系后 30 天内完成首次购买
  *   - 奖励无上限
  *
- * 我们照此实现，并额外做了一条句乐部没写明的收紧（见下方 purchaseReward 注释）。
+ * **我们的数值不同（2026-09-29 决策）**：注册档 5 天；首购档月/季卡双方各 3 天、
+ * 年卡双方各 7 天。句乐部的绝对天数比我们宽松，这是刻意的 —— 规则结构照抄，
+ * 力度自己定；我们还没有它的用户基数，送出去的每一天都是纯成本。
  */
 
-/** 受邀注册时，被邀请人获得的体验会员天数（句乐部为 7 天）。 */
-export const INVITE_REGISTER_DAYS = 7
+/**
+ * 受邀注册时，被邀请人获得的体验会员天数。
+ *
+ * 2026-09-29 决策：7 → **5**。
+ * 仍比主动领取的 `TRIAL_DAYS`（3 天）更长 —— 让「被朋友邀请」比「自己去领」
+ * 更划算，才有动力走邀请链接；但差距从 7:5 收窄到 5:3，避免邀请档发得太松。
+ */
+export const INVITE_REGISTER_DAYS = 5
 
 /** 建立邀请关系后，多久内完成首购才发奖励。 */
 export const INVITE_ATTRIBUTION_DAYS = 30
 
 const DAY_MS = 24 * 60 * 60 * 1000
 
-/** 可触发邀请首购奖励的套餐。partner 套餐另外走现金佣金，不参与天数制。 */
-export type InvitePurchasePlan = "monthly" | "yearly"
+/** 可触发邀请首购奖励的套餐。partner（终身会员）不参与天数制，见 purchaseReward。 */
+export type InvitePurchasePlan = "monthly" | "quarterly" | "yearly"
 
 export interface InvitePurchaseReward {
   /** 邀请人获得的天数 */
@@ -33,18 +42,24 @@ export interface InvitePurchaseReward {
 }
 
 /**
- * 首购奖励额度。年卡明显高于月卡 —— 句乐部原文「推荐好友购买年会员，双方获得
+ * 首购奖励额度。年卡高于月卡/季卡 —— 句乐部原文「推荐好友购买年会员，双方获得
  * 更多奖励」，靠这个差额把邀请人引导到推广年卡。
  *
- * 注意：句乐部的具体数值只出现在帮助文档的**图片**里，无法读取，
- * 这里的 5/3 与 30/20 沿用我们此前方案中的比例，属于待校准值而非抄来的数字。
+ * 2026-09-29 决策：数值大幅收紧（原为 年卡 30/20、月卡 5/3）。
+ *   - 月卡 / 季卡：双方各 **3 天**
+ *   - 年卡：双方各 **7 天**
  *
- * partner 套餐返回 null：¥399 合伙人本身就是推广身份，另有 50% 现金佣金
- * （见 lib/subscription 的 partner_commissions），若再叠加天数就是双重让利。
+ * 收紧的理由：原值一次年卡首购就送出 50 天会员，对一个尚无收入的产品是纯让利；
+ * 而且邀请人拉一个新用户即得 30 天，会让「拉人」比「卖课」更划算 —— 激励方向错了。
+ *
+ * partner（终身会员）返回 null。注意在 2026-09-29 的合规改造后，这条的理由变了：
+ * 不再是「它本身就是推广身份、另有现金佣金，叠加就是双重让利」（那个前提已随
+ * 推广资格解绑而消失），而是一个纯粹的产品判断 —— 一次 ¥499 的交易不该再叠加
+ * 几十天会员。现金佣金现在对**所有注册用户**开放，与本套餐无关。
  */
 export function purchaseReward(plan: string): InvitePurchaseReward | null {
-  if (plan === "yearly") return { inviterDays: 30, inviteeDays: 20 }
-  if (plan === "monthly") return { inviterDays: 5, inviteeDays: 3 }
+  if (plan === "yearly") return { inviterDays: 7, inviteeDays: 7 }
+  if (plan === "monthly" || plan === "quarterly") return { inviterDays: 3, inviteeDays: 3 }
   return null
 }
 

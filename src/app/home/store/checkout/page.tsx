@@ -6,11 +6,9 @@ import { Clock, Sparkles, ArrowLeft, CheckCircle2 } from "lucide-react"
 import QRCode from "qrcode"
 import Link from "next/link"
 
-const PLAN_LABELS: Record<string, string> = {
-  partner: "合伙人终身会员",
-  monthly: "月度会员",
-  yearly: "年度会员",
-}
+// 档位名走唯一事实源（lib/pricing）：原先这里手写了三档、漏了季度档，
+// 而且 partner 被写成「合伙人终身会员」—— 推广资格已解绑，它只是终身会员。
+import { memberTierLabel } from "@/lib/pricing"
 
 export default function CheckoutPage() {
   const params = useSearchParams()
@@ -92,7 +90,7 @@ export default function CheckoutPage() {
 
   const minutes = Math.floor(countdown / 60)
   const seconds = countdown % 60
-  const planLabel = PLAN_LABELS[plan] ?? "会员"
+  const planLabel = memberTierLabel(plan) ?? "会员"
 
   return (
     <div className="min-h-full bg-background flex flex-col items-center justify-center px-4 py-10">

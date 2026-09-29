@@ -18,7 +18,8 @@ import { PricingFAQ } from "@/components/pricing/PricingFAQ"
 import { ScrollToSection } from "@/components/layout/ScrollToSection"
 import { ScrollToTop } from "@/components/layout/ScrollToTop"
 import { AuthLink } from "@/components/layout/AuthLink"
-import { PARTNER_BENEFITS, PRO_BENEFITS } from "@/lib/membership-benefits"
+import { LIFETIME_BENEFITS, PRO_BENEFITS } from "@/lib/membership-benefits"
+import { findPlan, formatYuan, planPeriodSuffix, planPriceNote, planSaveNote } from "@/lib/pricing"
 import type { Metadata } from "next"
 
 // 落地页此前也没有页面级 metadata：搜索结果里显示的是根 layout 的泛化描述，
@@ -26,7 +27,7 @@ import type { Metadata } from "next"
 export const metadata: Metadata = {
   title: "TypeNow 码上英语 - 中译英打字练习，把英语用出来",
   description:
-    "看中文、敲英文，把「认识」练成「能用出来」。700+ 门课程、间隔重复复习、点词详情与 AI 句子讲解，每门课都可免费试学。",
+    "看中文、敲英文，把「认识」练成「能用出来」。700+ 门课程、间隔重复复习、点词详情与 AI 句子讲解，每门课都可免费试学，首期优惠 ¥29 起。",
 }
 
 // 会员权益不再各写一份：统一取自 lib/membership-benefits（唯一事实源）。
@@ -34,7 +35,20 @@ export const metadata: Metadata = {
 // 代码里并不存在的条目（听说读写全覆盖 / 自定义上传 / 报告导出 / 会员徽章）。
 const proMemberFeatures = PRO_BENEFITS.map((b) => b.claim)
 
-const partnerFeatures = PARTNER_BENEFITS.map((b) => b.claim)
+// 终身会员只讲**学习**权益。2026-09-29 合规改造后推广权益不再与付费档绑定
+// （见 lib/membership-benefits 的 PROMOTER_BENEFITS），所以这里不能再用
+// 任何含佣金/推广/赚钱的文案。
+const lifetimeFeatures = LIFETIME_BENEFITS.map((b) => b.claim)
+
+// 价格与「首期/续费」措辞一律取自 lib/pricing，不在页面里写死数字 ——
+// 首页与价格页必须显示同一组数字和同一套说法，否则就是又一次"两边各写一份"。
+function planOf(key: string) {
+  const plan = findPlan(key)
+  if (!plan) throw new Error(`未定义的会员档位: ${key}`)
+  return plan
+}
+const planPrice = (key: string) => formatYuan(planOf(key).firstAmount)
+const planOriginalPrice = (key: string) => formatYuan(planOf(key).standardAmount)
 
 export default function LandingPage() {
   return (
@@ -508,45 +522,61 @@ export default function LandingPage() {
               简单透明的定价
             </h2>
             <p className="text-base text-muted-foreground">
-              按需选择适合你的方案，合伙人可边学边赚
+              按需选择适合你的方案，新用户首次购买享首期优惠
             </p>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 w-full">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 w-full">
             <PricingCard
-              name="月度会员"
-              description="解锁全部功能，高效提升英语能力"
-              price="¥29"
-              period="/月"
+              name={planOf("monthly").label}
+              description={planPriceNote("monthly")}
+              price={planPrice("monthly")}
+              period={planPeriodSuffix("monthly")}
+              originalPrice={planOriginalPrice("monthly")}
+              saveBadge={planSaveNote("monthly")}
               features={proMemberFeatures}
               ctaText="立即订阅"
               ctaHref="/login"
               variant="neutral"
             />
             <PricingCard
-              name="年度会员"
-              description="最划算的选择，每天不到 6 毛钱"
-              price="¥199"
-              period="/年"
-              originalPrice="¥348"
-              subPeriod="≈ ¥16.6/月"
+              name={planOf("quarterly").label}
+              description={planPriceNote("quarterly")}
+              price={planPrice("quarterly")}
+              period={planPeriodSuffix("quarterly")}
+              originalPrice={planOriginalPrice("quarterly")}
+              saveBadge={planSaveNote("quarterly")}
+              features={proMemberFeatures}
+              ctaText="立即订阅"
+              ctaHref="/login"
+              variant="neutral"
+            />
+            <PricingCard
+              name={planOf("yearly").label}
+              description={planPriceNote("yearly")}
+              price={planPrice("yearly")}
+              period={planPeriodSuffix("yearly")}
+              originalPrice={planOriginalPrice("yearly")}
+              subPeriod={`≈ ${formatYuan(Math.round(planOf("yearly").firstAmount / 12))}/月`}
               features={proMemberFeatures}
               ctaText="立即订阅"
               ctaHref="/login"
               variant="emphasized"
               badge="推荐"
-              saveBadge="省 ¥149"
+              saveBadge={planSaveNote("yearly")}
             />
             <PricingCard
-              name="合伙人会员"
-              description="一次加入，永久免费学习 + 无限赚佣金"
-              price="¥399"
-              period="终身"
-              features={partnerFeatures}
-              ctaText="立即开通合伙人"
-              ctaHref="/home/partner"
+              name={planOf("partner").label}
+              description={planPriceNote("partner")}
+              price={planPrice("partner")}
+              period={planPeriodSuffix("partner")}
+              originalPrice={planOriginalPrice("partner")}
+              saveBadge={planSaveNote("partner")}
+              features={lifetimeFeatures}
+              ctaText="了解终身会员"
+              ctaHref="/login?redirect=/home/membership"
               variant="prominent"
-              badge="高收益"
+              badge="终身"
             />
           </div>
         </div>

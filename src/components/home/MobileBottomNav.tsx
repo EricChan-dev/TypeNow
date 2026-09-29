@@ -4,13 +4,16 @@ import { usePathname, useRouter } from "next/navigation"
 import { LayoutDashboard, BookOpen, ShoppingBag, BookText, BookMarked, TrendingUp } from "lucide-react"
 import { cn } from "@/lib/utils"
 
+// 底栏只有 6 格，加不下「教材同步」—— 它在侧边栏里（移动端展开菜单可见）。
+// 「合伙人」改为「推广」：2026-09-29 合规改造后该入口对所有人免费开放，
+// 不再是"付费取得的合伙人身份"。
 const tabs = [
   { key: "/home", label: "首页", icon: LayoutDashboard },
   { key: "/home/courses", label: "课程", icon: BookOpen },
   { key: "/home/store", label: "广场", icon: ShoppingBag },
   { key: "/home/wordbook", label: "单词本", icon: BookText },
   { key: "/home/review", label: "复习", icon: BookMarked },
-  { key: "/home/partner", label: "合伙人", icon: TrendingUp },
+  { key: "/home/partner", label: "推广", icon: TrendingUp },
 ]
 
 export function MobileBottomNav() {

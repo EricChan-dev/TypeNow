@@ -133,11 +133,13 @@ export const FEATURE_GROUPS: readonly FeatureGroup[] = [
       },
       {
         title: "每日打卡与任务",
-        detail: "完成当日学习即可打卡，累积连续天数；任务与分享可获得钻石。",
+        detail: "当天练够目标句数即可打卡，累积连续天数；打卡、任务与分享可获得金币。",
       },
       {
-        title: "钻石",
-        detail: "练习、任务与分享都能获得钻石，用于 AI 私教助手等消耗型能力。",
+        title: "双货币：金币与钻石",
+        detail:
+          "金币靠学习获得（练习、打卡、任务、分享），可兑换会员天数与道具；" +
+          "钻石由会员每天赠送，用于 AI 私教助手与语音评测的超额消耗。两者用途不交叉。",
       },
     ],
     caveat: "学习统计对所有用户开放，不区分会员。",
@@ -145,7 +147,7 @@ export const FEATURE_GROUPS: readonly FeatureGroup[] = [
   {
     id: "partner",
     anchor: "partner",
-    title: "合伙人推广",
+    title: "推广计划",
     summary: "边学边推广，按实际成交拿佣金。",
     items: [
       {
@@ -161,6 +163,6 @@ export const FEATURE_GROUPS: readonly FeatureGroup[] = [
         detail: "收益可全额提现至微信零钱，数据看板实时查看邀请数与待结算金额。",
       },
     ],
-    caveat: "合伙人资格为一次性买断，同时永久解锁全部会员功能。",
+    caveat: "加入推广计划免费，不收取任何费用，也不需要购买任何商品。佣金按被推荐人的实际付费金额计算。",
   },
 ]

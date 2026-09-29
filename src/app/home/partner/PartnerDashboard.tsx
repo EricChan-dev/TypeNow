@@ -201,7 +201,7 @@ export default function PartnerDashboard() {
       <canvas ref={canvasRef} className="hidden" />
 
       <div className="max-w-lg mx-auto px-4 pt-8 flex flex-col gap-6">
-        <div className="text-2xl font-bold">合伙人中心</div>
+        <div className="text-2xl font-bold">推广中心</div>
 
         {/* Stats */}
         <div className="grid grid-cols-2 gap-3">
