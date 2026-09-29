@@ -144,6 +144,14 @@ describe("后台表格约定", () => {
     ).toEqual([])
   })
 
+  it("scroll.x 必须是 max-content，不能写死像素数", () => {
+    // 写死像素（例如 x: 1100）时 AntD 会用 table-layout: fixed 把各列**压缩进**
+    // 指定宽度：宽屏下表格宽度不到容器宽 → 不出滚动条，而列照样被挤到换行、
+    // 按钮被裁掉。「用户管理」就因此没修上（其余 14 张都是 max-content）。
+    const bad = tables.filter((t) => /scroll=\{\{\s*x:\s*\d/.test(t.text))
+    expect(bad.map((b) => `${b.file}:${b.line}`), "写死 scroll.x 的表格").toEqual([])
+  })
+
   it("每个操作列都固定了 —— 否则横向滚动后按钮会滑出视野", () => {
     const bad = actions.filter((a) => !a.text.includes("fixed"))
     expect(

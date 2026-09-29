@@ -61,7 +61,7 @@ export default function UsersList() {
         </Space>
       </div>
 
-      <Table {...tableProps} rowKey="id" scroll={{ x: 1100 }}>
+      <Table {...tableProps} rowKey="id" scroll={{ x: "max-content" }}>
         <Table.Column
           dataIndex="name"
           title="昵称"
