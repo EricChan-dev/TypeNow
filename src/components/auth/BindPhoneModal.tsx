@@ -122,8 +122,10 @@ export function BindPhoneModal({ onClose, reason }: BindPhoneModalProps) {
         role="dialog"
         aria-modal="true"
         aria-label="绑定手机号"
-        className="relative w-full max-w-sm rounded-2xl border border-border p-6 flex flex-col gap-4"
-        style={{ background: "var(--surface)" }}
+        // 必须用 bg-card（不透明的卡片底色），不能用 var(--surface)：
+        // --surface 是 rgba(0,0,0,0.03) 那种"叠加一点点"的透明层，
+        // 拿它当弹窗底色会让页面内容透过弹窗显出来，字几乎看不清。
+        className="relative w-full max-w-sm rounded-2xl border border-border bg-card p-6 flex flex-col gap-4 shadow-2xl"
       >
         {onClose ? (
           <button
