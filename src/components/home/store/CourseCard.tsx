@@ -1,58 +1,33 @@
 "use client"
 
 import Link from "next/link"
+import Image from "next/image"
 import { Users } from "lucide-react"
 import { cn } from "@/lib/utils"
 import type { Course } from "@/types/course"
-import { COURSE_CATEGORIES } from "@/types/course"
+import {
+  getCategoryLabel,
+  resolveCourseCover,
+  type CategoryTheme,
+} from "@/lib/course-cover"
 
-// ─── Category → color scheme ────────────────────────────────────────────────
-const CATEGORY_THEMES: Record<string, { bg: string; accent: string; text: string; badge: string }> = {
-  graded_reading: {
-    bg: "linear-gradient(135deg, #0f2b1a 0%, #1a3d28 40%, #0d2216 100%)",
-    accent: "#4ade80",
-    text: "#bbf7d0",
-    badge: "#166534",
-  },
-  school_sync: {
-    bg: "linear-gradient(135deg, #0f1a3a 0%, #1a2d5a 40%, #0d1430 100%)",
-    accent: "#60a5fa",
-    text: "#bfdbfe",
-    badge: "#1e3a5f",
-  },
-  exam_prep: {
-    bg: "linear-gradient(135deg, #3a1010 0%, #5c1818 40%, #2d0d0d 100%)",
-    accent: "#f87171",
-    text: "#fecaca",
-    badge: "#5c1a1a",
-  },
-  practical: {
-    bg: "linear-gradient(135deg, #2d1a0f 0%, #4a2a1a 40%, #221006 100%)",
-    accent: "#fb923c",
-    text: "#fed7aa",
-    badge: "#5c2d1a",
-  },
+export interface CourseCardStats {
+  lessonCount: number
+  sentenceCount: number
+  completedLessons: number
 }
 
-const DEFAULT_THEME = {
-  bg: "linear-gradient(135deg, #1a1a2e 0%, #2a2a44 40%, #12121f 100%)",
-  accent: "#a78bfa",
-  text: "#ddd6fe",
-  badge: "#2e1a4a",
-}
-
-function getTheme(categoryKey: string | null) {
-  if (categoryKey && CATEGORY_THEMES[categoryKey]) return CATEGORY_THEMES[categoryKey]
-  return DEFAULT_THEME
-}
-
-function getCategoryLabel(categoryKey: string | null, subCategoryKey: string | null): string {
-  if (!categoryKey) return "综合"
-  const main = COURSE_CATEGORIES.find((c) => c.key === categoryKey)
-  if (!main) return categoryKey
-  if (!subCategoryKey) return main.label
-  const sub = main.subCategories.find((s) => s.key === subCategoryKey)
-  return sub ? `${main.label} · ${sub.label}` : main.label
+interface CourseCardProps {
+  course: Course
+  /**
+   * "discover" —— 课程广场 / 教材同步：用户在**挑**课程，图片负责吸引点击
+   * "mine"     —— 我的课程：用户已经挑过、要回来继续练，需要的是「我学到哪了」
+   *
+   * 默认 discover，所以另两个列表页无需改动。
+   */
+  variant?: "discover" | "mine"
+  /** 仅 variant="mine" 需要，由 /api/courses/mine 提供 */
+  stats?: CourseCardStats
 }
 
 function formatLearnerCount(n: number): string {
@@ -61,108 +36,159 @@ function formatLearnerCount(n: number): string {
   return String(n)
 }
 
-interface CourseCardProps {
-  course: Course
+/**
+ * 封面图。
+ *
+ * 只有我们自己生成的本地图片（以 `/` 开头）才走 `next/image`：自动出 WebP/AVIF、
+ * 懒加载、按 `sizes` 下发合适尺寸。外链与 dataURL 走裸 img ——
+ * `next/image` 对未在 `next.config.ts` 的 `remotePatterns` 里登记的域名会直接抛错，
+ * 而后台的「上传封面」是把图片转成 base64 dataURL 写进 `courses.cover_url`。
+ */
+function CoverImage({ src, alt, sizes }: { src: string; alt: string; sizes: string }) {
+  if (src.startsWith("/")) {
+    return (
+      <Image
+        src={src}
+        alt={alt}
+        fill
+        sizes={sizes}
+        className="object-cover transition-transform duration-300 group-hover:scale-[1.03]"
+      />
+    )
+  }
+  // eslint-disable-next-line @next/next/no-img-element
+  return <img src={src} alt={alt} className="absolute inset-0 h-full w-full object-cover" />
 }
 
-export function CourseCard({ course }: CourseCardProps) {
-  const theme = getTheme(course.categoryKey)
+/**
+ * 主题图缺失（或课程还没落到任何槽位）时的兜底：分类渐变 + 分类标签 + 标题。
+ * 这是三层降级里唯一会画出文字的一层，所以它必须自己带上标题。
+ */
+function GradientCover({
+  theme,
+  label,
+  title,
+  sourceName,
+}: {
+  theme: CategoryTheme
+  label: string
+  title: string
+  sourceName: string
+}) {
+  return (
+    <div
+      className="absolute inset-0 flex flex-col justify-between p-4 select-none"
+      style={{ background: theme.bg }}
+    >
+      <div
+        className="absolute inset-0 opacity-[0.06]"
+        style={{
+          backgroundImage: `radial-gradient(circle, ${theme.accent} 1px, transparent 1px)`,
+          backgroundSize: "16px 16px",
+        }}
+      />
+      <span
+        className="relative z-10 self-start rounded-md px-2 py-0.5 text-[10px] font-semibold tracking-wide"
+        style={{ background: theme.badge, color: theme.accent }}
+      >
+        {label}
+      </span>
+      <h3
+        className="relative z-10 line-clamp-2 text-sm font-bold leading-snug"
+        style={{ color: theme.text }}
+      >
+        {title}
+      </h3>
+      <span
+        className="relative z-10 text-[10px] font-medium opacity-50"
+        style={{ color: theme.text }}
+      >
+        {sourceName}
+      </span>
+    </div>
+  )
+}
+
+export function CourseCard({ course, variant = "discover", stats }: CourseCardProps) {
+  const cover = resolveCourseCover(course)
   const categoryLabel = getCategoryLabel(course.categoryKey, course.subCategoryKey)
+
+  // 5 列布局时卡片约 220px；sizes 必须按断点如实声明，否则 next/image 会下发过大的图
+  const sizes =
+    "(max-width: 639px) 100vw, (max-width: 767px) 50vw, (max-width: 1023px) 33vw, (max-width: 1279px) 25vw, 20vw"
+
+  const isMine = variant === "mine"
+  const progressPct =
+    stats && stats.lessonCount > 0
+      ? Math.min(100, Math.round((stats.completedLessons / stats.lessonCount) * 100))
+      : 0
 
   return (
     <Link
       href={`/home/store/${course.id}`}
       className="group block w-full text-left rounded-xl border border-border bg-card overflow-hidden hover:border-accent/50 hover:shadow-lg transition-all"
     >
-      {/* Cover */}
-      {course.coverUrl ? (
-        <div className="relative aspect-[16/10] overflow-hidden">
-          <img src={course.coverUrl} alt={course.title} className="w-full h-full object-cover" />
-          {course.source === "official" && (
-            <span className="absolute top-2.5 left-2.5 rounded-full bg-foreground/15 backdrop-blur-sm px-2 py-0.5 text-[10px] font-medium text-foreground/90">
-              官方
-            </span>
-          )}
-        </div>
-      ) : (
-        /* Generated cover */
-        <div
-          className="relative aspect-[16/10] flex flex-col justify-between p-4 overflow-hidden select-none"
-          style={{ background: theme.bg }}
-        >
-          {/* Subtle texture dots */}
-          <div
-            className="absolute inset-0 opacity-[0.06]"
-            style={{
-              backgroundImage: `radial-gradient(circle, ${theme.accent} 1px, transparent 1px)`,
-              backgroundSize: "16px 16px",
-            }}
+      {/*
+        封面：discover 用 3:2 大图（视觉冲击由图片本身提供），mine 用 16:10。
+        两种形态都**不把标题压在图上** —— 实测 4 张样图的底部全是画面里最亮最碎的
+        区域，「下三分之一留暗区」的约束一次都没生效，压图方案的可靠性取决于
+        每一张图的明暗，而 176 张的构图不受控（见设计文档 D7）。
+      */}
+      <div className={cn("relative overflow-hidden", isMine ? "aspect-[16/10]" : "aspect-[3/2]")}>
+        {cover.kind === "image" ? (
+          <CoverImage src={cover.src} alt={course.title} sizes={sizes} />
+        ) : (
+          <GradientCover
+            theme={cover.theme}
+            label={categoryLabel}
+            title={course.title}
+            sourceName={course.sourceName}
           />
+        )}
+        {course.source === "official" && (
+          <span className="absolute top-2 left-2 rounded-full bg-foreground/15 px-2 py-0.5 text-[10px] font-medium text-foreground/90 backdrop-blur-sm">
+            官方
+          </span>
+        )}
+      </div>
 
-          {/* Top row: category badge + source badge */}
-          <div className="relative z-10 flex items-center gap-2">
-            <span
-              className="rounded-md px-2 py-0.5 text-[10px] font-semibold tracking-wide"
-              style={{ background: theme.badge, color: theme.accent }}
-            >
-              {categoryLabel}
-            </span>
-            {course.source === "official" && (
-              <span className="rounded-full bg-white/10 backdrop-blur-sm px-2 py-0.5 text-[10px] font-medium text-white/70">
-                官方
-              </span>
-            )}
-          </div>
-
-          {/* Middle: course title */}
-          <div className="relative z-10 flex-1 flex items-center">
-            <h3
-              className="text-sm font-bold leading-snug line-clamp-2"
-              style={{ color: theme.text }}
-            >
-              {course.title}
-            </h3>
-          </div>
-
-          {/* Bottom: creator name */}
-          <div className="relative z-10 flex items-center gap-1.5">
-            <span className="text-[10px] font-medium opacity-50" style={{ color: theme.text }}>
-              {course.sourceName}
-            </span>
-            {/* Decorative line */}
-            <div className="flex-1 h-px opacity-10" style={{ background: theme.text }} />
-          </div>
-        </div>
-      )}
-
-      {/* Info */}
-      <div className="p-3.5 space-y-2.5">
-        <h3 className="text-sm font-medium text-foreground truncate leading-snug">
+      {/* 信息区：标题只渲染一次（原先封面上还压了一次，换成真图后纯属重复） */}
+      <div className={cn("space-y-2", isMine ? "p-3.5" : "p-3")}>
+        <h3 className="line-clamp-2 text-sm font-medium leading-snug text-foreground">
           {course.title}
         </h3>
 
-        <div className="flex items-center justify-between">
-          {/* Source */}
-          <div className="flex items-center gap-1.5 min-w-0">
-            <div className={cn(
-              "flex items-center justify-center h-5 w-5 rounded-full shrink-0 text-[10px] font-bold",
-              course.source === "official" ? "bg-accent text-white" : "bg-muted text-muted-foreground"
-            )}>
-              {course.source === "official" ? "官" : (course.sourceName || "U")[0]}
-            </div>
-            <span className="text-xs text-muted-foreground truncate">
-              {course.sourceName}
-            </span>
-          </div>
-
-          {/* Learner count */}
-          <div className="flex items-center gap-1 shrink-0">
-            <Users className="h-3 w-3 text-muted-foreground" />
-            <span className="text-xs text-muted-foreground">
+        {isMine && stats ? (
+          <>
+            <p className="text-xs text-muted-foreground">
+              {stats.lessonCount} 课 · {stats.sentenceCount} 句
+            </p>
+            {stats.lessonCount > 0 && (
+              <div>
+                <div className="mb-1 flex items-center justify-between text-[11px] text-muted-foreground">
+                  <span>
+                    已学 {stats.completedLessons} / {stats.lessonCount} 课
+                  </span>
+                  <span>{progressPct}%</span>
+                </div>
+                <div className="h-1 w-full overflow-hidden rounded-full bg-muted">
+                  <div
+                    className="h-full rounded-full bg-accent"
+                    style={{ width: `${progressPct}%` }}
+                  />
+                </div>
+              </div>
+            )}
+          </>
+        ) : (
+          <div className="flex items-center justify-between text-xs text-muted-foreground">
+            <span className="truncate">{categoryLabel}</span>
+            <span className="flex shrink-0 items-center gap-1">
+              <Users className="h-3 w-3" />
               {formatLearnerCount(course.learnerCount)}
             </span>
           </div>
-        </div>
+        )}
       </div>
     </Link>
   )

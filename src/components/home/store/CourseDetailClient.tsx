@@ -2,62 +2,17 @@
 
 import { useState, useEffect } from "react"
 import Link from "next/link"
+import Image from "next/image"
 import { useRouter } from "next/navigation"
 import { ChevronLeft, BookOpen, Users, Play, Check } from "lucide-react"
 import type { Course } from "@/types/course"
-import { COURSE_CATEGORIES } from "@/types/course"
 import { useAcquiredCourses } from "@/lib/hooks/useAcquiredCourses"
 import { trackCourseOpen } from "@/lib/analytics"
 import { cn } from "@/lib/utils"
-
-// ─── Category → color scheme ────────────────────────────────────────────────
-const CATEGORY_THEMES: Record<string, { bg: string; accent: string; text: string; badge: string }> = {
-  graded_reading: {
-    bg: "linear-gradient(135deg, #0f2b1a 0%, #1a3d28 40%, #0d2216 100%)",
-    accent: "#4ade80",
-    text: "#bbf7d0",
-    badge: "#166534",
-  },
-  school_sync: {
-    bg: "linear-gradient(135deg, #0f1a3a 0%, #1a2d5a 40%, #0d1430 100%)",
-    accent: "#60a5fa",
-    text: "#bfdbfe",
-    badge: "#1e3a5f",
-  },
-  exam_prep: {
-    bg: "linear-gradient(135deg, #3a1010 0%, #5c1818 40%, #2d0d0d 100%)",
-    accent: "#f87171",
-    text: "#fecaca",
-    badge: "#5c1a1a",
-  },
-  practical: {
-    bg: "linear-gradient(135deg, #2d1a0f 0%, #4a2a1a 40%, #221006 100%)",
-    accent: "#fb923c",
-    text: "#fed7aa",
-    badge: "#5c2d1a",
-  },
-}
-
-const DEFAULT_THEME = {
-  bg: "linear-gradient(135deg, #1a1a2e 0%, #2a2a44 40%, #12121f 100%)",
-  accent: "#a78bfa",
-  text: "#ddd6fe",
-  badge: "#2e1a4a",
-}
-
-function getTheme(categoryKey: string | null) {
-  if (categoryKey && CATEGORY_THEMES[categoryKey]) return CATEGORY_THEMES[categoryKey]
-  return DEFAULT_THEME
-}
-
-function getCategoryLabel(categoryKey: string | null, subCategoryKey: string | null): string {
-  if (!categoryKey) return "综合"
-  const main = COURSE_CATEGORIES.find((c) => c.key === categoryKey)
-  if (!main) return categoryKey
-  if (!subCategoryKey) return main.label
-  const sub = main.subCategories.find((s) => s.key === subCategoryKey)
-  return sub ? `${main.label} · ${sub.label}` : main.label
-}
+// 配色与分类标签原先在本文件里复制了一份（与 CourseCard 各约 40 行），
+// 且这里只看 cover_url 决定用图还是色块 —— 在主题图上线的语境下，那会让同一门课
+// 在列表里有图、点进详情却是色块。现在两处走同一个解析函数。
+import { getCategoryLabel, resolveCourseCover } from "@/lib/course-cover"
 
 interface LessonRow {
   id: string
@@ -134,7 +89,7 @@ export function CourseDetailClient({ courseId }: CourseDetailClientProps) {
 
   const acquired = isAcquired(courseId)
   const firstLessonId = lessons[0]?.id
-  const theme = getTheme(course.categoryKey)
+  const cover = resolveCourseCover(course)
   const categoryLabel = getCategoryLabel(course.categoryKey, course.subCategoryKey)
 
   return (
@@ -151,9 +106,16 @@ export function CourseDetailClient({ courseId }: CourseDetailClientProps) {
       {/* Header Card */}
       <div className="rounded-2xl border border-border bg-card overflow-hidden mb-6 flex flex-col sm:flex-row">
         {/* Cover */}
-        {course.coverUrl ? (
+        {cover.kind === "image" ? (
           <div className="relative sm:w-[280px] lg:w-[320px] shrink-0 aspect-[16/10] sm:aspect-auto overflow-hidden">
-            <img src={course.coverUrl} alt={course.title} className="w-full h-full object-cover" />
+            {/* 本地图片走 next/image；外链与后台传的 base64 dataURL 走裸 img
+                （next/image 对未登记 remotePatterns 的域名会直接抛错） */}
+            {cover.src.startsWith("/") ? (
+              <Image src={cover.src} alt={course.title} fill sizes="320px" className="object-cover" />
+            ) : (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={cover.src} alt={course.title} className="absolute inset-0 h-full w-full object-cover" />
+            )}
             {course.source === "official" && (
               <span className="absolute top-3 left-3 rounded-full bg-foreground/15 backdrop-blur-sm px-2.5 py-0.5 text-[10px] font-medium text-foreground/90">
                 官方
@@ -163,13 +125,13 @@ export function CourseDetailClient({ courseId }: CourseDetailClientProps) {
         ) : (
           <div
             className="relative sm:w-[280px] lg:w-[320px] shrink-0 aspect-[16/10] sm:aspect-auto flex flex-col justify-between p-5 overflow-hidden select-none"
-            style={{ background: theme.bg }}
+            style={{ background: cover.theme.bg }}
           >
             {/* Subtle texture dots */}
             <div
               className="absolute inset-0 opacity-[0.05]"
               style={{
-                backgroundImage: `radial-gradient(circle, ${theme.accent} 1px, transparent 1px)`,
+                backgroundImage: `radial-gradient(circle, ${cover.theme.accent} 1px, transparent 1px)`,
                 backgroundSize: "14px 14px",
               }}
             />
@@ -178,7 +140,7 @@ export function CourseDetailClient({ courseId }: CourseDetailClientProps) {
             <div className="relative z-10 flex items-center gap-2">
               <span
                 className="rounded-md px-2.5 py-1 text-xs font-semibold tracking-wide"
-                style={{ background: theme.badge, color: theme.accent }}
+                style={{ background: cover.theme.badge, color: cover.theme.accent }}
               >
                 {categoryLabel}
               </span>
@@ -193,7 +155,7 @@ export function CourseDetailClient({ courseId }: CourseDetailClientProps) {
             <div className="relative z-10 flex-1 flex items-center">
               <h2
                 className="text-base font-bold leading-snug line-clamp-3"
-                style={{ color: theme.text }}
+                style={{ color: cover.theme.text }}
               >
                 {course.title}
               </h2>
@@ -201,10 +163,10 @@ export function CourseDetailClient({ courseId }: CourseDetailClientProps) {
 
             {/* Bottom: creator */}
             <div className="relative z-10 flex items-center gap-2">
-              <span className="text-xs font-medium opacity-50" style={{ color: theme.text }}>
+              <span className="text-xs font-medium opacity-50" style={{ color: cover.theme.text }}>
                 {course.sourceName}
               </span>
-              <div className="flex-1 h-px opacity-10" style={{ background: theme.text }} />
+              <div className="flex-1 h-px opacity-10" style={{ background: cover.theme.text }} />
             </div>
           </div>
         )}
