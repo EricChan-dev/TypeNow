@@ -174,15 +174,12 @@ async function attemptSend(
 const EXPIRY_SCENARIO_KEYS: readonly string[] = EXPIRY_SCENARIOS.map((s) => s.key)
 
 export async function POST(request: Request) {
-  // ③ 全局开关：默认关闭（fail-closed）
-  if (process.env.LIFECYCLE_ENABLED !== "true") {
-    return NextResponse.json(
-      { ok: false, code: "disabled", message: "LIFECYCLE_ENABLED 未设为 true，未执行任何发送。" },
-      { status: 503 },
-    )
-  }
-
-  // ② 鉴权：fail-closed
+  // ① 鉴权：fail-closed
+  //
+  // **必须排在开关检查之前。** 否则关闭状态下所有请求都回 503，
+  // 未认证的调用者据此就能判断"功能是否开启"（不必知道密钥）——
+  // 那是把配置状态泄露给了任何人。放在前面之后，无密钥/错密钥一律
+  // 403/503，与开关无关，行为不随配置变化。
   const expected = process.env.CRON_SECRET ?? ""
   if (!expected) {
     return NextResponse.json(
@@ -194,12 +191,20 @@ export async function POST(request: Request) {
     return NextResponse.json({ ok: false, code: "forbidden" }, { status: 403 })
   }
 
-  // ① 不接受任何入参
+  // ② 不接受任何入参
   const url = new URL(request.url)
   if ([...url.searchParams.keys()].length > 0) {
     return NextResponse.json(
       { ok: false, code: "params_not_allowed", message: "本接口不接受任何参数。" },
       { status: 400 },
+    )
+  }
+
+  // ③ 全局开关：默认关闭（fail-closed）
+  if (process.env.LIFECYCLE_ENABLED !== "true") {
+    return NextResponse.json(
+      { ok: false, code: "disabled", message: "LIFECYCLE_ENABLED 未设为 true，未执行任何发送。" },
+      { status: 503 },
     )
   }
 
