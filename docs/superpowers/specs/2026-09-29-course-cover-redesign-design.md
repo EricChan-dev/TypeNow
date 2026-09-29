@@ -1,0 +1,458 @@
+# 课程卡片改版 + AI 主题封面 — 设计文档
+
+- 日期：2026-09-29
+- 状态：待评审
+- 范围：课程广场 / 我的课程 / 教材同步 三个列表页的卡片，以及课程详情页封面
+
+---
+
+## 1. 背景与问题
+
+### 1.1 用户视角
+
+课程卡片现在「都没有封面，只有一个颜色」。核实后，真实情况比这更糟 —— 是**三种状态混排**：
+
+| 状态 | 行数 | 表现 |
+| --- | --- | --- |
+| `cover_url` 为空 | 580 | 落到分类渐变色块（**全部 580 行都是在架课程**） |
+| `cover_url` 是 `picsum.photos` 随机图 | 195 | 随机风景照，与课程主题无关，且挂在第三方外链（其中在架 194 门） |
+| 真正贴合主题的图 | **0** | —— |
+
+生产库 `courses` 表共 775 行，其中在架 774 门（`is_published = 1`）。
+本文后续凡涉及「774 门」均指在架课程，「195 行」指含未上架那一行在内的表级计数。
+
+### 1.2 代码视角
+
+- `courses.cover_url`（`mediumtext`）与「无图时渐变兜底」**早已实现**，所以本任务不是新增字段，而是补图 + 改版。
+- `CourseCard.tsx` 把**课程标题渲染了两遍**：封面上一次（第 119-124 行）、信息区再一次（第 140 行）。色块时代这是「海报感」设计，换成真图后是纯粹的重复。
+- `CATEGORY_THEMES` / `DEFAULT_THEME` / `getTheme()` 在 `CourseCard.tsx` 与 `CourseDetailClient.tsx` 里**各复制了一份**，约 40 行。
+- 卡片信息区只有「来源 + 人数」，而 `learner_count` 在 774 门课里**大量为 0**，等于这一行常常是空的。
+- 广场最多 5 列，xl 断点下卡片实际宽约 **220px** —— 所有版式判断必须按这个真实尺寸做。
+- 两处封面都用裸 `<img>`，未走 `next/image`。
+
+### 1.3 一个必须一并修的既有 bug
+
+`src/app/api/courses/list/route.ts:31` 把 `pageSize` 夹到上限 100：
+
+```ts
+const pageSize = Math.min(100, Math.max(1, toInt(searchParams.get("pageSize"), 20)))
+```
+
+而 `MyCoursesClient.tsx:38` 请求的是 `pageSize=500`，然后**在前端筛出「我的课程」**。这个组合的前提是「能拿到全部课程」，但实际只能拿到按 `created_at` 倒序的最新 100 门。
+
+生产库实测：
+
+- 774 门在架课程中，**674 门（87%）** 对「我的课程」不可见（截断点 `created_at = 2026-06-15 15:20:35`）。
+- `user_course_progress` 中有 **24 行**指向被挡住的课程，涉及 **15 / 26 个用户（58%）**，其中 13 个真实微信用户。
+- `user_acquired_courses` 暂无被挡记录（该表只有 1 行），所以这条路径尚未爆出。
+
+这不是潜在风险，是**已经发生**的用户可用性问题。而「我的课程」正是本次要加进度条的那个页面 —— 不修它，加进度条的价值会被这个 bug 吃掉。
+
+---
+
+## 2. 目标与非目标
+
+### 目标
+
+1. 774 门在架课程**全部**有贴合主题的封面，且不依赖任何第三方外链。
+2. 课程卡片改版：区分「发现课程」与「继续学习」两种使用场景。
+3. 顺带修掉 1.3 的 `pageSize` bug。
+4. 收拢 1.2 中的重复代码。
+
+### 非目标
+
+- 不做用户上传封面的自助入口（后台已有）。
+- 不做视频/动图封面。
+- 不重构课程详情页的其余部分。
+- 不新增数据库列、不做数据库迁移。
+
+---
+
+## 3. 已拍板的决策（含被否决方案与理由）
+
+| # | 决策 | 被否决的方案与理由 |
+| --- | --- | --- |
+| D1 | 封面图用**阿里云百炼通义万相** `wan2.2-t2i-flash` 生成 | 账号免费额度里只有 `qwen-image-3.0` / `-pro` 共 20 张可用于文生图（视频模型和 `qwen-mt-image-2.0` 图片翻译模型用不上），不够 69 张；且风格决策全部基于 flash 的真实输出，换模型会让风格依据作废 |
+| D2 | **统一用 flash**，不使用免费额度、不混模型 | 混模型会破坏视觉一致性 —— 风格一致性 > 省 6 元 |
+| D3 | 粒度 = 44 张「主题基图」+ 约 20~30 张主推课专属图 | 逐门生成 775 张：风格必然不统一，775 张无人能逐张审核，且新增课程还要再调 API |
+| D4 | **`cover_url` 降级为「覆盖项」，主题映射表放代码里** | 把 44 条路径写进 775 行 `cover_url`：需要批量 UPDATE 与手工迁移，新增课程不会自动有图，换主题图要改几十行数据 |
+| D5 | 图片提交进仓库 `public/images/courses/` | 阿里云 OSS：要新建 bucket、配域名与密钥、多一层故障面；而 `deploy.sh` 的 `git pull --ff-only` 已经能自动带上仓库内文件 |
+| D6 | 卡片改版采用**双形态**（`discover` / `mine`） | 单形态：广场是「在挑课程」，我的课程是「回来继续练」，两者共用一张卡则两边都不最优 |
+| D7 | 广场态**放弃把标题压在图上**，改为图下标题 | 压图方案：4 张真实样图的底部**全部**是画面里最亮最碎的座椅区，「下三分之一保持简洁偏暗」这条约束一次都没生效 |
+| D8 | 风格按大类分流：`graded_reading` + `school_sync` 用水彩，其余用扁平 | 单一风格：243 门儿童/校园课与 531 门应试/职场课对温度与严肃度的要求相反 |
+| D9 | 一并修 `pageSize` bug，新增 `/api/courses/mine` | 只提高 pageSize 上限：本质仍是「全量拉到浏览器再前端筛」，课程库增长后必再撞墙；且后台「上传封面」是把 base64 dataURL 写进 `cover_url`（`mediumtext`），一旦有人用后台传图，全量拉取立刻变成 MB 级载荷炸弹 |
+
+---
+
+## 4. 架构
+
+### 4.1 封面解析：三层降级
+
+新增 `src/lib/course-cover.ts`，导出：
+
+```ts
+/** 分类配色（从 CourseCard.tsx 与 CourseDetailClient.tsx 收拢，消除重复） */
+export const CATEGORY_THEMES: Record<string, CategoryTheme>
+export const DEFAULT_THEME: CategoryTheme
+export function getTheme(categoryKey: string | null): CategoryTheme
+
+/** 44 条主题槽位 → WebP 路径 */
+export const THEME_COVERS: Record<string, string>
+
+/** 三层降级 */
+export function resolveCourseCover(course: {
+  coverUrl: string | null
+  categoryKey: string | null
+  subCategoryKey: string | null
+}): { kind: "image"; src: string; theme: CategoryTheme }
+  | { kind: "gradient"; theme: CategoryTheme }
+```
+
+解析顺序：
+
+1. `course.coverUrl` 非空 → 用它（主推课专属图 / 管理员上传 / 版权方提供）
+2. 主题映射表命中 `(categoryKey, subCategoryKey)` → `/images/courses/<slug>.webp`
+3. 都没命中 → 分类渐变兜底
+
+**三层降级，永不出现空白封面。**
+
+槽位命名：
+
+```
+slug = `${categoryKey ?? "none"}__${subCategoryKey ?? "general"}`
+例：practical__movies_stories.webp
+    school_sync__general.webp      （sub_category_key 为 NULL）
+    none__general.webp             （两个都为 NULL）
+```
+
+### 4.2 调用方
+
+`CourseCard` 与 `CourseDetailClient` **都是客户端组件，且都已持有完整 course 对象**（`/api/courses/list` 与 `/api/courses/[id]` 均 `db.select()` 返回全部列）。
+
+因此：
+
+- **不需要改任何 API 路由的参数或返回结构**（除 6.1 新增的 `/api/courses/mine`）；
+- 不需要改 `src/types/course.ts` 的 `Course`；
+- **不需要数据库迁移**。
+
+`/api/courses/[id]` 已确认返回完整行（`route.ts:11` `db.select().from(courses)`，第 16 行 `data: course`）。
+
+### 4.3 主题槽位清单（生产库实测，共 44 个）
+
+**扁平 — 24 个槽位 / 531 门**
+
+| category | sub_category | 课程数 |
+| --- | --- | --- |
+| practical | movies_stories | 71 |
+| practical | classic_textbooks | 49 |
+| practical | grammar_vocab | 48 |
+| practical | listening_speaking | 45 |
+| exam_prep | ielts_toefl | 34 |
+| practical | daily_oral | 32 |
+| practical | _(NULL)_ | 30 |
+| _(NULL)_ | _(NULL)_ | 28 |
+| exam_prep | cet_4_6 | 25 |
+| practical | business_career | 20 |
+| exam_prep | pte | 20 |
+| exam_prep | gaokao | 19 |
+| exam_prep | zhuan_sheng_ben | 19 |
+| exam_prep | zhongkao | 15 |
+| exam_prep | postgraduate | 14 |
+| practical | travel_english | 11 |
+| exam_prep | degree_english | 9 |
+| exam_prep | tem_4_8 | 8 |
+| exam_prep | pet | 8 |
+| exam_prep | gre | 6 |
+| exam_prep | toeic | 6 |
+| exam_prep | ket | 6 |
+| exam_prep | fce | 5 |
+| exam_prep | _(NULL)_ | 3 |
+
+**水彩 — 20 个槽位 / 243 门**
+
+| category | sub_category | 课程数 |
+| --- | --- | --- |
+| school_sync | grade_4 | 32 |
+| school_sync | grade_3 | 26 |
+| school_sync | grade_8 | 24 |
+| school_sync | grade_1 | 19 |
+| school_sync | grade_7 | 18 |
+| school_sync | grade_5 | 17 |
+| school_sync | grade_6 | 11 |
+| school_sync | _(NULL)_ | 11 |
+| school_sync | high_school | 10 |
+| school_sync | grade_9 | 10 |
+| school_sync | grade_2 | 9 |
+| graded_reading | oxford_reading_tree | 7 |
+| graded_reading | lets_go | 7 |
+| graded_reading | raz | 7 |
+| graded_reading | heinemann | 7 |
+| school_sync | vocational | 7 |
+| graded_reading | big_cat | 6 |
+| graded_reading | oxford_bookworm | 6 |
+| graded_reading | red_rocket | 5 |
+| graded_reading | _(NULL)_ | 4 |
+
+24 + 20 = 44 个槽位，531 + 243 = 774 门课，与 `is_published = 1` 的总数一致。
+
+---
+
+## 5. 生成流水线
+
+### 5.1 脚本 `scripts/gen-course-covers.ts`
+
+分步执行、每步幂等，支持 `--step=generate|compress|report` 与 `--force`：
+
+| 步骤 | 行为 | 幂等规则 |
+| --- | --- | --- |
+| generate | 串行调 API，44 条主题提示词（按 D8 分流风格） | 目标 PNG 已存在且未 `--force` → 跳过 |
+| compress | sharp 转 WebP，写 `public/images/courses/` | 同上 |
+| report | 打印成功率、总体积、失败清单 | —— |
+
+中间产物 PNG 落 `.covers-build/`（加进 `.gitignore`），**只有 WebP 进仓库**。
+
+### 5.2 接口约束（全部为实测所得，不是文档抄来的）
+
+| 项 | 值 | 为什么 |
+| --- | --- | --- |
+| 创建任务 | `POST /api/v1/services/aigc/text2image/image-synthesis`，带 `X-DashScope-Async: enable` | 异步两步式 |
+| 查询结果 | `GET /api/v1/tasks/{task_id}` | 轮询至 `SUCCEEDED` |
+| `model` | `wan2.2-t2i-flash` | D1/D2 |
+| `size` | `1440*960`（3:2） | flash **限制宽高都在 [512, 1440]**；3:2 一张原图供两种卡片形态 `object-cover` 共用 |
+| `n` | **必须显式写 1** | 官方默认是 **4**，不写就是一次 4 张、4 倍计费 |
+| `prompt_extend` | **必须显式写 false** | 默认 true 会让大模型改写提示词，44 张各改各的 → 风格漂移 |
+| `watermark` | 显式写 false | 默认为 false，显式钉住防误改 |
+| `negative_prompt` | 放在 `input` 内（**不是** `parameters`） | 见官方示例 |
+| 并发 | **串行 + 429 退避重试** | 实测 3 并发即触发 `Throttling.RateQuota`，账号实际并发配额低于文档的 120 RPM |
+| 结果 URL | 有效期仅 **24 小时** | 必须下载后落盘，**不能存链接** |
+| 提示词 | **禁止出现任何 IP 名 / 作品名 / 明星名** | 官方文档明确：提示词含受版权保护的角色名或作品名会触发 `IPInfringementSuspect` / `DataInspectionFailed`，关闭 `prompt_extend` 也无法绕过。而课程库大量是《Journey to the West》《老友记》《Sherlock Holmes》这类 —— 因此提示词只能描述**场景与氛围**，不能描述招牌形象 |
+| 图片转码 | sharp 通过 `createRequire(require.resolve('next/package.json'))` 解析 | `sharp@0.34.5` 已是 `next` 的可选依赖，pnpm 未提升到顶层；**不新增任何依赖** |
+| WebP 质量 | q80，`effort: 5` | 实测 827KB PNG → 54KB；44 张约 2.4~5.4MB |
+
+### 5.3 提示词结构（v3，已通过实测验证）
+
+```
+[风格 + 配色前置]。[画面主体：短场景]。[构图]。[风格与配色再钉一次]。
+negative_prompt: [通用负向词] + [按风格各配一份]
+```
+
+**v3 相对 v1 的三处关键改动（每一处都有实测依据）：**
+
+1. **风格词前置**，而不是放在整段末尾。
+   依据：v1 把风格后缀放在末尾时，水彩漂成动漫背景、扁平漂成描线 CG —— 模型被前面一长串具体名词主导，把结尾的风格词当成了弱约束。
+2. **配色必须写进风格约束**。
+   依据：v2 只钉住了画法，没钉住色板，于是「会议室」场景让整张塌成冷调单色，而同为扁平的「书桌」场景是暖色编辑插画。v3 显式写入色板后（扁平 = 深蓝灰底 + 砖红暖橙强调色）配色收敛。
+3. **按风格各配一份负向词**，把「另一种画法」明确排掉。
+
+#### 证据图
+
+风格分化（第一批：同一主题、同一段提示词、只换风格后缀）：
+
+| 扁平（选定用于应试/职场 531 门） | 水彩（选定用于儿童/校园 243 门） |
+| --- | --- |
+| ![扁平插画](images/2026-09-29-course-cover/style-a-flat.webp) | ![水彩手绘](images/2026-09-29-course-cover/style-d-watercolor.webp) |
+
+风格漂移与修复（水彩，同一场景）：
+
+| v1 漂成动漫背景 + 车身站牌出现乱码汉字 | v2 修复：纸纹与墨线回归，乱码消失 |
+| --- | --- |
+| ![水彩漂移](images/2026-09-29-course-cover/prod-2-water-school.webp) | ![水彩修复](images/2026-09-29-course-cover/v2-water-school.webp) |
+
+配色漂移与修复（扁平，同一场景）：
+
+| v1 漂成描线 CG | v2 画法修好但配色塌成冷调单色 | v3 钉住色板后收敛 |
+| --- | --- | --- |
+| ![扁平漂移](images/2026-09-29-course-cover/prod-4-flat-business.webp) | ![配色漂移](images/2026-09-29-course-cover/v2-flat-business.webp) | ![配色修复](images/2026-09-29-course-cover/v3-flat-business.webp) |
+
+目前已达到的最佳效果（扁平 · 应试考试）：
+
+![最佳样本](images/2026-09-29-course-cover/prod-3-flat-exam.webp)
+
+风格定义（`STYLE` 常量）：
+
+- **水彩**：`水彩手绘风格，湿画法水彩晕染，明显的粗纹水彩纸质感，淡雅的莫兰迪配色，笔触松弛，温暖治愈的儿童绘本插画质感` + 配色 `莫兰迪暖调：主色草木绿与米黄，暖砖红与淡粉点缀，少量天蓝`
+- **扁平**：`扁平矢量插画风格，克制的几何形状，大面积纯色块，边缘干净利落，无描边、无渐变、无噪点，现代教育科技产品的编辑插画质感` + 配色 `深蓝灰底（近似 #1e293b）、砖红暖橙为唯一强调色（近似 #e2603f）、点缀米白`
+
+共用构图约束：`画面中心构图，主体四周留出余量，重要元素不贴近画面边缘，画面中没有人`
+（**刻意不含**「下三分之一留暗区」—— 已决定标题不压图，见 D7）
+
+通用负向词要点：文字类词写得冗余（`文字, 汉字, 英文字母, 单词, 标题, 字幕, 招牌, 站牌, 指示牌, 广告牌, 标语 ...`），并含 `画面中没有人` 配套的 `面部特写, 人群, 多余手指, 畸形`。
+
+### 5.4 已知风险与人工把关
+
+**落款问题（未解决，转人工）**
+
+水彩风格会在画面内生成**手写体画师落款式伪文字**。两轮负向词均无效：
+
+- v1/v2：`签名, 印章` → 出现在右下角
+- v3：追加 `手写签名, 落款, 作者署名, 花体字, 草书, 手写字, 装饰性文字, 角落文字, 版权声明` → **仍然出现，只是被挪到画面内部并改变颜色以融入画面**
+
+结论：水彩插画的训练数据里画师署名是普遍特征，模型把它视为「像水彩」的一部分。**停止在提示词上继续投入**（边际收益已归零）。
+
+证据（v3 中落款被挪到画面内部、并改为红褐色以融入画面）：
+
+![落款证据](images/2026-09-29-course-cover/v3-signature-zoom.webp)
+
+把关方式：水彩只有 20 张，**量产后人工逐张过目**，发现落款的单张重跑（0.14 元/张）。扁平 4 张样本中 0 张出现落款，可直接量产。
+
+**白纸边（已决定接受）**
+
+水彩的「孤景构图」（主体浮在纸上、周围留白）会形成白纸边，在深色 UI 里形成亮边。
+实测：**满幅构图（如公交站）没有白边，孤景构图（如花园小狗）有**。故这不是水彩的普遍属性，而是场景构图相关。
+「水彩颜料铺满整幅画面、不留白边」这句提示词实测**无效**（反而白边更大）。
+不保证压缩环节的中心裁切能解决（该图白边深入约 65px，需放大至约 1.16 倍才裁得掉，已超出「轻微裁切」范围）。
+**决定：接受。** 若量产评审时认为不可接受，作为独立问题另行处理。
+
+---
+
+## 6. 卡片改版
+
+### 6.1 数据源：新增 `GET /api/courses/mine`
+
+```
+1. 取 user_acquired_courses ∪ user_course_progress 的 courseId 集合（当前用户）
+2. JOIN courses，条件：is_published = 1 且未被软删除（aliveCourse）
+3. 同时算出每门课的 stats
+4. 按 lastStudiedAt 倒序（无进度记录的排在后面）
+```
+
+返回值：课程行 + `{ lessonCount, sentenceCount, completedLessons }`。
+
+**进度口径**：`completedLessons / lessonCount`，其中 `completedLessons` 来自
+
+```sql
+SELECT COUNT(*) FROM practice_sessions
+WHERE user_id = ? AND course_id = ? AND state = 'completed'
+```
+
+`practice_sessions` 有 `UNIQUE (user_id, lesson_id)`，保证一课一行，计数精确。
+
+**刻意不用 `user_course_progress.sentenceCount` 做百分比** —— `CLAUDE.md` 已记录它是单调递增的历史累计值（重练会持续增长），拿它当分子会出现 >100% 的进度条。
+
+同时去掉「全量拉课程再前端筛」这个浪费（每行还带着 `description` 与 `mediumtext` 的 `cover_url`）。
+
+### 6.2 组件接口
+
+```ts
+interface CourseCardStats {
+  lessonCount: number
+  sentenceCount: number
+  completedLessons: number
+}
+
+interface CourseCardProps {
+  course: Course
+  /** 默认 "discover" —— 广场与教材同步行为不变 */
+  variant?: "discover" | "mine"
+  /** 仅 variant="mine" 需要，由 /api/courses/mine 提供 */
+  stats?: CourseCardStats
+}
+```
+
+- **`discover`**（课程广场 / 教材同步）：3:2 大图 + **图下**标题（`line-clamp-2`）+ 一行「分类 · N 人在学」
+- **`mine`**（我的课程）：16:10 图 + 标题 + 「N 课 · M 句」+ 进度条 + 悬停浮现「继续学习」
+
+`variant` 默认值为 `"discover"`，因此三个列表页中只有 `/home/courses` 需要传 `"mine"`，另外两个无需改动。
+
+### 6.3 其他改动
+
+- 两处裸 `<img>` 改 `next/image`，并给 `sizes` 按 1/2/3/4/5 列断点声明，避免 20 张原图同时下载。
+- 删除 `CourseCard.tsx` 与 `CourseDetailClient.tsx` 中各自复制的 `CATEGORY_THEMES` / `DEFAULT_THEME` / `getTheme`（各约 40 行）。
+- 消除标题重复渲染：`discover` 与 `mine` 都只在图下渲染一次标题。
+
+---
+
+## 7. 数据清理
+
+那 195 行 `picsum` 是随机照片、与主题无关、且挂第三方外链，必须清掉：
+
+```sql
+-- 执行前先 mysqldump 备份 courses 表
+UPDATE courses SET cover_url = NULL WHERE cover_url LIKE '%picsum%';
+```
+
+受影响 **195 行**（在架 194 门 + 未上架 1 门）。
+
+置空后这 194 门在架课程**自动落到第 2 层**（主题映射表），与其余 580 门走完全相同的路径 —— 没有特殊情况，也没有一门课会失去封面。
+
+> **这是一次对生产库的写操作，且生产库就是唯一的库（无 staging）。**
+> 必须在执行前完成备份、打印确切的受影响行数、并由人工明确确认后才执行。
+
+---
+
+## 8. 测试与验收
+
+### 8.1 单元测试（`vitest`，node 环境）
+
+`resolveCourseCover` 是纯函数，可测。用例：
+
+1. `coverUrl` 非空 → `kind === "image"`，且 `src === coverUrl`（覆盖项优先于映射表）
+2. `coverUrl` 为空 + 槽位命中 → `kind === "image"`，`src` 指向 `/images/courses/<slug>.webp`
+3. `coverUrl` 为空 + 槽位未命中 → `kind === "gradient"`
+4. `categoryKey` / `subCategoryKey` 为 `null` → slug 分别退化为 `none` / `general`
+5. `THEME_COVERS` 的每个值都指向 `public/` 下真实存在的文件（防「映射表指向不存在的图」这类静默错误）
+
+第 5 条尤其重要：它把「44 条映射」与「44 个实际文件」绑在一起，避免漏生成某一张时只表现为「那几门课悄悄退回渐变」。
+
+### 8.2 浏览器验证（puppeteer 脚本，见 `CLAUDE.md`）
+
+`vitest` 未启用 jsdom，React 组件无法单测，故用 `/tmp` 下的 puppeteer 脚本跑真实页面：
+
+- 三个列表页各有封面渲染，且无 404 图片请求（监听网络失败）
+- `mine` 形态显示进度条，`discover` 形态不显示
+- 220px 卡片尺寸下标题不溢出、不截断成半个字
+- 深色 / 浅色两种主题下标题与元信息的对比度可读
+
+### 8.3 数据验收
+
+- `SELECT COUNT(*) FROM courses WHERE is_published=1 AND (cover_url IS NULL OR cover_url='')` → 预期 774（picsum 清空后）
+- 逐门课调用 `resolveCourseCover`，断言 **没有任何一门课落到第 3 层渐变兜底**（当前 44 个槽位覆盖全部 774 门，这是可以断言的强条件）
+
+  > 已在生产库核实：按 44 个 `(category_key, sub_category_key)` 槽位分组，**未覆盖课程数 = 0**。所以这条断言现在是成立的，且它会在未来新增课程落入新槽位时立刻失败 —— 这正是我们想要的提醒。
+
+### 8.4 `pageSize` bug 的验收
+
+修复前后对比同一批用户的「我的课程」数量：
+
+- 修复前：`progress_outside_cap = 24`（15 个用户受影响）
+- 修复后：预期 `0`，且这 15 个用户的列表条数增加
+
+---
+
+## 9. 回滚
+
+| 部分 | 回滚方式 |
+| --- | --- |
+| 卡片改版 | `git revert`；`variant` 默认值的引入使三个列表页在回滚前后行为一致 |
+| 封面映射 | `resolveCourseCover` 的第 2 层命中失败即自动退回渐变，**删掉 `THEME_COVERS` 或图片文件即可整体失效**，不会白屏 |
+| `/api/courses/mine` | 新路由，回滚时删除即可；`MyCoursesClient` 可临时切回旧逻辑 |
+| picsum 清空 | **不可逆**（置 NULL 后原 URL 丢失），靠执行前的 `mysqldump` 备份恢复 |
+
+---
+
+## 10. 交付物
+
+1. `src/lib/course-cover.ts`（新增）
+2. `src/lib/__tests__/course-cover.test.ts`（新增）
+3. `src/components/home/store/CourseCard.tsx`（改版）
+4. `src/components/home/store/CourseDetailClient.tsx`（改用统一解析）
+5. `src/components/home/store/MyCoursesClient.tsx`（改调 `/api/courses/mine`）
+6. `src/app/api/courses/mine/route.ts`（新增）
+7. `scripts/gen-course-covers.ts`（新增）
+8. `public/images/courses/*.webp`（44 张，约 2.4~5.4MB）
+9. `.gitignore` 增加 `.covers-build/`
+10. 生产库：195 行 `picsum` 置空（**需人工确认**）
+
+---
+
+## 11. 未决 / 待确认
+
+- [ ] **195 行 picsum 置空的授权** —— 生产库写操作，执行前需人工明确点头
+- [ ] 水彩落款的量产审核标准（多小算可接受？还是**任何**落款都重跑）
+- [ ] 主推课专属图的清单（约 20~30 门，建议按 `usage_count` Top N + 每个大类至少 3 门）
+
+## 12. 已决定但可能被推翻的事
+
+- **水彩白纸边：接受**（理由与实测见 5.4）。若评审时认为不能接受，需另立任务处理，因为它无法靠提示词解决。
+- **画面中不出现人物**：所有提示词统一写「画面中没有人」，负向词含 `面部特写, 人群, 多余手指, 畸形`。理由是 AI 的人物面部在 44 张批量生成里翻车概率高，且一旦翻车很刺眼。代价是儿童类封面少了人物温度。若后续认为需要人物，应先单独出 1~2 张验证。
+- **颜色用近似 hex 而非精确品牌色**：提示词里写的是「近似 #1e293b」，不是精确的品牌色值。模型对 hex 的遵循是概率性的，实际色值会有偏移。若要求严格品牌一致，需要在压缩环节做色彩校正 —— 当前不做。

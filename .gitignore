@@ -76,3 +76,6 @@ db-backup/
 
 # 头脑风暴可视化会话产物（本地临时）
 .superpowers/
+
+# 封面方案样例图（临时工作产物）
+cover-samples/
