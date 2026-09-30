@@ -22,11 +22,18 @@
 --     只是因为线上又来了几条埋点）。留着它，每次重新生成的 diff 里都会混进这种噪音，
 --     真正的结构改动反而容易被看漏 —— 这份文件只该记录结构。
 --
--- 生成时间：2026-09-29（00026 之后）
--- 对应迁移：00009 / 00011 ～ 00026 全部已应用
+-- 生成时间：2026-09-30（00033 之后）
+-- 对应迁移：00009 / 00011 ～ 00033 全部已应用
 --   · 00024 analytics_events.visitor_id
 --   · 00025 task_logs 每日唯一约束限定回分享任务
---   · 00026 ai_chat_logs AI 私教对话日志（本日执行）
+--   · 00026 ai_chat_logs AI 私教对话日志
+--   · 00027 coins（双货币：coin_logs + users.coins + check_in_goal）
+--   · 00028 member_daily_grant（diamond_logs.type + grant_day）
+--   · 00029 quarterly_plan（两处 enum 追加 quarterly）
+--   · 00030 textbook_version（courses.textbook_version）
+--   · 00031 sentence_search（sentences.search_text + FULLTEXT ngram）
+--   · 00032 lifecycle_notifications（notifications 表 + users 两个退订/到期列）
+--   · 00033 pronunciation_scores（跟读评分，**按练习项**一行，sentence_id VARCHAR(64)）
 -- ============================================================================
 
 /*!40101 SET @OLD_CHARACTER_SET_CLIENT=@@CHARACTER_SET_CLIENT */;
@@ -40,18 +47,6 @@
 /*!40101 SET @OLD_SQL_MODE=@@SQL_MODE, SQL_MODE='NO_AUTO_VALUE_ON_ZERO' */;
 /*!40111 SET @OLD_SQL_NOTES=@@SQL_NOTES, SQL_NOTES=0 */;
 DROP TABLE IF EXISTS `admin_audit_logs`;
-/*!40101 SET @saved_cs_client     = @@character_set_client */;
-/*!50503 SET character_set_client = utf8mb4 */;
-/*!40101 SET @OLD_CHARACTER_SET_CLIENT=@@CHARACTER_SET_CLIENT */;
-/*!40101 SET @OLD_CHARACTER_SET_RESULTS=@@CHARACTER_SET_RESULTS */;
-/*!40101 SET @OLD_COLLATION_CONNECTION=@@COLLATION_CONNECTION */;
-/*!50503 SET NAMES utf8mb4 */;
-/*!40103 SET @OLD_TIME_ZONE=@@TIME_ZONE */;
-/*!40103 SET TIME_ZONE='+00:00' */;
-/*!40014 SET @OLD_UNIQUE_CHECKS=@@UNIQUE_CHECKS, UNIQUE_CHECKS=0 */;
-/*!40014 SET @OLD_FOREIGN_KEY_CHECKS=@@FOREIGN_KEY_CHECKS, FOREIGN_KEY_CHECKS=0 */;
-/*!40101 SET @OLD_SQL_MODE=@@SQL_MODE, SQL_MODE='NO_AUTO_VALUE_ON_ZERO' */;
-/*!40111 SET @OLD_SQL_NOTES=@@SQL_NOTES, SQL_NOTES=0 */;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `admin_audit_logs` (
@@ -73,6 +68,7 @@ CREATE TABLE `admin_audit_logs` (
   KEY `idx_audit_action_created` (`action`,`created_at`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `ai_chat_logs`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `ai_chat_logs` (
@@ -94,6 +90,7 @@ CREATE TABLE `ai_chat_logs` (
   KEY `idx_ai_chat_status_created` (`status`,`created_at`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `analytics_events`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `analytics_events` (
@@ -112,6 +109,7 @@ CREATE TABLE `analytics_events` (
   KEY `idx_ae_visitor` (`visitor_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `check_ins`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `check_ins` (
@@ -124,6 +122,26 @@ CREATE TABLE `check_ins` (
   KEY `idx_check_ins_user_id` (`user_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `coin_logs`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `coin_logs` (
+  `id` varchar(36) COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT (uuid()),
+  `user_id` varchar(36) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `amount` int NOT NULL COMMENT '正=获得，负=消耗',
+  `type` enum('check_in','sentence','lesson_complete','course_complete','share_invite','redeem_membership','redeem_item') COLLATE utf8mb4_unicode_ci NOT NULL,
+  `ref_id` varchar(36) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `duration_seconds` int DEFAULT NULL COMMENT '本次练习耗时（秒），仅 sentence 有意义。练习时长只在领奖请求里上报，practice_records 没有这一列；此前记在 diamond_logs，拆分后跟着搬到本表',
+  `streak` int NOT NULL DEFAULT '0' COMMENT '打卡时的连续天数快照，仅 check_in 有意义',
+  `date` varchar(10) COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '上海日历日 YYYY-MM-DD，用于每日统计与每月兑换上限',
+  `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  KEY `idx_coin_logs_user_id` (`user_id`),
+  KEY `idx_coin_logs_user_created` (`user_id`,`created_at`),
+  KEY `idx_coin_logs_user_date` (`user_id`,`date`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='金币流水（免费货币）。钻石流水见 diamond_logs，两者用途不交叉。';
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `courses`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `courses` (
@@ -143,9 +161,11 @@ CREATE TABLE `courses` (
   `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
   `deleted_at` datetime(3) DEFAULT NULL,
   `deleted_batch` char(36) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `textbook_version` varchar(50) COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '教材版本（人教版/译林版/外研版…）。认不出的写 other，不猜测。见 00030 与 lib/textbook-taxonomy.ts',
   PRIMARY KEY (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `diamond_logs`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `diamond_logs` (
@@ -153,15 +173,18 @@ CREATE TABLE `diamond_logs` (
   `user_id` varchar(36) COLLATE utf8mb4_unicode_ci NOT NULL,
   `amount` int NOT NULL,
   `duration_seconds` int DEFAULT NULL,
-  `type` enum('sentence','lesson_complete','course_complete','share_invite','chat') COLLATE utf8mb4_unicode_ci NOT NULL,
+  `type` enum('sentence','lesson_complete','course_complete','share_invite','chat','member_grant') COLLATE utf8mb4_unicode_ci NOT NULL,
   `ref_id` varchar(36) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
   `streak` int NOT NULL DEFAULT '0',
   `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `grant_day` varchar(10) COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '仅 member_grant 有值：会员每日赠钻的幂等键（上海日历日，见 00028 注释）',
   PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_diamond_grant_day` (`user_id`,`grant_day`),
   KEY `idx_diamond_logs_user_id` (`user_id`),
   KEY `idx_diamond_logs_user_created` (`user_id`,`created_at`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `invite_rewards`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `invite_rewards` (
@@ -177,6 +200,7 @@ CREATE TABLE `invite_rewards` (
   KEY `idx_ir_inviter` (`inviter_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `lessons`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `lessons` (
@@ -192,6 +216,7 @@ CREATE TABLE `lessons` (
   KEY `idx_lessons_course_id` (`course_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `material_imports`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `material_imports` (
@@ -208,6 +233,30 @@ CREATE TABLE `material_imports` (
   PRIMARY KEY (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `notifications`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `notifications` (
+  `id` varchar(36) COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT (uuid()),
+  `user_id` varchar(36) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `scenario` varchar(50) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `channel` enum('template','customer_service','sms') COLLATE utf8mb4_unicode_ci NOT NULL,
+  `status` enum('pending','sent','failed','skipped') COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'pending',
+  `title` varchar(200) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `body` text COLLATE utf8mb4_unicode_ci,
+  `error` varchar(500) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `attempts` int NOT NULL DEFAULT '0',
+  `period_key` varchar(50) COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT '',
+  `sent_at` datetime DEFAULT NULL,
+  `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_notification` (`user_id`,`scenario`,`period_key`),
+  KEY `idx_notifications_user_created` (`user_id`,`created_at`),
+  KEY `idx_notifications_status` (`status`,`created_at`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `partner_commissions`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `partner_commissions` (
@@ -229,6 +278,7 @@ CREATE TABLE `partner_commissions` (
   KEY `idx_pc_status` (`status`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `partner_risk_flags`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `partner_risk_flags` (
@@ -241,12 +291,13 @@ CREATE TABLE `partner_risk_flags` (
   KEY `idx_prf_user_id` (`user_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `payment_orders`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `payment_orders` (
   `id` varchar(36) COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT (uuid()),
   `user_id` varchar(36) COLLATE utf8mb4_unicode_ci NOT NULL,
-  `plan` enum('monthly','yearly','partner') COLLATE utf8mb4_unicode_ci NOT NULL,
+  `plan` enum('monthly','yearly','partner','quarterly') COLLATE utf8mb4_unicode_ci NOT NULL,
   `amount` int NOT NULL,
   `out_trade_no` varchar(64) COLLATE utf8mb4_unicode_ci NOT NULL,
   `transaction_id` varchar(64) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
@@ -263,6 +314,7 @@ CREATE TABLE `payment_orders` (
   KEY `idx_payment_orders_status_paid_at` (`status`,`paid_at`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `post_likes`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `post_likes` (
@@ -274,6 +326,7 @@ CREATE TABLE `post_likes` (
   UNIQUE KEY `uk_post_like` (`post_id`,`user_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `posts`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `posts` (
@@ -289,6 +342,7 @@ CREATE TABLE `posts` (
   KEY `idx_posts_created` (`created_at`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `practice_records`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `practice_records` (
@@ -305,6 +359,7 @@ CREATE TABLE `practice_records` (
   KEY `idx_practice_records_created_at` (`created_at`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `practice_sessions`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `practice_sessions` (
@@ -325,6 +380,27 @@ CREATE TABLE `practice_sessions` (
   KEY `idx_practice_session_user` (`user_id`,`updated_at`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `pronunciation_scores`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `pronunciation_scores` (
+  `id` varchar(36) COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT (uuid()),
+  `user_id` varchar(36) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `sentence_id` varchar(64) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `score` int NOT NULL,
+  `accuracy` int DEFAULT NULL,
+  `fluency` int DEFAULT NULL,
+  `integrity` int DEFAULT NULL,
+  `speed` decimal(6,2) DEFAULT NULL,
+  `words` json DEFAULT NULL,
+  `comment` varchar(500) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_pronunciation_user_sentence` (`user_id`,`sentence_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `review_queue`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `review_queue` (
@@ -344,6 +420,7 @@ CREATE TABLE `review_queue` (
   KEY `idx_review_queue_user_id` (`user_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `sentence_knowledge`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `sentence_knowledge` (
@@ -357,6 +434,7 @@ CREATE TABLE `sentence_knowledge` (
   UNIQUE KEY `idx_sentence_knowledge_hash` (`sentence_hash`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `sentences`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `sentences` (
@@ -376,12 +454,15 @@ CREATE TABLE `sentences` (
   `sentence_structure` json DEFAULT NULL,
   `deleted_at` datetime(3) DEFAULT NULL,
   `deleted_batch` char(36) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `search_text` text COLLATE utf8mb4_unicode_ci GENERATED ALWAYS AS (concat(`chinese`,_utf8mb4' ',`english`)) STORED COMMENT '全库模糊搜索用：chinese + 空格 + english。配套 FULLTEXT ngram 索引，见 00031',
   PRIMARY KEY (`id`),
   KEY `idx_sentences_lesson_id` (`lesson_id`),
   KEY `idx_sentences_lesson_sort` (`lesson_id`,`sort_order`),
-  KEY `idx_sentences_created_at` (`created_at`)
+  KEY `idx_sentences_created_at` (`created_at`),
+  FULLTEXT KEY `ft_sentences_search` (`search_text`) /*!50100 WITH PARSER `ngram` */ 
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `sessions`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `sessions` (
@@ -394,6 +475,7 @@ CREATE TABLE `sessions` (
   KEY `idx_sessions_expires` (`expires_at`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `site_config`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `site_config` (
@@ -403,6 +485,7 @@ CREATE TABLE `site_config` (
   PRIMARY KEY (`key`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `strengthen_sessions`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `strengthen_sessions` (
@@ -416,12 +499,13 @@ CREATE TABLE `strengthen_sessions` (
   PRIMARY KEY (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `subscriptions`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `subscriptions` (
   `id` varchar(36) COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT (uuid()),
   `user_id` varchar(36) COLLATE utf8mb4_unicode_ci NOT NULL,
-  `plan` enum('monthly','yearly','partner') COLLATE utf8mb4_unicode_ci NOT NULL,
+  `plan` enum('monthly','yearly','partner','quarterly') COLLATE utf8mb4_unicode_ci NOT NULL,
   `status` enum('active','cancelled','expired') COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'active',
   `payment_order_id` varchar(36) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
   `starts_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -435,13 +519,14 @@ CREATE TABLE `subscriptions` (
   KEY `idx_subscriptions_status` (`status`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `task_logs`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `task_logs` (
   `id` varchar(36) COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT (uuid()),
   `user_id` varchar(36) COLLATE utf8mb4_unicode_ci NOT NULL,
   `task_type` enum('share_invite','invite_register','invite_purchase') COLLATE utf8mb4_unicode_ci NOT NULL,
-  `reward_type` enum('diamond','trial_days') COLLATE utf8mb4_unicode_ci NOT NULL,
+  `reward_type` enum('diamond','trial_days','coin') COLLATE utf8mb4_unicode_ci NOT NULL,
   `reward_amount` int NOT NULL,
   `date` varchar(10) COLLATE utf8mb4_unicode_ci NOT NULL,
   `ref_id` varchar(36) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
@@ -452,6 +537,7 @@ CREATE TABLE `task_logs` (
   UNIQUE KEY `uk_task_share_day` (`user_id`,`share_day`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `tts_cache`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `tts_cache` (
@@ -466,6 +552,7 @@ CREATE TABLE `tts_cache` (
   UNIQUE KEY `idx_tts_cache_key` (`cache_key`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `user_acquired_courses`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `user_acquired_courses` (
@@ -478,6 +565,7 @@ CREATE TABLE `user_acquired_courses` (
   KEY `idx_user_acquired_user` (`user_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `user_course_progress`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `user_course_progress` (
@@ -491,6 +579,7 @@ CREATE TABLE `user_course_progress` (
   KEY `idx_ucp_user` (`user_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `user_feedback`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `user_feedback` (
@@ -510,6 +599,7 @@ CREATE TABLE `user_feedback` (
   KEY `idx_feedback_status_created` (`status`,`created_at`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `user_notes`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `user_notes` (
@@ -523,6 +613,7 @@ CREATE TABLE `user_notes` (
   KEY `idx_user_notes_user` (`user_id`,`updated_at`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `users`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `users` (
@@ -545,13 +636,16 @@ CREATE TABLE `users` (
   `is_partner` tinyint NOT NULL DEFAULT '0',
   `partner_agreed_at` datetime DEFAULT NULL,
   `diamonds` int NOT NULL DEFAULT '0',
-  `check_in_goal` int NOT NULL DEFAULT '50',
+  `check_in_goal` int NOT NULL DEFAULT '10' COMMENT '每日打卡目标＝当日练习句数（2026-09-29 前是"当日钻石数"，语义已变更）',
   `wechat_access_token` text COLLATE utf8mb4_unicode_ci,
   `wechat_refresh_token` text COLLATE utf8mb4_unicode_ci,
   `wechat_token_expires_at` datetime DEFAULT NULL,
   `trial_claimed_at` datetime DEFAULT NULL,
   `signup_channel` varchar(30) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '注册渠道：wechat_oa_qr/wechat_oa_oauth/wechat_open_qr/phone/dev',
   `signup_source` json DEFAULT NULL COMMENT '注册来源明细（白名单键，见 lib/signup-source.ts）',
+  `coins` int NOT NULL DEFAULT '0' COMMENT '金币余额（免费货币），只用于兑换会员天数与道具；产出见 lib/coins.ts',
+  `notify_opt_out_at` datetime DEFAULT NULL COMMENT '退订主动触达的时间；非 NULL = 已退订。所有发送路径入口必须检查，见 lib/notify.ts',
+  `last_expiry_at` datetime DEFAULT NULL COMMENT '上一次会员到期时刻。checkAndExpirePro 清空 pro_expires 时同步写入，用于「已到期挽回」场景',
   PRIMARY KEY (`id`),
   UNIQUE KEY `users_phone_unique` (`phone`),
   UNIQUE KEY `users_email_unique` (`email`),
@@ -564,6 +658,7 @@ CREATE TABLE `users` (
   KEY `idx_users_signup_channel` (`signup_channel`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `verification_codes`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `verification_codes` (
@@ -579,6 +674,7 @@ CREATE TABLE `verification_codes` (
   KEY `idx_verification_codes_expires` (`expires_at`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `withdrawal_requests`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `withdrawal_requests` (
@@ -598,6 +694,7 @@ CREATE TABLE `withdrawal_requests` (
   KEY `idx_wr_status` (`status`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `word_dictionary_cache`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `word_dictionary_cache` (
@@ -616,6 +713,7 @@ CREATE TABLE `word_dictionary_cache` (
   UNIQUE KEY `uniq_word` (`word`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `wordbook_items`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `wordbook_items` (
@@ -629,6 +727,7 @@ CREATE TABLE `wordbook_items` (
   KEY `idx_wordbook_user` (`user_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `writing_entries`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `writing_entries` (
