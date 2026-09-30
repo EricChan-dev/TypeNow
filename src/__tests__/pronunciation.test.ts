@@ -265,8 +265,17 @@ describe("源码约束：不许写回旧的那一套（防回退）", () => {
 
   it("响应解析走纯函数（可单测），不在路由里手写字段名", () => {
     expect(routeCode).toContain("mapYoudaoEvaluate")
-    // 旧实现读的是 result.accuracy / words[].content —— 文档里都没有
-    expect(routeCode).not.toContain("result.accuracy")
+    // 旧实现是拿有道**原始响应**直接取字段（youdaoData.result.accuracy、
+    // words[].content），而文档里这两个路径都不存在，于是永远读不到值。
+    // 所以禁止的是「绕过映射函数去读原始 payload」；读**映射后**的 result
+    // （result.accuracy）才是正确写法，不能一并禁掉 —— 这条规则只针对
+    // youdaoData 这个名字上的属性访问，不针对 result。
+    //
+    // 用正则而不是字面量：`youdaoData?.result` 与 `youdaoData["result"]`
+    // 都是同一处越界，而 `not.toContain("youdaoData.result")` 只挡得住第一种
+    //（可选链与下标取值都能直接绕过去）。原始 payload 只允许整体传给
+    // youdaoErrorCode / mapYoudaoEvaluate / JSON.stringify，不许取字段。
+    expect(routeCode).not.toMatch(/youdaoData\s*\??\s*[.[]/)
     expect(routeCode).not.toContain(".content")
   })
 })

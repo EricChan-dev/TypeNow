@@ -18,6 +18,8 @@ import {
   mapYoudaoEvaluate,
   youdaoErrorCode,
 } from "@/lib/pronunciation"
+import { buildComment } from "@/lib/pronunciation-comment"
+import { getPreviousComment, savePronunciationScore } from "@/lib/pronunciation-store"
 
 /**
  * 跟读评分 / 有道语音评测代理。
@@ -72,14 +74,14 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "未登录" }, { status: 401 })
   }
 
-  let body: { audio?: string; text?: string }
+  let body: { audio?: string; text?: string; sentenceId?: string }
   try {
     body = await request.json()
   } catch {
     return NextResponse.json({ error: "请求格式错误" }, { status: 400 })
   }
 
-  const { audio, text } = body
+  const { audio, text, sentenceId } = body
   if (!audio || !text) {
     return NextResponse.json({ error: "audio 和 text 不能为空" }, { status: 400 })
   }
@@ -210,6 +212,38 @@ export async function POST(request: Request) {
     // 否则又会退化成"用户看到 0 分、我们不知道发生了什么"。
     console.error("[youdao/evaluate] 成功响应无法映射:", JSON.stringify(youdaoData).slice(0, 500))
     return NextResponse.json({ error: "评分结果解析失败" }, { status: 502 })
+  }
+
+  // ── 落库（覆盖式）────────────────────────────────────────────────────────
+  //
+  // 写在这里而不是让客户端再发一次请求：额度校验已经在这个路由里，评分结果
+  // 也已经在这里组装好，多一次往返没有任何收益。
+  //
+  // ⚠️ 写库失败**不影响返回**：分数已经算出来了（而且配额已经扣了），
+  // 因为存不上就不给用户看，是拿我们的故障惩罚用户。失败记日志。
+  // ⚠️ 只在客户端给了 sentenceId 时才写：没有句子就没有归属。
+  //    `text` 是本路由发给有道的**英文字符串**（body 类型是 `{ audio?: string; text?: string; sentenceId?: string }`），
+  //    它不含句子 id —— 所以 sentenceId 必须由前端单独传上来（Task 6 已改）。
+  //    老客户端不传时静默跳过落库，不影响评分返回。
+  if (sentenceId) {
+    const previousComment = await getPreviousComment(session.userId, sentenceId)
+    const comment = buildComment({
+      score: result.score,
+      accuracy: result.accuracy,
+      fluency: result.fluency,
+      integrity: result.integrity,
+      words: result.words,
+      previousComment,
+    })
+    const saved = await savePronunciationScore({
+      userId: session.userId,
+      sentenceId,
+      result,
+      comment,
+      now: new Date(),
+    })
+    // 落库失败时仍然把评语回给用户（这一次的体验不该变差），只是下次进来会没有历史分
+    return NextResponse.json({ ...result, comment, saved })
   }
 
   return NextResponse.json(result)
