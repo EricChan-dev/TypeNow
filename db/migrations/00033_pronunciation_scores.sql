@@ -13,10 +13,24 @@
 --   · comment —— 评语是评分那一刻生成的。不存的话，重开详情会重新生成一句
 --                不一样的话，用户会以为评分变了
 --
--- ── 为什么只留一行 ──────────────────────────────────────────────────────────
+-- ── 一句话一行 —— 但「一句」指的是**练习项**，不是原句 ────────────────────────
 --
 -- 产品决定：只保留最新一次（重录覆盖）。代价是日后做「进步曲线」没有历史
 -- 数据可回溯 —— 这是明知的取舍，不是疏漏。
+--
+-- ⚠️ 关键在 sentence_id 存的是**练习项 id**，不是 sentences.id：
+--    `sentences` 表里带 chunks 的句子会被练习页展开成多个分块练习项
+--    （线上 23,010 / 461,933 句有 chunks），每个分块是**独立朗读、独立评分**的
+--    一段文字。若按原句 id 存，一句 3 个分块就只有一个分数格：
+--      · 录分块 1 得 90 → 录分块 2 得 60 → 90 被覆盖，第一段的分永久丢失
+--      · 大纲里同一句的 3 个分块会都显示「跟读 60」，包括从没录过的那个
+--    两种情况都是"分数挂在了不是它的那段文字上"，而且用户看不出来。
+--    所以键是 `${原句 id}_c<order>`（分块）或原句 id（整句，没有 chunks 时）。
+--
+--    代价：这张表因此**不能**对 sentences 建外键（`_c0` 那一串在 sentences 里
+--    不存在）。目前本来就没建外键，这里只是把原因写下来。
+--    也因此 sentence_id 必须宽到 VARCHAR(64)：36 字符的 UUID 加 `_c0` 就是 39，
+--    写成 VARCHAR(36) 会让分块**根本存不进来**（严格模式下 1406 拒绝整行）。
 --
 -- ── 为什么三个维度列可空，而总分不可空 ──────────────────────────────────────
 --
@@ -89,6 +103,14 @@
 --   注：MySQL 8.0.13+ 的表达式默认值在 EXTRA 里只标 `DEFAULT_GENERATED`，
 --   不会写出 `uuid()`，所以默认值要看 COLUMN_DEFAULT。
 --
+--   同时确认 `sentence_id` 的宽度够放分块练习项（36 字符 UUID + `_c0` = 39）。
+--   写成 36 的后果是分块**根本存不进来**，而且只在分块句上出现 —— 很难联想到列宽：
+--
+--   SELECT CHARACTER_MAXIMUM_LENGTH FROM information_schema.COLUMNS
+--    WHERE TABLE_SCHEMA='typenow' AND TABLE_NAME='pronunciation_scores'
+--      AND COLUMN_NAME='sentence_id';
+--   -- 期望 64（≥39 即可，写 64 是给 `_c<多位序号>` 留余量）
+--
 -- ③ 索引只剩主键与唯一键（多出来的是漏删的冗余索引）：
 --
 --   SELECT INDEX_NAME, NON_UNIQUE, GROUP_CONCAT(COLUMN_NAME ORDER BY SEQ_IN_INDEX)
@@ -114,13 +136,20 @@
 --
 --   DELETE FROM pronunciation_scores WHERE user_id='probe';
 --
+-- ⑤ 分块练习项的 id 真的存得进去（39 字符，最容易在列宽上翻车的一条）：
+--
+--   INSERT INTO pronunciation_scores (user_id, sentence_id, score)
+--     VALUES ('probe','33333333-3333-4333-8333-000000000001_c0',88);
+--   -- 不报 1406 → sentence_id 够宽，分块的分有地方放
+--   DELETE FROM pronunciation_scores WHERE user_id='probe';
+--
 -- 回滚：
 --   DROP TABLE IF EXISTS pronunciation_scores;
 
 CREATE TABLE IF NOT EXISTS `pronunciation_scores` (
   `id`          VARCHAR(36)  NOT NULL DEFAULT (UUID()),
   `user_id`     VARCHAR(36)  NOT NULL,
-  `sentence_id` VARCHAR(36)  NOT NULL,
+  `sentence_id` VARCHAR(64)  NOT NULL,
   -- 总分有 overall → pronunciation → integrity → 0 的兜底链，必定有值
   `score`       INT          NOT NULL,
   -- 三个维度**可空**：有道没给这个字段时存 NULL，绝不写 0。

@@ -403,13 +403,13 @@ describe("跟读评分 · 直连 store 的写路径", () => {
     expect(rows[0].id).not.toBe(rows[1].id)
   })
 
-  it("★ 超长 sentence_id 拒写且不留行；正好 36 字符按原值写入", async () => {
-    // sentence_id 是 UNIQUE(user_id, sentence_id) 的一部分，列宽 VARCHAR(36)。
+  it("★ 超长 sentence_id 拒写且不留行；正好 64 字符按原值写入", async () => {
+    // sentence_id 是 UNIQUE(user_id, sentence_id) 的一部分，列宽 VARCHAR(64)。
     // 超长只能拒写：截断不是"少存几个字符"，而是把这行**改挂到另一个 key 上**，
-    // 用户的分数会记到别的句子头上 —— 比丢行严格更坏。
+    // 用户的分数会记到别的文字头上 —— 比丢行严格更坏。
     const userId = await insertUser({ name: "超长 id 用户" })
 
-    for (const len of [37, 40]) {
+    for (const len of [65, 80]) {
       const tooLong = "x".repeat(len)
       expect(await save(userId, tooLong, evaluate(), "评语")).toBe(false)
     }
@@ -419,22 +419,51 @@ describe("跟读评分 · 直连 store 的写路径", () => {
       [userId],
     )
     expect(Number(rows[0].n)).toBe(0)
-    // 明确挡住"悄悄截断到 36 字符后照写"这条歧路
+    // 明确挡住"悄悄截断到 64 字符后照写"这条歧路
     const truncated = await q<{ n: number }[]>(
       "SELECT COUNT(*) AS n FROM pronunciation_scores WHERE sentence_id LIKE ?",
-      [`${"x".repeat(36)}%`],
+      [`${"x".repeat(64)}%`],
     )
     expect(Number(truncated[0].n)).toBe(0)
 
-    // 边界另一侧：正好 36 字符（列宽上限，也是 UUID 的长度）必须**原样**写入。
-    // 这正是"宁可拒写也不截断"安全的前提 —— 合法 id 永远落在 36 以内。
-    const exact = crypto.randomUUID()
-    expect(exact).toHaveLength(36)
+    // 边界另一侧：正好 64 字符（列宽上限）必须**原样**写入。
+    // 这正是"宁可拒写也不截断"安全的前提 —— 合法 id 永远落在 64 以内。
+    const exact = "y".repeat(64)
     expect(await save(userId, exact, evaluate({ score: 77 }), "边界评语")).toBe(true)
 
     const row = await readRow(userId, exact)
     expect(row?.sentence_id).toBe(exact)
     expect(row?.score).toBe(77)
+  })
+
+  it("★ 分块练习项 id（`<原句>_c0`，39 字符）能各自成行，不会互相覆盖", async () => {
+    // 这是"按练习项计分"这条产品决定的核心：带 chunks 的句子被展开成多个分块，
+    // 每个分块是独立朗读的一段文字，必须各占一行。若按原句 id 存，一句只有一个
+    // 分数格 —— 录完分块 1 再录分块 2 会把 1 覆盖掉，先录的那段分永久丢失。
+    const userId = await insertUser({ name: "分块句用户" })
+    const parent = FIXTURE.sentA1Plain
+
+    const c0 = `${parent}_c0`
+    const c1 = `${parent}_c1`
+    // 36 字符 UUID + `_c0` = 39，正是列宽写 36 就会翻车的长度
+    expect(c0.length).toBeGreaterThan(36)
+    expect(c0.length).toBeLessThanOrEqual(64)
+
+    expect(await save(userId, c0, evaluate({ score: 90 }), "分块一评语")).toBe(true)
+    expect(await save(userId, c1, evaluate({ score: 60 }), "分块二评语")).toBe(true)
+
+    // 三行并存：两个分块各一行，且都是自己的分（互不覆盖）
+    expect(await countRows(userId, c0)).toBe(1)
+    expect(await countRows(userId, c1)).toBe(1)
+    expect((await readRow(userId, c0))?.score).toBe(90)
+    expect((await readRow(userId, c1))?.score).toBe(60)
+
+    // 上一句评语也按练习项隔离：录分块 2 时不该看到分块 1 的评语
+    expect(await store.getPreviousComment(userId, c0)).toBe("分块一评语")
+    expect(await store.getPreviousComment(userId, c1)).toBe("分块二评语")
+
+    // 父句 id 是**另一个**练习项（只有整句没被展开时才存在），不与分块互相干扰
+    expect(await countRows(userId, parent)).toBe(0)
   })
 
   it("★ 不同用户各自的上一句评语互不串号", async () => {

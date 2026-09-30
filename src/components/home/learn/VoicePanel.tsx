@@ -22,7 +22,6 @@ import {
   type EvaluateResult,
 } from "@/lib/pronunciation"
 import { describeMicError } from "@/lib/mic-error"
-import { baseSentenceId } from "@/lib/sentence-id"
 import type { Sentence } from "@/types"
 import { PronunciationCard } from "@/components/home/learn/PronunciationCard"
 import { PronunciationModal } from "@/components/home/learn/PronunciationModal"
@@ -164,14 +163,18 @@ async function toWavBase64(blob: Blob): Promise<string> {
 export function VoicePanel({ sentence }: { sentence: Sentence }) {
   const english = sentence.english
   /**
-   * 落库用的是**原句 id**，不是练习项的 id。
+   * 落库用的是**这个练习项自己的 id**。
    *
    * 有 chunks 的句子会被 LearnClient 展开成 `<原句 id>_c<order>`（见 expandSentences），
-   * 而数据库里没有 `xxx_c0` 这一行：列宽是 VARCHAR(36)，`_c0` 后缀会把 id 顶到 39 字符，
-   * pronunciation-store 会**直接拒写并只留一行日志** —— 用户看到分数、库里什么都没有，
-   * 正是这次改版要消灭的静默丢分。所以统一走 baseSentenceId（非分块句子是 no-op）。
+   * 而每个分块是**独立朗读、独立评分**的一段文字 —— 一句 3 个分块就是 3 段各自要读，
+   * 所以每个分块有自己的分数行。若统一改写成原句 id，一句就只剩一个分数格：
+   * 录完分块 1 再录分块 2 会把前一个覆盖掉，先录的那段分永久丢失。
+   * 所以这里用 `sentence.id` 原值（没有 chunks 时它就是原句 id）。
+   *
+   * 列宽 VARCHAR(64) 放得下 36+3 的分块 id；服务端只接受「原句 id 或 `_c<数字>`」
+   * 两种形态（见 evaluate 路由的 isPracticeItemId），别的一律不落库。
    */
-  const sentenceId = baseSentenceId(sentence.id)
+  const sentenceId = sentence.id
   const [recording, setRecording] = useState(false)
   const [evaluating, setEvaluating] = useState(false)
   const [secondsLeft, setSecondsLeft] = useState(MAX_RECORD_MS / 1000)
@@ -373,8 +376,8 @@ export function VoicePanel({ sentence }: { sentence: Sentence }) {
         const res = await fetch("/api/youdao/evaluate", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          // sentenceId 必传：路由只认这个字段来决定分数挂在哪句上，
-          // 而且是**原句 id**（分块练习项必须还原，见上面 sentenceId 的说明）
+          // sentenceId 必传：路由只认这个字段来决定分数挂在哪个练习项上，
+          // 传的是本练习项自己的 id（分块句就是 `<原句 id>_c<n>`，见上面 sentenceId 的说明）
           body: JSON.stringify({ audio, text: english, sentenceId }),
           signal: controller.signal,
         })

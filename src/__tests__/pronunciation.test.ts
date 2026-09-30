@@ -324,11 +324,13 @@ describe("源码约束：录音侧必须真的产出 WAV", () => {
     expect(panelCode).toContain("getTracks().forEach")
   })
 
-  it("上传的 sentenceId 走 baseSentenceId（分块句 id 带 `_c0`，库里没有那一行）", () => {
-    // 练习页把有 chunks 的句子展开成 `<原句 id>_c<order>`（LearnClient 的 expandSentences）。
-    // 那个 id 直接上传的话：sentence_id 列宽只有 VARCHAR(36)，加 `_c0` 就是 39 ——
-    // store 的超长拒写分支会把它丢掉，表现成"用户看得到分数、库里永远没有"。
-    // 而 /api/courses/sentences 的 JOIN 也是按原句 id 匹配的，读回来同样对不上。
-    expect(panelCode).toContain("baseSentenceId(sentence.id)")
+  it("上传的 sentenceId 是**练习项自己的 id**，不能改写成原句 id", () => {
+    // 跟读分按**练习项**存：有 chunks 的句子会被 LearnClient 展开成
+    // `<原句 id>_c<order>`（expandSentences），而每个分块是独立朗读、独立评分的
+    // 一段文字，各有各的一行。若在这里统一改写成 baseSentenceId(sentence.id)，
+    // 一句 3 个分块就只剩一个分数格 —— 录完分块 1 再录分块 2 会把前一个覆盖掉。
+    // 所以这里断言"没有发生那次改写"，而不只是断言某个字符串存在。
+    expect(panelCode).toContain("const sentenceId = sentence.id")
+    expect(panelCode).not.toContain("baseSentenceId(sentence.id)")
   })
 })

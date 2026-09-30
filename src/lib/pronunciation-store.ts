@@ -23,10 +23,14 @@ import { and, eq } from "drizzle-orm"
  */
 const COMMENT_MAX = 500
 /**
- * sentence_id 的列宽（VARCHAR(36)）。**这是拒绝阈值，不是截断宽度** ——
+ * sentence_id 的列宽（VARCHAR(64)）。**这是拒绝阈值，不是截断宽度** ——
  * 它是 UNIQUE(user_id, sentence_id) 的一部分，超长只能拒写，见写入处的说明。
+ *
+ * 64 而不是 36 是因为存的是**练习项 id**：带 chunks 的句子会被练习页展开成
+ * `<原句 id>_c<order>`，36 字符的 UUID 加 `_c0` 就是 39。用 36 会让分块
+ * 永远写不进来，而那只在分块句上出现 —— 排查时很难联想到列宽。
  */
-const SENTENCE_ID_MAX_LEN = 36
+const SENTENCE_ID_MAX_LEN = 64
 /** DECIMAL(6,2)：6 位总精度里 2 位给小数，整数部分只剩 4 位 → 上限 9999.99。 */
 const SPEED_MAX = 9999.99
 
@@ -56,8 +60,10 @@ function toDecimalSpeed(speed: number | null): string | null {
 /**
  * 写入（覆盖式）。
  *
- * 一句话一行：`UNIQUE(user_id, sentence_id)` + `onDuplicateKeyUpdate`，
+ * **一个练习项一行**：`UNIQUE(user_id, sentence_id)` + `onDuplicateKeyUpdate`，
  * 重录即覆盖。产品决定只留最新一次，所以这里是 upsert 而不是 insert。
+ * 「练习项」而不是「原句」：带 chunks 的句子会被练习页展开成多个分块练习项，
+ * 每个分块独立朗读、独立评分，所以 sentence_id 存的是练习项 id。
  *
  * **返回 boolean 而不是抛错**：调用方是评分接口，写库失败**不该让用户看不到分数**。
  * 分数已经算出来了，存不上是我们的问题，要记日志但不该毁掉这次响应。
@@ -78,7 +84,7 @@ export async function savePronunciationScore(params: {
 
   // ── 进 SQL 前按列宽收敛（键列除外，键列是拒写）────────────────────────────
   //
-  // comment(VARCHAR(500)) / sentence_id(VARCHAR(36)) / speed(DECIMAL(6,2)) 都是
+  // comment(VARCHAR(500)) / sentence_id(VARCHAR(64)) / speed(DECIMAL(6,2)) 都是
   // 定宽列。MySQL 8 默认 STRICT_TRANS_TABLES：超长或越界**不是截断，是拒绝整条
   // 语句**（1406 Data too long / 1264 Out of range）。而本函数的约定是
   //「写库失败不影响返回分数」，于是表现成：用户每次都能看到分数，行却**永久、
@@ -94,8 +100,8 @@ export async function savePronunciationScore(params: {
   //   · speed   —— 越界存 null，而 null 的语义恰好就是"不知道语速"，也可接受；
   //   · sentence_id —— **键列**，`UNIQUE(user_id, sentence_id)` 的一部分。
   //     截断不是降级，是**悄悄把这一行改挂到另一个 key 上**：调用方拿 id A 来
-  //     写，库里却落在 A 的前 36 字符下；两个前 36 字符相同、其后分叉的不同句子
-  //     还会撞进同一行互相覆盖。把用户的分数记到别的句子头上，比这一行没写进去
+  //     写，库里却落在 A 的截断前缀下；两个前缀相同、其后分叉的不同 id
+  //     还会撞进同一行互相覆盖。把用户的分数记到别的文字头上，比这一行没写进去
   //     **严格更坏**：丢行只是"没有数据"，改 key 是"错的数据被当成对的"。
   //     所以超长一律拒写，绝不 slice。
   //
@@ -104,8 +110,8 @@ export async function savePronunciationScore(params: {
   // 写入（INSERT 分支）落成不同的内容，而这种漂移只在"重录"时才现形。
   // sentence_id 没有局部变量，因为它的"处理"就是不处理 —— 原样进 SQL。
   //
-  // 注：路由目前只会传客户端给的真实 sentence id（Task 6 才开始传），所以这条
-  // 拒写分支不该出现在实际流量里；它挡的是畸形/恶意值，不是常规路径。
+  // 注：正常流量传的是练习项 id（LearnClient 展开出来的原句 id 或 `<原句 id>_c<n>`），
+  // 所以这两条拒写分支不该出现在实际流量里；它们挡的是畸形/恶意值，不是常规路径。
   if (sentenceId.length > SENTENCE_ID_MAX_LEN) {
     // 必须留下能定位问题的信息：长度说明"为什么被拒"，前缀说明"是哪个值"。
     // 前缀要截断 —— 畸形值可能有几 MB，整条打进日志会把真正有用的上下文冲掉。

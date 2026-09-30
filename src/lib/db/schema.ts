@@ -402,14 +402,22 @@ export const reviewQueue = mysqlTable(
 
 // ─── 跟读评分（有道语音评测）───────────────────────────────────────────────────
 //
-// 一句话一行：UNIQUE(user_id, sentence_id)，重录覆盖（产品决定只留最新一次）。
+// **一个练习项一行**：UNIQUE(user_id, sentence_id)，重录覆盖（产品决定只留最新一次）。
+// 「练习项」而不是「原句」：带 chunks 的句子会被练习页展开成多个分块练习项，
+// 每个分块独立朗读、独立评分，所以各有各的一行 —— 见下面 sentenceId 列上的说明。
 // 与练习进度**完全无关** —— 不写 practice_records / review_queue / 课程进度。
 export const pronunciationScores = mysqlTable(
   "pronunciation_scores",
   {
     id: varchar("id", { length: 36 }).primaryKey().default(sql`(UUID())`),
     userId: varchar("user_id", { length: 36 }).notNull(),
-    sentenceId: varchar("sentence_id", { length: 36 }).notNull(),
+    // 存的是**练习项 id**，不是 sentences.id：带 chunks 的句子会被练习页展开成
+    // `<原句 id>_c<order>` 的多个分块练习项，每个分块独立朗读、独立评分，各自落一行。
+    // 按原句 id 存的话，一句 3 个分块只会有一个分数格 —— 后录的分块覆盖先录的，
+    // 而且大纲里三个分块都会显示同一个分（包括没录过的那个）。
+    // 宽度 64 而不是 36：UUID 36 字符 + `_c0` = 39，写小了分块根本存不进来。
+    // 因此这张表**不能**对 sentences 建外键（`_c0` 在 sentences 里不存在这一行）。
+    sentenceId: varchar("sentence_id", { length: 64 }).notNull(),
     // 总分有 overall → pronunciation → integrity → 0 的兜底链，必定有值，
     // 所以它**是**非空的。下面三个维度没有这条链，必须可空 —— 见维度列上的注释。
     score: int("score").notNull(),

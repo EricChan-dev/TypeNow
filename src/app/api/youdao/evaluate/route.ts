@@ -20,6 +20,23 @@ import {
 } from "@/lib/pronunciation"
 import { buildComment } from "@/lib/pronunciation-comment"
 import { getPreviousComment, savePronunciationScore } from "@/lib/pronunciation-store"
+import { baseSentenceId, isChunkPracticeItemId } from "@/lib/sentence-id"
+
+/** sentence_id 的列宽。与 db/migrations/00033 和 schema.ts 同值。 */
+const SENTENCE_ID_MAX_LEN = 64
+
+/**
+ * 客户端传来的是不是一个合法的练习项 id。
+ *
+ * 练习项只有两种形态：原句 id，或分块句展开后的 `<原句 id>_c<数字>`。
+ * 两者合起来就是「这个 id 不可能是别的什么东西」—— 空串、非字符串、
+ * 以及带 `_c` 却不是纯数字后缀的 slug（`my_course_c1x`）都被挡在外面。
+ */
+function isPracticeItemId(id: unknown): id is string {
+  if (typeof id !== "string" || id.length === 0) return false
+  if (id.length > SENTENCE_ID_MAX_LEN) return false
+  return baseSentenceId(id) === id || isChunkPracticeItemId(id)
+}
 
 /**
  * 跟读评分 / 有道语音评测代理。
@@ -223,12 +240,18 @@ export async function POST(request: Request) {
   // 因为存不上就不给用户看，是拿我们的故障惩罚用户。失败记日志。
   // ⚠️ 只在客户端给了 sentenceId 时才写：没有句子就没有归属。
   //    `text` 是本路由发给有道的**英文字符串**（body 类型是 `{ audio?: string; text?: string; sentenceId?: string }`），
-  //    它不含句子 id —— 所以 sentenceId 必须由前端单独传上来（Task 6 已改）。
+  //    它不含句子 id —— 所以 sentenceId 必须由前端单独传上来。
   //    老客户端不传时静默跳过落库，不影响评分返回。
-  // ⚠️ 类型也要查：`sentenceId` 来自客户端 JSON，可能是数字或对象。只判真值的话，
-  //    store 里那句 `sentenceId.length > 36` 对 number/object 永远为 false
-  //    （NaN 比较不成立），于是会被 MySQL 隐式转成字符串，落一行挂在并不存在的句子上。
-  if (typeof sentenceId === "string" && sentenceId !== "") {
+  // ⚠️ 这里收到的必须是**练习项 id**：原句 id，或分块句展开后的 `<原句 id>_c<order>`。
+  //    分块是各自独立朗读与评分的（一句 3 个分块就是 3 段各自要读的文字），
+  //    所以每个分块有自己的分数行 —— 这才不会出现"后录的分块覆盖先录的"。
+  // ⚠️ 校验放在这一层，而不是只靠 store 的列宽：
+  //    · 类型要查 —— `sentenceId` 来自客户端 JSON，可能是数字或对象；只判真值的话
+  //      store 里那句 `sentenceId.length > 64` 对它们永远为 false（NaN 比较不成立），
+  //      于是会被 MySQL 隐式转成字符串，落一行挂在并不存在的 id 上；
+  //    · 形状要查 —— 必须是 `baseSentenceId(id)` 本身、或它的 `_c<数字>` 派生形式。
+  //      别的字符串（含带 `_c` 却非纯数字的 slug）不是练习项 id，落库只会污染这张表。
+  if (isPracticeItemId(sentenceId)) {
     const previousComment = await getPreviousComment(session.userId, sentenceId)
     const comment = buildComment({
       score: result.score,

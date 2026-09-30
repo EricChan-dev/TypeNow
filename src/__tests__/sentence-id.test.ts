@@ -1,15 +1,18 @@
 /**
- * 句 id 的基础化（去掉分块后缀）。
+ * 句 id 的基础化（去掉分块后缀）与「是不是分块练习项」的判断。
  *
  * 存在的理由：练习页会把「有 chunks 的句子」展开成若干条练习项，各自带
- * `${原句 id}_c${order}` 的后缀。但下游所有接口（review/complete、
- * wordbook、practice/record）认的都是**原句 id**，库里根本没有 `xxx_c0`
- * 这一行。这个后缀在 LearnClient 里被就地手写了 4 遍，任何一处漏掉，
+ * `${原句 id}_c${order}` 的后缀。**两套接口认两套 id**：
+ * 练习进度类（review/complete、wordbook、practice/record）认**原句 id**，
+ * 库里根本没有 `xxx_c0` 这一行；而跟读评分认**练习项 id**，因为每个分块是
+ * 独立朗读、独立评分的一段文字，各有各的分数行。
+ *
+ * 这个后缀在 LearnClient 里被就地手写了 4 遍，任何一处漏掉，
  * 用户看到的就是「Review item not found」这种莫名其妙的失败 —— 而且
  * 因为只在特定内容上触发，很难复现。抽出来用一个函数兜住。
  */
 import { describe, it, expect } from "vitest"
-import { baseSentenceId } from "@/lib/sentence-id"
+import { baseSentenceId, isChunkPracticeItemId } from "@/lib/sentence-id"
 
 describe("baseSentenceId", () => {
   it("带分块后缀时剥掉后缀", () => {
@@ -49,5 +52,33 @@ describe("baseSentenceId", () => {
     expect(baseSentenceId("")).toBe("")
     expect(baseSentenceId(null)).toBe("")
     expect(baseSentenceId(undefined)).toBe("")
+  })
+})
+
+describe("isChunkPracticeItemId", () => {
+  it("认 `_c<纯数字>` 结尾的分块练习项", () => {
+    expect(isChunkPracticeItemId("14da28fe-01ba-4fa6-a932-8cc30762d916_c0")).toBe(true)
+    expect(isChunkPracticeItemId("14da28fe-01ba-4fa6-a932-8cc30762d916_c12")).toBe(true)
+    expect(isChunkPracticeItemId("my_course_c0")).toBe(true)
+  })
+
+  it("整句 id 不算分块练习项", () => {
+    expect(isChunkPracticeItemId("14da28fe-01ba-4fa6-a932-8cc30762d916")).toBe(false)
+    expect(isChunkPracticeItemId("plain")).toBe(false)
+  })
+
+  it("与 baseSentenceId 同一套后缀规则（`_c` 后必须是纯数字）", () => {
+    // 这两个函数一旦用了不同的正则，就会出现"按原句 id 存、按分块 id 读"的错配，
+    // 而且不会报错 —— 所以这里逐条对齐 baseSentenceId 的否定用例。
+    expect(isChunkPracticeItemId("prefix_c")).toBe(false)
+    expect(isChunkPracticeItemId("prefix_cx")).toBe(false)
+    expect(isChunkPracticeItemId("prefix_c1x")).toBe(false)
+    expect(isChunkPracticeItemId("prefix_c-1")).toBe(false)
+  })
+
+  it("空值安全降级", () => {
+    expect(isChunkPracticeItemId("")).toBe(false)
+    expect(isChunkPracticeItemId(null)).toBe(false)
+    expect(isChunkPracticeItemId(undefined)).toBe(false)
   })
 })

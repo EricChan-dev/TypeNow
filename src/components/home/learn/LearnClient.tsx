@@ -46,11 +46,11 @@ function expandSentences(raw: Sentence[]): Sentence[] {
         lesson_id: s.lesson_id,
         words: alignWordsWithEnglish(chunk.text, parentWords),
         chunks: null,
-        // 跟读分跟着原句走：库里一句话一行（UNIQUE(user_id, sentence_id)），
-        // /api/courses/sentences 也只把 pronunciation 挂在**父行**上。这个分支是
-        // 重新构造的字面量（不是展开 s），漏掉这一项，分块练习项就永远读不到分数，
-        // 历史卡片与「查看详情」对它们等于不存在。同 category/difficulty/tags 一样继承。
-        pronunciation: s.pronunciation,
+        // ⚠️ 这里**不能**继承 s.pronunciation：跟读分是按**练习项**存的，每个分块
+        // 是独立朗读、独立评分的一段文字，各有各的一行。父行的分属于"整句"这个
+        // 练习项（只有没被展开时才存在），把它挂到每个分块上会让大纲里三个分块
+        // 都显示同一个分、包括从没录过的那个；也会让历史卡片显示另一段录音的分。
+        // 分块自己的分由 /api/courses/sentences 按练习项 id 匹配下发。
       }))
   })
 }
