@@ -4,7 +4,13 @@
 
 **Goal:** 把跟读评分从练习页里的一行小标签改成独立弹窗（逐词评分 + 多维进度条 + 总评分与评语），并把评分落库，使其在练习页与大纲历史里可见。
 
-**Architecture:** 评分能力（有道）与呈现解耦：`lib/pronunciation.ts` 保持不变，新增一个纯函数模块负责「评语生成」、一个 store 模块负责落库；`VoicePanel` 保留录音与调用，把**显示**交给新的 `PronunciationModal`（弹窗）与 `PronunciationCard`（关闭后的卡片）。跟读数据通过 `pronunciation_scores` 表持久化，一句话一行（`UNIQUE(user_id, sentence_id)`），在 `/api/courses/sentences` 里 LEFT JOIN 下发。
+**Architecture:** 评分能力（有道）与呈现解耦：`lib/pronunciation.ts` 保持不变，新增一个纯函数模块负责「评语生成」、一个 store 模块负责落库；`VoicePanel` 保留录音与调用，把**显示**交给新的 `PronunciationModal`（弹窗）与 `PronunciationCard`（关闭后的卡片）。跟读数据通过 `pronunciation_scores` 表持久化，**一个练习项一行**（`UNIQUE(user_id, sentence_id)`，`sentence_id` 是练习项 id：原句 id，或分块句展开后的 `<原句 id>_c<order>`），在 `/api/courses/sentences` 里按练习项 LEFT JOIN 下发。
+
+> ⚠️ 最初写的是「一句话一行」并按**原句** id 存。实现到一半发现那是错的：带 chunks 的句子
+> 会被练习页展开成多个分块练习项（线上 23,010/461,933 句有 chunks），每个分块是各自朗读的
+> 一段文字。按原句 id 存的话一句只有一个分数格 —— 后录的分块会覆盖先录的，大纲里每个分块
+> 还会显示同一个分。现在改为按练习项计分，`sentence_id` 加宽到 `VARCHAR(64)`（UUID + `_c0` = 39）。
+> 详见本文件顶部「执行进度」的第 8 条。
 
 **Tech Stack:** Next.js 16（App Router）/ React 19 / TypeScript / Tailwind v4 / Drizzle ORM + MySQL 8 / vitest（单测与 e2e）
 
@@ -75,6 +81,18 @@
    `YOUDAO_APP_KEY` 被清空而在碰到 store 之前就 503，而前三组用例都是自己拼 SQL 写表。
    现在 Task 9 有一段直连 `savePronunciationScore / getPreviousComment` 的用例，
    并在注入 `DATABASE_URL` 前先跑 `assertTestDatabase()`。
+
+8. **「一句一行」这个前提本身是错的**（已改为按练习项计分，`b77164a`）。
+   计划最初写的是"跟读分挂原句"，实现时按它做了两件事：上传前把分块 id 还原成原句 id
+   （`baseSentenceId`），并把父行的 `pronunciation` 继承给每个分块。
+   终审发现这两步合起来会让**一句的多个分块共用一个分数格**：
+   - 录分块 1 得 90 → 录分块 2 得 60 → 90 被覆盖，第一段的分永久丢失；
+   - 大纲里同一句的每个分块都显示「跟读 60」，包括从没录过的那个；
+   - 历史卡片会把 A 段录音的分显示成 B 段的分。
+   根因是"一句 = 一个可跟读单位"不成立：有 chunks 的句子（线上 5%）会被展开成
+   多个**独立朗读**的分块。现在：`sentence_id` 存练习项 id（`<原句 id>_c<n>`）、
+   列宽 `VARCHAR(64)`、路由只接受「原句 id 或 `_c<数字>`」两种形态，
+   且分块**不再**继承父行的分。E2E 有一条用例专门钉住"两个分块各自成行、互不覆盖"。
 
 
 ---
