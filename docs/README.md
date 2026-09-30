@@ -1,6 +1,6 @@
 # TypeNow 文档索引
 
-> 最后更新：2026-09-28
+> 最后更新：2026-10-01
 
 `docs/` 只放**当前有效**的文档。已经执行完毕或已被取代的历史文档统一移到
 [archive/](archive/README.md)。
@@ -20,6 +20,7 @@
 | 句乐部数据导入的**日常操作** | [julebu-import-guide.md](julebu-import-guide.md) |
 | 会员赠送、邀请、推广体系的设计与已拍板决策 | [membership-growth-plan.md](membership-growth-plan.md) |
 | **分销/邀请机制的法律红线与自查**（改分销机制前必读） | [distribution-compliance.md](distribution-compliance.md) |
+| 竞品（句游英语）模式拆解：能借鉴什么、不能抄什么 | [juyou-english-teardown.md](juyou-english-teardown.md) |
 | 本地开发、命令、踩坑清单 | [../CLAUDE.md](../CLAUDE.md)、[../AGENTS.md](../AGENTS.md) |
 | 已归档的历史文档 | [archive/](archive/README.md) |
 
@@ -40,6 +41,7 @@ TypeNow/
 │   ├── julebu-import-guide.md      # 内容导入操作手册
 │   ├── membership-growth-plan.md   # 会员赠送 / 邀请 / 推广体系（含已拍板决策）
 │   ├── distribution-compliance.md  # 分销机制的合规边界与自查
+│   ├── juyou-english-teardown.md   # 竞品（句游英语）拆解与借鉴清单
 │   ├── pages/                      # 15 篇页面级需求文档
 │   └── archive/                    # 已归档（PRD-V2、30天计划、竞品调研…）
 ├── specs/
@@ -65,6 +67,7 @@ TypeNow/
 | `docs/architecture.md` | 系统怎么搭、数据怎么存 | 产品需求 |
 | `membership-growth-plan.md` | 会员/邀请/推广**怎么做**、参数与决策台账 | 法律合规边界 |
 | `distribution-compliance.md` | 分销机制的**法律边界**与现状自查 | 具体产品参数（引用 growth-plan） |
+| `juyou-english-teardown.md` | 竞品做对了什么、我们该动哪一层 | 参数台账与排期（引用 growth-plan / business-model / checklist） |
 
 改需求前先确认改哪一层；**技术事实以代码为准**，架构文档与代码冲突时以代码为准并回修文档。
 
