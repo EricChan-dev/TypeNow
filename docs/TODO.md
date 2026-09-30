@@ -9,30 +9,38 @@
 
 ## 零、需要人工介入（优先）
 
-### [ ] 0-A-0. 执行 `00033_pronunciation_scores.sql`（**必须早于部署**）
+### [x] 0-A-0. 执行 `00033_pronunciation_scores.sql`（2026-09-30 已完成）
 
 跟读评分改版（计划：`docs/superpowers/plans/2026-09-30-pronunciation-scoring-redesign.md`）
-新增了一张表，代码已经写好但**迁移还没在生产执行**。
+新增的表**已在生产执行并部署上线**。
 
-**顺序不能反**：`/api/courses/sentences` 现在对每一节课都 LEFT JOIN 这张表
-（`src/app/api/courses/sentences/route.ts`），表不存在时该接口 500，
-练习页对**所有用户**都打不开（不是只影响跟读功能）。
+执行前的备份在 `db-backup/pre-00033-20260930-145848/`
+（迁移前 37 张表的完整结构快照 + 表数量/users 行数基线，回滚是 `DROP TABLE`）。
 
-```bash
-# 1) 按 db-backup/ 惯例先备份
-mkdir -p db-backup/pre-00033-$(date +%Y%m%d-%H%M%S)
-# 2) 执行（连接参数取 .env.local 的 DATABASE_URL）
-mysql ... < db/migrations/00033_pronunciation_scores.sql
-```
+**顺序**：先执行 DDL 与校验，再推代码部署。这条不能反 ——
+`/api/courses/sentences` 对每一节课都 LEFT JOIN 这张表，
+表不存在时该接口 500，练习页对**所有用户**都打不开。
 
-迁移文件头部写了 4 组事后校验 SQL（排序规则 / `id` 的库级默认值 / 索引只有两个 /
-一次真实写入 + 覆盖语义），逐条跑一遍。其中 **`id` 的默认值和排序规则是两条
-"漏了不会当场报错"的项**：前者漏了会表现成"用户看得到分数、库里永远没有"，
-后者会以 `Illegal mix of collations` 让整课 500。生产现有 37 张表都是
-`utf8mb4_unicode_ci`，本迁移显式写了同一个。
+事后校验（均在 `typenow.cn` 实测）：
 
-执行完还要：重新生成 `db/schema-snapshot.sql`（`db/README.md` 有命令），
-再推代码触发部署，最后用一次真实录音验证「刷新后卡片还在」。
+| 校验 | 结果 |
+|---|---|
+| 排序规则 | `utf8mb4_unicode_ci`（与既有 37 张表一致） |
+| `id` 库级默认值 | `COLUMN_DEFAULT=uuid()`、`EXTRA=DEFAULT_GENERATED`；不带 id 写入成功（不报 1364） |
+| 维度列可空 | `accuracy/fluency/integrity` 均为 `YES`；写入 NULL 成功（不报 1048） |
+| `sentence_id` 宽度 | 64（分块练习项 id 39 字符，实测写入成功 —— 列宽写 36 会让分块**永远存不进去**） |
+| 索引 | 只有 `PRIMARY` 与 `uk_pronunciation_user_sentence(user_id,sentence_id)` |
+| 覆盖语义 | 同一 key 再写一次仍 1 行、取最新值 |
+| 既有表未受影响 | 迁移后 38 张表；逐表 diff 只多出 `pronunciation_scores` |
+
+结构快照已重新生成（顺带补上了此前漏记的 `00027`–`00032`）。
+
+⚠️ **遗留的基础设施问题**：部署时服务器到 `github.com:443` **不通**
+（`Empty reply from server` / `Connection timed out`，5 次重试全败，`deploy.sh` 已按设计取消、未构建未重启）。
+本次是**用本机 `git bundle` 把提交同步过去**、再跑部署脚本的构建段完成的。
+服务器 git 远端仍是 HTTPS，且该仓库是 **shallow clone**（`.git/shallow` 存在），
+所以下次推送仍可能拉不动。建议二选一：给 `admin` 配 GitHub SSH key 并把 origin 改成 SSH
+（实测 `ssh.github.com:443` 与 `github.com:22` 都通），或排查服务器到 `github.com:443` 的链路。
 
 ### [x] 0-A. 执行 4 个新迁移 + 教材版本回填（2026-09-29 已完成）
 
