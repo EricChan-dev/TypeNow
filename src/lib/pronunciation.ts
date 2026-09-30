@@ -57,6 +57,14 @@ export interface EvaluateResult {
   /** 语速（单词/分钟）；缺失为 null */
   speed: number | null
   words: EvaluateWordScore[]
+  /**
+   * 本次生成的评语。
+   *
+   * 可选，因为**映射器不产生它** —— `mapYoudaoEvaluate` 只负责把有道响应
+   * 转成我们的结构，评语是路由层用 buildComment 生成的。
+   * 历史分（来自 pronunciation_scores）里这个字段也用它。
+   */
+  comment?: string | null
 }
 
 /** 有道响应里我们读取的字段（只声明用到的，避免把整个响应结构化）。 */
