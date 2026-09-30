@@ -77,10 +77,38 @@ describe("mapYoudaoEvaluate · 字段映射", () => {
     const r = mapYoudaoEvaluate(DOC_RESPONSE)
     expect(r).not.toBeNull()
     expect(r!.score).toBe(96) // overall
+    // 文档这份响应三个维度都给了，所以这是数字；缺字段的情形见下一条用例。
+    expect(typeof r!.accuracy).toBe("number")
     expect(r!.accuracy).toBe(93) // pronunciation → 四舍五入
     expect(r!.fluency).toBe(100)
     expect(r!.integrity).toBe(100)
     expect(r!.speed).toBeCloseTo(242.42)
+  })
+
+  it("回归：响应里缺 fluency 时是 null，绝不兜底成 0", () => {
+    // 这是「缺字段」与「得了 0 分」被混为一谈后代价最大的一处：
+    // 评语规则是「该维度 < 75 就出短板建议」，而 JS 里 `0 < 75` 为真、`null < 75`
+    // 也为真 —— 所以维度为 null 时不但字面显示成 0 分，还会被误判成短板，
+    // 给一个字段缺失的用户生成「流利度偏低，试着连贯一些、少停顿。」并落库。
+    const r = mapYoudaoEvaluate({
+      errorCode: "0",
+      overall: 90,
+      pronunciation: 90,
+      integrity: 100,
+    })!
+    expect(r.fluency).toBeNull()
+    expect(r.fluency).not.toBe(0)
+    // 同一份响应里给了的维度照常映射
+    expect(r.accuracy).toBe(90)
+    expect(r.integrity).toBe(100)
+  })
+
+  it("三个维度全缺时都是 null，而总分仍有值", () => {
+    // 维度与总分是两套策略：维度没有兜底链，必须如实为 null；
+    // 总分有 overall → pronunciation → integrity → 0 的链，必须仍是非空数字。
+    const r = mapYoudaoEvaluate({ errorCode: "0", overall: 88 })!
+    expect([r.accuracy, r.fluency, r.integrity]).toEqual([null, null, null])
+    expect(r.score).toBe(88)
   })
 
   it("词级分数取 words[].word 与 words[].pronunciation", () => {

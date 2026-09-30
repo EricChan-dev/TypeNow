@@ -14,6 +14,10 @@ import {
   uniqueIndex,
 } from "drizzle-orm/mysql-core"
 import { sql, type SQL } from "drizzle-orm"
+// 只为了给 pronunciation_scores.words 标 $type。用 import type 是刻意的：
+// 编译后不留运行时 import，不会让 schema 与 pronunciation 之间产生循环依赖
+// （pronunciation.ts 也不 import schema，两边都是纯类型关系）。
+import type { EvaluateWordScore } from "@/lib/pronunciation"
 
 // ─── Users (replaces Supabase auth.users + profiles) ─────────────────────────
 export const users = mysqlTable(
@@ -406,24 +410,45 @@ export const pronunciationScores = mysqlTable(
     id: varchar("id", { length: 36 }).primaryKey().default(sql`(UUID())`),
     userId: varchar("user_id", { length: 36 }).notNull(),
     sentenceId: varchar("sentence_id", { length: 36 }).notNull(),
+    // 总分有 overall → pronunciation → integrity → 0 的兜底链，必定有值，
+    // 所以它**是**非空的。下面三个维度没有这条链，必须可空 —— 见维度列上的注释。
     score: int("score").notNull(),
-    accuracy: int("accuracy").notNull(),
-    fluency: int("fluency").notNull(),
-    integrity: int("integrity").notNull(),
+    // 三个维度**可空**：有道没给这个字段时存 NULL，绝不写 0。
+    // 这是**与 words[].score 完全相同的一套空值策略**，理由也一样：用 0 兜底会把
+    // 「没给分」变成一个看起来真实的分数，而维度还多一层危害 —— 评语规则是
+    // 「该维度 < 75 就出短板建议」，0 会命中它，于是给一个字段缺失的用户生成
+    // 「流利度偏低，试着连贯一些、少停顿。」并一起落库，历史回看时仍是这句
+    // 误导性评语。总分不可空，是因为它有 overall → pronunciation → integrity → 0
+    // 的兜底链且必定非空；维度没有这条链，所以只能可空。
+    accuracy: int("accuracy"),
+    fluency: int("fluency"),
+    integrity: int("integrity"),
     // 有道可能不给语速
     speed: decimal("speed", { precision: 6, scale: 2 }),
     // 形状固定为 Array<{ word: string; score: number | null }>。
     // score 必须允许 null —— 有道的字段可能缺失，用 0 兜底会把「没给分」显示成「0 分」。
-    words: json("words"),
+    // 上一行注释原本只写了形状，没有把类型钉进 schema，读出来是 unknown；用 $type
+    // 与仓库其它形状已知的 JSON 列（sentences.words 等）保持一致。
+    words: json("words").$type<EvaluateWordScore[]>(),
     comment: varchar("comment", { length: 500 }),
     createdAt: datetime("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+    // 本文件里**唯一**一处带 ON UPDATE 的列，别为了跟邻居对齐而"简化"掉它 ——
+    // 它们**不是等价写法**：
+    //   · `DEFAULT CURRENT_TIMESTAMP` 只在 INSERT 时填一次，之后 UPDATE 不动它；
+    //   · 加上 `ON UPDATE CURRENT_TIMESTAMP` 后，每次 UPDATE 都会把它刷新成当前时间。
+    // 这里必须要后者：一句话只有一行，重录走的是 upsert(UPDATE)，界面上的
+    // 「3 天前」要显示**最近一次评分**的时间，而不是第一次录这句的时间。
+    // 历史教训：notifications 表就是因为这个差别与生产库漂移了（见 db/README.md）。
     updatedAt: datetime("updated_at")
       .notNull()
       .default(sql`CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP`),
   },
   (t) => [
     uniqueIndex("uk_pronunciation_user_sentence").on(t.userId, t.sentenceId),
-    index("idx_pronunciation_user_updated").on(t.userId, t.updatedAt),
+    // 这里**故意没有** (user_id, updated_at) 索引：本次全部访问路径（upsert、
+    // 取上一句评语、LEFT JOIN）都是两列等值，上面唯一键的最左前缀已覆盖；
+    // 唯一用得上它的「按 updated_at 排序的历史列表」在设计里是非目标。
+    // 详见 db/migrations/00033_pronunciation_scores.sql 文件头。
   ]
 )
 

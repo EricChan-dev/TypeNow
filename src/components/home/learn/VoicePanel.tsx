@@ -454,22 +454,29 @@ export function VoicePanel({ english }: { english: string }) {
             {shownResult.score}
           </div>
           <div className="flex flex-wrap gap-4 justify-center text-xs text-muted-foreground">
+            {/*
+              三个维度都可能是 null（有道没给这个字段，见 EvaluateResult 的注释）。
+              不判空就会直接把 "null" 渲染成字符串；而兜底成 0 更糟 —— 那是个
+              看起来真实的分数，还会骗过「< 75 出短板建议」的评语规则。
+              这里用「—」表示"没有这一个维度"，与仓库其它缺值处一致；
+              scoreColor(null) 已经是中性灰。
+            */}
             <span>
               准确度{" "}
               <span className="font-semibold" style={{ color: scoreColor(shownResult.accuracy) }}>
-                {shownResult.accuracy}
+                {shownResult.accuracy ?? "—"}
               </span>
             </span>
             <span>
               流利度{" "}
               <span className="font-semibold" style={{ color: scoreColor(shownResult.fluency) }}>
-                {shownResult.fluency}
+                {shownResult.fluency ?? "—"}
               </span>
             </span>
             <span>
               完整度{" "}
               <span className="font-semibold" style={{ color: scoreColor(shownResult.integrity) }}>
-                {shownResult.integrity}
+                {shownResult.integrity ?? "—"}
               </span>
             </span>
             {shownResult.speed !== null && <span>语速 {Math.round(shownResult.speed)} 词/分</span>}

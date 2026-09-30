@@ -41,12 +41,19 @@ export interface EvaluateWordScore {
 export interface EvaluateResult {
   /** 综合得分：优先 overall，缺失时退回 pronunciation，再退回 integrity */
   score: number
-  /** 准确度（有道字段名是 pronunciation） */
-  accuracy: number
-  /** 流利度 */
-  fluency: number
-  /** 完整度（是否漏读/少读） */
-  integrity: number
+  /**
+   * 准确度（有道字段名是 pronunciation）。**`null` 表示有道没给这个字段**，
+   * 不是「得了 0 分」—— 与下面 words[].score 同一套策略：
+   *
+   * 维度一旦用 `?? 0` 兜底，下游评语规则「该维度 < 75 就出短板建议」就会命中，
+   * 给一个字段缺失的用户生成「流利度偏低，试着连贯一些、少停顿。」并落库，
+   * 历史回看时还是这句误导性评语。总分 `score` 非空，因为它有自己的兜底链。
+   */
+  accuracy: number | null
+  /** 流利度。`null` = 有道没给，不是 0 分。理由同 accuracy。 */
+  fluency: number | null
+  /** 完整度（是否漏读/少读）。`null` = 有道没给，不是 0 分。理由同 accuracy。 */
+  integrity: number | null
   /** 语速（单词/分钟）；缺失为 null */
   speed: number | null
   words: EvaluateWordScore[]
@@ -98,7 +105,13 @@ export function mapYoudaoEvaluate(data: unknown): EvaluateResult | null {
   // 综合分的兜底链：overall → pronunciation → integrity → 0。
   // 文档保证有 overall，但服务端字段变动的代价太大（整句显示 0 分），
   // 所以按可靠度逐级退让。三者全缺时只能给 0，但那种响应本身已不是成功响应。
+  // 注意这条链**只有总分有**，所以只有 score 敢写成非空。
   const score = overall ?? pronunciation ?? integrity ?? 0
+
+  // 三维度与下面的词级分是**同一套策略**：有道没给就保留 null，绝不 `?? 0`。
+  // 理由见 EvaluateResult.accuracy 的注释（0 会命中「< 75 出短板建议」的评语规则）。
+  // 取整：句子级已经是整数，混着小数会让界面参差不齐。
+  const roundOrNull = (n: number | null): number | null => (n === null ? null : Math.round(n))
 
   const words: EvaluateWordScore[] = Array.isArray(raw.words)
     ? (raw.words as Array<Record<string, unknown>>)
@@ -106,9 +119,8 @@ export function mapYoudaoEvaluate(data: unknown): EvaluateResult | null {
           const n = asFiniteNumber(w?.pronunciation)
           return {
             word: typeof w?.word === "string" ? w.word : "",
-            // 词级分数同样取整：句子级已经是整数，混着小数会让界面参差不齐。
             // 关键是**保留 null** —— 不能用 `?? 0`，那会把"字段缺失"显示成"0 分"。
-            score: n === null ? null : Math.round(n),
+            score: roundOrNull(n),
           }
         })
         .filter((w) => w.word !== "")
@@ -116,9 +128,9 @@ export function mapYoudaoEvaluate(data: unknown): EvaluateResult | null {
 
   return {
     score: Math.round(score),
-    accuracy: Math.round(pronunciation ?? 0),
-    fluency: Math.round(fluency ?? 0),
-    integrity: Math.round(integrity ?? 0),
+    accuracy: roundOrNull(pronunciation),
+    fluency: roundOrNull(fluency),
+    integrity: roundOrNull(integrity),
     speed: asFiniteNumber(raw.speed),
     words,
   }

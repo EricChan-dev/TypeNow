@@ -77,22 +77,30 @@
 --    漏了它，生产库（只由本文件建立）会在 STRICT 模式下报 1364，
 --    而 store 的约定是"写库失败只记日志并返回 false" → 用户每次都能看到分数、
 --    却永远存不进去，且 e2e 走 drizzle-kit push 生成的库（有默认值）一路全绿。
+--
+-- ⚠️ 三个维度列**必须可空**，见 schema.ts 同处注释：维度与 words[].score 是
+--    同一套空值策略（有道没给就存 NULL）。写成 NOT NULL 等于逼写入方用 0 兜底，
+--    而 0 会命中「该维度 < 75 就出短板建议」的评语规则。总分不同，它有
+--    overall → pronunciation → integrity → 0 的兜底链，所以非空。
+--
+-- ⚠️ **不要**加 `KEY idx_pronunciation_user_updated (user_id, updated_at)`：
+--    本次全部访问路径都是两列等值（upsert / 取上一句评语 / LEFT JOIN），
+--    唯一键的最左前缀已覆盖；会用到它的"按时间排序的历史列表"是设计里的非目标。
 CREATE TABLE IF NOT EXISTS `pronunciation_scores` (
   `id`          VARCHAR(36)  NOT NULL DEFAULT (UUID()),
   `user_id`     VARCHAR(36)  NOT NULL,
   `sentence_id` VARCHAR(36)  NOT NULL,
   `score`       INT          NOT NULL,
-  `accuracy`    INT          NOT NULL,
-  `fluency`     INT          NOT NULL,
-  `integrity`   INT          NOT NULL,
+  `accuracy`    INT          NULL,
+  `fluency`     INT          NULL,
+  `integrity`   INT          NULL,
   `speed`       DECIMAL(6,2) NULL,
   `words`       JSON         NULL,
   `comment`     VARCHAR(500) NULL,
   `created_at`  DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
   `updated_at`  DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`),
-  UNIQUE KEY `uk_pronunciation_user_sentence` (`user_id`, `sentence_id`),
-  KEY `idx_pronunciation_user_updated` (`user_id`, `updated_at`)
+  UNIQUE KEY `uk_pronunciation_user_sentence` (`user_id`, `sentence_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 ```
 
@@ -112,26 +120,35 @@ export const pronunciationScores = mysqlTable(
     userId: varchar("user_id", { length: 36 }).notNull(),
     sentenceId: varchar("sentence_id", { length: 36 }).notNull(),
     score: int("score").notNull(),
-    accuracy: int("accuracy").notNull(),
-    fluency: int("fluency").notNull(),
-    integrity: int("integrity").notNull(),
+    // 三个维度**可空**：有道没给这个字段时存 NULL，绝不写 0。
+    // 与 words[].score 同一套策略（见 design §3.7）：0 是个看起来真实的分数，
+    // 还会骗过评语规则「该维度 < 75 就出短板建议」。总分有兜底链，所以非空。
+    accuracy: int("accuracy"),
+    fluency: int("fluency"),
+    integrity: int("integrity"),
     // 有道可能不给语速
     speed: decimal("speed", { precision: 6, scale: 2 }),
     // 形状固定为 Array<{ word: string; score: number | null }>。
     // score 必须允许 null —— 有道的字段可能缺失，用 0 兜底会把「没给分」显示成「0 分」。
-    words: json("words"),
+    words: json("words").$type<EvaluateWordScore[]>(),
     comment: varchar("comment", { length: 500 }),
     createdAt: datetime("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+    // 本文件里唯一一处带 ON UPDATE 的列，**不是**只写 CURRENT_TIMESTAMP 的等价写法：
+    // 后者只在 INSERT 时填一次，重录走的是 upsert(UPDATE)，界面上的「3 天前」
+    // 要显示最近一次评分的时间。别为了跟邻居对齐而"简化"掉。
     updatedAt: datetime("updated_at")
       .notNull()
       .default(sql`CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP`),
   },
   (t) => [
     uniqueIndex("uk_pronunciation_user_sentence").on(t.userId, t.sentenceId),
-    index("idx_pronunciation_user_updated").on(t.userId, t.updatedAt),
+    // 故意没有 (user_id, updated_at) 索引 —— 理由见上面 DDL 的 ⚠️。
   ]
 )
 ```
+
+`EvaluateWordScore` 用 `import type { EvaluateWordScore } from "@/lib/pronunciation"` 引入
+（`import type` 编译后不留运行时 import，不会与 pronunciation.ts 形成循环依赖）。
 
 若 `uniqueIndex` / `index` 未在文件顶部导入，补进现有的 drizzle-orm/mysql-core 导入行。
 
@@ -346,6 +363,16 @@ describe("buildComment · 短板维度", () => {
     expect(c).not.toContain("流利度")
     expect(c).not.toContain("完整")
   })
+  it("★ 维度为 null（有道没给）时不出现该维度建议", () => {
+    // JS 里 `null < 75` 为 true，不显式判空就会给字段缺失的用户生成短板建议。
+    const c = buildComment(
+      input({ accuracy: null, fluency: null, integrity: null, words: [] }),
+      first,
+    )
+    expect(c).not.toContain("准确度")
+    expect(c).not.toContain("流利度")
+    expect(c).not.toContain("完整")
+  })
 })
 
 describe("buildComment · 边界与健壮性", () => {
@@ -427,9 +454,10 @@ export interface CommentWord {
 
 export interface CommentInput {
   score: number
-  accuracy: number
-  fluency: number
-  integrity: number
+  /** 三个维度与 EvaluateResult 一致：**可为 null**（有道没给这个字段）。 */
+  accuracy: number | null
+  fluency: number | null
+  integrity: number | null
   words: CommentWord[]
   /** 上一次的评语（同一句的上一条记录）。用于避免连着两次说同一句话。 */
   previousComment?: string | null
@@ -589,9 +617,12 @@ export function buildComment(input: CommentInput, rand: () => number = Math.rand
   }
 
   // ── 短板维度：准确度/流利度门槛 75，完整度门槛 100 ──────────────────────────
-  if (accuracy < WEAK_DIMENSION_THRESHOLD) parts.push(pick(WEAK.accuracy, rand))
-  if (fluency < WEAK_DIMENSION_THRESHOLD) parts.push(pick(WEAK.fluency, rand))
-  if (integrity < 100) parts.push(pick(WEAK.integrity, rand))
+  // ⚠️ 必须先判 null：维度可空（有道没给这个字段），而 JS 里 `null < 75` 为 true，
+  //    直接写 `accuracy < WEAK_DIMENSION_THRESHOLD` 会把"没给分"当成"读得差"，
+  //    给一个字段缺失的用户生成「流利度偏低…」并落库。null 不算短板，跳过。
+  if (accuracy !== null && accuracy < WEAK_DIMENSION_THRESHOLD) parts.push(pick(WEAK.accuracy, rand))
+  if (fluency !== null && fluency < WEAK_DIMENSION_THRESHOLD) parts.push(pick(WEAK.fluency, rand))
+  if (integrity !== null && integrity < 100) parts.push(pick(WEAK.integrity, rand))
 
   return parts.join("")
 }
@@ -640,9 +671,10 @@ import type { EvaluateResult } from "@/lib/pronunciation"
 
 export interface StoredPronunciation {
   score: number
-  accuracy: number
-  fluency: number
-  integrity: number
+  /** 三个维度可空：库里的列就是 NULL 可空的（有道没给这个字段）。 */
+  accuracy: number | null
+  fluency: number | null
+  integrity: number | null
   speed: number | null
   words: { word: string; score: number | null }[]
   comment: string | null
@@ -848,9 +880,10 @@ git commit -m "feat(pronunciation): 评分成功后覆盖式落库，并把评�
    */
   pronunciation?: {
     score: number
-    accuracy: number
-    fluency: number
-    integrity: number
+    /** 三个维度可空（有道没给这个字段时存的是 NULL，不是 0）。 */
+    accuracy: number | null
+    fluency: number | null
+    integrity: number | null
     speed: number | null
     words: { word: string; score: number | null }[]
     comment: string | null
@@ -919,9 +952,12 @@ git commit -m "feat(pronunciation): 评分成功后覆盖式落库，并把评�
           ? {
               pronunciation: {
                 score: pronunciationScore,
-                accuracy: pronunciationAccuracy ?? 0,
-                fluency: pronunciationFluency ?? 0,
-                integrity: pronunciationIntegrity ?? 0,
+                // ⚠️ 三维度**保留 null**，不要 `?? 0`：库里的 NULL 意思是
+                // "有道没给这个维度"，兜底成 0 会把"没数据"显示成"得了 0 分"，
+                // 还会骗过「该维度 < 75 就出短板建议」的评语规则。
+                accuracy: pronunciationAccuracy,
+                fluency: pronunciationFluency,
+                integrity: pronunciationIntegrity,
                 speed: pronunciationSpeed === null ? null : Number(pronunciationSpeed),
                 words: (pronunciationWords as { word: string; score: number | null }[] | null) ?? [],
                 comment: pronunciationComment ?? null,
@@ -987,9 +1023,10 @@ interface PronunciationModalProps {
   words: { word: string; score: number | null }[]
   result: {
     score: number
-    accuracy: number
-    fluency: number
-    integrity: number
+    /** 三个维度可空：null = 有道没给这个字段，界面要显示「—」而不是 0。 */
+    accuracy: number | null
+    fluency: number | null
+    integrity: number | null
     speed: number | null
     comment?: string | null
   }
@@ -1010,17 +1047,21 @@ function scoreColor(score: number | null): string {
   return "#ef4444"
 }
 
-function Bar({ label, value, color }: { label: string; value: number; color?: string }) {
+function Bar({ label, value, color }: { label: string; value: number | null; color?: string }) {
   return (
     <div className="flex items-center gap-2.5">
       <span className="w-12 shrink-0 text-xs text-muted-foreground">{label}</span>
       <div className="h-2 flex-1 rounded-full bg-foreground/10">
         <div
           className="h-full rounded-full transition-all"
-          style={{ width: `${Math.max(0, Math.min(100, value))}%`, background: color ?? scoreColor(value) }}
+          style={{
+            // 维度缺失时不画进度条（宽度 0），并显示「—」而不是 0
+            width: value === null ? "0%" : `${Math.max(0, Math.min(100, value))}%`,
+            background: color ?? scoreColor(value),
+          }}
         />
       </div>
-      <b className="w-8 shrink-0 text-right text-xs tabular-nums">{value}</b>
+      <b className="w-8 shrink-0 text-right text-xs tabular-nums">{value ?? "—"}</b>
     </div>
   )
 }
@@ -1184,9 +1225,10 @@ import { cn } from "@/lib/utils"
  */
 interface PronunciationCardProps {
   score: number
-  accuracy: number
-  fluency: number
-  integrity: number
+  /** 三个维度可空：null = 有道没给这个字段，显示「—」而不是 0。 */
+  accuracy: number | null
+  fluency: number | null
+  integrity: number | null
   /** 已经有值时会显示「3 天前」这种相对时间。 */
   updatedAt?: Date | null
   onClick: () => void
@@ -1230,7 +1272,7 @@ export function PronunciationCard({
       <span className="min-w-0 flex-1 leading-snug">
         <span className="block text-sm font-semibold text-foreground">跟读评分 {score}</span>
         <span className="block text-xs text-muted-foreground">
-          准确 {accuracy} · 流利 {fluency} · 完整 {integrity}
+          准确 {accuracy ?? "—"} · 流利 {fluency ?? "—"} · 完整 {integrity ?? "—"}
           {updatedAt ? ` · ${relativeDay(updatedAt)}` : ""}
         </span>
       </span>
