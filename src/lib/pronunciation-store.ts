@@ -4,21 +4,18 @@ import type { EvaluateResult } from "@/lib/pronunciation"
 import { and, eq } from "drizzle-orm"
 
 /**
- * 跟读评分的持久化。**这是唯一碰 pronunciation_scores 的模块** ——
- * 读写都经这里，避免查询逻辑散落在路由与组件里。
+ * 跟读评分的持久化。**单条分数的读写都经这里** —— 写入、取上一句评语都收敛在
+ * 本模块，避免查询逻辑散落在路由与组件里。
+ *
+ * 唯一例外是 `api/courses/sentences` 的**批量** LEFT JOIN：它按 lesson 一次性把
+ * 整节课（含每句的跟读分）取出来，是"一次查询 vs 每句一次请求"的取舍 —— 走本模块
+ * 就等于 N 次往返。那个 JOIN 必须自带 `userId` 条件（否则会挂上别人的分），
+ * 而且它只读、不写。
+ *
+ * 响应形状也**不在这里**重复描述：以 `src/types/index.ts` 的 `Sentence.pronunciation`
+ * 为唯一权威（speed 在库里是 DECIMAL、读出来是字符串，路由转成 number；updatedAt
+ * 在响应里是 ISO 字符串 —— 在这里再写一份 interface 只会与它对不上）。
  */
-
-export interface StoredPronunciation {
-  score: number
-  /** 三个维度可空：库里的列就是 NULL 可空的（有道没给这个字段）。 */
-  accuracy: number | null
-  fluency: number | null
-  integrity: number | null
-  speed: number | null
-  words: { word: string; score: number | null }[]
-  comment: string | null
-  updatedAt: Date
-}
 
 /**
  * 列宽必须与 DDL 同值 —— 权威是 db/migrations/00033_pronunciation_scores.sql。

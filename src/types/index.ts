@@ -42,6 +42,22 @@ export interface Sentence {
   chunks?: Chunk[] | null
   dependencyAnalysis?: DependencyAnalysis | null
   sentenceStructure?: SentenceComponent[] | null
+  /**
+   * 跟读评分（有道语音评测）。**没有跟读过的句子这个字段不存在** ——
+   * 不是 null、不是 0。界面据此决定「显示一个小分数」还是「什么都不显示」。
+   */
+  pronunciation?: {
+    score: number
+    /** 三个维度可空（有道没给这个字段时存的是 NULL，不是 0）。 */
+    accuracy: number | null
+    fluency: number | null
+    integrity: number | null
+    speed: number | null
+    words: { word: string; score: number | null }[]
+    comment: string | null
+    /** ISO 字符串。界面上的「3 天前」用它。 */
+    updatedAt: string
+  }
 }
 
 export interface DependencyAnalysis {

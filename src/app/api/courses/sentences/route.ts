@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server"
 import { db } from "@/lib/db"
 import { aliveCourse, aliveLesson, aliveSentence } from "@/lib/soft-delete"
-import { courses, lessons, sentences, users } from "@/lib/db/schema"
-import { and, eq, asc, type SQL } from "drizzle-orm"
+import { courses, lessons, sentences, users, pronunciationScores } from "@/lib/db/schema"
+import { and, eq, asc, getTableColumns, type SQL } from "drizzle-orm"
 import { getSession } from "@/lib/auth/session"
 import { checkAndExpirePro } from "@/lib/subscription"
 import { typeableAnswerSql, usableSentenceSql } from "@/lib/sentence-quality"
@@ -50,10 +50,31 @@ export async function GET(request: Request) {
     //   答案脏 —— english 是空串或只有标点，练习页渲染不出任何输入格，是个死画面。
     // （闭包里必须用下面这个已收窄的非空别名，直接用 db 会丢掉 null 检查。）
     const database = db
+    // 跟读分随句子一起下发（LEFT JOIN，且**只 JOIN 当前用户自己的**记录）：
+    //   · LEFT 而不是 INNER —— 绝大多数句子没有跟读分，INNER 会把它们滤掉
+    //   · JOIN 条件必须带 userId，否则会取到别人的分
+    // 省掉「每句再请求一次」的 N 次往返。
     const forLesson = (where: SQL<unknown>) =>
       database
-        .select()
+        .select({
+          ...getTableColumns(sentences),
+          pronunciationScore: pronunciationScores.score,
+          pronunciationAccuracy: pronunciationScores.accuracy,
+          pronunciationFluency: pronunciationScores.fluency,
+          pronunciationIntegrity: pronunciationScores.integrity,
+          pronunciationSpeed: pronunciationScores.speed,
+          pronunciationWords: pronunciationScores.words,
+          pronunciationComment: pronunciationScores.comment,
+          pronunciationUpdatedAt: pronunciationScores.updatedAt,
+        })
         .from(sentences)
+        .leftJoin(
+          pronunciationScores,
+          and(
+            eq(pronunciationScores.sentenceId, sentences.id),
+            eq(pronunciationScores.userId, session.userId),
+          ),
+        )
         .where(and(eq(sentences.lessonId, lessonId), aliveSentence, where))
         .orderBy(asc(sentences.sortOrder))
 
@@ -76,10 +97,45 @@ export async function GET(request: Request) {
 
     // words 一律以 english 的分词为骨架重建：库里导入的 words 普遍缺标点，
     // 直接下发会让练习页那行的标点与翻译对不上（线上 40% 的句子如此）。
-    const normalized = visible.map((s) => ({
-      ...s,
-      words: alignWordsWithEnglish(s.english, s.words),
-    }))
+    const normalized = visible.map((s) => {
+      const {
+        pronunciationScore,
+        pronunciationAccuracy,
+        pronunciationFluency,
+        pronunciationIntegrity,
+        pronunciationSpeed,
+        pronunciationWords,
+        pronunciationComment,
+        pronunciationUpdatedAt,
+        ...rest
+      } = s
+      return {
+        ...rest,
+        words: alignWordsWithEnglish(s.english, s.words),
+        // ⚠️ 没有跟读分时**字段完全不出现**（而不是 null / 0）。
+        // 界面只要写 `if (s.pronunciation)` 就行，不会有人误把 0 当成"读了得 0 分"。
+        ...(pronunciationScore != null
+          ? {
+              pronunciation: {
+                score: pronunciationScore,
+                // ⚠️ 三维度**保留 null**，不要 `?? 0`：库里的 NULL 意思是
+                // "有道没给这个维度"，兜底成 0 会把"没数据"显示成"得了 0 分"，
+                // 还会骗过「该维度 < 75 就出短板建议」的评语规则。
+                accuracy: pronunciationAccuracy,
+                fluency: pronunciationFluency,
+                integrity: pronunciationIntegrity,
+                speed: pronunciationSpeed === null ? null : Number(pronunciationSpeed),
+                // 这里**不要**再 cast 成字面量形状：列的 $type<EvaluateWordScore[]>() 已经
+                // 给出同一种类型，重复写一遍只会让这一行赢过 schema 的类型推导 —— 日后
+                // EvaluateWordScore 改了，本该报错的地方会被这里静默吞掉。
+                words: pronunciationWords ?? [],
+                comment: pronunciationComment ?? null,
+                updatedAt: (pronunciationUpdatedAt as Date).toISOString(),
+              },
+            }
+          : {}),
+      }
+    })
 
     return NextResponse.json({ sentences: normalized, trial, trialAvailable })
   } catch (e) {
