@@ -27,6 +27,10 @@
  *   # 校验全部 6 个场景的 payload 结构（不发消息，不需要 openid）
  *   pnpm notify:test -- --check-all
  *
+ *   # 读回阿里云短信模板的正文与变量名，并核对是否与代码传参一致
+ *   pnpm notify:test -- --sms-template
+ *   pnpm notify:test -- --sms-template=SMS_512530543
+ *
  *   # 列出公众号账号下所有模板的 ID / 标题 / 字段（不发消息，最有用的一步）
  *   pnpm notify:test -- --list
  *   pnpm notify:test -- --list --template=veIYcDZG...   # 顺便核对指定 ID
@@ -81,6 +85,45 @@ async function main() {
   const { buildMessage, findScenario, LIFECYCLE_SCENARIOS } = await import(
     "../src/lib/lifecycle-scenarios"
   )
+
+  // ── 阿里云短信模板自查：变量名对不对 ──────────────────────────────────────
+  //
+  // 模板里的 `${变量}` 必须与代码传的参数名完全一致，差一个字母就发送失败。
+  // 模板审核要等 1~2 天，所以启用前先自查，比事后从失败率里发现划算。
+  if (arg("sms-template") !== undefined) {
+    const code =
+      arg("sms-template") === "true"
+        ? process.env.ALIYUN_SMS_NOTIFY_TEMPLATE_CODE ?? ""
+        : (arg("sms-template") as string)
+    const { getSmsTemplateInfo } = await import("../src/lib/aliyun-sms")
+    console.log(`查询短信模板 ${code || "(未配置)"}\n`)
+    const info = await getSmsTemplateInfo(code)
+    if (!info.ok) {
+      console.error(`✗ ${info.error}`)
+      process.exitCode = 1
+      return
+    }
+    console.log(`  模板名称  ${info.name}`)
+    console.log(`  模板类型  ${info.type}`)
+    console.log(`  审核状态  ${info.status}`)
+    console.log(`  模板正文  ${info.content}`)
+    console.log(`  变量      ${info.variables.join(", ") || "（无）"}`)
+
+    // 代码实际会传的参数名（用于年卡的到期提醒）
+    const expected = ["tier", "date", "count"]
+    const missing = expected.filter((v) => !info.variables.includes(v))
+    const extra = info.variables.filter((v) => !expected.includes(v))
+    console.log("")
+    console.log(`  代码会传  ${expected.join(", ")}`)
+    if (missing.length === 0 && extra.length === 0) {
+      console.log("  ✓ 变量名完全对得上")
+    } else {
+      if (missing.length) console.error(`  ✗ 模板里缺变量：${missing.join(", ")}（代码会传但模板没有 → 发送失败）`)
+      if (extra.length) console.error(`  ✗ 模板里有代码不传的变量：${extra.join(", ")}（模板要必填则发送失败）`)
+      process.exitCode = 1
+    }
+    return
+  }
 
   // ── 列出账号下所有模板：直接回答"这个 ID 是哪个模板、字段叫什么" ─────────
   //

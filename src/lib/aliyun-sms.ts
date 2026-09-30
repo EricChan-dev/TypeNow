@@ -57,10 +57,13 @@ export type SmsSendOutcome =
  *    已审核通过**的模板（`ALIYUN_SMS_NOTIFY_TEMPLATE_CODE`）。阿里云不允许混用，
  *    而且通知类模板需要单独申请、单独审核（§11.6 第 3 条，1–2 天）。
  *
- * ② **必须有退订方式**：《通信短信息服务管理规定》要求商业性短信息提供退订方式。
- *    ⚠️ **退订提示不能由代码拼接** —— 短信模板的参数是<b>固定</b>的，代码多塞一段文字
- *    会直接发送失败。正确做法是**在申请模板时就把「回T退订」写进模板正文**。
- *    这里只负责填参数，并把这个前提写进注释，免得后来的人试图在代码里加。
+ * ② **不写退订提示**（这条曾写反过，改过来说清楚）：
+ *    ① 阿里云《通知短信模板规范》明确要求通知类模板**不得夹带**「拒收请回复R」这类
+ *       退订内容，写了会被驳回 —— 退订字样是**营销类**模板的规矩；
+ *    ② 更根本的是，我们**没有短信入站回复的处理能力**（阿里云不提供回复回调），
+ *       承诺「回T退订」而用户回了 T 却石沉大海，比不写更糟。
+ *    退订入口只有两个**已实现**的：设置页开关、公众号内发送「退订」。
+ *    （模板参数是固定的，代码也塞不进额外文字，所以这件事只能在申请模板时决定。）
  *
  * ③ **时段限制**：通知类短信通常只允许 8:00–20:00 发送（由服务商限制）。
  *    这也是扫描任务定在 10:00 与 19:00 的原因之一（§11.5 ②）。
@@ -110,5 +113,54 @@ export async function sendNotificationSms(
       reason: "failed",
       error: err instanceof Error ? err.message : String(err),
     }
+  }
+}
+
+
+// ─── 模板自查（启用前验证用）─────────────────────────────────────────────
+
+export type SmsTemplateInfo =
+  | {
+      ok: true
+      templateCode: string
+      name: string
+      content: string
+      type: string
+      status: string
+      /** 模板正文里声明的变量名，如 ["tier","date","count"] */
+      variables: string[]
+    }
+  | { ok: false; error: string }
+
+/**
+ * 读回一个已申请短信模板的正文与变量名。
+ *
+ * 为什么需要它：**模板里的变量名必须与代码传的参数名完全一致**，
+ * 差一个字母就会在"用户该收到提醒的那一刻"发送失败，而那时已经错过了挽回窗口。
+ * 模板审核要等 1~2 天，所以启用前先自查一遍，比事后从失败率里发现划算得多。
+ */
+export async function getSmsTemplateInfo(templateCode: string): Promise<SmsTemplateInfo> {
+  if (!templateCode) return { ok: false, error: "模板 CODE 为空" }
+  try {
+    const { GetSmsTemplateRequest } = await import("@alicloud/dysmsapi20170525")
+    const res = await getClient().getSmsTemplate(new GetSmsTemplateRequest({ templateCode }))
+    const body = res.body
+    if (!body || body.code !== "OK") {
+      return { ok: false, error: `${body?.code}: ${body?.message || "查询失败"}` }
+    }
+    const content = body.templateContent ?? ""
+    // 阿里云模板正文里的变量写作 ${name}
+    const variables = [...content.matchAll(/\$\{([A-Za-z0-9_]+)\}/g)].map((m) => m[1])
+    return {
+      ok: true,
+      templateCode: body.templateCode ?? templateCode,
+      name: body.templateName ?? "",
+      content,
+      type: body.templateType ?? "",
+      status: String(body.templateStatus ?? ""),
+      variables: [...new Set(variables)],
+    }
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : String(err) }
   }
 }
