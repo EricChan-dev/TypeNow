@@ -23,6 +23,7 @@ import {
   isOptedOut,
   isWindowWideEnough,
   practiceSummary,
+  smsPracticeCount,
   type LifecycleTier,
 } from "@/lib/lifecycle-scenarios"
 
@@ -355,10 +356,9 @@ describe("buildMessage · 文案", () => {
   it("★ 练了 0 句时不能说「已练习 0 句」", () => {
     // 「领了体验会员但一次都没练」是 §11.1 列为 P1 的那批人（流失率最高），
     // 而这句话是他们收到的唯一一句关于他们自己的话 —— 既无信息量又像指责。
-    expect(practiceSummary(0, 0, "sms")).toBe("尚未开始练习")
-    expect(practiceSummary(0, 0, "wechat")).toBe("尚未开始练习")
+    expect(practiceSummary(0, 0)).toBe("尚未开始练习")
     // 负数属于脏数据，也不该渲染成"已练习 -3 句"
-    expect(practiceSummary(-3, 0, "sms")).toBe("尚未开始练习")
+    expect(practiceSummary(-3, 0)).toBe("尚未开始练习")
 
     const msg = buildMessage({ scenario: findScenario("trial_expiring_24h")!, ...ctx, practicedSentences: 0, pendingReview: 0 })
     expect(msg.templateData.keyword3).not.toContain("0 句")
@@ -367,23 +367,19 @@ describe("buildMessage · 文案", () => {
 
   it("★ 待复习为 0 时不要写「待复习错句 0 个」", () => {
     // 那是一句没有内容的填充，只会让消息显得是机器群发的
-    expect(practiceSummary(47, 0, "wechat")).toBe("已练习 47 句")
-    expect(practiceSummary(47, 0, "wechat")).not.toContain("0 个")
-    expect(practiceSummary(47, 23, "wechat")).toBe("已练习 47 句 · 待复习错句 23 个")
+    expect(practiceSummary(47, 0)).toBe("已练习 47 句")
+    expect(practiceSummary(47, 0)).not.toContain("0 个")
+    expect(practiceSummary(47, 23)).toBe("已练习 47 句 · 待复习错句 23 个")
   })
 
-  it("★ 微信与短信对同一个人的练习句数必须一致", () => {
-    // 两个渠道各拼各的文案很容易漂移 —— 短信里曾经把日期算成 UTC（比微信早一天）。
-    // 这里守的是**共同的那个数字**（练习句数）在两边一致。
-    // 短信模板只有一个 ${stats} 变量，本来就不含待复习数，所以不比较字段集合。
-    for (const n of [0, 1, 47]) {
-      const sms = practiceSummary(n, 23, "sms")
-      const wx = practiceSummary(n, 23, "wechat")
-      const firstNum = (t: string) => (t.match(/\d+/) ?? [""])[0]
-      expect(firstNum(sms), `练习${n}句时两个渠道不一致：${sms} vs ${wx}`).toBe(firstNum(wx))
-    }
-    // 短信不该出现"待复习"这类模板里没有的字段（模板没有对应变量，多传会发送失败）
-    expect(practiceSummary(47, 23, "sms")).not.toContain("待复习")
+  it("★ 短信的句数变量必须是纯数字（单位在模板正文里）", () => {
+    // 阿里云变量属性「数量」明确"不支持常见的数量单位，如个、分钟"，单位必须在变量外。
+    // 而且变量值是整句中文，正是垃圾短信绕关键词过滤的手法，审核更容易被盯上。
+    expect(smsPracticeCount(47)).toBe(47)
+    expect(typeof smsPracticeCount(47)).toBe("number")
+    // 一次都没练过 → 返回 null，调用方据此**跳过短信**（而不是发"你已练习0句"）
+    expect(smsPracticeCount(0)).toBeNull()
+    expect(smsPracticeCount(-3)).toBeNull()
   })
 
   it("★ 到期类文案的时态必须跟着场景走（已到期不能说「将于」）", () => {

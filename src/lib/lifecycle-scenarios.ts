@@ -358,6 +358,16 @@ export function decideSend(params: {
  *       keyword1 体验会员未领取
  *       remark   点击领取体验会员
  *
+ * 短信模板（阿里云，类型必须选「通知短信」）只用于年卡场景，变量名同理必须一致：
+ *
+ *     你的${tier}将于${date}到期，你已练习${count}句。请登录码上英语查看学习报告。
+ *       tier  会员类型 → 变量属性「其他」
+ *       date  到期日  → 变量属性「时间」（官方支持 YYYY-MM-DD）
+ *       count 已练习句数，**纯数字** → 变量属性「数量」，单位"句"在正文里
+ *
+ *     不写"回T退订"：通知类模板本就不该带退订字样，而且我们**没有短信入站
+ *     回复的处理能力**，承诺了也兑现不了（退订入口只有设置页与公众号指令）。
+ *
  * 同一个 `templateIdEnv` 被多个场景复用时（如月卡的前 3 天与前 1 天），
  * 它们的字段集合必须相同 —— 有一条单测守着这件事。
  */
@@ -438,23 +448,37 @@ function expiryTemplateData(
  * 短信里不加空格：一条短信按 70 字计费，空格也是钱，而且中文里
  * "已练习47句"比"已练习 47 句"更自然。
  */
-export function practiceSummary(
-  practiced: number,
-  pending: number,
-  style: "wechat" | "sms",
-): string {
+export function practiceSummary(practiced: number, pending: number): string {
   if (practiced <= 0) return "尚未开始练习"
-  if (style === "sms") return `已练习${practiced}句`
   // 待复习为 0 时不要再写"待复习错句 0 个" —— 那是一句没有内容的填充
   return pending > 0
     ? `已练习 ${practiced} 句 · 待复习错句 ${pending} 个`
     : `已练习 ${practiced} 句`
 }
 
+/**
+ * 短信里「已练习 N 句」的那个 N —— **纯数字**，"句"写在模板正文里。
+ *
+ * ⚠️ 为什么不学微信、把整句"已练习47句"当变量值传过去：
+ *   ① 阿里云的变量属性里有「数量」这一类，就是给纯数字用的。官方规范明确写
+ *      "不支持常见的数量单位，如个、分钟" —— **单位必须在变量外**。
+ *      把整句塞进「其他」属性是能过，但不是这个属性被设计出来的用法。
+ *   ② 变量值是整句中文，恰恰是垃圾短信绕关键词过滤的常见手法，
+ *      审核时更容易被判定为可疑模板。
+ *
+ * 返回 `null` 表示**这条短信不该发**：一次都没练过的用户会渲染出
+ * 「你已练习0句」。那是一句负价值的话 —— 他买了年卡却还没开始，
+ * 该给的是另一套文案（"还没开始，这几门课适合入门"），而不是提醒他"你练了 0 句"。
+ * 放在这里而不是散在调用处，是为了让这个判断可被单测覆盖。
+ */
+export function smsPracticeCount(practiced: number): number | null {
+  return practiced > 0 ? practiced : null
+}
+
 export function buildMessage(ctx: MessageContext): BuiltMessage {
   const { scenario, practicedSentences, pendingReview, tierLabel } = ctx
   const expiryStr = ctx.expiry ? formatExpiry(ctx.expiry) : ""
-  const stats = practiceSummary(practicedSentences, pendingReview, "wechat")
+  const stats = practiceSummary(practicedSentences, pendingReview)
 
   switch (scenario.key) {
     case "trial_expiring_24h":

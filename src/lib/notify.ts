@@ -10,7 +10,7 @@ import {
   buildMessage,
   decideSend,
   isOptedOut,
-  practiceSummary,
+  smsPracticeCount,
   type BuiltMessage,
   type LifecycleChannel,
   type LifecycleScenario,
@@ -177,14 +177,21 @@ async function deliver(
       //   ① 短信模板的参数是固定的，退订提示若要有，必须烧在模板正文里；
       //   ② 我们**没有短信入站回复的处理能力**（阿里云不提供回复回调），
       //      承诺"回T退订"却做不到，比不写更糟。退订入口只有设置页与公众号指令。
+      // 一次都没练过就不发这条短信：模板正文是「你已练习${count}句」，
+      // count 只能是纯数字，渲染出来就是「你已练习0句」—— 一句负价值的话。
+      // 返回 notConfigured 语义（→ skipped、不重试），不是 failed。
+      const count = smsPracticeCount(input.practicedSentences)
+      if (count === null) {
+        return { ok: false, error: "用户尚无练习记录，不发标注句数的短信", notConfigured: true }
+      }
       const r = await sendNotificationSms(target.phone!, templateCode, {
         tier: input.tierLabel,
         // ⚠️ 必须用上海日历日，不能用 toISOString().slice(0,10)（那是 UTC）：
         //    到期时刻若落在上海时间 00:00~08:00，UTC 会退到前一天，于是
         //    **同一次到期，微信说 10-01、短信说 09-30**，用户看到两个日期。
         date: input.expiry ? toShanghaiDateStr(input.expiry) : "",
-        // 与微信共用同一套文案逻辑，避免两个渠道对同一个人说不同的话
-        stats: practiceSummary(input.practicedSentences, input.pendingReview, "sms"),
+        // 纯数字，"句"在模板正文里（阿里云「数量」属性不允许带单位）
+        count: String(count),
       })
       return r.ok
         ? { ok: true }
