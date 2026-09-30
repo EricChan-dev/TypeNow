@@ -6,6 +6,14 @@ import { CommissionWriteError, classifyCommissionWriteError } from "@/lib/commis
 // 时长与价格的唯一事实源都在 lib/pricing —— 加一档只改那里一处。
 // 此前时长映射写在本文件、价格写在 lib/wechat-pay，加档要改两处、很容易漏。
 import { planDurationDays, type PlanKey } from "@/lib/pricing"
+// 归因窗口 / 冷静期 / 佣金比例是对**推广员的对外承诺**（推广中心会显示倒计时与
+// 「还差多少可提现」），所以数值只在 lib/partner-rules 定义一次。
+// 这里若与 UI 各写一份，一漂移就会出现"看板说还有 30 天、佣金却不触发"。
+import {
+  ATTRIBUTION_WINDOW_MS,
+  COMMISSION_COOLING_DAYS,
+  COMMISSION_RATE,
+} from "@/lib/partner-rules"
 
 /**
  * 生成邀请码。
@@ -102,7 +110,8 @@ async function triggerCommission(
 
   if (!buyer?.referredBy) return
 
-  // Only trigger commission if buyer registered within the 90-day attribution window.
+  // Only trigger commission if buyer registered within the attribution window
+  // (90 天，见 lib/partner-rules —— 推广中心会按同一个数显示倒计时).
   // Use the order timestamp (not Date.now()) so delayed payment notifications don't skip commission.
   let orderTime = Date.now()
   if (orderId) {
@@ -113,7 +122,6 @@ async function triggerCommission(
       .limit(1)
     if (order?.createdAt) orderTime = new Date(order.createdAt).getTime()
   }
-  const ATTRIBUTION_WINDOW_MS = 90 * 24 * 60 * 60 * 1000
   if (!buyer.createdAt || orderTime - new Date(buyer.createdAt).getTime() > ATTRIBUTION_WINDOW_MS) return
 
   // ── 推广资格在 2026-09-29 已与付费解绑：任何注册用户都能拿佣金 ──────────────
@@ -149,9 +157,9 @@ async function triggerCommission(
     )
 
   const isFirst = Number(cnt) === 0
-  const rate = isFirst ? 0.5 : 0.3
+  const rate = isFirst ? COMMISSION_RATE.first : COMMISSION_RATE.renewal
   const commissionAmount = Math.floor(orderAmount * rate)
-  const availableAt = new Date(Date.now() + 15 * 24 * 60 * 60 * 1000)
+  const availableAt = new Date(Date.now() + COMMISSION_COOLING_DAYS * 24 * 60 * 60 * 1000)
 
   try {
     await db.insert(partnerCommissions).values({

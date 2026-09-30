@@ -2,7 +2,7 @@ import { NextResponse } from "next/server"
 import { db } from "@/lib/db"
 import { partnerCommissions, users } from "@/lib/db/schema"
 import { getSession } from "@/lib/auth/session"
-import { eq, and, lte, sum, count, isNotNull } from "drizzle-orm"
+import { eq, and, lte, sum, count, isNotNull, ne } from "drizzle-orm"
 
 export async function GET() {
   if (!db) return NextResponse.json({ error: "服务未配置" }, { status: 500 })
@@ -73,18 +73,20 @@ export async function GET() {
     .from(users)
     .where(eq(users.referredBy, session.userId))
 
-  const paidUsers = commissions
-    .filter((c) => c.status !== "clawed_back")
-    .map((c) => c.commissionAmount) // proxy for paid count (distinct referredUserId)
-
-  // Distinct paid users count
+  // Distinct paid users count.
+  //
+  // 必须排掉 `clawed_back`：被退款扣回的人已经不算付费用户了。
+  // 此前这里没有这个条件，于是退款后 `paidCount` 仍然算他一分 ——
+  // 而 `/api/partner/invites` 的列表口径是"非 clawed_back 的 first 佣金"，
+  // 两个数会对不上（列表说未付费、统计说付费），推广员会先怀疑平台在克扣。
   const distinctPaid = await db
     .selectDistinct({ referredUserId: partnerCommissions.referredUserId })
     .from(partnerCommissions)
     .where(
       and(
         eq(partnerCommissions.partnerId, session.userId),
-        eq(partnerCommissions.commissionType, "first")
+        eq(partnerCommissions.commissionType, "first"),
+        ne(partnerCommissions.status, "clawed_back")
       )
     )
 

@@ -11,7 +11,7 @@
 import { describe, it, expect, beforeEach } from "vitest"
 import { ApiClient } from "./helpers/api"
 import { FIXTURE, seedFixtures, q, one } from "./helpers/db"
-import { insertCommission, setWechatOpenid } from "./helpers/factories"
+import { insertCommission, insertPractice, insertUser, setWechatOpenid } from "./helpers/factories"
 
 const MIN_WITHDRAW = 5000
 
@@ -312,5 +312,144 @@ describe("提现记录 /api/partner/withdrawals", () => {
     expect(res.status).toBe(200)
     expect(res.body.data.length).toBe(2)
     expect(JSON.stringify(res.body)).not.toContain("WD-OTHER")
+  })
+})
+
+/**
+ * 待跟进邀请记录 /api/partner/invites（2026-10-01 新增）
+ *
+ * 这个接口存在的理由：看板只给两个**总数**，总数能让推广员知道成绩，
+ * 但**不能让他做任何事** —— 他不知道该跟进谁。所以这里守三件事：
+ *
+ *   1. `practiced` —— 注册了但一句都没练的人，是最该被提醒的那批
+ *   2. `daysLeft` / `expired` —— **唯一的紧迫性来源**：归因窗口 90 天，
+ *      过了这个点这个人再付款也不产生佣金
+ *   3. `paid` 的口径必须与看板的 `paidCount` **完全一致**，
+ *      否则列表说 3 人未付费、统计说付费 2 人，推广员会先怀疑平台克扣
+ */
+describe("待跟进邀请记录 /api/partner/invites", () => {
+  const DAY = 24 * 3600 * 1000
+  const BASE = "/api/partner/invites"
+
+  interface InviteRow {
+    userId: string
+    phone: string | null
+    registeredAt: string
+    practiced: boolean
+    paid: boolean
+    daysLeft: number | null
+    expired: boolean
+  }
+  interface InviteBody {
+    data: InviteRow[]
+    total: number
+    attributionWindowDays: number
+    summary: {
+      total: number
+      paidCount: number
+      pendingCount: number
+      pendingInWindow: number
+    }
+  }
+
+  it("未登录 → 401；未加入推广计划的注册用户 → 403", async () => {
+    expect((await ApiClient.anonymous().get(BASE)).status).toBe(401)
+    expect((await ApiClient.asUser(FIXTURE.userFree).get(BASE)).status).toBe(403)
+  })
+
+  it("只返回**自己**邀请的人，且手机号脱敏", async () => {
+    await insertUser({ referredBy: FIXTURE.userPartner, phone: "13812341234" })
+    // 别人的被邀请人不能串进来
+    await insertUser({ referredBy: FIXTURE.userBuyer, phone: "13999998888" })
+
+    const res = await ApiClient.asUser(FIXTURE.userPartner).get<InviteBody>(BASE)
+    expect(res.status).toBe(200)
+
+    const phones = res.body.data.map((r) => r.phone)
+    expect(phones).toContain("138****1234")
+    // 脱敏后不应出现完整号码，也不应出现别人的号码
+    expect(JSON.stringify(res.body)).not.toContain("13812341234")
+    expect(JSON.stringify(res.body)).not.toContain("13999998888")
+  })
+
+  it("带齐三件事：是否练过 · 归因窗口剩余天数 · 是否已付费", async () => {
+    const before = await ApiClient.asUser(FIXTURE.userPartner).get<InviteBody>(BASE)
+
+    // 注册时间刻意取「10 天半之前」而不是整整 10 天：
+    // MySQL 的 DATETIME 没有小数秒，写入时会**四舍五入**（不是截断），
+    // 所以"恰好 10 天"会让剩余天数在 80/81 之间跳。取半天可以避开这个边界，
+    // 见 db-datetime 相关单测。剩余 79.5 天 → ceil 得到 80。
+    const fresh = await insertUser({
+      referredBy: FIXTURE.userPartner,
+      createdAt: new Date(Date.now() - (10 * DAY + 12 * 3600 * 1000)),
+    })
+    await insertPractice(fresh, FIXTURE.sentA1Plain)
+
+    // 100 天前注册 → 窗口已过（他再付款也不会产生佣金）
+    const stale = await insertUser({
+      referredBy: FIXTURE.userPartner,
+      createdAt: new Date(Date.now() - 100 * DAY),
+    })
+
+    // 已付费（有一笔未扣回的 first 佣金）
+    const payer = await insertUser({ referredBy: FIXTURE.userPartner })
+    await insertCommission(FIXTURE.userPartner, payer, 1000, {
+      status: "available",
+      commissionType: "first",
+    })
+
+    const after = await ApiClient.asUser(FIXTURE.userPartner).get<InviteBody>(BASE)
+    expect(after.status).toBe(200)
+    expect(after.body.attributionWindowDays).toBe(90)
+
+    const byId = new Map(after.body.data.map((r) => [r.userId, r]))
+
+    const f = byId.get(fresh)
+    expect(f, "新邀请的人应当出现在列表里").toBeTruthy()
+    expect(f!.practiced).toBe(true)
+    expect(f!.paid).toBe(false)
+    expect(f!.expired).toBe(false)
+    expect(f!.daysLeft).toBe(80)
+
+    const s = byId.get(stale)
+    expect(s).toBeTruthy()
+    expect(s!.practiced).toBe(false)
+    expect(s!.expired).toBe(true)
+    expect(s!.daysLeft).toBeLessThan(0)
+
+    // 已付费的人不再显示倒计时（钱已经记上了，倒计时只会造成困惑）
+    const p = byId.get(payer)
+    expect(p).toBeTruthy()
+    expect(p!.paid).toBe(true)
+    expect(p!.daysLeft).toBeNull()
+
+    // summary 必须是增量，而不是拍脑袋的绝对值
+    expect(after.body.summary.total).toBe(before.body.summary.total + 3)
+    expect(after.body.summary.paidCount).toBe(before.body.summary.paidCount + 1)
+    expect(after.body.summary.pendingCount).toBe(after.body.summary.total - after.body.summary.paidCount)
+    // 新增的 3 人里只有 fresh 是"未付费且窗口未过"
+    expect(after.body.summary.pendingInWindow).toBe(before.body.summary.pendingInWindow + 1)
+  })
+
+  it("列表口径与看板一致：**已扣回的 first 佣金不算已付费**", async () => {
+    // 这是本次修掉的一个真实缺陷：看板的 paidCount 原先没有排掉 clawed_back，
+    // 于是被推荐人退款后仍被算作"已付费"，与邀请列表口径对不上。
+    const refunded = await insertUser({ referredBy: FIXTURE.userPartner })
+    await insertCommission(FIXTURE.userPartner, refunded, 1000, {
+      status: "clawed_back",
+      commissionType: "first",
+    })
+
+    const list = await ApiClient.asUser(FIXTURE.userPartner).get<InviteBody>(BASE)
+    const row = list.body.data.find((r) => r.userId === refunded)
+    expect(row, "被扣回的人仍应在列表里（他确实注册过）").toBeTruthy()
+    expect(row!.paid).toBe(false)
+
+    const dash = await ApiClient.asUser(FIXTURE.userPartner).get<{
+      paidCount: number
+      referredCount: number
+    }>("/api/partner/dashboard")
+    // 看板也必须是 0：两边口径不同源，推广员会先怀疑平台克扣
+    expect(dash.body.paidCount).toBe(0)
   })
 })

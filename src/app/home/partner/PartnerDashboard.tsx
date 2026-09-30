@@ -3,8 +3,25 @@
 import { useState, useEffect, useRef, useCallback, Suspense } from "react"
 import { toast } from "sonner"
 import QRCode from "qrcode"
-import { ChevronRight, ArrowLeft, X } from "lucide-react"
+import { ChevronRight, ArrowLeft, AlertTriangle } from "lucide-react"
 import { PaymentSuccessModal } from "@/components/payment/PaymentSuccessModal"
+import {
+  ATTRIBUTION_WINDOW_DAYS,
+  COMMISSION_RATE,
+  COMMISSION_TYPE_LABELS,
+  COMMISSION_COOLING_DAYS,
+  MIN_WITHDRAW_FEN,
+  fmtFen as fmt,
+  withdrawProgress,
+} from "@/lib/partner-rules"
+import {
+  PROMOTION_MATERIALS_VERSION,
+  buildCopyText,
+  materialsForPlatform,
+  ruleForPlatform,
+  type PromotionMaterial,
+  type PromotionPlatform,
+} from "@/lib/promotion-materials"
 
 interface DashboardData {
   inviteCode: string
@@ -26,28 +43,47 @@ interface Commission {
   referredUserPhone: string | null
 }
 
-const COPY_SCRIPTS = [
-  {
-    scene: "朋友圈",
-    text: "发现一个超好用的 AI 英语打字练习 App，边打字边学英语，有音标有词性分析，比背单词效率高太多了！免费注册体验👉",
-  },
-  {
-    scene: "私聊",
-    text: "给你推荐个学英语的神器，我用了一段时间感觉进步很明显，主要是每天练几分钟，不用死记硬背。你可以用我的邀请码注册试试",
-  },
-  {
-    scene: "抖音评论",
-    text: "用码上英语练打字真的会了很多地道表达，推荐给英语想进步的小伙伴，我有邀请码可以优先注册",
-  },
-]
+/** 我邀请的人（见 /api/partner/invites）。 */
+interface Invite {
+  userId: string
+  phone: string | null
+  name: string | null
+  registeredAt: string
+  practiced: boolean
+  paid: boolean
+  /** 归因窗口剩余天数；已付费的人为 null */
+  daysLeft: number | null
+  expired: boolean
+}
 
-const fmt = (fen: number) => `¥${(fen / 100).toFixed(2)}`
+interface InviteSummary {
+  total: number
+  paidCount: number
+  pendingCount: number
+  /** 未付费**且**归因窗口还没过期 —— 现在值得花时间跟进的那批 */
+  pendingInWindow: number
+}
+
+/**
+ * 平台展示顺序：**微信排第一**。
+ *
+ * 微信是唯一可以自由放链接和二维码的场景，也就是唯一能把人直接带到产品的场景；
+ * 小红书/抖音只能做"内容种草 + 让人自己去搜"。推广员的时间应该先花在转化率最高的地方，
+ * 所以素材默认打开微信这一栏。
+ */
+const PLATFORM_ORDER: PromotionPlatform[] = ["微信", "小红书", "抖音"]
+
+/** 归因窗口的中文标签。数值来自 lib/partner-rules，这里只负责显示。 */
+const ATTRIBUTION_WINDOW_LABEL = `${ATTRIBUTION_WINDOW_DAYS} 天`
 
 export default function PartnerDashboard() {
   const [data, setData] = useState<DashboardData | null>(null)
   const [commissions, setCommissions] = useState<Commission[]>([])
   const [withdrawals, setWithdrawals] = useState<{ amount: number; status: string; createdAt: string }[]>([])
+  const [invites, setInvites] = useState<Invite[]>([])
+  const [inviteSummary, setInviteSummary] = useState<InviteSummary | null>(null)
   const [tab, setTab] = useState<"link" | "poster" | "scripts">("link")
+  const [materialPlatform, setMaterialPlatform] = useState<PromotionPlatform>("微信")
   const [detailPanel, setDetailPanel] = useState<"withdrawals" | "commissions" | "invites" | null>(null)
   const [withdrawAmount, setWithdrawAmount] = useState("")
   const [withdrawing, setWithdrawing] = useState(false)
@@ -68,6 +104,12 @@ export default function PartnerDashboard() {
     fetch("/api/partner/withdrawals")
       .then((r) => r.json())
       .then((d) => setWithdrawals(d.data ?? []))
+
+    // 待付费邀请记录 —— 推广员唯一能自己动手做转化的抓手（见 invites 路由的注释）
+    fetch("/api/partner/invites")
+      .then((r) => r.json())
+      .then((d) => { setInvites(d.data ?? []); setInviteSummary(d.summary ?? null) })
+      .catch(() => { /* 列表拿不到不影响主流程，不打断 */ })
   }, [])
 
   const inviteLink = data?.inviteCode
@@ -79,8 +121,25 @@ export default function PartnerDashboard() {
     navigator.clipboard.writeText(inviteLink).then(() => toast.success("邀请链接已复制"))
   }
 
-  function copyScript(text: string, fullText: string) {
-    navigator.clipboard.writeText(fullText).then(() => toast.success("话术已复制"))
+  /**
+   * 复制素材。
+   *
+   * 走 `buildCopyText` 而不是自己拼链接：小红书禁止发布站外链接/二维码
+   * （《交易导流违规管理细则》，处罚可到永久封禁账号），所以那里**必须**省略链接。
+   * 省略时要如实告诉推广员，而不是静默丢掉 —— 否则他会以为链接已经在里面了。
+   */
+  function copyMaterial(m: PromotionMaterial, which: "skeleton" | "example") {
+    const raw = which === "skeleton"
+      ? m.skeleton.map((s, i) => `${i + 1}. ${s}`).join("\n")
+      : m.example
+    const { text, linkIncluded } = buildCopyText(raw, m.platform, inviteLink)
+    navigator.clipboard.writeText(text).then(() => {
+      if (linkIncluded) {
+        toast.success("已复制（含你的邀请链接）")
+      } else {
+        toast.success(`${m.platform}不能放链接，已只复制文字 —— 请引导对方搜索「码上英语」`)
+      }
+    })
   }
 
   const generatePoster = useCallback(async () => {
@@ -159,8 +218,8 @@ export default function PartnerDashboard() {
 
   async function handleWithdraw() {
     const amount = Math.round(parseFloat(withdrawAmount) * 100)
-    if (!amount || amount < 5000) {
-      toast.error("最低提现 ¥50")
+    if (!amount || amount < MIN_WITHDRAW_FEN) {
+      toast.error(`最低提现 ${fmt(MIN_WITHDRAW_FEN)}`)
       return
     }
     setWithdrawing(true)
@@ -172,7 +231,7 @@ export default function PartnerDashboard() {
       })
       const d = await res.json()
       if (!res.ok) throw new Error(d.error || "提现失败")
-      toast.success(`提现成功！¥${(amount / 100).toFixed(2)} 已转入微信零钱`)
+      toast.success(`提现成功！${fmt(amount)} 已转入微信零钱`)
       setWithdrawAmount("")
       // Refresh dashboard
       const refreshed = await fetch("/api/partner/dashboard").then((r) => r.json())
@@ -196,6 +255,10 @@ export default function PartnerDashboard() {
     ? ((data.paidCount / data.referredCount) * 100).toFixed(1)
     : "0.0"
 
+  const progress = withdrawProgress(data.available)
+  const platformMaterials = materialsForPlatform(materialPlatform)
+  const platformRule = ruleForPlatform(materialPlatform)
+
   return (
     <div className="min-h-screen bg-background text-foreground pb-20">
       <canvas ref={canvasRef} className="hidden" />
@@ -207,14 +270,20 @@ export default function PartnerDashboard() {
         <div className="grid grid-cols-2 gap-3">
           <StatCard label="累计佣金" value={fmt(data.totalEarned)} onClick={() => setDetailPanel("commissions")} clickable />
           <StatCard label="可提现余额" value={fmt(data.available)} accent />
-          <StatCard label="待生效" value={fmt(data.cooling)} sub="15天冷静期" />
-          <StatCard label="邀请注册" value={String(data.referredCount)} sub={`付费 ${data.paidCount} 人 · 转化 ${conversionRate}%`} onClick={() => setDetailPanel("invites")} clickable />
+          <StatCard label="待生效" value={fmt(data.cooling)} sub={`${COMMISSION_COOLING_DAYS}天冷静期`} />
+          <StatCard
+            label="邀请注册"
+            value={String(data.referredCount)}
+            sub={`付费 ${data.paidCount} 人 · 转化 ${conversionRate}%`}
+            onClick={() => setDetailPanel("invites")}
+            clickable
+          />
         </div>
 
         {/* Material tabs */}
         <div className="bg-muted/40 border border-border rounded-2xl overflow-hidden">
           <div className="flex border-b border-border">
-            {([["link", "邀请链接"], ["poster", "分享海报"], ["scripts", "推广话术"]] as const).map(([key, label]) => (
+            {([["link", "邀请链接"], ["poster", "分享海报"], ["scripts", "推广素材"]] as const).map(([key, label]) => (
               <button
                 key={key}
                 onClick={() => setTab(key)}
@@ -233,6 +302,10 @@ export default function PartnerDashboard() {
                   复制邀请链接
                 </button>
                 <div className="text-xs text-muted-foreground/70 text-center">邀请码：{data.inviteCode}</div>
+                <div className="text-xs text-muted-foreground/60 text-center leading-relaxed">
+                  被推荐人注册后 {ATTRIBUTION_WINDOW_LABEL} 内首次付款，你拿订单实付金额的{" "}
+                  {COMMISSION_RATE.first * 100}%；之后续费拿 {COMMISSION_RATE.renewal * 100}%。
+                </div>
               </div>
             )}
 
@@ -253,25 +326,101 @@ export default function PartnerDashboard() {
                     {generatingPoster ? "生成中..." : "生成分享海报"}
                   </button>
                 )}
+                {/* 海报里带二维码，而小红书明令禁止二维码/水印 —— 必须在这里说清楚，
+                    否则等于平台在教推广员踩线（处罚可到永久封禁账号）。 */}
+                <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl p-3 text-xs text-amber-400 leading-relaxed">
+                  这张海报<b>带二维码</b>，只能用在<b>微信朋友圈 / 私聊</b>。
+                  小红书明令禁止二维码、水印与站外链接，发在那里会被限流甚至封号 ——
+                  小红书请改用「推广素材」里的小红书版本。
+                </div>
               </div>
             )}
 
             {tab === "scripts" && (
               <div className="flex flex-col gap-3">
-                {COPY_SCRIPTS.map((s) => (
-                  <div key={s.scene} className="bg-muted/60 rounded-xl p-4 flex flex-col gap-2">
+                {/* 平台切换：默认微信（唯一能直接放链接的场景） */}
+                <div className="flex gap-2">
+                  {PLATFORM_ORDER.map((p) => (
+                    <button
+                      key={p}
+                      onClick={() => setMaterialPlatform(p)}
+                      className={`flex-1 py-2 rounded-lg text-xs font-medium transition-colors ${
+                        materialPlatform === p
+                          ? "bg-foreground text-background"
+                          : "bg-muted/60 text-muted-foreground hover:text-foreground"
+                      }`}
+                    >
+                      {p}
+                    </button>
+                  ))}
+                </div>
+
+                {/* 该平台的红线。asOf 必须显示 —— 平台规则会变，
+                    一张不标日期的"红线表"比没有更危险。 */}
+                {platformRule && (
+                  <div
+                    className={`rounded-xl p-3 text-xs leading-relaxed border ${
+                      platformRule.linkAllowed
+                        ? "bg-emerald-500/10 border-emerald-500/20 text-emerald-400"
+                        : "bg-amber-500/10 border-amber-500/20 text-amber-400"
+                    }`}
+                  >
+                    <div className="flex items-center gap-1.5 font-medium">
+                      <AlertTriangle className="h-3.5 w-3.5" />
+                      {platformRule.linkAllowed ? "可以放链接和二维码" : "不能放链接，也不能放二维码"}
+                    </div>
+                    <p className="mt-1 opacity-90">{platformRule.note}</p>
+                    <p className="mt-1 opacity-60">{platformRule.asOf}</p>
+                  </div>
+                )}
+
+                {platformMaterials.map((m) => (
+                  <div key={m.id} className="bg-muted/60 rounded-xl p-4 flex flex-col gap-3">
                     <div className="flex items-center justify-between">
-                      <span className="text-xs text-muted-foreground font-medium">{s.scene}</span>
+                      <span className="text-xs text-muted-foreground font-medium">{m.scene}</span>
                       <button
-                        onClick={() => copyScript(s.scene, s.text + " " + inviteLink)}
+                        onClick={() => copyMaterial(m, "example")}
                         className="text-xs text-sky-400 hover:text-sky-300"
                       >
-                        复制
+                        复制示例
                       </button>
                     </div>
-                    <p className="text-sm text-foreground/70 leading-relaxed">{s.text}</p>
+
+                    {/* 骨架：告诉推广员"按什么顺序说"，不是让他抄 */}
+                    <div className="flex flex-col gap-1.5">
+                      <span className="text-[11px] text-muted-foreground/70">按这个结构用自己的话写：</span>
+                      {m.skeleton.map((s, i) => (
+                        <div key={i} className="flex gap-2 text-xs text-foreground/70 leading-relaxed">
+                          <span className="text-muted-foreground/50 shrink-0">{i + 1}.</span>
+                          <span>{s}</span>
+                        </div>
+                      ))}
+                    </div>
+
+                    <div className="border-t border-border/50 pt-3">
+                      <span className="text-[11px] text-muted-foreground/70">示例（记得改成你自己的话）：</span>
+                      <p className="text-sm text-foreground/70 leading-relaxed whitespace-pre-line mt-1">{m.example}</p>
+                    </div>
+
+                    <details className="text-xs">
+                      <summary className="text-muted-foreground/70 cursor-pointer">为什么这样写</summary>
+                      <p className="text-foreground/60 leading-relaxed mt-2">{m.why}</p>
+                    </details>
+
+                    <div className="bg-red-500/5 border border-red-500/15 rounded-lg p-2.5 flex flex-col gap-1">
+                      {m.avoid.map((a, i) => (
+                        <div key={i} className="flex gap-1.5 text-[11px] text-red-400/80 leading-relaxed">
+                          <span className="shrink-0">·</span>
+                          <span>{a}</span>
+                        </div>
+                      ))}
+                    </div>
                   </div>
                 ))}
+
+                <div className="text-[11px] text-muted-foreground/50 text-center">
+                  素材库版本 {PROMOTION_MATERIALS_VERSION} · 不要承诺收益或收入，只需如实描述你自己的使用体验
+                </div>
               </div>
             )}
           </div>
@@ -285,6 +434,19 @@ export default function PartnerDashboard() {
               提现记录 <ChevronRight className="h-3 w-3" />
             </button>
           </div>
+
+          {/* 差多少才能提现 —— 必须写出来。
+              只把一个禁用的按钮摆在那里，赚了 ¥14.5 的推广员只会得出"这是骗人的"。
+              推广体系信任崩塌最常见的就是这一秒。 */}
+          {!progress.canWithdraw && (
+            <div className="bg-sky-500/10 border border-sky-500/20 rounded-xl p-3 text-xs text-sky-400 leading-relaxed">
+              距离可提现还差 <b>{fmt(progress.shortfallFen)}</b>（满 {fmt(MIN_WITHDRAW_FEN)} 可申请）。
+              {data.cooling > 0 && (
+                <> 另有 {fmt(data.cooling)} 在 {COMMISSION_COOLING_DAYS} 天冷静期内，到期后自动转为可提现。</>
+              )}
+            </div>
+          )}
+
           {!data.hasWechat && (
             <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl p-3 text-xs text-amber-400">
               请先在个人设置中绑定微信账号，提现将转入微信零钱
@@ -303,7 +465,7 @@ export default function PartnerDashboard() {
             </div>
             <button
               onClick={handleWithdraw}
-              disabled={withdrawing || !data.hasWechat || data.available < 5000}
+              disabled={withdrawing || !data.hasWechat || !progress.canWithdraw}
               className="px-5 py-3 rounded-xl bg-foreground text-background font-medium text-sm hover:bg-foreground/90 disabled:opacity-40 transition-colors whitespace-nowrap"
             >
               {withdrawing ? "处理中" : "提现"}
@@ -360,7 +522,7 @@ export default function PartnerDashboard() {
                       <div key={c.id} className="bg-muted/40 border border-border rounded-xl p-3">
                         <div className="flex items-center justify-between">
                           <span className="text-sm text-foreground/80">
-                            {c.referredUserPhone ?? "用户"} · {c.commissionType === "first" ? "首次购买" : "续费"}
+                            {c.referredUserPhone ?? "用户"} · {COMMISSION_TYPE_LABELS[c.commissionType]}
                           </span>
                           <span className="text-sm font-medium text-emerald-400">{fmt(c.commissionAmount)}</span>
                         </div>
@@ -376,20 +538,57 @@ export default function PartnerDashboard() {
 
               {detailPanel === "invites" && (
                 <div className="flex flex-col gap-4">
-                  <div className="bg-muted/40 border border-border rounded-2xl p-4 text-center">
-                    <div className="text-3xl font-bold text-foreground">{data?.referredCount ?? 0}</div>
-                    <div className="text-xs text-muted-foreground mt-1">邀请注册人数</div>
+                  <div className="grid grid-cols-3 gap-2">
+                    <MiniStat label="邀请注册" value={inviteSummary?.total ?? data.referredCount} />
+                    <MiniStat label="已付费" value={inviteSummary?.paidCount ?? data.paidCount} accent />
+                    <MiniStat
+                      label="待跟进"
+                      value={inviteSummary?.pendingInWindow ?? 0}
+                      hint="还赶得上"
+                    />
                   </div>
-                  <div className="bg-muted/40 border border-border rounded-2xl p-4 text-center">
-                    <div className="text-3xl font-bold text-emerald-400">{data?.paidCount ?? 0}</div>
-                    <div className="text-xs text-muted-foreground mt-1">付费转化人数</div>
-                  </div>
-                  <div className="bg-muted/40 border border-border rounded-2xl p-4 text-center">
-                    <div className="text-3xl font-bold text-foreground">{conversionRate}%</div>
-                    <div className="text-xs text-muted-foreground mt-1">转化率</div>
-                  </div>
-                  <p className="text-xs text-muted-foreground/50 text-center mt-2">
-                    邀请好友注册并购买会员，即可获得佣金。首次购买佣金 50%，续费佣金 30%。
+
+                  {inviteSummary && inviteSummary.pendingInWindow > 0 && (
+                    <p className="text-xs text-muted-foreground/70 leading-relaxed">
+                      这 {inviteSummary.pendingInWindow} 位好友还没付费、而且归因窗口还没过 ——
+                      现在跟进正是时候。窗口一过，他再付款你也不会拿到佣金。
+                    </p>
+                  )}
+
+                  {invites.length === 0 ? (
+                    <p className="text-sm text-muted-foreground text-center py-8">
+                      还没有人通过你的链接注册
+                    </p>
+                  ) : (
+                    <div className="flex flex-col gap-2">
+                      {invites.map((v) => (
+                        <div key={v.userId} className="bg-muted/40 border border-border rounded-xl p-3 flex flex-col gap-1.5">
+                          <div className="flex items-center justify-between">
+                            <span className="text-sm text-foreground/80">
+                              {v.phone ?? v.name ?? "好友"}
+                            </span>
+                            {v.paid ? (
+                              <span className="text-[11px] text-emerald-400">已付费</span>
+                            ) : v.expired ? (
+                              <span className="text-[11px] text-muted-foreground/50">窗口已过</span>
+                            ) : (
+                              <span className="text-[11px] text-amber-400">还剩 {v.daysLeft} 天</span>
+                            )}
+                          </div>
+                          <div className="flex items-center gap-2 text-[11px] text-muted-foreground/60">
+                            <span>{new Date(v.registeredAt).toLocaleDateString()} 注册</span>
+                            <span>·</span>
+                            <span>{v.practiced ? "已开始练习" : "还没开始练"}</span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  <p className="text-xs text-muted-foreground/50 text-center mt-2 leading-relaxed">
+                    邀请好友注册并购买会员，即可获得佣金。首次购买佣金 {COMMISSION_RATE.first * 100}%，
+                    续费佣金 {COMMISSION_RATE.renewal * 100}% · 归因窗口 {ATTRIBUTION_WINDOW_LABEL} ·
+                    冷静期 {COMMISSION_COOLING_DAYS} 天
                   </p>
                 </div>
               )}
@@ -416,6 +615,16 @@ function StatCard({ label, value, sub, accent, onClick, clickable }: { label: st
       <div className={`text-xl font-bold ${accent ? "text-emerald-400" : "text-foreground"}`}>{value}</div>
       {sub && <div className="text-xs text-muted-foreground/70 mt-0.5">{sub}</div>}
     </Comp>
+  )
+}
+
+function MiniStat({ label, value, accent, hint }: { label: string; value: number; accent?: boolean; hint?: string }) {
+  return (
+    <div className="bg-muted/40 border border-border rounded-xl p-3 text-center">
+      <div className={`text-xl font-bold ${accent ? "text-emerald-400" : "text-foreground"}`}>{value}</div>
+      <div className="text-[11px] text-muted-foreground mt-0.5">{label}</div>
+      {hint && <div className="text-[10px] text-muted-foreground/50">{hint}</div>}
+    </div>
   )
 }
 

@@ -10,8 +10,10 @@ import {
   UNCERTAIN_WITHDRAW_REASON,
   classifyTransferFailure,
 } from "@/lib/withdraw-safety"
-
-const MIN_WITHDRAW = 5000 // ¥50 in fen
+// 最低提现金额的单一来源在 lib/partner-rules：推广中心的进度提示
+// （「还差 ¥XX 可提现」）必须和这里的判定用同一个数，否则界面会承诺一个
+// 点下去就被拒的金额。
+import { MIN_WITHDRAW_FEN as MIN_WITHDRAW } from "@/lib/partner-rules"
 
 export async function POST(request: Request) {
   if (!db) return NextResponse.json({ error: "服务未配置" }, { status: 500 })
