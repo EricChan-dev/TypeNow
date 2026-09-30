@@ -146,8 +146,13 @@ export function mapYoudaoEvaluate(data: unknown): EvaluateResult | null {
 
   // 三维度与下面的词级分是**同一套策略**：有道没给就保留 null，绝不 `?? 0`。
   // 理由见 EvaluateResult.accuracy 的注释（0 会命中「< 75 出短板建议」的评语规则）。
-  // 取整：句子级已经是整数，混着小数会让界面参差不齐。
-  const roundOrNull = (n: number | null): number | null => (n === null ? null : Math.round(n))
+  //
+  // 取整后**夹到 0–100**：分数只可能是百分制，而 score/维度都是 INT 列、写入方
+  // 在 STRICT 模式下"越界即拒整条语句"。真出现超范围的值（协议异常/字段被换用）
+  // 就只有两种下场：整行静默丢掉（用户看到分数、库里没有），或落一个荒谬的值。
+  // 夹住更接近事实，也保住这一行。null 仍然原样透传 —— 那是"没给分"，不是 0。
+  const roundOrNull = (n: number | null): number | null =>
+    n === null ? null : Math.max(0, Math.min(100, Math.round(n)))
 
   const words: EvaluateWordScore[] = Array.isArray(raw.words)
     ? (raw.words as Array<Record<string, unknown>>)
@@ -163,7 +168,9 @@ export function mapYoudaoEvaluate(data: unknown): EvaluateResult | null {
     : []
 
   return {
-    score: Math.round(score),
+    // 总分同样夹到 0–100：它是 NOT NULL 的 INT 列，越界一样会让整行写不进去。
+    // 走到这里的分一定非空（上面有 overall → pronunciation → integrity → 0 的兜底链）。
+    score: Math.max(0, Math.min(100, Math.round(score))),
     accuracy: roundOrNull(pronunciation),
     fluency: roundOrNull(fluency),
     integrity: roundOrNull(integrity),

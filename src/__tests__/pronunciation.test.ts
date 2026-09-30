@@ -278,6 +278,17 @@ describe("源码约束：不许写回旧的那一套（防回退）", () => {
     expect(routeCode).not.toMatch(/youdaoData\s*\??\s*[.[]/)
     expect(routeCode).not.toContain(".content")
   })
+
+  it("先读上一句评语、再覆盖写（顺序反了「不重复上一次评语」就永远不生效）", () => {
+    // 评语规则要求"不与上一句相同"，而写入是 upsert —— 一旦先写后读，
+    // 读到的永远是刚写进去的那句，previousComment 就等于本次评语，规则形同不存在。
+    // 这条只能靠源码顺序钉住：直接调 store 的单测天然看不到路由里的先后。
+    const readAt = routeCode.indexOf("getPreviousComment(")
+    const writeAt = routeCode.indexOf("savePronunciationScore(")
+    expect(readAt).toBeGreaterThan(-1)
+    expect(writeAt).toBeGreaterThan(-1)
+    expect(readAt).toBeLessThan(writeAt)
+  })
 })
 
 describe("源码约束：录音侧必须真的产出 WAV", () => {
@@ -311,5 +322,13 @@ describe("源码约束：录音侧必须真的产出 WAV", () => {
     expect(panelCode).toContain("discardRef")
     expect(panelCode).toContain("releaseStream")
     expect(panelCode).toContain("getTracks().forEach")
+  })
+
+  it("上传的 sentenceId 走 baseSentenceId（分块句 id 带 `_c0`，库里没有那一行）", () => {
+    // 练习页把有 chunks 的句子展开成 `<原句 id>_c<order>`（LearnClient 的 expandSentences）。
+    // 那个 id 直接上传的话：sentence_id 列宽只有 VARCHAR(36)，加 `_c0` 就是 39 ——
+    // store 的超长拒写分支会把它丢掉，表现成"用户看得到分数、库里永远没有"。
+    // 而 /api/courses/sentences 的 JOIN 也是按原句 id 匹配的，读回来同样对不上。
+    expect(panelCode).toContain("baseSentenceId(sentence.id)")
   })
 })

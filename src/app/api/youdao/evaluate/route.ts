@@ -225,7 +225,10 @@ export async function POST(request: Request) {
   //    `text` 是本路由发给有道的**英文字符串**（body 类型是 `{ audio?: string; text?: string; sentenceId?: string }`），
   //    它不含句子 id —— 所以 sentenceId 必须由前端单独传上来（Task 6 已改）。
   //    老客户端不传时静默跳过落库，不影响评分返回。
-  if (sentenceId) {
+  // ⚠️ 类型也要查：`sentenceId` 来自客户端 JSON，可能是数字或对象。只判真值的话，
+  //    store 里那句 `sentenceId.length > 36` 对 number/object 永远为 false
+  //    （NaN 比较不成立），于是会被 MySQL 隐式转成字符串，落一行挂在并不存在的句子上。
+  if (typeof sentenceId === "string" && sentenceId !== "") {
     const previousComment = await getPreviousComment(session.userId, sentenceId)
     const comment = buildComment({
       score: result.score,

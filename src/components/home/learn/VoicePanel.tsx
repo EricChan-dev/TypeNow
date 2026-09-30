@@ -477,8 +477,11 @@ export function VoicePanel({ sentence }: { sentence: Sentence }) {
 
       {/* 本次没录、但库里有历史分（设计 §3.6）：显示历史卡片，点开看详情。
           ⚠️ 这张卡片与下面「本次评分」卡片互斥（一个 !shownResult、一个 shownResult），
-          所以任何时刻最多只有一张卡片 —— 不会出现两张分数卡叠在一起。 */}
-      {!shownResult && !modalOpen && sentence.pronunciation && (
+          所以任何时刻最多只有一张卡片 —— 不会出现两张分数卡叠在一起。
+          ⚠️ recording 期间也要藏起来：录音一开始 shownResult 就被清空，这张卡会重新出现，
+          而弹窗是 fixed inset-0 z-50 —— 点开就会盖住倒计时和「停止录音」，用户只能等
+          10 秒自动结束（甚至按 Enter 进下一句把这次录音丢掉）。 */}
+      {!recording && !shownResult && !modalOpen && sentence.pronunciation && (
         <PronunciationCard
           score={sentence.pronunciation.score}
           accuracy={sentence.pronunciation.accuracy}
