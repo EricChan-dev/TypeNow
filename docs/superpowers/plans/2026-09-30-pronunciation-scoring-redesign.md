@@ -14,17 +14,31 @@
 
 ## 执行进度（2026-09-30 更新）
 
-**已完成并提交**：
+**Task 1 – Task 9 已全部实现并提交**（本文件即权威记录，逐任务细节见各节与 git log）：
 
 | 任务 | 提交 | 备注 |
 | --- | --- | --- |
 | Task 1 建表 + schema | `fa1a203` | 后有 `b8c7d16` 修正（见下） |
 | Task 1b `EvaluateResult.comment` | `66d5306` | |
 | Task 2 评语生成纯函数 | `993adf9` | 22 条单测 |
+| Task 3 落库 store + 接入评分路由 | `f9374c4` + `369e56d` | 后者是审查后的修正：`sentence_id` 超长改为**拒写**（截断等于悄悄改挂 key） |
+| Task 4 sentences 路由下发跟读分 | `ba7065e` | 同时删掉 Task 3 留下的死接口 `StoredPronunciation`、修正 store 的「唯一碰这张表」注释 |
+| Task 5 评分弹窗 | `9a9b392` | 额外把 `scoreColor` 抽到 `lib/pronunciation`（否则会有第 3 份拷贝） |
+| Task 6 卡片 + 接入 VoicePanel | `b04a2d2` | 见下「Task 6 的两处必改」 |
+| Task 7 大纲显示小分数 | `ff7f2de` | |
+| Task 8 e2e 夹具 | `40ac382` | |
+| Task 9 e2e | `921c54d` | 14 条，含**直连 store** 的写法路径（见下） |
+| 终审收尾 | `40b89ec` | 分数夹到 0–100、`sentenceId` 类型校验、录音中不显示历史卡、两条源码守卫 |
 
-**下一步：从 Task 3 开始。** 三个提交都**只在本地**，未推（推送会触发线上部署，留给 Task 10）。
+**验证状态（全部在本地实测）**：`npx tsc --noEmit` 无输出；`pnpm test` **1109 条全过**（71 文件）；
+`npx vitest run --config vitest.e2e.config.ts` **530 条全过**（29 文件）；
+本次改动的每个文件 lint 增量为 0。
 
-**执行这 3 个任务时，审查抓出 4 个真 bug，其中 3 个是本计划自己写错的 —— 计划已就地修正，不要改回去**：
+**Task 10 还没做**：生产迁移与部署需要人工确认，已登记在 `docs/TODO.md` 的 0-A-0。
+⚠️ **顺序不能反**：`/api/courses/sentences` 现在对每节课都 LEFT JOIN 新表，
+表不存在会让练习页对所有用户 500。
+
+**执行过程中审查抓出的坑（其中若干是本计划自己写错的 —— 已就地修正，不要改回去）**：
 
 1. **Task 1 的 DDL 漏了 `DEFAULT (UUID())`**（已补）。
    Task 3 的 INSERT **不带 id**，靠库级默认值。漏了它，生产库（只由迁移建立）
@@ -45,15 +59,22 @@
 4. `idx_pronunciation_user_updated` 是**投机索引**（已删）：全部访问路径都是两列等值，
    `uk_pronunciation_user_sentence` 的最左前缀已覆盖。
 
-**验证状态**：`npx tsc --noEmit` 无输出；`pnpm test` **1107 条全过**（71 文件）；
-e2e 在改动前是 508 条全过（本次改动尚未触及路由与界面，所以线上行为与改动前一致）。
+5. **本计划 Task 6 的 `const sentenceId = sentence.id` 是错的**（实现时已改）。
+   练习页把有 `chunks` 的句子展开成 `<原句 id>_c<order>`，那个 id 长 39 字符、
+   列宽只有 `VARCHAR(36)`，而 store 对超长 key 是**拒写** —— 用户看得到分数、
+   库里永远没有；而且下发 JOIN 按原句 id 匹配，读回来也对不上。
+   线上有 **23,010 / 461,933 句（5%）**带 chunks。
+   现在：上传走 `baseSentenceId(sentence.id)`，且 `expandSentences` 把父行的
+   `pronunciation` 继承给每个分块项（下发的字段只挂在父行上）。
 
-**给执行者的两条操作提醒**：
+6. **`src/__tests__/pronunciation.test.ts` 里 `not.toContain("result.accuracy")` 是一条错守卫**
+   （已改成禁止读**原始 payload**）。`result` 是映射后的 `EvaluateResult`，读 `result.accuracy`
+   本来就是正确写法；旧断言只挡住了正确代码，却挡不住真正的旧 bug（读 `youdaoData.result`）。
 
-- 工作区里 `scripts/gen-remaining-covers.ts` 是**并行开发**的在途文件，
-  **绝不要提交它**，也不要用 `git add -A`。
-- 若 `npx tsc --noEmit` 报 `.next-e2e/dev/types/validator.ts` 的语法错误，
-  那是被中断的 e2e 跑留下的损坏缓存：`rm -rf .next-e2e` 即可（Next 会重新生成）。
+7. **e2e 里 store 的写路径原本无人覆盖**（Task 9 补上）。评分路由在 e2e 里因
+   `YOUDAO_APP_KEY` 被清空而在碰到 store 之前就 503，而前三组用例都是自己拼 SQL 写表。
+   现在 Task 9 有一段直连 `savePronunciationScore / getPreviousComment` 的用例，
+   并在注入 `DATABASE_URL` 前先跑 `assertTestDatabase()`。
 
 
 ---

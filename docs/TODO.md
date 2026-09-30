@@ -9,6 +9,31 @@
 
 ## 零、需要人工介入（优先）
 
+### [ ] 0-A-0. 执行 `00033_pronunciation_scores.sql`（**必须早于部署**）
+
+跟读评分改版（计划：`docs/superpowers/plans/2026-09-30-pronunciation-scoring-redesign.md`）
+新增了一张表，代码已经写好但**迁移还没在生产执行**。
+
+**顺序不能反**：`/api/courses/sentences` 现在对每一节课都 LEFT JOIN 这张表
+（`src/app/api/courses/sentences/route.ts`），表不存在时该接口 500，
+练习页对**所有用户**都打不开（不是只影响跟读功能）。
+
+```bash
+# 1) 按 db-backup/ 惯例先备份
+mkdir -p db-backup/pre-00033-$(date +%Y%m%d-%H%M%S)
+# 2) 执行（连接参数取 .env.local 的 DATABASE_URL）
+mysql ... < db/migrations/00033_pronunciation_scores.sql
+```
+
+迁移文件头部写了 4 组事后校验 SQL（排序规则 / `id` 的库级默认值 / 索引只有两个 /
+一次真实写入 + 覆盖语义），逐条跑一遍。其中 **`id` 的默认值和排序规则是两条
+"漏了不会当场报错"的项**：前者漏了会表现成"用户看得到分数、库里永远没有"，
+后者会以 `Illegal mix of collations` 让整课 500。生产现有 37 张表都是
+`utf8mb4_unicode_ci`，本迁移显式写了同一个。
+
+执行完还要：重新生成 `db/schema-snapshot.sql`（`db/README.md` 有命令），
+再推代码触发部署，最后用一次真实录音验证「刷新后卡片还在」。
+
 ### [x] 0-A. 执行 4 个新迁移 + 教材版本回填（2026-09-29 已完成）
 
 双货币 / 定价 / 合规 / 教材同步改造已全部实现并通过
