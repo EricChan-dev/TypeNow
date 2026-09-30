@@ -46,6 +46,11 @@ function expandSentences(raw: Sentence[]): Sentence[] {
         lesson_id: s.lesson_id,
         words: alignWordsWithEnglish(chunk.text, parentWords),
         chunks: null,
+        // 跟读分跟着原句走：库里一句话一行（UNIQUE(user_id, sentence_id)），
+        // /api/courses/sentences 也只把 pronunciation 挂在**父行**上。这个分支是
+        // 重新构造的字面量（不是展开 s），漏掉这一项，分块练习项就永远读不到分数，
+        // 历史卡片与「查看详情」对它们等于不存在。同 category/difficulty/tags 一样继承。
+        pronunciation: s.pronunciation,
       }))
   })
 }
@@ -1974,7 +1979,7 @@ export function LearnClient({
               {sentence.chinese}
             </p>
 
-            <VoicePanel english={sentence.english} />
+            <VoicePanel sentence={sentence} />
 
             <div className="flex flex-col items-center gap-2 sm:gap-3">
               <p className="text-xs sm:text-base text-foreground/30 font-medium text-center">

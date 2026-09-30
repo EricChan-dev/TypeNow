@@ -18,11 +18,14 @@ import {
 } from "@/lib/pcm-wav"
 import {
   describeEvaluateFailure,
-  scoreColor,
   type EvaluateFailureView,
   type EvaluateResult,
 } from "@/lib/pronunciation"
 import { describeMicError } from "@/lib/mic-error"
+import { baseSentenceId } from "@/lib/sentence-id"
+import type { Sentence } from "@/types"
+import { PronunciationCard } from "@/components/home/learn/PronunciationCard"
+import { PronunciationModal } from "@/components/home/learn/PronunciationModal"
 
 /**
  * 跟读评分面板。
@@ -158,7 +161,17 @@ async function toWavBase64(blob: Blob): Promise<string> {
   }
 }
 
-export function VoicePanel({ english }: { english: string }) {
+export function VoicePanel({ sentence }: { sentence: Sentence }) {
+  const english = sentence.english
+  /**
+   * 落库用的是**原句 id**，不是练习项的 id。
+   *
+   * 有 chunks 的句子会被 LearnClient 展开成 `<原句 id>_c<order>`（见 expandSentences），
+   * 而数据库里没有 `xxx_c0` 这一行：列宽是 VARCHAR(36)，`_c0` 后缀会把 id 顶到 39 字符，
+   * pronunciation-store 会**直接拒写并只留一行日志** —— 用户看到分数、库里什么都没有，
+   * 正是这次改版要消灭的静默丢分。所以统一走 baseSentenceId（非分块句子是 no-op）。
+   */
+  const sentenceId = baseSentenceId(sentence.id)
   const [recording, setRecording] = useState(false)
   const [evaluating, setEvaluating] = useState(false)
   const [secondsLeft, setSecondsLeft] = useState(MAX_RECORD_MS / 1000)
@@ -171,6 +184,15 @@ export function VoicePanel({ english }: { english: string }) {
    * 换了句子它自然就不该显示，不需要额外的清理逻辑。
    */
   const [result, setResult] = useState<{ forSentence: string; data: EvaluateResult } | null>(null)
+  /**
+   * 本次会话内上一次的分数（用于弹窗上的「61 → 84」）。重录前先存这里。
+   *
+   * 必须在 handleRecord 里 setResult(null) **之前**取值 —— 所以它是在 onstop 里
+   * 从当次渲染的闭包读 shownResult，而不是等结果回来再读（那时旧的已经清掉了）。
+   */
+  const [previousScore, setPreviousScore] = useState<number | null>(null)
+  /** 弹窗开关。评分回来时自动打开，也能从下面的卡片点开；关闭后回到卡片上。 */
+  const [modalOpen, setModalOpen] = useState(false)
   const [failure, setFailure] = useState<{
     forSentence: string
     view: EvaluateFailureView
@@ -251,6 +273,12 @@ export function VoicePanel({ english }: { english: string }) {
 
     setResult(null)
     setFailure(null)
+    // 重录必须把弹窗收起来：弹窗是 fixed inset-0 z-50，会盖住面板上的
+    // 录音倒计时、「停止录音」和失败提示。尤其在有历史分时，弹窗会转而渲染
+    // 那条**旧的**历史分（sentence.pronunciation 是首屏快照，upsert 后不会更新），
+    // 于是用户点了「再试一次」，屏幕上看到的分数反而退回去了。
+    // 收起后评分成功会由 onstop 里的 setModalOpen(true) 重新打开。
+    setModalOpen(false)
 
     if (!support.ok) {
       toast.error(support.reason ?? "此浏览器不支持录音")
@@ -314,6 +342,10 @@ export function VoicePanel({ english }: { english: string }) {
         return
       }
 
+      // 记下上一次的分数（如果这次会话里录过），用于弹窗上的变化显示。
+      // 读的是**这次渲染闭包**里的 shownResult：handleRecord 已经 setResult(null)，
+      // 等结果回来再读就永远是 null，「61 → 84」也就永远不显示。
+      setPreviousScore(shownResult?.score ?? null)
       setEvaluating(true)
       const controller = new AbortController()
       abortRef.current = controller
@@ -341,7 +373,9 @@ export function VoicePanel({ english }: { english: string }) {
         const res = await fetch("/api/youdao/evaluate", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ audio, text: english }),
+          // sentenceId 必传：路由只认这个字段来决定分数挂在哪句上，
+          // 而且是**原句 id**（分块练习项必须还原，见上面 sentenceId 的说明）
+          body: JSON.stringify({ audio, text: english, sentenceId }),
           signal: controller.signal,
         })
         const data = await res.json().catch(() => null)
@@ -350,6 +384,8 @@ export function VoicePanel({ english }: { english: string }) {
           return
         }
         setResult({ forSentence: english, data: data as EvaluateResult })
+        // 拿到结果就弹窗：用户刚读完，逐词分析正是此刻要看的
+        setModalOpen(true)
       } catch (err) {
         const timedOut = (err as { name?: string } | null)?.name === "AbortError"
         setFailure({
@@ -439,61 +475,60 @@ export function VoicePanel({ english }: { english: string }) {
         </div>
       )}
 
-      {shownResult && (
-        <div className="flex flex-col items-center gap-3 w-full max-w-sm">
-          <div
-            className="flex items-center justify-center w-20 h-20 rounded-full border-4 text-3xl font-black"
-            style={{ borderColor: scoreColor(shownResult.score), color: scoreColor(shownResult.score) }}
-          >
-            {shownResult.score}
-          </div>
-          <div className="flex flex-wrap gap-4 justify-center text-xs text-muted-foreground">
-            {/*
-              三个维度都可能是 null（有道没给这个字段，见 EvaluateResult 的注释）。
-              不判空就会直接把 "null" 渲染成字符串；而兜底成 0 更糟 —— 那是个
-              看起来真实的分数，还会骗过「< 75 出短板建议」的评语规则。
-              这里用「—」表示"没有这一个维度"，与仓库其它缺值处一致；
-              scoreColor(null) 已经是中性灰。
-            */}
-            <span>
-              准确度{" "}
-              <span className="font-semibold" style={{ color: scoreColor(shownResult.accuracy) }}>
-                {shownResult.accuracy ?? "—"}
-              </span>
-            </span>
-            <span>
-              流利度{" "}
-              <span className="font-semibold" style={{ color: scoreColor(shownResult.fluency) }}>
-                {shownResult.fluency ?? "—"}
-              </span>
-            </span>
-            <span>
-              完整度{" "}
-              <span className="font-semibold" style={{ color: scoreColor(shownResult.integrity) }}>
-                {shownResult.integrity ?? "—"}
-              </span>
-            </span>
-            {shownResult.speed !== null && <span>语速 {Math.round(shownResult.speed)} 词/分</span>}
-          </div>
-          {shownResult.words.length > 0 && (
-            <div className="flex flex-wrap gap-1.5 justify-center">
-              {shownResult.words.map((w, i) => (
-                <span
-                  key={`${w.word}-${i}`}
-                  className="px-2 py-0.5 rounded-md text-xs font-medium border"
-                  style={{
-                    borderColor: scoreColor(w.score) + "60",
-                    background: scoreColor(w.score) + "18",
-                    color: scoreColor(w.score),
-                  }}
-                >
-                  {w.word}
-                  {w.score !== null && <span className="ml-1 opacity-70">{w.score}</span>}
-                </span>
-              ))}
-            </div>
-          )}
-        </div>
+      {/* 本次没录、但库里有历史分（设计 §3.6）：显示历史卡片，点开看详情。
+          ⚠️ 这张卡片与下面「本次评分」卡片互斥（一个 !shownResult、一个 shownResult），
+          所以任何时刻最多只有一张卡片 —— 不会出现两张分数卡叠在一起。 */}
+      {!shownResult && !modalOpen && sentence.pronunciation && (
+        <PronunciationCard
+          score={sentence.pronunciation.score}
+          accuracy={sentence.pronunciation.accuracy}
+          fluency={sentence.pronunciation.fluency}
+          integrity={sentence.pronunciation.integrity}
+          updatedAt={new Date(sentence.pronunciation.updatedAt)}
+          onClick={() => setModalOpen(true)}
+        />
+      )}
+
+      {/* 有本次评分时显示卡片；点击重开弹窗。
+          不传 updatedAt：这是本次刚录出来的分，"3 天前"那种相对时间只属于历史分。 */}
+      {shownResult && !modalOpen && (
+        <PronunciationCard
+          score={shownResult.score}
+          accuracy={shownResult.accuracy}
+          fluency={shownResult.fluency}
+          integrity={shownResult.integrity}
+          onClick={() => setModalOpen(true)}
+        />
+      )}
+
+      {/* 弹窗要传 recording：录音期间必须禁用「听发音 / 再试一次」，
+          否则参考音被麦克风采进去会评出假高分，而评分是覆盖式落库的。 */}
+      {modalOpen && shownResult && (
+        <PronunciationModal
+          words={shownResult.words}
+          result={shownResult}
+          previousScore={previousScore}
+          speaking={speaking}
+          evaluating={evaluating}
+          recording={recording}
+          onSpeak={handleTTS}
+          onRetry={handleRecord}
+          onClose={() => setModalOpen(false)}
+        />
+      )}
+
+      {modalOpen && !shownResult && sentence.pronunciation && (
+        <PronunciationModal
+          words={sentence.pronunciation.words}
+          result={sentence.pronunciation}
+          previousScore={null}
+          speaking={speaking}
+          evaluating={evaluating}
+          recording={recording}
+          onSpeak={handleTTS}
+          onRetry={handleRecord}
+          onClose={() => setModalOpen(false)}
+        />
       )}
     </div>
   )
