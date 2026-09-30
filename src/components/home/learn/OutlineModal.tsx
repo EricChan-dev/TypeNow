@@ -72,6 +72,14 @@ export function OutlineModal({ sentences, currentIndex, onClose, onJumpTo, revea
                   {revealed && i !== currentIndex && (
                     <span className="ml-2 text-[10px] text-emerald-400/50 font-medium">已完成</span>
                   )}
+                  {/* 跟读分：**有才显示**。没有就不显示任何占位 —— 不显示 0 分、
+                      也不显示「—」（设计 §3.5）。已完成标记只由练习进度决定，
+                      跟读有没有分都不影响它。 */}
+                  {s.pronunciation && (
+                    <span className="ml-2 whitespace-nowrap text-[10px] font-medium text-accent/70 tabular-nums">
+                      跟读 {s.pronunciation.score}
+                    </span>
+                  )}
                 </button>
                 <button
                   onClick={() => { onJumpTo(i); onClose() }}
