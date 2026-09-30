@@ -396,6 +396,37 @@ export const reviewQueue = mysqlTable(
   ]
 )
 
+// ─── 跟读评分（有道语音评测）───────────────────────────────────────────────────
+//
+// 一句话一行：UNIQUE(user_id, sentence_id)，重录覆盖（产品决定只留最新一次）。
+// 与练习进度**完全无关** —— 不写 practice_records / review_queue / 课程进度。
+export const pronunciationScores = mysqlTable(
+  "pronunciation_scores",
+  {
+    id: varchar("id", { length: 36 }).primaryKey().default(sql`(UUID())`),
+    userId: varchar("user_id", { length: 36 }).notNull(),
+    sentenceId: varchar("sentence_id", { length: 36 }).notNull(),
+    score: int("score").notNull(),
+    accuracy: int("accuracy").notNull(),
+    fluency: int("fluency").notNull(),
+    integrity: int("integrity").notNull(),
+    // 有道可能不给语速
+    speed: decimal("speed", { precision: 6, scale: 2 }),
+    // 形状固定为 Array<{ word: string; score: number | null }>。
+    // score 必须允许 null —— 有道的字段可能缺失，用 0 兜底会把「没给分」显示成「0 分」。
+    words: json("words"),
+    comment: varchar("comment", { length: 500 }),
+    createdAt: datetime("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+    updatedAt: datetime("updated_at")
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP`),
+  },
+  (t) => [
+    uniqueIndex("uk_pronunciation_user_sentence").on(t.userId, t.sentenceId),
+    index("idx_pronunciation_user_updated").on(t.userId, t.updatedAt),
+  ]
+)
+
 // ─── Strengthen Sessions ──────────────────────────────────────────────────────
 export const strengthenSessions = mysqlTable("strengthen_sessions", {
   id: varchar("id", { length: 36 }).primaryKey().default(sql`(UUID())`),
