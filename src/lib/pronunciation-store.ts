@@ -25,7 +25,11 @@ export interface StoredPronunciation {
  * 这里不是"防御性编程"，是**这个函数唯一能挡住静默丢行的地方**（见下方说明）。
  */
 const COMMENT_MAX = 500
-const SENTENCE_ID_MAX = 36
+/**
+ * sentence_id 的列宽（VARCHAR(36)）。**这是拒绝阈值，不是截断宽度** ——
+ * 它是 UNIQUE(user_id, sentence_id) 的一部分，超长只能拒写，见写入处的说明。
+ */
+const SENTENCE_ID_MAX_LEN = 36
 /** DECIMAL(6,2)：6 位总精度里 2 位给小数，整数部分只剩 4 位 → 上限 9999.99。 */
 const SPEED_MAX = 9999.99
 
@@ -63,7 +67,7 @@ function toDecimalSpeed(speed: number | null): string | null {
  *
  * 代价是：**任何被 MySQL 拒绝的写入都会变成一条只有 console.error 的静默丢行**
  * （用户照样看到分数，库里却没有）。所以凡是"调用方可以影响、而列是定宽的"值，
- * 都必须在进 SQL 之前收敛 —— 见下面三个 clamp。
+ * 都必须在进 SQL 之前处理 —— 见下面的收敛与拒写。
  */
 export async function savePronunciationScore(params: {
   userId: string
@@ -75,7 +79,7 @@ export async function savePronunciationScore(params: {
   if (!db) return false
   const { userId, sentenceId, result, comment, now } = params
 
-  // ── 进 SQL 前按列宽收敛 ──────────────────────────────────────────────────
+  // ── 进 SQL 前按列宽收敛（键列除外，键列是拒写）────────────────────────────
   //
   // comment(VARCHAR(500)) / sentence_id(VARCHAR(36)) / speed(DECIMAL(6,2)) 都是
   // 定宽列。MySQL 8 默认 STRICT_TRANS_TABLES：超长或越界**不是截断，是拒绝整条
@@ -88,10 +92,33 @@ export async function savePronunciationScore(params: {
   // 里的"单词"，长度不受我们控制 —— 一个超长"单词"能把整行（分数、逐词分、
   // 历史评语）一起带走。所以边界挡在这里，而不是指望调用方每次都对。
   //
+  // 但处理手法要按字段语义分，不能一律截断：
+  //   · comment —— 散文，少几个字只是**降级**，截断可接受；
+  //   · speed   —— 越界存 null，而 null 的语义恰好就是"不知道语速"，也可接受；
+  //   · sentence_id —— **键列**，`UNIQUE(user_id, sentence_id)` 的一部分。
+  //     截断不是降级，是**悄悄把这一行改挂到另一个 key 上**：调用方拿 id A 来
+  //     写，库里却落在 A 的前 36 字符下；两个前 36 字符相同、其后分叉的不同句子
+  //     还会撞进同一行互相覆盖。把用户的分数记到别的句子头上，比这一行没写进去
+  //     **严格更坏**：丢行只是"没有数据"，改 key 是"错的数据被当成对的"。
+  //     所以超长一律拒写，绝不 slice。
+  //
   // 每个字段只留一个局部变量，`.values()` 与 `onDuplicateKeyUpdate({ set })`
   // 共用它：两处写的是同一行，值一旦不一致，重录（UPDATE 分支）就会与首次
   // 写入（INSERT 分支）落成不同的内容，而这种漂移只在"重录"时才现形。
-  const clampedSentenceId = sentenceId.slice(0, SENTENCE_ID_MAX)
+  // sentence_id 没有局部变量，因为它的"处理"就是不处理 —— 原样进 SQL。
+  //
+  // 注：路由目前只会传客户端给的真实 sentence id（Task 6 才开始传），所以这条
+  // 拒写分支不该出现在实际流量里；它挡的是畸形/恶意值，不是常规路径。
+  if (sentenceId.length > SENTENCE_ID_MAX_LEN) {
+    // 必须留下能定位问题的信息：长度说明"为什么被拒"，前缀说明"是哪个值"。
+    // 前缀要截断 —— 畸形值可能有几 MB，整条打进日志会把真正有用的上下文冲掉。
+    console.error(
+      `[pronunciation-store] sentence_id 超长被拒（长度 ${sentenceId.length} > 列宽 ${SENTENCE_ID_MAX_LEN}），已放弃写入:`,
+      sentenceId.slice(0, 64),
+    )
+    return false
+  }
+
   const clampedComment = comment.slice(0, COMMENT_MAX)
   const clampedSpeed = toDecimalSpeed(result.speed)
 
@@ -100,7 +127,7 @@ export async function savePronunciationScore(params: {
       .insert(pronunciationScores)
       .values({
         userId,
-        sentenceId: clampedSentenceId,
+        sentenceId,
         score: result.score,
         accuracy: result.accuracy,
         fluency: result.fluency,
