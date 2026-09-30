@@ -67,6 +67,34 @@ export interface EvaluateResult {
   comment?: string | null
 }
 
+/**
+ * 低分阈值，低于它就是"读得不好"。
+ *
+ * 名字不带 "word"：`scoreColor` 的琥珀段（既用于词级分，也用于维度与总分）
+ * 与弹窗里的逐词高亮共用这一个值。两处曾经各自硬编码 `60`，只改一处就会出现
+ * 「数字是琥珀色、但没有底色」这种自相矛盾的画面 —— 同一条规则分裂成两种表现。
+ */
+export const LOW_SCORE_THRESHOLD = 60
+
+/**
+ * 分数→颜色。
+ *
+ * `null` 走中性灰：**字段缺失不是读错了**，绝不能显示或着色成"0 分红"。
+ * 这与上面 `score` / `words[].score` 保留 `null` 是同一个契约的两端 ——
+ * 数据层不兜底成 0，展示层也就不该把它画成红。
+ *
+ * 放在这里而不是组件里，是因为它承载了本模块最重要的那条规则：色表一旦
+ * 在组件间各抄一份就会各自漂移（对比 `lib/pos-color` 的由来，正是同一个
+ * 词性色表被抄了两份之后开始不一致）。色值与阈值目前是**既定**的，改动
+ * 属于单独的配色决策，不要顺手调。
+ */
+export function scoreColor(score: number | null): string {
+  if (score === null) return "#94a3b8"
+  if (score >= 80) return "#22c55e"
+  if (score >= LOW_SCORE_THRESHOLD) return "#f59e0b"
+  return "#ef4444"
+}
+
 /** 有道响应里我们读取的字段（只声明用到的，避免把整个响应结构化）。 */
 interface YoudaoRaw {
   errorCode?: string | number

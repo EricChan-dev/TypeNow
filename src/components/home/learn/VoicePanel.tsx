@@ -18,6 +18,7 @@ import {
 } from "@/lib/pcm-wav"
 import {
   describeEvaluateFailure,
+  scoreColor,
   type EvaluateFailureView,
   type EvaluateResult,
 } from "@/lib/pronunciation"
@@ -155,13 +156,6 @@ async function toWavBase64(blob: Blob): Promise<string> {
   } finally {
     void ctx.close()
   }
-}
-
-function scoreColor(score: number | null): string {
-  if (score === null) return "#94a3b8" // 无数据：中性灰，绝不显示成"0 分红"
-  if (score >= 80) return "#22c55e"
-  if (score >= 60) return "#f59e0b"
-  return "#ef4444"
 }
 
 export function VoicePanel({ english }: { english: string }) {
