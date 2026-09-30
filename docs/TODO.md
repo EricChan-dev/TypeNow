@@ -78,8 +78,39 @@
 物料审核记录、退款冲正记录），且 `distribution-compliance.md` 建议正式推广前
 拿三份协议去给熟悉社交电商的执业律师审一遍。
 
-### [ ] 0-C. 教材版本回填的两个人工判断项（不影响上线）
+**逐项核查结论见 [compliance-archive-audit.md](compliance-archive-audit.md)（2026-10-01）**：
+五类留档物里 **1 类完全不存在**（推广物料审核记录）、**4 类数据在但拿不出来**
+（缺导出或聚合）。另发现一处**协议与实现不一致**：协议已如实承诺"依法代扣代缴、
+并在结算记录中体现税前/税额/税后金额"，但提现实现是**佣金全额转出、无任何扣缴**——
+这比不写更麻烦，建议在正式推广前二选一（实现扣缴，或先收回协议口径）。
 
+### [x] 0-B2. 推广期开工准备（2026-10-01 已完成代码部分）
+
+产品确认进入推广期。落地的三块能力，操作手册见
+[promotion-launch-checklist.md](promotion-launch-checklist.md)：
+
+| 块 | 内容 | 位置 |
+|---|---|---|
+| 合规留档自查 | 五类留档物逐项核查，见 [compliance-archive-audit.md](compliance-archive-audit.md) | 文档 |
+| 推广中心缺口 | 提现进度引导（还差 ¥XX）· 待跟进邀请记录 · 推广素材库（可改写骨架 + 禁用词 + 平台红线） | `src/lib/partner-rules.ts`、`src/lib/promotion-materials.ts`、`src/app/api/partner/invites/route.ts`、`src/app/home/partner/PartnerDashboard.tsx` |
+| 漏斗基线 | `funnel` 接口与数据分析页新增**按来源拆解**（注册渠道 / 推荐关系 / UTM 来源），三个维度共用同一同期群，并暴露一致性校验 | `src/app/api/admin/analytics/funnel/route.ts`、`src/app/admin/analytics/page.tsx` |
+
+顺带修掉的两处：
+
+- `partner/dashboard` 的 `paidCount` 原先**没有排掉 `clawed_back`** ——
+  退款后仍算已付费，与新增的邀请列表口径对不上（两个数不一致会让推广员怀疑平台克扣）
+- 归因窗口 / 冷静期 / 佣金比例 / 提现门槛**原先各写一份字面量**，
+  现在统一到 `src/lib/partner-rules.ts`：UI 要显示倒计时，与佣金链路不同源就会出现
+  "看板说还有 30 天但佣金不触发"。有源码断言钉住
+
+**仍未做（需要人工）**：
+
+- [ ] 0-B 的律师审阅与留档物补齐（含代扣代缴的取舍）
+- [ ] `payment_orders` 补 `refunded_at` / `refund_amount` / `out_refund_no`
+      —— 退款的独立留痕，见 audit 文档第 5 项（需一次人工 DDL）
+- [ ] 佣金流水与层级关系的**导出**能力（合规留档物 #2 #3，也是税务季度报送的基础）
+
+### [ ] 0-C. 教材版本回填的两个人工判断项（不影响上线）
 `content-textbook-version.json` 里有两份清单，脚本**刻意没有自动改库**：
 
 - **11 门课没有年级**（`sub_category_key IS NULL`，现挂在教材同步页的「未分级」分组）。
