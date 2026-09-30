@@ -6,7 +6,6 @@ import { sendNotificationSms } from "@/lib/aliyun-sms"
 import { isWeChatOAConfigured, sendOACustomerMessage, sendOATemplateMessage } from "@/lib/wechat"
 import {
   FREQUENCY,
-  SMS_OPT_OUT_SUFFIX,
   buildMessage,
   decideSend,
   isOptedOut,
@@ -172,11 +171,14 @@ async function deliver(
       // ⚠️ 退订提示（SMS_OPT_OUT_SUFFIX）必须**烧在申请短信模板时的模板正文里**，
       //    不能由这里拼接 —— 模板短信的参数是固定的，多塞一段文字会直接发送失败。
       //    这里只是把它作为参数传过去，前提是模板里已经声明了这个占位符。
+      // 参数名必须与阿里云短信模板里的 ${变量} 完全一致。
+      // ⚠️ **不要传 optout**：退订字样要么写死在模板正文里（模板审核时定），
+      // 要么根本不写 —— 由代码传一个「回T退订」进去是错的，
+      // 因为**我们没有短信入站回复的处理能力**，承诺了也兑现不了（见隐私政策 §2.1）。
       const r = await sendNotificationSms(target.phone!, templateCode, {
         tier: input.tierLabel,
         date: input.expiry ? input.expiry.toISOString().slice(0, 10) : "",
         stats: `已练习${input.practicedSentences}句`,
-        optout: SMS_OPT_OUT_SUFFIX,
       })
       return r.ok
         ? { ok: true }

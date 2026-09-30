@@ -16,6 +16,7 @@ import { signupFields } from "@/lib/signup-source"
 import { recordServerEvent } from "@/lib/analytics-server"
 import { trialGrantFields } from "@/lib/trial"
 import { INVITE_REGISTER_DAYS } from "@/lib/invite-rules"
+import { optInNotifications, optOutNotifications } from "@/lib/notify"
 
 async function resolveReferredBy(refCode: string | null): Promise<string | null> {
   if (!refCode || !db) return null
@@ -166,6 +167,65 @@ export async function POST(request: NextRequest) {
   return new NextResponse("success")
 }
 
+/**
+ * 退订指令的精确匹配表。
+ *
+ * 刻意用**精确匹配**而不是 includes：中文里「不想退订」「怎么退订」都含「退订」，
+ * 用 includes 会把它们误判成退订请求 —— 那是把用户的选择权搞反，比不实现更糟。
+ * 所以只认短指令，并容忍首尾空白与标点。
+ */
+const OPT_OUT_COMMANDS = ["退订", "退订通知", "取消订阅", "不再接收", "td", "TD", "T"]
+const OPT_IN_COMMANDS = ["订阅", "开启通知", "恢复通知", "接收通知"]
+
+/** 归一化：去掉空白与首尾标点，再小写英文比较。 */
+function normalizeCommand(raw: string): string {
+  return raw.replace(/\s+/g, "").replace(/^[，。！？、,.!?]+|[，。！？、,.!?]+$/g, "")
+}
+
+/**
+ * 处理用户在公众号里发来的文本指令。
+ *
+ * 只处理「恰好等于某个指令」的消息；其余文本一律不回复 ——
+ * 这个公众号不是客服机器人，对任意消息回话会让人以为有人工在值守。
+ * 找不到对应用户时也静默返回（比如只是关注了公众号但没注册）。
+ */
+async function handleTextCommand(openid: string, raw: string): Promise<void> {
+  const cmd = normalizeCommand(raw)
+  const isOptOut = OPT_OUT_COMMANDS.some((k) => cmd === k.toLowerCase() || cmd === k)
+  const isOptIn = OPT_IN_COMMANDS.some((k) => cmd === k)
+  if (!isOptOut && !isOptIn) return
+  if (!db) return
+
+  const [user] = await db
+    .select({ id: users.id, optedOutAt: users.notifyOptOutAt })
+    .from(users)
+    .where(eq(users.wechatOpenid, openid))
+    .limit(1)
+
+  if (!user) {
+    console.log("[OA Event] 退订指令来自未绑定账号的 openid:", maskId(openid))
+    return
+  }
+
+  if (isOptOut) {
+    await optOutNotifications(user.id)
+    console.log("[OA Event] 用户已退订服务通知:", maskId(openid))
+    await sendOACustomerMessage(
+      openid,
+      "已为你关闭服务通知。会员到期、学习提醒等消息不会再发送。\n" +
+        "账号与会员权益不受影响；如需重新开启，可在「设置 → 消息通知」里打开，或回复「订阅」。",
+    )
+  } else {
+    await optInNotifications(user.id)
+    console.log("[OA Event] 用户已重新开启服务通知:", maskId(openid))
+    await sendOACustomerMessage(
+      openid,
+      "已为你重新开启服务通知。你会收到会员到期与学习提醒（不含促销内容）。\n" +
+        "如需关闭，可在「设置 → 消息通知」里操作，或回复「退订」。",
+    )
+  }
+}
+
 async function handleEvent(event: Record<string, string>): Promise<void> {
   const openid = event.FromUserName
   const eventType = event.Event
@@ -173,6 +233,19 @@ async function handleEvent(event: Record<string, string>): Promise<void> {
 
   if (!openid) {
     console.warn("[OA Event] Event without FromUserName")
+    return
+  }
+
+  // ── 用户发来的文本消息：退订 / 重新开启 ────────────────────────────────────
+  //
+  // 隐私政策 §2.1 与用户协议 §9 白纸黑字写了「在公众号内发送『退订』」可以关闭
+  // 服务通知 —— 这里就是那句话的实现。**承诺了就必须能兑现**：没有这个分支，
+  // 用户发「退订」会石沉大海，而政策里明明写着可以。
+  //
+  // 确认回执走**客服消息**：不需要模板审核，而且用户刚发过消息，
+  // 48 小时窗口一定是开的（见 §11.2 的渠道能力表）。
+  if (event.MsgType === "text") {
+    await handleTextCommand(openid, event.Content ?? "")
     return
   }
 

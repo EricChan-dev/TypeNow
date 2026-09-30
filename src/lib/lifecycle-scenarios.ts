@@ -338,6 +338,30 @@ export function decideSend(params: {
 
 // ─── 文案（§11.4：模板消息只陈述事实）────────────────────────────────────────
 
+/**
+ * ⚠️ **`templateData` 的键名必须与微信公众号后台申请到的模板字段完全一致**，
+ * 否则发送会因参数不匹配被驳回（错误码 40037 一类），而且是在**用户该收到提醒的那一刻**
+ * 才发现 —— 模板申请本身要等 1~3 天，字段名写错等于白等一轮。
+ *
+ * 所以这里一律用微信的惯例字段名：`first` / `keyword1` / `keyword2` / `keyword3` / `remark`。
+ * 申请模板时按这些名字去对（见 docs/business-model.md §11.6 的申请清单）：
+ *
+ *     到期类模板（3 个关键词 + 首尾）：
+ *       first    你的{会员类型}将于 {到期日} 到期
+ *       keyword1 会员类型
+ *       keyword2 到期时间
+ *       keyword3 学习记录（已练习 N 句 · 待复习错句 M 个）
+ *       remark   点击查看你的学习报告
+ *
+ *     注册未领体验模板：
+ *       first    你已注册 TypeNow
+ *       keyword1 体验会员未领取
+ *       remark   点击领取体验会员
+ *
+ * 同一个 `templateIdEnv` 被多个场景复用时（如月卡的前 3 天与前 1 天），
+ * 它们的字段集合必须相同 —— 有一条单测守着这件事。
+ */
+
 /** 构建消息时需要的用户上下文。数字都来自调用方（真实查询结果），不在这里编。 */
 export interface MessageContext {
   scenario: LifecycleScenario
@@ -369,6 +393,30 @@ function formatExpiry(d: Date): string {
 }
 
 /**
+ * 到期类模板的数据。
+ *
+ * ⚠️ `first` 的时态**必须跟着场景走**：「即将到期」用"将于"、「已到期」用"已于"。
+ * 给一个会员已经过期的用户发"你的年度会员将于 9月30日 到期"是明显的错话 ——
+ * 而这句话恰好出现在通知的第一行。
+ */
+function expiryTemplateData(
+  tierLabel: string,
+  expiryStr: string,
+  stats: string,
+  alreadyExpired: boolean,
+): Record<string, string> {
+  return {
+    first: alreadyExpired
+      ? `你的${tierLabel}已于 ${expiryStr} 到期`
+      : `你的${tierLabel}将于 ${expiryStr} 到期`,
+    keyword1: tierLabel,
+    keyword2: expiryStr,
+    keyword3: stats,
+    remark: "点击查看你的学习报告",
+  }
+}
+
+/**
  * 生成消息内容。
  *
  * ⚠️ **只能写服务事实**，不要出现「优惠」「立减」「限时」「最后机会」等营销词：
@@ -392,12 +440,7 @@ export function buildMessage(ctx: MessageContext): BuiltMessage {
           `你的${tierLabel}将于 ${expiryStr} 到期。\n` +
           `学习记录：${stats}\n` +
           `到期后复习队列与历史记录会保留，但需要会员才能继续练习完整课程。`,
-        templateData: {
-          tier: tierLabel,
-          expire_date: expiryStr,
-          stats,
-          remark: "点击查看你的学习报告",
-        },
+        templateData: expiryTemplateData(tierLabel, expiryStr, stats, false),
       }
 
     case "trial_expired_1d":
@@ -407,12 +450,7 @@ export function buildMessage(ctx: MessageContext): BuiltMessage {
           `你的${tierLabel}已于 ${expiryStr} 到期。\n` +
           `学习记录：${stats}\n` +
           `记录都还在。继续练习可以随时开通会员。`,
-        templateData: {
-          tier: tierLabel,
-          expire_date: expiryStr,
-          stats,
-          remark: "点击查看你的学习报告",
-        },
+        templateData: expiryTemplateData(tierLabel, expiryStr, stats, true),
       }
 
     case "monthly_expiring_3d":
@@ -425,12 +463,7 @@ export function buildMessage(ctx: MessageContext): BuiltMessage {
           `你的${tierLabel}将于 ${expiryStr} 到期。\n` +
           `学习记录：${stats}\n` +
           `到期后需要续费才能继续练习完整课程。`,
-        templateData: {
-          tier: tierLabel,
-          expire_date: expiryStr,
-          stats,
-          remark: "点击查看你的学习报告",
-        },
+        templateData: expiryTemplateData(tierLabel, expiryStr, stats, false),
       }
 
     case "yearly_expired_1d":
@@ -440,12 +473,7 @@ export function buildMessage(ctx: MessageContext): BuiltMessage {
           `你的${tierLabel}已于 ${expiryStr} 到期。\n` +
           `学习记录：${stats}\n` +
           `记录都还在。继续练习可以随时续费。`,
-        templateData: {
-          tier: tierLabel,
-          expire_date: expiryStr,
-          stats,
-          remark: "点击查看你的学习报告",
-        },
+        templateData: expiryTemplateData(tierLabel, expiryStr, stats, true),
       }
 
     case "trial_claimed_no_practice":
@@ -466,6 +494,8 @@ export function buildMessage(ctx: MessageContext): BuiltMessage {
           `你已注册 TypeNow，还有一份${"体验会员"}未领取。\n` +
           `领取后可以练习完整课程，并生成学习记录与错句复习队列。`,
         templateData: {
+          first: "你已注册 TypeNow",
+          keyword1: "体验会员未领取",
           remark: "点击领取体验会员",
         },
       }

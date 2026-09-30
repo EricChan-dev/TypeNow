@@ -76,9 +76,10 @@ export default function PrivacyPage() {
         <p className="mt-3">
           <strong>如何退订：</strong>你可以随时在
           <Link href="/home/settings" className="text-[#1E40AF] hover:underline mx-0.5">
-            「设置」
+            「设置 → 消息通知」
           </Link>
-          中关闭服务通知，或回复短信中的退订指令、在公众号内发送「退订」。
+          中关闭，或<strong>在公众号内发送「退订」</strong>。
+          两个入口都会立即生效，并给你一条确认回执。
           退订后我们不会再向你发送上述通知，但<strong>不影响账号与已验证的会员权益</strong>，
           也不会影响你继续使用本服务。
         </p>

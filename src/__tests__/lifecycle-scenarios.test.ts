@@ -333,13 +333,14 @@ describe("buildMessage · 文案", () => {
     const msg = buildMessage({ scenario: findScenario("trial_expiring_24h")!, ...ctx })
     expect(msg.body).toContain("47")
     expect(msg.body).toContain("23")
-    expect(msg.templateData.stats).toContain("47")
+    // 键名是微信模板的惯例字段名（keyword3 = 学习记录）
+    expect(msg.templateData.keyword3).toContain("47")
   })
 
   it("到期类文案带上到期日期，且是上海日历日", () => {
     const msg = buildMessage({ scenario: findScenario("yearly_expiring_1d")!, ...ctx })
     expect(msg.body).toContain("2026-09-30")
-    expect(msg.templateData.expire_date).toBe("2026-09-30")
+    expect(msg.templateData.keyword2).toBe("2026-09-30")
   })
 
   it("模板变量键在同类模板之间保持一致（同一个模板 ID 被多个场景复用）", () => {
@@ -348,6 +349,42 @@ describe("buildMessage · 文案", () => {
     const a = buildMessage({ scenario: findScenario("monthly_expiring_3d")!, ...ctx })
     const b = buildMessage({ scenario: findScenario("monthly_expiring_1d")!, ...ctx })
     expect(Object.keys(a.templateData).sort()).toEqual(Object.keys(b.templateData).sort())
+  })
+
+  it("★ 到期类文案的时态必须跟着场景走（已到期不能说「将于」）", () => {
+    // 「会员已过期」的场景里第一行写"你的年度会员将于 9月30日 到期"是明显的错话，
+    // 而它正好在通知最显眼的位置。到期类模板共用同一个模板 ID，
+    // 所以时态差异只能靠 first 字段的内容表达 —— 这里守住它。
+    const expiredKeys = ["trial_expired_1d", "yearly_expired_1d"]
+    for (const scenario of LIFECYCLE_SCENARIOS) {
+      if (!scenario.expiryKind) continue
+      const msg = buildMessage({ scenario, ...ctx })
+      const first = msg.templateData.first ?? ""
+      if (expiredKeys.includes(scenario.key)) {
+        expect(first, `${scenario.key} 应用「已于」`).toContain("已于")
+        expect(first, `${scenario.key} 不该出现「将于」`).not.toContain("将于")
+      } else {
+        expect(first, `${scenario.key} 应用「将于」`).toContain("将于")
+        expect(first, `${scenario.key} 不该出现「已于」`).not.toContain("已于")
+      }
+    }
+  })
+
+  it("★ 模板字段名必须是微信惯例（first/keyword1..N/remark），不能自造", () => {
+    // 字段名与申请到的模板不一致 → 发送会在**用户该收到提醒的那一刻**被驳回，
+    // 而模板申请本身要等 1~3 天，写错等于白等一轮。
+    const allowed = /^(first|keyword\d+|remark)$/
+    for (const scenario of LIFECYCLE_SCENARIOS) {
+      const msg = buildMessage({ scenario, ...ctx })
+      for (const key of Object.keys(msg.templateData)) {
+        expect(key, `${scenario.key} 的模板字段名 "${key}" 不是微信惯例名`).toMatch(allowed)
+      }
+      // 到期类必须有 first + remark（首尾是模板消息的固定结构）
+      if (scenario.expiryKind) {
+        expect(Object.keys(msg.templateData), `${scenario.key} 缺 first`).toContain("first")
+        expect(Object.keys(msg.templateData), `${scenario.key} 缺 remark`).toContain("remark")
+      }
+    }
   })
 
   it("客服消息类文案不带模板变量（客服消息发的是纯文本）", () => {
