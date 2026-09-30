@@ -4,11 +4,13 @@ import { and, desc, eq, gte, isNull, notInArray, sql, type SQL } from "drizzle-o
 import { affectedRows } from "@/lib/db/affected-rows"
 import { sendNotificationSms } from "@/lib/aliyun-sms"
 import { isWeChatOAConfigured, sendOACustomerMessage, sendOATemplateMessage } from "@/lib/wechat"
+import { toShanghaiDateStr } from "@/lib/practice-stats"
 import {
   FREQUENCY,
   buildMessage,
   decideSend,
   isOptedOut,
+  practiceSummary,
   type BuiltMessage,
   type LifecycleChannel,
   type LifecycleScenario,
@@ -168,17 +170,21 @@ async function deliver(
 
     case "sms": {
       const templateCode = process.env.ALIYUN_SMS_NOTIFY_TEMPLATE_CODE ?? ""
-      // ⚠️ 退订提示（SMS_OPT_OUT_SUFFIX）必须**烧在申请短信模板时的模板正文里**，
-      //    不能由这里拼接 —— 模板短信的参数是固定的，多塞一段文字会直接发送失败。
-      //    这里只是把它作为参数传过去，前提是模板里已经声明了这个占位符。
-      // 参数名必须与阿里云短信模板里的 ${变量} 完全一致。
-      // ⚠️ **不要传 optout**：退订字样要么写死在模板正文里（模板审核时定），
-      // 要么根本不写 —— 由代码传一个「回T退订」进去是错的，
-      // 因为**我们没有短信入站回复的处理能力**，承诺了也兑现不了（见隐私政策 §2.1）。
+      // 参数名（tier / date / stats）必须与阿里云短信模板里的 ${变量} 完全一致，
+      // 一个字母都不能差 —— 不一致会在**用户该收到提醒的那一刻**发送失败。
+      //
+      // ⚠️ 不传退订字样。两个原因：
+      //   ① 短信模板的参数是固定的，退订提示若要有，必须烧在模板正文里；
+      //   ② 我们**没有短信入站回复的处理能力**（阿里云不提供回复回调），
+      //      承诺"回T退订"却做不到，比不写更糟。退订入口只有设置页与公众号指令。
       const r = await sendNotificationSms(target.phone!, templateCode, {
         tier: input.tierLabel,
-        date: input.expiry ? input.expiry.toISOString().slice(0, 10) : "",
-        stats: `已练习${input.practicedSentences}句`,
+        // ⚠️ 必须用上海日历日，不能用 toISOString().slice(0,10)（那是 UTC）：
+        //    到期时刻若落在上海时间 00:00~08:00，UTC 会退到前一天，于是
+        //    **同一次到期，微信说 10-01、短信说 09-30**，用户看到两个日期。
+        date: input.expiry ? toShanghaiDateStr(input.expiry) : "",
+        // 与微信共用同一套文案逻辑，避免两个渠道对同一个人说不同的话
+        stats: practiceSummary(input.practicedSentences, input.pendingReview, "sms"),
       })
       return r.ok
         ? { ok: true }

@@ -427,10 +427,34 @@ function expiryTemplateData(
  * 模板消息支持变量，带个性化数字的打开率远高于通用文案，而且它属于"服务事实"，
  * 合规与转化两头都对（§11.4）。
  */
+/**
+ * 学习记录的摘要文案。微信与短信共用，只在排版上区分。
+ *
+ * ⚠️ **练了 0 句时不能说"已练习 0 句"**。这个分支不是凑数的：
+ * 「领了体验会员但一次都没练」正是 §11.1 列为 P1 的那批人，流失率最高，
+ * 而这句话是他们收到的**唯一一句关于他们自己的话** —— 既没有信息量，
+ * 读起来又像指责（"你什么都没做"）。改成中性的"尚未开始练习"。
+ *
+ * 短信里不加空格：一条短信按 70 字计费，空格也是钱，而且中文里
+ * "已练习47句"比"已练习 47 句"更自然。
+ */
+export function practiceSummary(
+  practiced: number,
+  pending: number,
+  style: "wechat" | "sms",
+): string {
+  if (practiced <= 0) return "尚未开始练习"
+  if (style === "sms") return `已练习${practiced}句`
+  // 待复习为 0 时不要再写"待复习错句 0 个" —— 那是一句没有内容的填充
+  return pending > 0
+    ? `已练习 ${practiced} 句 · 待复习错句 ${pending} 个`
+    : `已练习 ${practiced} 句`
+}
+
 export function buildMessage(ctx: MessageContext): BuiltMessage {
   const { scenario, practicedSentences, pendingReview, tierLabel } = ctx
   const expiryStr = ctx.expiry ? formatExpiry(ctx.expiry) : ""
-  const stats = `已练习 ${practicedSentences} 句 · 待复习错句 ${pendingReview} 个`
+  const stats = practiceSummary(practicedSentences, pendingReview, "wechat")
 
   switch (scenario.key) {
     case "trial_expiring_24h":
