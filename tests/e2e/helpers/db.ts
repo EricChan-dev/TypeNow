@@ -74,6 +74,9 @@ const TABLES = [
   "post_likes",
   "posts",
   "practice_records",
+  // 跟读评分：不清会让「没有跟读分时字段不出现」这条用例被上一个用例留下的分数搞失败，
+  // 而失败信息指向接口，把人引去查错地方。
+  "pronunciation_scores",
   "review_queue",
   "sentence_knowledge",
   "sentences",
@@ -304,6 +307,7 @@ export async function seedFixtures(): Promise<void> {
 /** 某些用例需要"干净的用户"，避免夹具互相影响。 */
 const USER_ID_TABLES = [
   "practice_records",
+  "pronunciation_scores",
   "review_queue",
   "wordbook_items",
   "user_notes",
