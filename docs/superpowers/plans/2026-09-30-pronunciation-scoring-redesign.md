@@ -73,8 +73,12 @@
 -- 回滚：
 --   DROP TABLE IF EXISTS pronunciation_scores;
 
+-- ⚠️ `id` 必须写 DEFAULT (UUID())：Task 3 的 INSERT **不带 id**，靠库级默认值。
+--    漏了它，生产库（只由本文件建立）会在 STRICT 模式下报 1364，
+--    而 store 的约定是"写库失败只记日志并返回 false" → 用户每次都能看到分数、
+--    却永远存不进去，且 e2e 走 drizzle-kit push 生成的库（有默认值）一路全绿。
 CREATE TABLE IF NOT EXISTS `pronunciation_scores` (
-  `id`          VARCHAR(36)  NOT NULL,
+  `id`          VARCHAR(36)  NOT NULL DEFAULT (UUID()),
   `user_id`     VARCHAR(36)  NOT NULL,
   `sentence_id` VARCHAR(36)  NOT NULL,
   `score`       INT          NOT NULL,
