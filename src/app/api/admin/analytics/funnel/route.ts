@@ -11,7 +11,8 @@ import { requireAdmin } from "@/lib/admin-auth"
 import { activeSubscriptionSql } from "@/lib/subscription"
 import { FUNNEL_STEPS } from "@/lib/analytics-events"
 import { DEFAULT_RANGE, parseRangeQuery, resolveRange } from "@/lib/admin-range"
-import { eq, and, gte, lte, inArray, sql } from "drizzle-orm"
+import { signupChannelLabel } from "@/lib/signup-source"
+import { eq, and, gte, lte, inArray, sql, type SQL } from "drizzle-orm"
 
 /**
  * 首启漏斗报表（**同期群口径**，第一步例外）。
@@ -43,6 +44,8 @@ export async function GET(request: Request) {
   const auth = await requireAdmin()
   if (auth instanceof NextResponse) return auth
   if (!db) return NextResponse.json({ error: "DB not configured" }, { status: 500 })
+  // 闭包（下面的 breakdownBy）里会丢失 db 的非空收窄，所以先落到一个局部常量。
+  const database = db
 
   const { searchParams } = new URL(request.url)
   // 这里 always 有一个窗口（缺参数就按默认），与列表接口"不给就不过滤"不同
@@ -205,6 +208,94 @@ export async function GET(request: Request) {
 
   const byEvent = new Map(eventRows.map((r) => [r.eventType, r]))
 
+  // ── 按来源拆解（推广期新增）────────────────────────────────────────────────
+  //
+  // 上面那个漏斗只有一个总数，回答的是"整体转化如何"。但推广期真正要回答的是
+  // **"哪条渠道值得继续投"**：小红书那条笔记带来的人、抖音直播带来的人、
+  // 某个推广员带来的人，各自的转化率差多少。没有这个拆解，"沉淀推广经验"就
+  // 只是一句感觉，交不出数字。
+  //
+  // 三个维度：
+  //   · 注册渠道（users.signup_channel）—— 用户从哪个入口建的号
+  //   · 推荐关系（users.referred_by 是否为空）—— 推广体系到底有没有在起作用
+  //   · UTM 来源（signup_source.utm.utm_source）—— 具体是哪条内容/哪次投放
+  //
+  // ⚠️ 口径必须与上面的 cohort 总数**完全一致**。这里刻意复用同一个 cohortIds
+  // 子查询，而不是另写一遍时间范围过滤 —— 两处各写一份，迟早会漂移，
+  // 而报表里"分渠道加起来不等于总数"会让人先怀疑数据错了，而不是怀疑口径。
+  // 返回体里的 `breakdownConsistency` 把这个校验显式暴露出来。
+  const breakdownBy = async (expr: SQL<string | null>) => {
+    const rows = await database
+      .select({
+        key: expr,
+        registered: sql<number>`COUNT(DISTINCT ${users.id})`,
+        practiced: sql<number>`COUNT(DISTINCT ${practiceRecords.userId})`,
+        paid: sql<number>`COUNT(DISTINCT ${paymentOrders.userId})`,
+      })
+      .from(users)
+      // 两个 LEFT JOIN 会让行数相乘，所以每个指标都必须 COUNT(DISTINCT ...)；
+      // 用 COUNT(*) 会把"练过很多句"的人重复计数。
+      .leftJoin(practiceRecords, eq(practiceRecords.userId, users.id))
+      .leftJoin(
+        paymentOrders,
+        and(eq(paymentOrders.userId, users.id), eq(paymentOrders.status, "paid")),
+      )
+      .where(inArray(users.id, cohortIds))
+      .groupBy(expr)
+
+    return rows.map((r) => {
+      const registered = Number(r.registered ?? 0)
+      const practiced = Number(r.practiced ?? 0)
+      const paid = Number(r.paid ?? 0)
+      return {
+        key: r.key ?? "—",
+        registered,
+        practiced,
+        paid,
+        practiceRate: registered > 0 ? practiced / registered : null,
+        payRate: registered > 0 ? paid / registered : null,
+      }
+    })
+  }
+
+  const [channelRows, referralRows, utmRows] = await Promise.all([
+    breakdownBy(sql<string | null>`COALESCE(${users.signupChannel}, '(未知)')`),
+    breakdownBy(
+      sql<string | null>`CASE WHEN ${users.referredBy} IS NULL THEN 'organic' ELSE 'referred' END`,
+    ),
+    breakdownBy(
+      sql<string | null>`COALESCE(JSON_UNQUOTE(JSON_EXTRACT(${users.signupSource}, '$.utm.utm_source')), '(无来源参数)')`,
+    ),
+  ])
+
+  const sortByRegistered = <T extends { registered: number }>(rows: T[]) =>
+    [...rows].sort((a, b) => b.registered - a.registered)
+
+  const bySignupChannel = sortByRegistered(channelRows).map((r) => ({
+    ...r,
+    // 认不出的值原样返回（signupChannelLabel 的行为），不要吞掉历史数据
+    label: r.key === "(未知)" ? "未知" : signupChannelLabel(r.key),
+  }))
+
+  const REFERRAL_LABELS: Record<string, string> = {
+    organic: "自然注册（无推荐人）",
+    referred: "推广链接带来",
+  }
+  const byReferral = sortByRegistered(referralRows).map((r) => ({
+    ...r,
+    label: REFERRAL_LABELS[r.key] ?? r.key,
+  }))
+
+  const byUtmSource = sortByRegistered(utmRows).map((r) => ({
+    ...r,
+    label: r.key === "(无来源参数)" ? "无来源参数" : r.key,
+  }))
+
+  // 分渠道注册数之和应当等于 cohort 总数。不等于就说明口径漂移了，
+  // 如实暴露而不是藏起来（同 visitorShortfall 的处理方式）。
+  const registeredSum =
+    bySignupChannel.reduce((s, r) => s + r.registered, 0)
+
   const dbValues: Record<string, number> = {
     registered: cohortSize,
     practiced: practicedUsers,
@@ -290,6 +381,18 @@ export async function GET(request: Request) {
           `converted 的判据是"这个访客的事件里出现过 user_id"，注册与登录后的上报都会满足。`,
     },
     funnel,
+    // 按来源拆解：推广期"哪条渠道值得继续投"的答案在这里。
+    // 三个维度共用同一个 cohort，所以各自的和都应当等于 cohortSize。
+    breakdown: {
+      bySignupChannel,
+      byReferral,
+      byUtmSource,
+      consistency: {
+        registeredSum,
+        cohortSize,
+        consistent: registeredSum === cohortSize,
+      },
+    },
     domain: {
       registered: cohortSize,
       practicedUsers,

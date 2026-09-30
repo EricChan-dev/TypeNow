@@ -2,7 +2,7 @@
 
 import { useState } from "react"
 import Link from "next/link"
-import { Alert, Card, Col, Row, Space, Spin, Tag, Typography } from "antd"
+import { Alert, Card, Col, Row, Space, Spin, Table, Tag, Typography } from "antd"
 import { LineChartOutlined } from "@ant-design/icons"
 import EChart from "@/components/admin/EChart"
 import MetricCard from "@/components/admin/MetricCard"
@@ -38,6 +38,7 @@ interface FunnelData {
   cohortNote: string
   acquisition: Acquisition
   funnel: FunnelStep[]
+  breakdown: Breakdown
   domain: {
     registered: number
     practicedUsers: number
@@ -48,6 +49,31 @@ interface FunnelData {
     subscriptions: number
     visitors: number
   }
+}
+
+/** 按来源拆解的一行。分母统一是这一行的注册数 —— 见下方口径说明。 */
+interface BreakdownRow {
+  key: string
+  label: string
+  registered: number
+  practiced: number
+  paid: number
+  practiceRate: number | null
+  payRate: number | null
+}
+
+interface Breakdown {
+  bySignupChannel: BreakdownRow[]
+  byReferral: BreakdownRow[]
+  byUtmSource: BreakdownRow[]
+  /**
+   * 分渠道注册数之和与同期群总数的一致性。
+   *
+   * 不一致就说明两处口径漂移了（例如某一处改了时间过滤而另一处没改）。
+   * 这种情况**必须显式暴露**：报表里"分渠道加起来不等于总数"会让人先怀疑
+   * 数据错了，而不是怀疑口径不同，然后整页数字都不敢用。
+   */
+  consistency: { registeredSum: number; cohortSize: number; consistent: boolean }
 }
 
 function pct(v: number | null): string {
@@ -365,6 +391,58 @@ export default function AnalyticsPage() {
         />
       </Card>
 
+      {/* 按来源拆解 —— 推广期"哪条渠道值得继续投"的答案在这里。
+          上面的漏斗只有一个总数，回答"整体转化如何"；这一段才回答"该投哪里"。 */}
+      <Card title={`按来源拆解（${data.rangeLabel}）`} style={{ marginTop: 20 }}>
+        <Text type="secondary" style={{ fontSize: 12 }}>
+          三个维度用的是同一个同期群（都是「{data.rangeLabel}注册的 {data.cohortSize} 人」），
+          所以每一张表里的注册数之和都应当等于 {data.cohortSize}。
+          「练过率」「付费率」的分母都是本行的注册数，可以横向比。
+        </Text>
+
+        {!data.breakdown.consistency.consistent ? (
+          <Alert
+            style={{ marginTop: 12 }}
+            type="warning"
+            showIcon
+            message="分渠道注册数之和与同期群总数不一致，这一页的数字先不要用"
+            description={
+              `分渠道相加得到 ${data.breakdown.consistency.registeredSum} 人，` +
+              `而同期群总数是 ${data.breakdown.consistency.cohortSize} 人。` +
+              `这说明两处的时间范围过滤口径漂移了（见 funnel 路由的注释），` +
+              `需要先修代码再看数。`
+            }
+          />
+        ) : null}
+
+        {/* 注册渠道 ≠ 用户从哪个平台看到你。
+            前者是"从哪个入口建的号"（公众号扫码 / 手机号 / 开放平台），
+            后者要看 UTM 来源。不写清楚一定会被误读成"微信带来的人"。 */}
+        <Alert
+          style={{ marginTop: 12 }}
+          type="info"
+          showIcon
+          message="「注册渠道」是建号入口，不是流量来源"
+          description={
+            <>
+              注册渠道指的是用户**从哪个入口建的号**（公众号扫码 / 微信内授权 / 手机号…），
+              它天然偏向微信。想知道「从哪个平台看到你的」，要看下面的 <b>UTM 来源</b> ——
+              那才是小红书笔记、抖音视频带 utm_source 参数时的落点。
+              「推荐关系」看的是推广体系到底有没有在起作用。
+            </>
+          }
+        />
+
+        <BreakdownTable title="按注册渠道" rows={data.breakdown.bySignupChannel} />
+        <BreakdownTable title="按推荐关系（推广 vs 自然）" rows={data.breakdown.byReferral} />
+        <BreakdownTable title="按 UTM 来源" rows={data.breakdown.byUtmSource} />
+
+        <Text type="secondary" style={{ display: "block", marginTop: 12, fontSize: 12 }}>
+          「付费」与上方漏斗同口径：该渠道注册的人里，有多少人有过<b>已支付</b>订单。
+          推广期的最低可用基线就是这里的数字 —— 拿它去告诉推广员「发一条大概能带来多少人」。
+        </Text>
+      </Card>
+
       <Card size="small" style={{ marginTop: 20 }}>
         <Space>
           <LineChartOutlined />
@@ -374,6 +452,70 @@ export default function AnalyticsPage() {
           </Text>
         </Space>
       </Card>
+    </div>
+  )
+}
+
+/**
+ * 按来源拆解表。
+ *
+ * 存在的理由：上面那个漏斗只有一个总数，回答"整体转化如何"；
+ * 而推广期要回答的是**"哪条渠道值得继续投"**。没有这个拆解，
+ * "沉淀推广经验"就只是一句感觉，交不出数字。
+ *
+ * 分母统一是本行的注册数，所以「练过率」「付费率」两列可以直接横向比。
+ * 不提供"占全部注册的比例"——那会诱导人把不同渠道的行当成互斥的一份总量，
+ * 而它们本来就是互斥的（看 key 那一列）。
+ */
+function BreakdownTable({ title, rows }: { title: string; rows: BreakdownRow[] }) {
+  const columns = [
+    { title: "来源", dataIndex: "label", key: "label" },
+    {
+      title: "注册",
+      dataIndex: "registered",
+      key: "registered",
+      align: "right" as const,
+    },
+    {
+      title: "练过至少一句",
+      dataIndex: "practiced",
+      key: "practiced",
+      align: "right" as const,
+    },
+    {
+      title: "练过率",
+      key: "practiceRate",
+      align: "right" as const,
+      render: (_: unknown, r: BreakdownRow) => pct(r.practiceRate),
+    },
+    {
+      title: "付费",
+      dataIndex: "paid",
+      key: "paid",
+      align: "right" as const,
+    },
+    {
+      title: "付费率",
+      key: "payRate",
+      align: "right" as const,
+      render: (_: unknown, r: BreakdownRow) => (
+        <Text strong={r.paid > 0}>{pct(r.payRate)}</Text>
+      ),
+    },
+  ]
+
+  return (
+    <div style={{ marginTop: 16 }}>
+      <Text strong>{title}</Text>
+      <Table<BreakdownRow>
+        size="small"
+        style={{ marginTop: 8 }}
+        rowKey="key"
+        columns={columns}
+        dataSource={rows}
+        pagination={false}
+        locale={{ emptyText: "该时间范围内没有数据" }}
+      />
     </div>
   )
 }

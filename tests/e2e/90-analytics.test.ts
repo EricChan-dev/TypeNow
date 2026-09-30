@@ -15,7 +15,7 @@
 import { describe, it, expect, beforeEach } from "vitest"
 import { ApiClient } from "./helpers/api"
 import { FIXTURE, seedFixtures, q, one } from "./helpers/db"
-import { insertUser } from "./helpers/factories"
+import { insertPractice, insertUser } from "./helpers/factories"
 import { ALLOWED_EVENTS, FUNNEL_STEPS } from "@/lib/analytics-events"
 
 /** 造一个管理员账号（requireAdmin 认 role='admin'）。 */
@@ -60,6 +60,23 @@ interface FunnelResponse {
   events: Array<{ eventType: string; events: number; users: number }>
   daily: Array<{ date: string; events: number; users: number }>
   topPages: Array<{ page: string; count: number }>
+  cohortSize: number
+  breakdown: {
+    bySignupChannel: BreakdownRow[]
+    byReferral: BreakdownRow[]
+    byUtmSource: BreakdownRow[]
+    consistency: { registeredSum: number; cohortSize: number; consistent: boolean }
+  }
+}
+
+interface BreakdownRow {
+  key: string
+  label: string
+  registered: number
+  practiced: number
+  paid: number
+  practiceRate: number | null
+  payRate: number | null
 }
 
 /** 造一个合规的 visitor id（track 接口只认这个格式，见 lib/visitor.ts） */
@@ -199,8 +216,84 @@ describe("漏斗报表 /api/admin/analytics/funnel", () => {
     )
   })
 
-  it("行为步骤取自埋点：上报 course_open 后该步人数立刻反映出来", async () => {
-    const adminId = await makeAdmin()
+  /**
+   * 按来源拆解（2026-10-01 新增）
+   *
+   * 推广期真正要回答的是"哪条渠道值得继续投"，所以这一段把 cohort 按
+   * 注册渠道 / 推荐关系 / UTM 来源拆开。三条口径必须与 cohort 总数**完全一致** ——
+   * 报表里"分渠道加起来不等于总数"会让人先怀疑数据错了，然后整页数字都不敢用。
+   */
+  describe("按来源拆解", () => {
+    it("三个维度都在，且每个维度的注册数之和都等于 cohortSize", async () => {
+      const res = await getFunnel(ApiClient.asUser(await makeAdmin()))
+      expect(res.status).toBe(200)
+
+      const b = res.body.breakdown
+      expect(b).toBeTruthy()
+      for (const rows of [b.bySignupChannel, b.byReferral, b.byUtmSource]) {
+        const sum = rows.reduce((s, r) => s + r.registered, 0)
+        // 三个维度用的是同一个 cohort，所以各自的和都应当等于 cohortSize
+        expect(sum).toBe(res.body.cohortSize)
+      }
+
+      // 一致性校验必须自己也是对的：不一致时要能把两个数都报出来
+      expect(b.consistency.cohortSize).toBe(res.body.cohortSize)
+      expect(b.consistency.registeredSum).toBe(
+        b.bySignupChannel.reduce((s, r) => s + r.registered, 0),
+      )
+      expect(b.consistency.consistent).toBe(true)
+    })
+
+    it("按注册渠道：注册数之和等于库内用户数，标签是中文而不是原始枚举值", async () => {
+      const res = await getFunnel(ApiClient.asUser(await makeAdmin()))
+      const rows = res.body.breakdown.bySignupChannel
+
+      expect(rows.reduce((s, r) => s + r.registered, 0)).toBe(
+        await dbScalar("SELECT COUNT(*) AS n FROM users"),
+      )
+      // 夹具用户没有 signup_channel，归到「未知」而不是被悄悄丢掉
+      const unknown = rows.find((r) => r.key === "(未知)")
+      expect(unknown).toBeTruthy()
+      expect(unknown!.label).toBe("未知")
+    })
+
+    it("按推荐关系：有 referred_by 的人算进推广，没有的算自然", async () => {
+      const res = await getFunnel(ApiClient.asUser(await makeAdmin()))
+      const rows = res.body.breakdown.byReferral
+
+      const referred = rows.find((r) => r.key === "referred")
+      const organic = rows.find((r) => r.key === "organic")
+
+      // 夹具里 userInvitee / userBuyer 的 referred_by 都指向 userPartner
+      expect(referred?.registered).toBe(
+        await dbScalar("SELECT COUNT(*) AS n FROM users WHERE referred_by IS NOT NULL"),
+      )
+      expect(organic?.registered).toBe(
+        await dbScalar("SELECT COUNT(*) AS n FROM users WHERE referred_by IS NULL"),
+      )
+      // 两个分组的标签是给人看的
+      expect(referred?.label).toBe("推广链接带来")
+      expect(organic?.label).toBe("自然注册（无推荐人）")
+    })
+
+    it("练过 / 付费按人归属到各自渠道，而不是被 JOIN 重复计数", async () => {
+      const adminId = await makeAdmin()
+      // userInvitee 通过推广链接注册，练过一句 → referred 这行应当练过 1 人
+      await insertPractice(FIXTURE.userInvitee, FIXTURE.sentA1Plain)
+
+      const res = await getFunnel(ApiClient.asUser(adminId))
+      const referred = res.body.breakdown.byReferral.find((r) => r.key === "referred")
+
+      expect(referred).toBeTruthy()
+      expect(referred!.practiced).toBe(1)
+      // 两个 LEFT JOIN 会让行数相乘 —— 用 COUNT(*) 会把练习句数当成人数。
+      // 这里断言"练过的人数不超过注册的人数"，正是为了挡住那个写法。
+      expect(referred!.practiced).toBeLessThanOrEqual(referred!.registered)
+      expect(referred!.practiceRate).toBeCloseTo(1 / referred!.registered, 5)
+    })
+  })
+
+  it("行为步骤取自埋点：上报 course_open 后该步人数立刻反映出来", async () => {    const adminId = await makeAdmin()
 
     const before = await getFunnel(ApiClient.asUser(adminId))
     const beforeVal = before.body.funnel.find((s) => s.key === "course_open")?.value ?? 0
