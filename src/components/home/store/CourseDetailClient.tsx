@@ -149,7 +149,7 @@ export function CourseDetailClient({ courseId }: CourseDetailClientProps) {
         ) : (
           <div
             className="relative sm:w-[280px] lg:w-[320px] shrink-0 aspect-[16/10] sm:aspect-auto flex flex-col justify-between p-5 overflow-hidden select-none"
-            style={{ background: cover.theme.bg }}
+            style={{ background: cover.gradient }}
           >
             {/* Subtle texture dots */}
             <div

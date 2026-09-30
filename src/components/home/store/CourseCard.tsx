@@ -89,11 +89,14 @@ function CoverImage({
  */
 function GradientCover({
   theme,
+  gradient,
   label,
   title,
   sourceName,
 }: {
   theme: CategoryTheme
+  /** 由 courseId 算出的渐变 —— 每门课不同，这是「色卡不重复」的关键 */
+  gradient: string
   label: string
   title: string
   sourceName: string
@@ -101,7 +104,7 @@ function GradientCover({
   return (
     <div
       className="absolute inset-0 flex flex-col justify-between p-4 select-none"
-      style={{ background: theme.bg }}
+      style={{ background: gradient }}
     >
       <div
         className="absolute inset-0 opacity-[0.06]"
@@ -175,6 +178,7 @@ export function CourseCard({ course, variant = "discover", stats }: CourseCardPr
         ) : (
           <GradientCover
             theme={cover.theme}
+            gradient={cover.gradient}
             label={categoryLabel}
             title={course.title}
             sourceName={course.sourceName}

@@ -1,5 +1,5 @@
 /**
- * 断言「声明的变体张数」与「磁盘上的文件」**完全一致**。
+ * 断言「声明的变体张数」与「磁盘上的槽位图文件」**完全一致**（逐课图由 audit 脚本核对）。
  *
  * 这是整条生成流水线唯一的端到端检查，也是本方案里最容易静默出错的一环：
  * 映射表指向不存在的文件**不会有任何报错** —— 只是那批课的封面退回色块，
@@ -68,14 +68,34 @@ describe("public/images/courses · 声明的变体张数必须与文件一致", 
     expect(tooSmall, `体积异常（<1KB）：${tooSmall.join(", ")}`).toEqual([])
   })
 
-  it("磁盘上没有未声明的孤立文件（生成多了却没更新表）", () => {
+  /**
+   * 目录里现在有**两类**文件：
+   *   1. 槽位主题图 `<category>__<sub>__v<n>.webp` —— 由 COVER_VARIANT_COUNTS 静态声明；
+   *   2. 逐课专属图 `<课程id>.webp` —— 文件名就是课程 id，由数据库的 cover_url 声明。
+   *
+   * 第 2 类无法在这里对照（会读库），所以这条测试只把**非 UUID 文件名**当作应当被声明的，
+   * UUID 命名的文件交给 `scripts/audit-course-covers.ts` 去核对
+   * （它断言每个 cover_url 指向的文件都存在）。
+   */
+  const UUID_NAME = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.webp$/
+
+  it("磁盘上没有未声明的孤立槽位图（生成多了却没更新表）", () => {
     const declared = new Set(declaredFiles().flatMap((d) => d.files))
-    const actual = fs.readdirSync(COVER_DIR).filter((f) => f.endsWith(".webp"))
+    const actual = fs
+      .readdirSync(COVER_DIR)
+      .filter((f) => f.endsWith(".webp"))
+      .filter((f) => !UUID_NAME.test(f)) // 逐课图另行由 audit 脚本核对
     const orphans = actual.filter((f) => !declared.has(f))
     expect(
       orphans,
-      `存在但未被声明的文件（把它们补进 COVER_VARIANT_COUNTS 或删掉）：${orphans.join(", ")}`,
+      `存在但未被声明的槽位图（把它们补进 COVER_VARIANT_COUNTS 或删掉）：${orphans.join(", ")}`,
     ).toEqual([])
+  })
+
+  it("逐课专属图存在（教材同步那一批）", () => {
+    const perCourse = fs.readdirSync(COVER_DIR).filter((f) => UUID_NAME.test(f))
+    // 2026-09-30 首批逐课图 = 158 张（教材同步）。放宽为「至少 100」，避免以后补生成时误报。
+    expect(perCourse.length).toBeGreaterThan(100)
   })
 
   it("抽查多变体槽位：同槽位的各变体文件不应大小全同（防文件名串位）", () => {

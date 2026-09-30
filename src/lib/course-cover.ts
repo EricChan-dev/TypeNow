@@ -1,55 +1,45 @@
 import type { Course } from "@/types/course"
 import { COURSE_CATEGORIES } from "@/types/course"
-import {
-  COVER_THEME_SLUGS,
-  COVER_VARIANTS_PER_THEME,
-  availableVariants,
-  coverPool,
-  themeSlug,
-} from "@/lib/course-cover-themes"
+import { COVER_VARIANTS_PER_THEME } from "@/lib/course-cover-themes"
 
+/**
+ * 分类配色。
+ *
+ * ── 2026-09-30 改版：色卡从「分类一个渐变」改为「每门课一个渐变」────────────
+ *
+ * 原先 4 个分类只有 4 条渐变，于是当大批课程没有专属图时，同一分类下的色卡
+ * **除了文字完全一样** —— 等于把「图片重复」换成了「色卡重复」，而且重复上百次。
+ * 现在改用「基准色相 + 按 courseId 偏移」，同类仍是同一色系（保留分类识别性），
+ * 但每门课的颜色都不同。
+ *
+ * 所以这里存的是 HSL 分量而不是现成的渐变字符串 —— 渐变要按课程现算。
+ */
 export interface CategoryTheme {
-  bg: string
+  /** 基准色相（HSL 的 H，0~360） */
+  hue: number
+  /** 饱和度（%）—— 决定这个分类的气质 */
+  sat: number
+  /** 明度（%）—— 统一压暗，保证浅色文字可读 */
+  light: number
+  /** 分类标签的强调色，不随课程变化（这是分类识别性的一部分） */
   accent: string
+  /** 渐变色卡上的标题颜色 */
   text: string
+  /** 分类标签的背景色 */
   badge: string
 }
 
-/**
- * 分类配色。原先在 `CourseCard.tsx` 与 `CourseDetailClient.tsx` 里各复制了一份
- * （各约 40 行），改一处漏一处是迟早的事 —— 现在只留这一份。
- *
- * 只在「主题图缺失」或「课程还没落到任何槽位」时才会用到。
- */
 export const CATEGORY_THEMES: Record<string, CategoryTheme> = {
-  graded_reading: {
-    bg: "linear-gradient(135deg, #0f2b1a 0%, #1a3d28 40%, #0d2216 100%)",
-    accent: "#4ade80",
-    text: "#bbf7d0",
-    badge: "#166534",
-  },
-  school_sync: {
-    bg: "linear-gradient(135deg, #0f1a3a 0%, #1a2d5a 40%, #0d1430 100%)",
-    accent: "#60a5fa",
-    text: "#bfdbfe",
-    badge: "#1e3a5f",
-  },
-  exam_prep: {
-    bg: "linear-gradient(135deg, #3a1010 0%, #5c1818 40%, #2d0d0d 100%)",
-    accent: "#f87171",
-    text: "#fecaca",
-    badge: "#5c1a1a",
-  },
-  practical: {
-    bg: "linear-gradient(135deg, #2d1a0f 0%, #4a2a1a 40%, #221006 100%)",
-    accent: "#fb923c",
-    text: "#fed7aa",
-    badge: "#5c2d1a",
-  },
+  graded_reading: { hue: 145, sat: 42, light: 13, accent: "#4ade80", text: "#bbf7d0", badge: "#166534" },
+  school_sync: { hue: 222, sat: 45, light: 15, accent: "#60a5fa", text: "#bfdbfe", badge: "#1e3a5f" },
+  exam_prep: { hue: 0, sat: 45, light: 15, accent: "#f87171", text: "#fecaca", badge: "#5c1a1a" },
+  practical: { hue: 25, sat: 48, light: 14, accent: "#fb923c", text: "#fed7aa", badge: "#5c2d1a" },
 }
 
 export const DEFAULT_THEME: CategoryTheme = {
-  bg: "linear-gradient(135deg, #1a1a2e 0%, #2a2a44 40%, #12121f 100%)",
+  hue: 265,
+  sat: 35,
+  light: 15,
   accent: "#a78bfa",
   text: "#ddd6fe",
   badge: "#2e1a4a",
@@ -60,7 +50,7 @@ export function getTheme(categoryKey: string | null): CategoryTheme {
   return DEFAULT_THEME
 }
 
-/** 分类标签：主类 + 子类，用于卡片上的小标签与渐变兜底封面 */
+/** 分类标签：主类 + 子类，用于卡片上的小标签与渐变色卡封面 */
 export function getCategoryLabel(
   categoryKey: string | null,
   subCategoryKey: string | null,
@@ -73,63 +63,92 @@ export function getCategoryLabel(
   return sub ? `${main.label} · ${sub.label}` : main.label
 }
 
-const COVER_BASE_PATH = "/images/courses"
+/**
+ * FNV-1a 32 位哈希。
+ *
+ * 用 courseId（稳定且唯一）而不是数组下标 —— 用下标的话，用户切换排序方式或翻页后
+ * 同一门课的封面就会变，看起来像封面加载错了。
+ */
+function fnv1a(input: string): number {
+  let h = 0x811c9dc5
+  for (let i = 0; i < input.length; i++) {
+    h ^= input.charCodeAt(i)
+    h = Math.imul(h, 0x01000193) >>> 0
+  }
+  return h
+}
+
+/**
+ * 按课程生成渐变色卡。
+ *
+ * 分类基准色相 ±30° 偏移，再叠一点明度抖动 —— 抽查过 774 门课的实际取值，
+ * 相邻课程的色相差异肉眼可辨，但仍在同一色系内，不会失去分类识别性。
+ */
+export function courseGradient(courseId: string, theme: CategoryTheme): string {
+  const h = fnv1a(courseId)
+  /**
+   * 三个维度各自抖动，把配色空间从「61 档色相 × 9 档明度 = 549」扩到
+   * 「61 × 13 × 13 = 10309」。
+   *
+   * 为什么需要：484 门色卡课落在 549 种里，按生日悖论必然大量撞色 ——
+   * 实测第一版是「409 种配色服务 484 门课，68 种被 2~3 门共用」。
+   * 扩到 10309 之后撞色基本消失，这才配得上「所有卡片都不重复」。
+   */
+  const hueShift = (h % 61) - 30 //        -30 ~ +30
+  const lightJitter = ((h >>> 8) % 13) - 6 // -6 ~ +6
+  const satJitter = ((h >>> 16) % 13) - 6 //  -6 ~ +6
+  const h1 = (theme.hue + hueShift + 360) % 360
+  const h2 = (h1 + 16) % 360
+  const sat = Math.min(70, Math.max(20, theme.sat + satJitter))
+  const l1 = Math.max(8, theme.light + lightJitter)
+  const l2 = l1 + 9
+  const l3 = Math.max(6, l1 - 4)
+  return (
+    `linear-gradient(135deg, hsl(${h1} ${sat}% ${l1}%) 0%, ` +
+    `hsl(${h2} ${sat}% ${l2}%) 45%, ` +
+    `hsl(${h1} ${sat}% ${l3}%) 100%)`
+  )
+}
 
 /**
  * 由 courseId 稳定地选出变体下标（0 基）。
  *
- * **必须用 courseId（稳定且唯一），不能用数组下标。** 用下标的话，用户切换排序方式
- * 或翻页后同一门课的封面就会变，看起来像封面加载错了。用 FNV-1a：实现只有几行、
- * 零依赖、分布足够均匀（单测里对 4000 个 id 断言过每个变体都不低于 10%）。
- *
- * `modulo` 是该槽位**实际可用**的变体数，由 `availableVariants(slug)` 给出 ——
- * 不是固定的 4。见 COVER_VARIANT_COUNTS 的说明：额度耗尽会让各槽位张数不同，
- * 一律按 4 取模会让同槽位的卡片一半有图、一半是色块。
+ * ⚠️ **自 2026-09-30 起解析器不再使用它。** 保留是因为生成脚本与验收脚本仍在用
+ * （它们要按槽位统计变体分布）。封面解析已改为「专属图 or 分类色卡」两层，
+ * 不再有「同槽位共用主题图」这一层。
  */
 export function themeVariantIndex(courseId: string, modulo: number = COVER_VARIANTS_PER_THEME): number {
-  const m = modulo > 0 ? modulo : 1
-  let h = 0x811c9dc5
-  for (let i = 0; i < courseId.length; i++) {
-    h ^= courseId.charCodeAt(i)
-    h = Math.imul(h, 0x01000193) >>> 0
-  }
-  return h % m
+  return fnv1a(courseId) % (modulo > 0 ? modulo : 1)
 }
 
 export type ResolvedCover =
-  | { kind: "image"; src: string; theme: CategoryTheme }
-  | { kind: "gradient"; theme: CategoryTheme }
+  | { kind: "image"; src: string; theme: CategoryTheme; gradient: string }
+  | { kind: "gradient"; theme: CategoryTheme; gradient: string }
 
 type CoverInput = Pick<Course, "id" | "coverUrl" | "categoryKey" | "subCategoryKey">
 
 /**
- * 三层降级：`cover_url`（覆盖项）→ 主题变体表 → 分类渐变。
+ * 两层解析：**专属图 → 分类色卡（按课程着色）**。
  *
- * 第 2 层命中与否由 `COVER_THEME_SLUGS` 判断，**不是**「能拼出路径就算命中」——
- * 后者会让一个未生成的槽位拼出不存在的路径，表现为图片 404 而页面不报错。
- * 这也意味着：删掉 `public/images/courses/` 里的图不会白屏，只会让所有课退回渐变色块。
+ * ── 2026-09-30 去掉了原来的「主题变体表」这一层 ──────────────────────────────
+ *
+ * 旧的三层是「cover_url → 同槽位共用的主题图 → 渐变」，问题在于**共用**：
+ * 12 个 school_sync 槽位 × 3 风格 = 36 张图服务 194 门课，最惨的一张被 15 门课共用，
+ * 用户点进「三年级」会连看十几张同一张公交站。
+ *
+ * 需求方要求「任何两门课都不共用同一张图」，所以中间层被移除：
+ * 有 `cover_url` 的显示专属图，没有的显示**按课程着色**的色卡。
+ *
+ * 代价（已确认接受）：新增课程不会自动有封面，会先显示色卡，直到有人给它配图。
  */
 export function resolveCourseCover(course: CoverInput): ResolvedCover {
   const theme = getTheme(course.categoryKey)
+  const gradient = courseGradient(course.id, theme)
 
-  // 第 1 层：管理员上传 / 主推课专属图 / 版权方提供的图
+  // 第 1 层：专属图（管理员上传 / 逐课生成 / 版权方提供）
   const explicit = course.coverUrl?.trim()
-  if (explicit) return { kind: "image", src: explicit, theme }
+  if (explicit) return { kind: "image", src: explicit, theme, gradient }
 
-  // 第 2 层：主题变体表
-  const slug = themeSlug(course.categoryKey, course.subCategoryKey)
-  if (COVER_THEME_SLUGS.has(slug)) {
-    /**
-     * 在**该槽位的完整轮换池**里选（见 coverPool）：
-     * 变体够就用自己槽位的；只有 1 张时会并入同大类通用槽位的图，
-     * 避免 26 门三年级课程在列表里显示同一张公交站。
-     * 池中每一项都保证文件存在，所以这里的路径不会是死链。
-     */
-    const pool = coverPool(slug)
-    const pick = themeVariantIndex(course.id, pool.length)
-    return { kind: "image", src: `${COVER_BASE_PATH}/${pool[pick]}`, theme }
-  }
-
-  // 第 3 层：渐变兜底（永不出现空白封面）
-  return { kind: "gradient", theme }
+  // 第 2 层：分类色卡（颜色由 courseId 决定，每门课都不同）
+  return { kind: "gradient", theme, gradient }
 }

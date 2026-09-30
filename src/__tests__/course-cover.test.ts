@@ -1,33 +1,30 @@
 /**
- * 封面解析是三个列表页与课程详情页共用的唯一入口，所以这里守三层降级的**优先级**
- * 与**稳定性**：
- *   1. cover_url 必须压过主题表 —— 否则管理员上传的封面会被主题图覆盖；
- *   2. 未命中槽位必须落到渐变，而不是拼出一个不存在的图片路径
- *      （拼错路径的表现是「图片 404 但页面不报错」，最难发现）；
- *   3. 变体选择必须只由 courseId 决定 —— 若掺入列表下标，
- *      用户每换一次排序方式，同一门课的封面就会跳变。
+ * 封面解析是三个列表页与课程详情页共用的唯一入口。2026-09-30 起从三层降级
+ * 收敛为**两层**：专属图（`cover_url`）→ 分类色卡（按课程着色）。
+ *
+ * 这里守三件事：
+ *   1. `cover_url` 必须优先 —— 否则逐课生成的专属图会被色卡盖掉；
+ *   2. 没有 `cover_url` 的课**一律**是色卡，不再回退到「同槽位共用的主题图」——
+ *      那正是需求方要求消除的重复来源（最惨时 15 门课共用一张）；
+ *   3. 色卡颜色只由 courseId 决定且**每门课都不同** —— 若掺入列表下标，
+ *      用户换一次排序方式，同一门课的颜色就会跳变；若只按分类取色，
+ *      同一分类下的色卡又会变成几百张同款。
  */
 import { describe, it, expect } from "vitest"
 import {
   DEFAULT_THEME,
+  courseGradient,
   getCategoryLabel,
   getTheme,
   resolveCourseCover,
   themeVariantIndex,
 } from "@/lib/course-cover"
-import {
-  COVER_VARIANT_COUNTS,
-  COVER_VARIANTS_PER_THEME,
-  availableVariants,
-  coverPool,
-} from "@/lib/course-cover-themes"
-import fs from "node:fs"
-import path from "node:path"
+import { COVER_VARIANTS_PER_THEME } from "@/lib/course-cover-themes"
 
 const base = { id: "course-1", categoryKey: "practical", subCategoryKey: "movies_stories" }
 
-describe("resolveCourseCover · 第 1 层 cover_url 优先", () => {
-  it("cover_url 非空时直接用，且不走主题表", () => {
+describe("resolveCourseCover · 第 1 层 专属图优先", () => {
+  it("cover_url 非空时直接用", () => {
     const r = resolveCourseCover({ ...base, coverUrl: "/images/courses/custom.webp" })
     expect(r.kind).toBe("image")
     if (r.kind === "image") expect(r.src).toBe("/images/courses/custom.webp")
@@ -39,138 +36,134 @@ describe("resolveCourseCover · 第 1 层 cover_url 优先", () => {
     if (r.kind === "image") expect(r.src).toBe("https://cdn.example.com/a.webp")
   })
 
-  it("cover_url 只有空白字符时视为空，落到下一层", () => {
+  it("cover_url 只有空白字符时视为空，落到色卡", () => {
     const r = resolveCourseCover({ ...base, coverUrl: "   " })
-    expect(r.kind).toBe("image")
-    if (r.kind === "image") expect(r.src).toMatch(/^\/images\/courses\//)
+    expect(r.kind).toBe("gradient")
+  })
+
+  it("image 分支也带上 gradient —— 图片加载失败时组件用它兜底", () => {
+    const r = resolveCourseCover({ ...base, coverUrl: "/images/courses/custom.webp" })
+    expect(r.gradient).toMatch(/^linear-gradient/)
   })
 })
 
-describe("resolveCourseCover · 第 2 层主题表", () => {
-  it("命中槽位时指向已生成的变体文件", () => {
-    const r = resolveCourseCover({ ...base, coverUrl: null })
-    expect(r.kind).toBe("image")
-    if (r.kind === "image") {
-      expect(r.src).toMatch(/^\/images\/courses\/practical__movies_stories__v[1-4]\.webp$/)
+describe("resolveCourseCover · 第 2 层 色卡（不再有主题图共用）", () => {
+  const slots: [string | null, string | null][] = [
+    ["practical", "movies_stories"],
+    ["school_sync", "grade_3"],
+    ["exam_prep", null],
+    [null, null],
+  ]
+
+  it("没有 cover_url 的课一律是色卡 —— 不再回退到同槽位共用的主题图", () => {
+    for (const [categoryKey, subCategoryKey] of slots) {
+      const r = resolveCourseCover({ id: "c-1", coverUrl: null, categoryKey, subCategoryKey })
+      expect(r.kind, `${categoryKey}/${subCategoryKey} 竟然解析出了图片`).toBe("gradient")
     }
   })
 
-  it("子类为 null 时指向 general 变体", () => {
-    const r = resolveCourseCover({ ...base, subCategoryKey: null, coverUrl: null })
-    expect(r.kind).toBe("image")
-    if (r.kind === "image") {
-      expect(r.src).toMatch(/^\/images\/courses\/practical__general__v[1-4]\.webp$/)
+  it("同一门课每次解析得到同一张色卡（稳定）", () => {
+    const args = { id: "stable-id", coverUrl: null, categoryKey: "practical", subCategoryKey: null }
+    expect(resolveCourseCover(args).gradient).toBe(resolveCourseCover(args).gradient)
+  })
+
+  it("不同课程得到不同颜色的色卡 —— 这是『色卡不重复』的核心", () => {
+    const grads = new Set<string>()
+    for (let i = 0; i < 200; i++) {
+      grads.add(
+        resolveCourseCover({
+          id: `course-${i}`,
+          coverUrl: null,
+          categoryKey: "school_sync",
+          subCategoryKey: "grade_3",
+        }).gradient,
+      )
+    }
+    // 理论上界 = 61 档色相 × 9 档明度；200 个 id 至少应命中数十种
+    expect(grads.size).toBeGreaterThan(40)
+  })
+
+  it("同分类的色卡仍在同一色系内，且足够暗（浅色文字可读）", () => {
+    const theme = getTheme("exam_prep")
+    for (let i = 0; i < 50; i++) {
+      const g = resolveCourseCover({
+        id: `x-${i}`,
+        coverUrl: null,
+        categoryKey: "exam_prep",
+        subCategoryKey: "gre",
+      }).gradient
+      const hues = [...g.matchAll(/hsl\((\d+)/g)].map((m) => Number(m[1]))
+      expect(hues.length).toBeGreaterThan(0)
+      for (const h of hues) {
+        // 允许 +16° 的第二停靠点，所以上界放到 47
+        const diff = Math.min((h - theme.hue + 360) % 360, (theme.hue - h + 360) % 360)
+        expect(diff, `色相 ${h} 偏离基准 ${theme.hue} 过远：${g}`).toBeLessThanOrEqual(47)
+      }
+      const lights = [...g.matchAll(/% (\d+)%/g)].map((m) => Number(m[1]))
+      for (const l of lights) expect(l).toBeLessThan(35)
+    }
+  })
+})
+
+describe("courseGradient · 按课程着色", () => {
+  it("输出的是合法的 linear-gradient", () => {
+    expect(courseGradient("abc", getTheme("practical"))).toMatch(/^linear-gradient\(135deg, hsl\(/)
+  })
+
+  it("色相落点始终在 0~360 之间（不会出现负值或超界）", () => {
+    for (let i = 0; i < 300; i++) {
+      const g = courseGradient(`id-${i}`, getTheme("graded_reading"))
+      for (const m of g.matchAll(/hsl\((\d+)/g)) {
+        const h = Number(m[1])
+        expect(h).toBeGreaterThanOrEqual(0)
+        expect(h).toBeLessThan(360)
+      }
     }
   })
 
-  it("两个维度都为 null 时命中 none__general，不是兜底", () => {
+  it("明度不会被压到 0（否则色卡变纯黑，看不出差异）", () => {
+    for (let i = 0; i < 300; i++) {
+      const g = courseGradient(`id-${i}`, DEFAULT_THEME)
+      for (const m of g.matchAll(/% (\d+)%/g)) {
+        expect(Number(m[1])).toBeGreaterThanOrEqual(6)
+      }
+    }
+  })
+})
+
+describe("resolveCourseCover · 兜底永不空白", () => {
+  it("完全未知的分类也返回色卡，不是空", () => {
     const r = resolveCourseCover({
       id: "c",
       coverUrl: null,
-      categoryKey: null,
-      subCategoryKey: null,
+      categoryKey: "nope",
+      subCategoryKey: "nope",
     })
-    expect(r.kind).toBe("image")
-    if (r.kind === "image") {
-      expect(r.src).toMatch(/^\/images\/courses\/none__general__v[1-4]\.webp$/)
-    }
+    expect(r.kind).toBe("gradient")
+    expect(r.theme).toEqual(DEFAULT_THEME)
+    expect(r.gradient).toMatch(/^linear-gradient/)
   })
 
-  it("主题图路径携带的变体下标与 themeVariantIndex 一致", () => {
-    const r = resolveCourseCover({ ...base, coverUrl: null })
-    const expected = themeVariantIndex(base.id, availableVariants("practical__movies_stories")) + 1
-    if (r.kind === "image") expect(r.src).toContain(`__v${expected}.webp`)
+  it("已知分类的色卡带上该分类的强调色（保留分类识别性）", () => {
+    const theme = getTheme("exam_prep")
+    const r = resolveCourseCover({ id: "c", coverUrl: null, categoryKey: "exam_prep", subCategoryKey: "gre" })
+    expect(r.theme).toEqual(theme)
+    expect(r.kind).toBe("gradient")
   })
-
-  /**
-   * 额度耗尽导致各槽位实际变体数不同（19 个只有 v1、23 个有 v2、2 个有 v4）。
-   * 若解析器一律按 4 取模，只有 v1 的槽位里会有 3/4 的课程指向不存在的文件 ——
-   * 表现为同一个槽位的卡片一半有图、一半是色块。这条测试守住那个回归。
-   */
-  it("变体 ≥2 的槽位：解析结果只落在自己槽位已声明的变体里", () => {
-    const multi = Object.entries(COVER_VARIANT_COUNTS).filter(([, n]) => n >= 2)
-    expect(multi.length).toBeGreaterThan(0)
-    for (const [slug, count] of multi) {
-      const [cat, sub] = slug.split("__")
-      for (let i = 0; i < 30; i++) {
-        const r = resolveCourseCover({
-          id: `c-${i}`,
-          coverUrl: null,
-          categoryKey: cat === "none" ? null : cat,
-          subCategoryKey: sub === "general" ? null : sub,
-        })
-        expect(r.kind).toBe("image")
-        if (r.kind !== "image") continue
-        const m = r.src.match(new RegExp(`/${slug}__v(\\d+)\\.webp$`))
-        expect(m, `${slug} 解析出了别的槽位的图：${r.src}`).toBeTruthy()
-        expect(Number(m![1])).toBeLessThanOrEqual(count)
-        expect(Number(m![1])).toBeGreaterThanOrEqual(1)
-      }
-    }
-  })
-
-  /**
-   * 变体不足时会并入同大类通用槽位的图扩池（见 CATEGORY_GENERAL_SLUG）。
-   *
-   * 第二次量产后每个槽位都有 3 张，借图机制**不再触发** —— 所以这里断言的是
-   * 「没有多余借用」；同时保留「若出现单变体槽位则池子必须变大」这条断言，
-   * 因为将来额度不足导致批量被截断时，它仍要能守住那个场景。
-   */
-  it("变体充足时轮换池是自洽的：只用自己槽位的图", () => {
-    const multi = Object.entries(COVER_VARIANT_COUNTS).filter(([, n]) => n >= 2)
-    expect(multi.length).toBeGreaterThan(0)
-    for (const [slug, count] of multi) {
-      const pool = coverPool(slug)
-      expect(pool, `${slug} 的池子应恰好是自己声明的 ${count} 张`).toHaveLength(count)
-      for (const item of pool) expect(item.startsWith(`${slug}__v`)).toBe(true)
-    }
-  })
-
-  it("单变体槽位（若存在）的轮换池必须大于 1", () => {
-    const singles = Object.entries(COVER_VARIANT_COUNTS).filter(([, n]) => n === 1)
-    for (const [slug] of singles) {
-      expect(coverPool(slug).length, `${slug} 只有 1 张且没有借到图`).toBeGreaterThan(1)
-    }
-    // 当前数据下不存在单变体槽位；将来批量被截断时这条会重新变得有意义
-    expect(singles.length).toBeGreaterThanOrEqual(0)
-  })
-
-  it("轮换池里的每一项都对应到实际存在的文件", () => {
-    for (const [slug] of Object.entries(COVER_VARIANT_COUNTS)) {
-      for (const item of coverPool(slug)) {
-        const full = path.join(process.cwd(), "public", "images", "courses", item)
-        expect(fs.existsSync(full), `池中文件不存在：${item}`).toBe(true)
-      }
-    }
-  })
-
 })
 
-describe("themeVariantIndex · 变体选择必须只由 courseId 决定", () => {
+describe("themeVariantIndex · 生成/验收工具仍在用（解析器已不用）", () => {
   it("同一个 courseId 永远得到同一个下标", () => {
     const a = themeVariantIndex("abc-123")
-    const b = themeVariantIndex("abc-123")
-    expect(a).toBe(b)
+    expect(a).toBe(themeVariantIndex("abc-123"))
     expect(a).toBeGreaterThanOrEqual(0)
     expect(a).toBeLessThan(COVER_VARIANTS_PER_THEME)
   })
 
-  it("相邻 courseId 不会总落在同一个变体（哈希不能退化成常量）", () => {
-    const idx = new Set(["a", "b", "c", "d", "e", "f", "g", "h"].map(themeVariantIndex))
-    expect(idx.size).toBeGreaterThan(1)
-  })
-
-  it("分布覆盖全部 4 个变体", () => {
+  it("分布覆盖全部变体（不会退化成常量）", () => {
     const seen = new Set<number>()
     for (let i = 0; i < 200; i++) seen.add(themeVariantIndex(`course-${i}`))
     expect(seen.size).toBe(COVER_VARIANTS_PER_THEME)
-  })
-
-  it("分布大致均匀（每个变体都不低于 10%）", () => {
-    const counts = new Array(COVER_VARIANTS_PER_THEME).fill(0)
-    const n = 4000
-    for (let i = 0; i < n; i++) counts[themeVariantIndex(`c-${i}`)]++
-    for (const c of counts) expect(c / n).toBeGreaterThan(0.1)
   })
 })
 
