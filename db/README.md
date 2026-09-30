@@ -80,6 +80,7 @@ git show <旧提交>:supabase/migrations/00001_initial_schema.sql
 | `00024_analytics_visitor_id.sql` | 匿名访客长期身份（`analytics_events.visitor_id` + 索引） | **先 DDL**（代码读写新列；执行后需重新生成结构快照） |
 | `00027`–`00030` | 金币体系 / 会员每日赠钻 / 季度档 / 教材版本（见 docs/implementation-plan-2026-09.md §7） | **先 DDL**（代码依赖新列与新枚举值） |
 | `00031_sentence_search.sql` | `sentences.search_text` 生成列 + FULLTEXT ngram 索引（后台全库句子搜索） | **先 DDL**。⚠️ 这是**表重建**（约 16 分钟，重建期间写入被阻塞）；`drizzle-kit push` **建不出这个索引**，e2e 侧由 `tests/e2e/helpers/db.ts` 的 `ensureSentenceSearchIndex()` 补建 |
+| `00032_lifecycle_notifications.sql` | `notifications` 表 + `users.notify_opt_out_at`（退订位）+ `users.last_expiry_at`（上次到期时刻，主动触达体系用） | **先 DDL**（代码依赖新表与新列） |
 | `00033_pronunciation_scores.sql` | `pronunciation_scores` 表（跟读评分，一句话一行，重录覆盖） | **先 DDL**（代码依赖新表；`id` 的库级默认值只在迁移里，见文件头） |
 
 编号不连续是正常的（中间的是被删掉的 PG 文件）。**不要为了连续而重排编号**：

@@ -151,7 +151,7 @@ git add db/migrations/00033_pronunciation_scores.sql src/lib/db/schema.ts db/REA
 git commit -m "feat(pronunciation): pronunciation_scores 表（一句话一行，重录覆盖）"
 ```
 
-> **本任务不执行迁移。** 生产执行放在 Task 9。
+> **本任务不执行迁移。** 生产执行放在 Task 10。
 
 ---
 
