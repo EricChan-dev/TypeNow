@@ -398,9 +398,13 @@ git commit -m "chore: 初始化作品集站脚手架（Next 16 + Tailwind v4 + v
 import { describe, expect, it } from "vitest"
 import { revealContact } from "./contact"
 
+// 期望值由碎片拼出，而不是写成字面量：这样完整号码在仓库任何角落都不存在，
+// `grep -rn "<完整号码>" src/` 能保持「结果为空」这条硬性不变量。
+const FULL_PHONE = ["166", "3448", "2010"].join("")
+
 describe("revealContact", () => {
   it("把碎片按顺序拼成完整号码", () => {
-    expect(revealContact(["166", "3448", "2010"])).toBe("16634482010")
+    expect(revealContact(["166", "3448", "2010"])).toBe(FULL_PHONE)
   })
 
   it("允许片段是单字符（碎片可以切得很碎）", () => {
@@ -446,8 +450,9 @@ Expected: PASS — 3 passed。
 
 ```ts
 /**
- * 号码碎片。切分规则：任何单个片段都不得等于完整号码 "16634482010"。
- * 因此 "166"/"3448"/"2010" 合法，写成 ["16634482010"] 会把防护彻底作废。
+ * 号码碎片。切分规则：**任何单个片段都不得等于完整号码**。
+ * 正例："166" / "3448" / "2010"（三段各自都不是完整号码）。
+ * 反例：把整个号码放进一个片段——那等于明文存放，防护彻底作废。
  */
 export const PHONE_FRAGMENTS: readonly string[] = ["166", "3448", "2010"]
 
@@ -455,17 +460,21 @@ export const PHONE_FRAGMENTS: readonly string[] = ["166", "3448", "2010"]
 export const EMAIL_DOMAIN = "@163.com"
 ```
 
-> ⚠️ **不要把邮箱写成 `["16634482010", "@163.com"]`。** 那样第一个片段**就是完整手机号**，
+> ⚠️ **注意注释里也不要写出完整号码。** 哪怕是「反例示范」，
+> 写出来的那一行就已经让 `grep -rn "<完整号码>" src/` 命中，
+> 不变量就破了。用「完整号码」这种说法指代，不要粘贴真值。
+
+> ⚠️ **不要把邮箱写成 `["166****2010", "@163.com"]`。** 那样第一个片段**就是完整手机号**，
 > 等于在源码里明文存了一份号码，防护形同虚设——凡是扫描源码的爬虫（或任何人 grep 仓库）
 > 都能直接找到。正确做法是复用 `PHONE_FRAGMENTS`，让号码以碎片形式存在：
 >
 > ```ts
-> const phone = revealContact(PHONE_FRAGMENTS)          // "16634482010"
-> const email = `${phone}${EMAIL_DOMAIN}`               // "16634482010@163.com"
+> const phone = revealContact(PHONE_FRAGMENTS)          // "166****2010"
+> const email = `${phone}${EMAIL_DOMAIN}`               // "166****2010@163.com"
 > ```
 >
 > 拼接发生在**点击后的客户端**，所以服务端渲染的 HTML 与源码里都没有完整号码。
-> 这样 `grep -rn "16634482010" src/` 的结果就是**彻底为空**，不需要为任何文件开例外。
+> 这样 `grep -rn "166****2010" src/` 的结果就是**彻底为空**，不需要为任何文件开例外。
 
 - [ ] **Step 6: 写失败测试 `src/components/contact-privacy.test.tsx`（渲染产物守卫）**
 
@@ -479,7 +488,10 @@ import { describe, expect, it } from "vitest"
 import { renderToStaticMarkup } from "react-dom/server"
 import { ContactReveal } from "./ContactReveal"
 
-const FULL_PHONE = "16634482010"
+// 同样由碎片拼出，避免测试文件成为全仓库唯一写死号码的地方。
+// 这条很关键：本仓库是公开的，写死一次就等于把号码发布出去。
+const FULL_PHONE = ["166", "3448", "2010"].join("")
+const FULL_EMAIL = `${FULL_PHONE}@163.com`
 
 describe("联系方式隐私守卫", () => {
   it("服务端渲染的 HTML 里不出现完整手机号", () => {
@@ -489,7 +501,7 @@ describe("联系方式隐私守卫", () => {
 
   it("服务端渲染的 HTML 里不出现完整邮箱", () => {
     const html = renderToStaticMarkup(<ContactReveal />)
-    expect(html).not.toContain(`${FULL_PHONE}@163.com`)
+    expect(html).not.toContain(FULL_EMAIL)
   })
 
   it("初始状态只显示按钮文案", () => {
@@ -510,12 +522,12 @@ describe("联系方式隐私守卫", () => {
 
 ```tsx
 export function ContactReveal() {
-  return <span>16634482010</span>
+  return <span>166****2010</span>
 }
 ```
 
 Run: `pnpm vitest run src/components/contact-privacy.test.tsx`
-Expected: FAIL — `expected '<span>16634482010</span>' not to contain '16634482010'`。
+Expected: FAIL — `expected '<span>166****2010</span>' not to contain '166****2010'`。
 
 **只有看到这条失败，才能确认守卫测试有效。** 然后继续 Step 8 写真正的实现。
 
@@ -580,7 +592,8 @@ Expected: PASS — `src/lib/contact.test.ts` 3 passed，`src/components/contact-
 
 ```bash
 pnpm run build
-grep -rn "16634482010" .next/static .next/server/app 2>/dev/null && echo "❌ 泄漏！" || echo "✅ 构建产物中无明文号码"
+FULL_PHONE=$(node -e 'process.stdout.write(["166","3448","2010"].join(""))')
+grep -rn "$FULL_PHONE" .next/static .next/server/app 2>/dev/null && echo "❌ 泄漏！" || echo "✅ 构建产物中无明文号码"
 ```
 
 Expected: `✅ 构建产物中无明文号码`
@@ -2203,7 +2216,8 @@ Expected:
 再验隐私：
 
 ```bash
-curl -s https://dev.typenow.cn/ | grep -c "16634482010" || echo "✅ 公网 HTML 中无明文号码"
+FULL_PHONE=$(node -e 'process.stdout.write(["166","3448","2010"].join(""))')
+curl -s https://dev.typenow.cn/ | grep -c "$FULL_PHONE" || echo "✅ 公网 HTML 中无明文号码"
 ```
 
 Expected: `✅ 公网 HTML 中无明文号码`
@@ -2263,8 +2277,8 @@ pnpm start
 
 | 检查项 | 命令 | 期望 |
 |---|---|---|
-| 源码无明文号码 | `grep -rn "16634482010" src/components src/app` | **无输出**（`src/content/contact.ts` 里的邮箱碎片除外，故不含 content 目录） |
-| 构建产物无明文号码 | `grep -rn "16634482010" .next/static .next/server/app` | **无输出** |
+| 源码无明文号码 | 从碎片拼出真值后 `grep -rn "$FULL_PHONE" src/` | **无输出**（零例外） |
+| 构建产物无明文号码 | `grep -rn "$FULL_PHONE" .next/static .next/server/app` | **无输出** |
 | 时间线五节点 | 打开 `/#journey` 肉眼数 | 5 个 |
 | 详情页五段 | 打开 `/projects/otest` | 背景/角色/架构/取舍/结果 齐全 |
 | 取舍条数 | 数 `/projects/otest` 的取舍段 | ≥ 4 条 |
