@@ -17,6 +17,7 @@ import { recordServerEvent } from "@/lib/analytics-server"
 import { trialGrantFields } from "@/lib/trial"
 import { INVITE_REGISTER_DAYS } from "@/lib/invite-rules"
 import { optInNotifications, optOutNotifications } from "@/lib/notify"
+import { brandLockupWithEn, BRAND } from "@/lib/brand"
 
 async function resolveReferredBy(refCode: string | null): Promise<string | null> {
   if (!refCode || !db) return null
@@ -262,7 +263,7 @@ async function handleEvent(event: Record<string, string>): Promise<void> {
     } else {
       console.log("[OA Event] Subscribe without scene")
       // Still send a welcome message for direct follows
-      await sendOACustomerMessage(openid, "感谢关注 TypeNow · 码上英语！\n\n🔤 AI 驱动中译英打字练习\n📚 丰富课程 + 智能复习\n🎯 碎片时间，轻松提升\n\n👉 <a href=\"https://typenow.cn/login\">点击登录开始学习</a>")
+      await sendOACustomerMessage(openid, `感谢关注 ${brandLockupWithEn()}！\n\n🔤 AI 驱动中译英打字练习\n📚 丰富课程 + 智能复习\n🎯 碎片时间，轻松提升\n\n👉 <a href="https://typenow.cn/login">点击登录开始学习</a>`)
     }
   }
 
@@ -331,7 +332,7 @@ async function processSceneLogin(openid: string, sceneStr: string): Promise<void
 
       // Send message: returning user
       const name = user.name || oaUser.nickname || "同学"
-      await sendOACustomerMessage(openid, `👋 欢迎回来，${name}！\n\n已成功登录 TypeNow，继续你的英语学习之旅吧～`)
+      await sendOACustomerMessage(openid, `👋 欢迎回来，${name}！\n\n已成功登录 ${BRAND.nameZh}，继续你的英语学习之旅吧～`)
     } else {
       // Create new user
       const id = randomUUID()
@@ -397,7 +398,7 @@ async function processSceneLogin(openid: string, sceneStr: string): Promise<void
 
       // Send message: new user
       const name = oaUser.nickname || "同学"
-      await sendOACustomerMessage(openid, `🎉 ${name}，欢迎关注 TypeNow · 码上英语！\n\n🔤 AI 驱动中译英打字练习\n📚 丰富课程 + 智能复习\n🎯 碎片时间，轻松提升\n\n已自动登录，快去网站开始学习吧！`)
+      await sendOACustomerMessage(openid, `🎉 ${name}，欢迎关注 ${brandLockupWithEn()}！\n\n🔤 AI 驱动中译英打字练习\n📚 丰富课程 + 智能复习\n🎯 碎片时间，轻松提升\n\n已自动登录，快去网站开始学习吧！`)
     }
   } catch (err) {
     console.error("[OA Event] processSceneLogin error:", err)

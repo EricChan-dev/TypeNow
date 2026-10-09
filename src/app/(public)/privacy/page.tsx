@@ -1,8 +1,9 @@
 import type { Metadata } from "next"
 import Link from "next/link"
+import { BRAND, brandLockupWithEn } from "@/lib/brand"
 
 export const metadata: Metadata = {
-  title: "隐私政策 - TypeNow",
+  title: `隐私政策 - ${BRAND.nameZh}`,
 }
 
 export default function PrivacyPage() {
@@ -13,9 +14,17 @@ export default function PrivacyPage() {
         更新日期：2026 年 5 月 1 日 &middot; 生效日期：2026 年 5 月 1 日
       </p>
 
-      <div className="prose prose-slate dark:prose-invert max-w-none space-y-6 text-sm leading-relaxed">
+      <div className="prose prose-slate max-w-none space-y-6 text-sm leading-relaxed">
         <p>
-          我们深知个人信息对您的重要性。本隐私政策旨在向您说明我们如何收集、使用、存储和保护您的个人信息。请您在使用 TypeNow（码上英语）服务前仔细阅读本政策。
+          我们深知个人信息对您的重要性。本隐私政策旨在向您说明我们如何收集、使用、存储和保护您的个人信息。请您在使用 {BRAND.nameZh}（{BRAND.nameEn}）服务前仔细阅读本政策。
+        </p>
+
+        {/* 品牌更名过渡条款。隐私政策同样不能直接替换旧名 ——
+            用户此前基于旧名作出的授权需要一条明确的连续性声明。 */}
+        <p className="rounded-lg border border-border bg-muted px-4 py-3 text-[13px] text-muted-foreground">
+          <strong>关于品牌更名：</strong>本服务原名「码上英语」，自 2026 年 10 月 8 日起更名为「{BRAND.nameZh}」，
+          英文名 {BRAND.nameEn} 保持不变。更名不影响我们对您个人信息保护责任的连续性，
+          您此前基于原品牌作出的授权继续有效，{brandLockupWithEn()} 运营主体承担同等保护义务。
         </p>
 
         <h2 className="text-lg font-semibold mt-8 mb-3">1. 我们收集的信息</h2>
@@ -128,8 +137,20 @@ export default function PrivacyPage() {
           <li>您可以通过浏览器设置拒绝 Cookie，但可能导致部分功能无法正常使用。</li>
         </ul>
 
-        <h2 className="text-lg font-semibold mt-8 mb-3">7. 未成年人保护</h2>
-        <p>本服务主要面向成年人。如果您未满 14 周岁，请在监护人陪同下阅读本政策并取得监护人同意后再使用。我们会根据法律法规的要求保护未成年人的个人信息。</p>
+        {/* id 保留：外部与历史链接用过 /privacy#minors 定位这一节，
+            现在儿童隐私已有独立页面，但锚点不能删（删了旧链接就落到页首）。 */}
+        <h2 id="minors" className="text-lg font-semibold mt-8 mb-3">7. 未成年人保护</h2>
+        <p>
+          本服务主要面向成年人。如果您未满 14 周岁，请在监护人陪同下阅读本政策并取得监护人同意后再使用。
+          我们会根据法律法规的要求保护未成年人的个人信息。
+        </p>
+        <p className="mt-3">
+          针对未满 14 周岁儿童的个人信息处理，我们另行制定了专门的
+          <Link href="/children-privacy" className="text-[#1E40AF] hover:underline mx-0.5">
+            《儿童隐私保护政策》
+          </Link>
+          ，详细说明适用人群、监护人同意、信息使用限制与监护人权利。涉及儿童个人信息的部分，以该政策为准。
+        </p>
 
         <h2 className="text-lg font-semibold mt-8 mb-3">8. 隐私政策的更新</h2>
         <ul className="list-disc pl-5 space-y-2">
@@ -146,7 +167,7 @@ export default function PrivacyPage() {
         </ul>
 
         <p className="mt-10 text-muted-foreground">
-          感谢您信任并使用 TypeNow。我们将一如既往地重视并保护您的个人隐私。
+          感谢您信任并使用 {BRAND.nameZh}。我们将一如既往地重视并保护您的个人隐私。
         </p>
       </div>
     </div>

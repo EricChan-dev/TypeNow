@@ -2,6 +2,7 @@
 
 import { useEffect } from "react"
 import { useRouter } from "next/navigation"
+import { BRAND } from "@/lib/brand"
 
 interface Props {
   inviteCode: string
@@ -37,7 +38,7 @@ export default function RefLandingClient({ inviteCode, partnerName, partnerAvata
       <div className="w-full max-w-sm flex flex-col items-center gap-8">
         {/* App brand */}
         <div className="text-center">
-          <div className="text-3xl font-bold text-foreground tracking-tight">码上英语</div>
+          <div className="font-brand text-3xl text-foreground tracking-tight">{BRAND.lockup}</div>
           <div className="text-sm text-foreground/50 mt-1">AI 全程陪练，打字练就地道英语</div>
         </div>
 

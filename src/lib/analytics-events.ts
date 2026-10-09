@@ -15,7 +15,6 @@ export const ALLOWED_EVENTS = [
   // 流量
   "page_view",
   "click",
-  "theme_toggle",
   // 账号
   "login_success",
   "register_success",
@@ -95,12 +94,6 @@ export const EVENT_META: Record<AnalyticsEvent, EventMeta> = {
     category: "traffic",
     description: "关键按钮点击。properties.element 是被点元素的标识。",
     props: ["element"],
-  },
-  theme_toggle: {
-    label: "切换主题",
-    category: "traffic",
-    description: "深色/浅色切换。纯偏好类埋点，目前是量最大的一类。",
-    props: ["theme"],
   },
   login_success: {
     label: "登录成功",

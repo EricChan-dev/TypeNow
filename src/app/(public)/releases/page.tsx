@@ -2,10 +2,11 @@ import type { Metadata } from "next"
 import Link from "next/link"
 import { ArrowRight, Info } from "lucide-react"
 import { RELEASES } from "@/lib/releases"
+import { BRAND } from "@/lib/brand"
 
 export const metadata: Metadata = {
-  title: "版本更新 - TypeNow",
-  description: "TypeNow 的用户可见变化：功能上线、体验修复与会员权益调整。",
+  title: `版本更新 - ${BRAND.nameZh}`,
+  description: `${BRAND.nameZh} 的用户可见变化：功能上线、体验修复与会员权益调整。`,
 }
 
 /**

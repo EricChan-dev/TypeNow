@@ -14,6 +14,7 @@ import {
 // （「还差 ¥XX 可提现」）必须和这里的判定用同一个数，否则界面会承诺一个
 // 点下去就被拒的金额。
 import { MIN_WITHDRAW_FEN as MIN_WITHDRAW } from "@/lib/partner-rules"
+import { BRAND } from "@/lib/brand"
 
 export async function POST(request: Request) {
   if (!db) return NextResponse.json({ error: "服务未配置" }, { status: 500 })
@@ -151,7 +152,7 @@ export async function POST(request: Request) {
       outBatchNo,
       openid: promoter.wechatOpenid,
       amount: lockedAmount,
-      remark: "TypeNow 推广佣金提现",
+      remark: `${BRAND.nameZh} 推广佣金提现`,
     })
     transferDone = true
 

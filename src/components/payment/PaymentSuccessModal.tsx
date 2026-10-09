@@ -7,6 +7,7 @@ import { CheckCircle2, PartyPopper } from "lucide-react"
 // 档位名走唯一事实源（lib/pricing）：加季度档时才不会漏，
 // 且终身档不再叫「合伙人会员」（推广资格已从该商品解绑）。
 import { memberTierLabel } from "@/lib/pricing"
+import { BRAND } from "@/lib/brand"
 
 export function PaymentSuccessModal() {
   const searchParams = useSearchParams()
@@ -51,7 +52,7 @@ export function PaymentSuccessModal() {
         </div>
 
         <p className="text-sm text-muted-foreground mb-6">
-          恭喜你成为 TypeNow{planName}，所有功能已全部解锁！
+          恭喜你成为 {BRAND.nameZh}{planName}，所有功能已全部解锁！
         </p>
 
         <button

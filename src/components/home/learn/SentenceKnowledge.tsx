@@ -86,8 +86,9 @@ export function SentenceKnowledge({ sentence }: SentenceKnowledgeProps) {
         // 被中断的请求不是用户的故障，不该报给他看。
         if (e instanceof DOMException && e.name === "AbortError") return
         const err = e as { status?: number; payload?: unknown }
-        // 刻意不再回退到 getMockKnowledge()：那些是硬编码占位文案，
-        // 挂个角标也改变不了「把假内容当分析结果给用户看」的事实。
+        // 刻意不提供任何「兜底分析结果」：曾经有一份硬编码的占位文案
+        // （src/lib/mock-data/，已随本轮清理删除），挂个角标也改变不了
+        // 「把假内容当分析结果给用户看」的事实。
         setKnowledge(null)
         setFailure(
           describeKnowledgeFailure(err.status ?? null, err.payload, {

@@ -4,7 +4,6 @@ import { Refine } from "@refinedev/core"
 import routerProvider from "@refinedev/nextjs-router"
 import { ThemedLayout } from "@refinedev/antd"
 import { App, ConfigProvider, theme as antdTheme, Spin } from "antd"
-import { useTheme } from "next-themes"
 import { useEffect, useState } from "react"
 import { useRouter, usePathname } from "next/navigation"
 import { authProvider } from "@/lib/refine/auth-provider"
@@ -60,7 +59,6 @@ function AuthGate({ children }: { children: React.ReactNode }) {
 }
 
 function AdminLayoutContent({ children }: { children: React.ReactNode }) {
-  const { theme: appTheme } = useTheme()
   const [mounted, setMounted] = useState(false)
   const pathname = usePathname()
   useEffect(() => setMounted(true), [])
@@ -72,10 +70,9 @@ function AdminLayoutContent({ children }: { children: React.ReactNode }) {
   return (
     <ConfigProvider
       theme={{
-        algorithm:
-          appTheme === "dark"
-            ? antdTheme.darkAlgorithm
-            : antdTheme.defaultAlgorithm,
+        // 深浅色切换已在 2026-10 移除，后台固定用 antd 的浅色算法。
+        // 保留显式 algorithm 是为了记录这个决定，避免以后有人以为漏写了跟随逻辑。
+        algorithm: antdTheme.defaultAlgorithm,
         token: {
           colorPrimary: "#6366F1",
           borderRadius: 8,

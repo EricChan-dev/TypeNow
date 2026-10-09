@@ -1,7 +1,8 @@
 import type { Metadata } from "next"
+import { BRAND, brandLockupWithEn } from "@/lib/brand"
 
 export const metadata: Metadata = {
-  title: "推广合作协议 - TypeNow",
+  title: `推广合作协议 - ${BRAND.nameZh}`,
 }
 
 /**
@@ -32,23 +33,34 @@ export const metadata: Metadata = {
 export default function PartnerAgreementPage() {
   return (
     <div className="mx-auto max-w-[800px] px-6 py-12 sm:py-16">
-      <h1 className="text-3xl font-bold tracking-tight mb-2">码上英语推广合作协议</h1>
+      <h1 className="text-3xl font-bold tracking-tight mb-2">
+        <span className="font-brand">{BRAND.nameZh}</span>推广合作协议
+      </h1>
       <p className="text-sm text-muted-foreground mb-10">
         更新日期：2026 年 9 月 29 日 &middot; 生效日期：2026 年 9 月 29 日
       </p>
 
-      <div className="prose prose-slate dark:prose-invert max-w-none space-y-6 text-sm leading-relaxed">
+      <div className="prose prose-slate max-w-none space-y-6 text-sm leading-relaxed">
         <p>
-          本协议由推广方（以下简称「您」）与 TypeNow（码上英语）运营方（以下简称「平台方」或「我们」）共同缔结。
+          本协议由推广方（以下简称「您」）与 {BRAND.nameZh}（{BRAND.nameEn}）运营方（以下简称「平台方」或「我们」）共同缔结。
           任何完成注册的用户均可<strong>免费</strong>加入本推广合作，<strong>无需支付任何费用</strong>。
           您在推广中心主动确认加入即视为已阅读、理解并同意本协议的全部内容。
           本协议自您在推广中心确认加入之日起生效。
         </p>
 
+        {/* 品牌更名过渡条款：推广协议涉及佣金结算主体，更名必须交代权利
+            义务的连续性，否则推广方会以为需要重新签约。旧名在此是必要的
+            历史指代，不能删。 */}
+        <p className="rounded-lg border border-border bg-muted px-4 py-3 text-[13px] text-muted-foreground">
+          <strong>关于品牌更名：</strong>本平台原名「码上英语」，自 2026 年 10 月 8 日起更名为「{BRAND.nameZh}」，
+          英文名 {BRAND.nameEn} 保持不变。更名前您已确认的本协议继续有效，<strong>无需重新签署</strong>；
+          已产生的推广关系、归因与佣金结算均不受影响，由更名后的 {brandLockupWithEn()} 运营主体继续履行本协议。
+        </p>
+
         <h2 className="text-lg font-semibold mt-10 mb-3">第一条　合作性质</h2>
         <ol className="list-decimal pl-5 space-y-2">
           <li>
-            本协议项下的合作关系为<strong>单级推广合作</strong>，即您通过专属邀请链接向第三方用户推荐 TypeNow 平台，被推荐用户付费后您可获得相应佣金。
+            本协议项下的合作关系为<strong>单级推广合作</strong>，即您通过专属邀请链接向第三方用户推荐 {BRAND.nameZh} 平台，被推荐用户付费后您可获得相应佣金。
           </li>
           <li>
             本合作仅设<strong>一级</strong>推广关系，不存在多层级结构。当被邀请用户 B 进一步邀请用户 C 时，

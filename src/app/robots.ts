@@ -16,7 +16,7 @@ export default function robots(): MetadataRoute.Robots {
     rules: [
       {
         userAgent: "*",
-        allow: ["/", "/pricing", "/terms", "/privacy", "/partner-agreement"],
+        allow: ["/", "/pricing", "/terms", "/privacy", "/children-privacy", "/partner-agreement"],
         disallow: [
           // 后台与接口：没有任何理由被索引
           "/admin",

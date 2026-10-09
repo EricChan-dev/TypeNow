@@ -1,7 +1,8 @@
 import type { Metadata } from "next"
+import { BRAND, brandLockupWithEn } from "@/lib/brand"
 
 export const metadata: Metadata = {
-  title: "用户协议 - TypeNow",
+  title: `用户协议 - ${BRAND.nameZh}`,
 }
 
 export default function TermsPage() {
@@ -12,14 +13,25 @@ export default function TermsPage() {
         更新日期：2026 年 5 月 1 日 &middot; 生效日期：2026 年 5 月 1 日
       </p>
 
-      <div className="prose prose-slate dark:prose-invert max-w-none space-y-6 text-sm leading-relaxed">
+      <div className="prose prose-slate max-w-none space-y-6 text-sm leading-relaxed">
         <p>
-          欢迎使用 TypeNow（码上英语）及相关服务（以下简称「本服务」）。本协议由您（以下简称「用户」）与 TypeNow 运营方（以下简称「我们」）共同缔结。请您务必审慎阅读并充分理解本协议各条款内容，特别是免除或限制责任的条款。您使用本服务即表示您已阅读、理解并同意接受本协议的全部内容。
+          欢迎使用 {BRAND.nameZh}（{BRAND.nameEn}）及相关服务（以下简称「本服务」）。本协议由您（以下简称「用户」）与 {BRAND.nameEn} 运营方（以下简称「我们」）共同缔结。请您务必审慎阅读并充分理解本协议各条款内容，特别是免除或限制责任的条款。您使用本服务即表示您已阅读、理解并同意接受本协议的全部内容。
+        </p>
+
+        {/* 品牌更名过渡条款。
+            协议文本不能直接把旧名替换掉 —— 替换会让"更名前注册的用户当时同意的是
+            哪份协议"无从追溯。这里保留更名事实与权利义务的连续性声明，
+            旧名作为历史指代仍然出现（这正是它该出现的地方）。 */}
+        <p className="rounded-lg border border-border bg-muted px-4 py-3 text-[13px] text-muted-foreground">
+          <strong>关于品牌更名：</strong>本服务原名「码上英语」，自 2026 年 10 月 8 日起更名为「{BRAND.nameZh}」，
+          英文名 {BRAND.nameEn} 保持不变。更名不影响本协议项下任何权利义务，
+          原「码上英语」项下的权利义务由更名后的 {brandLockupWithEn()} 运营主体继续履行。
+          您在此前已同意本协议的行为，对更名后的本服务继续有效。
         </p>
 
         <h2 className="text-lg font-semibold mt-8 mb-3">1. 服务说明</h2>
         <p>
-          TypeNow 是一款 AI 驱动的中译英打字练习平台，提供包括但不限于打字练习、间隔重复复习、点词详情与 AI
+          {BRAND.nameZh} 是一款 AI 驱动的中译英打字练习平台，提供包括但不限于打字练习、间隔重复复习、点词详情与 AI
           句子讲解、学习统计等功能。我们保留随时修改、暂停或终止部分或全部服务的权利，且无需事先通知用户。
         </p>
 

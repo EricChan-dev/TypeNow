@@ -1,0 +1,5 @@
+# 大字体不下库（子集字体 + OFL 许可证要跟着仓库走，见 tools/fonts/）
+tools/.cache/
+tools/fonts/Inter.ttf
+tools/fonts/NotoSansSC.ttf
+tools/fonts/*.part

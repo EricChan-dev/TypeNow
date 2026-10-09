@@ -303,10 +303,19 @@ describe("事实源本身", () => {
     expect(importLines).toContain("@/lib/coins")
   })
 
-  it("额度类权益的文案确实被价格页/首页消费（不是只写在测试里）", () => {
+  it("额度类权益的文案确实被面向用户的界面消费（不是只写在测试里）", () => {
+    // 2026-10-08 从这张清单里移除了落地页（当时在 src/app/(public)/page.tsx，
+    // 同日搬进 (landing) 路由组）：
+    // 首页改版后不再展示会员价格与额度（对齐竞品首页结构，价格统一去 /pricing），
+    // 所以它不再 import 这个模块是**预期行为**，不是漂移。
+    // 但"额度文案必须有人真的渲染"这条约束不能因此失效 —— 于是把首页换成
+    // 真正把额度数字写进用户可见文案的两个位置：价格页的权益清单（PricingClient）
+    // 与 AI 助手浮窗的额度用尽提示（AiChatWidget，渲染 FREE_AI_CHAT_PER_DAY）。
+    // 后端路由（chat/analyze/evaluate）也消费这些常量，但它们是报错文案，
+    // 这里只钉住浏览器里能看到的界面。
     for (const p of [
       "src/components/pricing/PricingClient.tsx",
-      "src/app/(public)/page.tsx",
+      "src/components/layout/AiChatWidget.tsx",
       "src/app/(public)/pricing/page.tsx",
     ]) {
       expect(read(p)).toContain("membership-benefits")
@@ -321,7 +330,9 @@ describe("事实源本身", () => {
     )
     for (const p of [
       "src/components/pricing/PricingClient.tsx",
-      "src/app/(public)/page.tsx",
+      // 2026-10-08：落地页搬进 (landing) 路由组（参考页自带顶栏/页脚，
+      // 与 (public)/layout.tsx 的 Navbar+Footer 冲突）。被盯住的仍是首页本身。
+      "src/app/(landing)/page.tsx",
       "src/app/(public)/pricing/page.tsx",
     ]) {
       expect(read(p)).not.toContain("PARTNER_BENEFITS")

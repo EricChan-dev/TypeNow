@@ -4,9 +4,7 @@ import { useState, useEffect, useRef } from "react"
 import Link from "next/link"
 import Image from "next/image"
 import { useRouter } from "next/navigation"
-import { useTheme } from "next-themes"
-import { Moon, Sun, User, Settings, Crown, LogOut, ChevronRight, Handshake, MessageSquarePlus } from "lucide-react"
-import { trackThemeToggle } from "@/lib/analytics"
+import { User, Settings, Crown, LogOut, ChevronRight, Handshake, MessageSquarePlus } from "lucide-react"
 import { signOutAction } from "@/app/actions/auth"
 import { cn } from "@/lib/utils"
 import { CoinRulesModal } from "@/components/home/CoinRulesModal"
@@ -117,8 +115,7 @@ interface UserActionsProps {
 
 export function UserActions({ serverUser, variant = "public" }: UserActionsProps) {
   const router = useRouter()
-  const { theme, setTheme } = useTheme()
-  const [mounted, setMounted] = useState(false)
+
   const [user, setUser] = useState<UserProfile | null>(serverUser ? {
     name: serverUser.name,
     avatar: serverUser.avatar,
@@ -145,8 +142,6 @@ export function UserActions({ serverUser, variant = "public" }: UserActionsProps
   function handleMouseLeave() {
     hoverTimeout.current = setTimeout(() => setDropdownOpen(false), 150)
   }
-
-  useEffect(() => { setMounted(true) }, [])
 
   useEffect(() => {
     if (serverUser) { setLoading(false); return }
@@ -185,35 +180,6 @@ export function UserActions({ serverUser, variant = "public" }: UserActionsProps
 
   return (
     <div className="flex items-center gap-3">
-      {/* Theme toggle pill */}
-      <div className="hidden sm:flex items-center relative rounded-[24px] border border-border bg-muted p-[3px]">
-        <div
-          className={cn(
-            "absolute top-[3px] h-[28px] w-[56px] rounded-[20px]",
-            !mounted && "left-[3px] bg-background",
-            mounted && theme === "dark" && "left-[3px] bg-background shadow-sm",
-            mounted && theme === "light" && "left-[59px] bg-card shadow-md"
-          )}
-          style={{ transition: "left 0.5s cubic-bezier(0.34, 1.56, 0.64, 1), background-color 0.35s ease, box-shadow 0.35s ease" }}
-        />
-        <button
-          onClick={() => { setTheme("dark"); trackThemeToggle("dark") }}
-          className={cn("relative z-10 flex items-center justify-center gap-1.5 rounded-[20px] w-[56px] py-[5px] text-[13px] font-medium transition-all duration-300", mounted && theme === "dark" ? "text-foreground" : "text-muted-foreground hover:text-foreground/70")}
-          aria-label="深色模式"
-        >
-          <Moon className="h-3.5 w-3.5 transition-all duration-500" style={{ transform: mounted && theme === "dark" ? "scale(1.15)" : "scale(1)" }} />
-          深色
-        </button>
-        <button
-          onClick={() => { setTheme("light"); trackThemeToggle("light") }}
-          className={cn("relative z-10 flex items-center justify-center gap-1.5 rounded-[20px] w-[56px] py-[5px] text-[13px] font-medium transition-all duration-300", mounted && theme === "light" ? "text-card-foreground" : "text-muted-foreground hover:text-foreground/70")}
-          aria-label="浅色模式"
-        >
-          <Sun className="h-3.5 w-3.5 transition-all duration-500" style={{ transform: mounted && theme === "light" ? "scale(1.15) rotate(0deg)" : "rotate(-30deg)" }} />
-          浅色
-        </button>
-      </div>
-
       {/* Auth section */}
       {loading ? (
         <div className="h-9 w-9 rounded-full bg-muted animate-pulse" />

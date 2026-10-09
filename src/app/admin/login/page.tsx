@@ -4,6 +4,7 @@ import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
 import { Button, Card, Typography, Spin } from "antd"
+import { BRAND } from "@/lib/brand"
 
 const { Title, Text, Paragraph } = Typography
 
@@ -70,7 +71,7 @@ export default function AdminLoginPage() {
     >
       <Card style={{ width: 440, maxWidth: "100%" }}>
         <Title level={3} style={{ textAlign: "center", marginBottom: 8 }}>
-          TypeNow 管理后台
+          <span className="font-brand">{BRAND.nameZh}</span> 管理后台
         </Title>
 
         {state === "not-admin" ? (

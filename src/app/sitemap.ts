@@ -42,6 +42,9 @@ export default function sitemap(): MetadataRoute.Sitemap {
     { url: `${SITE_URL}/releases`, changeFrequency: "weekly", priority: 0.5 },
     { url: `${SITE_URL}/terms`, changeFrequency: "yearly", priority: 0.3 },
     { url: `${SITE_URL}/privacy`, changeFrequency: "yearly", priority: 0.3 },
+    // 儿童隐私保护政策是独立页（2026-10-09 新增，此前只有 /privacy 第 7 节的一句话）。
+    // 与 terms/privacy 同级：合规文本，更新频率低。
+    { url: `${SITE_URL}/children-privacy`, changeFrequency: "yearly", priority: 0.3 },
     { url: `${SITE_URL}/partner-agreement`, changeFrequency: "yearly", priority: 0.3 },
   ]
 }

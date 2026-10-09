@@ -7,13 +7,15 @@ import Image from "next/image"
 import { GraduationCap, Menu, X, User, Settings, Crown, LogOut } from "lucide-react"
 import { signOutAction } from "@/app/actions/auth"
 import { cn } from "@/lib/utils"
+import { BRAND } from "@/lib/brand"
 import { UserActions } from "@/components/layout/UserActions"
 
+// 锚点对齐新版落地页的区块（照竞品首页的三个锚点结构：玩法 / 演示 / 特色）。
+// section 值必须与 page.tsx 里的 section id 一致，否则 scrollIntoView 会静默失败。
 const navLinks = [
-  { href: "#hero", label: "首页", section: "hero" },
-  { href: "#features", label: "功能", section: "features" },
-  { href: "#pricing", label: "定价", section: "pricing" },
-  { href: "#faq", label: "常见问题", section: "faq" },
+  { href: "#features", label: "核心玩法", section: "features" },
+  { href: "#demo", label: "试玩演示", section: "demo" },
+  { href: "#highlights", label: "产品特色", section: "highlights" },
 ]
 
 interface UserProfile {
@@ -67,9 +69,10 @@ export function Navbar() {
       <div className="flex h-[72px] items-center justify-between px-5 xl:px-20">
         {/* Logo */}
         <Link href="/" className="flex items-center gap-2 shrink-0">
-          <Image src="/logo_w.svg" alt="TypeNow" width={26} height={26} className="hidden [.dark_&]:block" />
-          <Image src="/logo.svg" alt="TypeNow" width={26} height={26} className="block [.dark_&]:hidden" />
-          <span className="text-xl font-bold text-accent">TypeNow·码上英语</span>
+          {/* 图标仍是旧版 logo，等新矢量图定稿后替换 public/logo.svg 即可，这里不需要改。
+              深色主题已移除，不再需要 logo_w.svg 的深色变体。 */}
+          <Image src="/logo.svg" alt={BRAND.nameZh} width={26} height={26} />
+          <span className="font-brand text-xl text-accent">{BRAND.lockup}</span>
         </Link>
 
         {/* Desktop nav */}

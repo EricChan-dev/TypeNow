@@ -5,13 +5,13 @@ import Link from "next/link"
 import { useSearchParams } from "next/navigation"
 import { animate, stagger } from "animejs"
 import {
-  Flame, BookOpen, ChevronRight, Zap,
-  Clock, Check,
-  CalendarDays, Loader2,
-  ChevronLeft, Trophy, HelpCircle,
-  Smartphone, X, MessageCircle,
-  FileText, BookText, ShoppingBag,
-  Gift, TrendingUp,
+  Flame, ChevronRight, Zap,
+  Check, Loader2,
+  ChevronsLeft, ChevronsRight, HelpCircle,
+  MessageCircle,
+  CalendarDays, Plus, Settings, Crown, LogOut,
+  Headphones, Mic, BookOpen, BookText, BookMarked,
+  ArrowRight, TrendingUp,
 } from "lucide-react"
 import { toast } from "sonner"
 import { cn } from "@/lib/utils"
@@ -21,8 +21,15 @@ import { GlobalSettingsModal } from "@/components/home/GlobalSettingsModal"
 import { WelcomeTrialModal } from "@/components/home/WelcomeTrialModal"
 import { DailyTasks } from "@/components/home/DailyTasks"
 import { PaymentSuccessModal } from "@/components/payment/PaymentSuccessModal"
+import { ContactModal } from "@/components/auth/ContactModal"
+import { PracticeTrendChart } from "@/components/home/PracticeTrendChart"
+import { signOutAction } from "@/app/actions/auth"
 import { toShanghaiDateStr } from "@/lib/practice-stats"
 import { CHECK_IN_GOAL_DEFAULT } from "@/lib/coins"
+import { BRAND } from "@/lib/brand"
+import { TRIAL_DAYS } from "@/lib/trial-days"
+import type { MemberTier } from "@/lib/pricing"
+import { memberTierLabel } from "@/lib/pricing"
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -51,33 +58,44 @@ interface StatsData {
   todaySentences: number
   checkInGoal: number
   weekly: { date: string; count: number }[]
+  /** 待复习项数量（复习队列 pending），学习数据与词汇卡都要用。 */
+  pendingReviews: number
+  /* 以下是本次改版为「参考句游英语版式」新增的真实聚合字段（见 api/home/stats） */
+  totalSentences?: number
+  totalDurationSeconds?: number
+  totalDurationHours?: number
+  totalMistakes?: number
+  reviewBreakdown?: { mastered: number; almost: number; reviewing: number }
+  wordbookCount?: number
+  pronunciationToday?: number
+}
+
+/** `/api/auth/me` 返回的会员信息（无全局 user context，只能自己 fetch）。 */
+interface MeData {
+  id: string
+  name: string
+  avatar: string | null
+  is_pro: boolean
+  is_partner: boolean
+  trial_available: boolean
+  level: number
+  member_tier: MemberTier
+  diamonds: number
+  coins: number
+  role: string
 }
 
 interface HomeClientProps {
   name: string
 }
 
+/** 一千小时 = 首页「千小时进度」的目标常量。 */
+const THOUSAND_HOURS = 1000
+
 // ─── Utilities ────────────────────────────────────────────────────────────────
 
 // 日期键必须与后端 DATE(created_at) 的上海口径一致，见 lib/practice-stats。
 // 不要用 toISOString().slice(0,10) —— 那是 UTC 日期，CST 00:00-08:00 会差一天。
-
-function getHeatColor(count: number): string {
-  if (count === 0) return "var(--heat-empty)"
-  if (count <= 20) return "var(--heat-low)"
-  if (count <= 60) return "var(--heat-mid)"
-  if (count <= 100) return "var(--heat-high)"
-  return "var(--heat-max)"
-}
-
-function formatDuration(seconds: number): string {
-  if (seconds < 60) return `${seconds}秒`
-  const mins = Math.floor(seconds / 60)
-  if (mins < 60) return `${mins}分钟`
-  const hours = Math.floor(mins / 60)
-  const rem = mins % 60
-  return rem > 0 ? `${hours}小时${rem}分钟` : `${hours}小时`
-}
 
 function relativeTime(isoStr: string): string {
   const diff = Date.now() - new Date(isoStr).getTime()
@@ -90,304 +108,462 @@ function relativeTime(isoStr: string): string {
   return `${days}天前`
 }
 
-// ─── Monthly Check-In Calendar ────────────────────────────────────────────────
+/** 小数保留 n 位（参考页的时长/百分比都是两位小数口径，如 0.00）。 */
+function fixed(n: number, digits = 2): string {
+  return n.toFixed(digits)
+}
 
-function MonthlyCheckInCalendar({
-  checkInDates,
-  checkedInToday,
+// ─── Reference section: 学习日历（复刻参考页 .calendar）────────────────────
+
+/**
+ * 参考页的月历是「整月 7 列网格 + 到今天为止」，用**练习记录**（heatmap）
+ * 标出已学习 / 未学习，而不是签到（签到是我方独有的概念，已改到日签卡里）。
+ *
+ * 与旧版 `MonthlyCheckInCalendar` 的差别：这版只用打卡日历的**几何**
+ * （`.Date` / `.days` / `.tit`），数据换成 heatmap，翻月时不联网。
+ */
+function StudyCalendar({
+  heatmap,
+  heatmapDuration,
+  streakDays,
 }: {
-  checkInDates: string[]
-  checkedInToday: boolean
+  heatmap: Record<string, number>
+  heatmapDuration: Record<string, number>
+  streakDays: number
 }) {
   const [offset, setOffset] = useState(0)
-  const checkInSet = useMemo(() => new Set(checkInDates), [checkInDates])
 
-  const { year, month, days } = useMemo(() => {
+  const { year, month, cells, studiedDays, avgMinutes } = useMemo(() => {
     const d = new Date()
     d.setDate(1)
     d.setMonth(d.getMonth() + offset)
     const y = d.getFullYear()
     const m = d.getMonth()
     const daysInMonth = new Date(y, m + 1, 0).getDate()
-    const firstDow = new Date(y, m, 1).getDay()
-    const startPad = firstDow === 0 ? 6 : firstDow - 1
-    const cells: { date: string | null; day: number | null; isCheckedIn: boolean; isToday: boolean; isFuture: boolean }[] = []
-    for (let i = 0; i < startPad; i++) cells.push({ date: null, day: null, isCheckedIn: false, isToday: false, isFuture: false })
+    const firstDow = new Date(y, m, 1).getDay() // 0=周日
     const today = toShanghaiDateStr()
+
+    const list: { day: number; date: string; studied: boolean; isToday: boolean; future: boolean }[] = []
     for (let n = 1; n <= daysInMonth; n++) {
-      const dateStr = `${y}-${String(m + 1).padStart(2, "0")}-${String(n).padStart(2, "0")}`
-      const isToday = dateStr === today
-      const isFuture = dateStr > today
-      const isCheckedIn = isToday ? checkedInToday : checkInSet.has(dateStr)
-      cells.push({ date: dateStr, day: n, isCheckedIn, isToday, isFuture })
+      const date = `${y}-${String(m + 1).padStart(2, "0")}-${String(n).padStart(2, "0")}`
+      // heatmap 是「日期 → 当日金币」，>0 视为当天有练习记录。
+      // 只统计到今天：未来的格子恒为未学习（否则会跟随历史数据「预知未来」）。
+      list.push({
+        day: n,
+        date,
+        studied: date <= today && (heatmap[date] ?? 0) > 0,
+        isToday: date === today,
+        future: date > today,
+      })
     }
-    return { year: y, month: m, days: cells }
-  }, [offset, checkInSet, checkedInToday])
 
-  const monthName = ["一月","二月","三月","四月","五月","六月","七月","八月","九月","十月","十一月","十二月"][month]
-  const cellRef = useRef<HTMLDivElement>(null)
-
-  useEffect(() => {
-    if (!cellRef.current) return
-    const cells = cellRef.current.querySelectorAll(".checkin-cell")
-    animate(cells, {
-      opacity: [0, 1],
-      scale: [0.6, 1],
-      duration: 240,
-      delay: stagger(14, { start: 0 }),
-      ease: "out(3)",
-    })
-  }, [offset])
-
-  return (
-    <div>
-      <div className="flex items-center justify-between mb-3">
-        <button
-          onClick={() => setOffset((o) => Math.max(-12, o - 1))}
-          className="w-7 h-7 flex items-center justify-center rounded-lg text-foreground/30 hover:text-foreground/60 hover:bg-foreground/[0.06] transition-all"
-          aria-label="上个月"
-        >
-          <ChevronLeft className="h-4 w-4" />
-        </button>
-        <button onClick={() => setOffset(0)} className="text-sm font-semibold text-foreground/70 hover:text-foreground transition-colors">{year}年 {monthName}</button>
-        <button
-          onClick={() => setOffset((o) => Math.min(0, o + 1))}
-          disabled={offset === 0}
-          aria-label="下个月"
-          className={cn(
-            "w-7 h-7 flex items-center justify-center rounded-lg transition-all",
-            offset === 0 ? "text-foreground/15 cursor-default" : "text-foreground/30 hover:text-foreground/60 hover:bg-foreground/[0.06]"
-          )}
-        >
-          <ChevronRight className="h-4 w-4" />
-        </button>
-      </div>
-
-      <div className="grid grid-cols-7 mb-2">
-        {["一","二","三","四","五","六","日"].map((l) => (
-          <div key={l} className="text-center text-[10px] text-foreground/25 font-medium">{l}</div>
-        ))}
-      </div>
-
-      <div ref={cellRef} className="grid grid-cols-7 gap-1">
-        {days.map((cell, i) =>
-          cell.date === null ? (
-            <div key={`pad-${i}`} />
-          ) : (
-            <div
-              key={cell.date}
-              className={cn(
-                "checkin-cell rounded-lg flex items-center justify-center font-semibold mx-auto transition-all",
-                cell.isToday
-                  ? "w-8 flex-col gap-px py-1.5"
-                  : "w-8 h-8 text-[12px]"
-              )}
-              style={
-                cell.isCheckedIn
-                  ? cell.isToday
-                    ? { background: "var(--cal-today-bg)", color: "var(--cal-today-text)", border: "2px solid #0e7490" }
-                    : { background: "var(--cal-checkin-bg)", color: "var(--cal-checkin-text)", border: "1px solid var(--cal-checkin-text)" }
-                  : cell.isToday
-                  ? { border: "2px solid var(--accent)", color: "var(--accent)" }
-                  : cell.isFuture
-                  ? { color: "var(--heat-cell-text-empty)" }
-                  : { color: "var(--heat-cell-text-empty)", border: "1px dashed rgba(156,163,175,0.4)" }
-              }
-              title={cell.date}
-            >
-              <span className="text-[12px] leading-none">{cell.day}</span>
-              {cell.isToday && (
-                <span className="text-[6px] font-bold leading-none tracking-wide">今日</span>
-              )}
-            </div>
-          )
-        )}
-      </div>
-    </div>
-  )
-}
-
-// ─── Monthly Heatmap (right column) ──────────────────────────────────────────
-
-function MonthlyHeatmap({ heatmap, heatmapDuration }: { heatmap: Record<string, number>; heatmapDuration: Record<string, number> }) {
-  const [offset, setOffset] = useState(0)
-
-  const { year, month, days } = useMemo(() => {
-    const d = new Date()
-    d.setDate(1)
-    d.setMonth(d.getMonth() + offset)
-    const y = d.getFullYear()
-    const m = d.getMonth()
-    const daysInMonth = new Date(y, m + 1, 0).getDate()
-    const firstDow = new Date(y, m, 1).getDay()
-    const startPad = firstDow === 0 ? 6 : firstDow - 1
-    const cells: { date: string | null; count: number; day: number | null }[] = []
-    for (let i = 0; i < startPad; i++) cells.push({ date: null, count: 0, day: null })
-    for (let n = 1; n <= daysInMonth; n++) {
-      const dateStr = `${y}-${String(m + 1).padStart(2, "0")}-${String(n).padStart(2, "0")}`
-      cells.push({ date: dateStr, count: heatmap[dateStr] ?? 0, day: n })
+    const monthPrefix = `${y}-${String(m + 1).padStart(2, "0")}`
+    // 本月平均时长：只对**本月有过练习的天**取平均，除以整月天数会得到一个
+    // 随日期推进不断下降的假数字。
+    let seconds = 0
+    let active = 0
+    for (const c of list) {
+      if (!c.date.startsWith(monthPrefix)) continue
+      const sec = heatmapDuration[c.date] ?? 0
+      if (sec > 0) { seconds += sec; active += 1 }
     }
-    return { year: y, month: m, days: cells }
-  }, [offset, heatmap])
 
-  const today = toShanghaiDateStr()
-  const monthName = ["一月","二月","三月","四月","五月","六月","七月","八月","九月","十月","十一月","十二月"][month]
-  const cellRef = useRef<HTMLDivElement>(null)
+    return {
+      year: y,
+      month: m,
+      cells: list,
+      studiedDays: list.filter((c) => c.studied).length,
+      avgMinutes: active > 0 ? Math.round(seconds / 60 / active) : 0,
+    }
+  }, [offset, heatmap, heatmapDuration])
 
-  useEffect(() => {
-    if (!cellRef.current) return
-    const cells = cellRef.current.querySelectorAll(".heat-cell-m")
-    animate(cells, {
-      opacity: [0, 1],
-      scale: [0.5, 1],
-      duration: 220,
-      delay: stagger(12, { start: 0 }),
-      ease: "out(3)",
-    })
-  }, [offset])
-
-  return (
-    <div>
-      <div className="flex items-center justify-between mb-3">
-        <button
-          onClick={() => setOffset((o) => Math.max(-12, o - 1))}
-          className="w-7 h-7 flex items-center justify-center rounded-lg text-foreground/30 hover:text-foreground/60 hover:bg-foreground/[0.06] transition-all"
-          aria-label="上个月"
-        >
-          <ChevronLeft className="h-4 w-4" />
-        </button>
-        <button onClick={() => setOffset(0)} className="text-xs font-semibold text-foreground/60 hover:text-foreground transition-colors">{year}年 {monthName}</button>
-        <button
-          onClick={() => setOffset((o) => Math.min(0, o + 1))}
-          disabled={offset === 0}
-          aria-label="下个月"
-          className={cn(
-            "w-7 h-7 flex items-center justify-center rounded-lg transition-all",
-            offset === 0 ? "text-foreground/15 cursor-default" : "text-foreground/30 hover:text-foreground/60 hover:bg-foreground/[0.06]"
-          )}
-        >
-          <ChevronRight className="h-4 w-4" />
-        </button>
-      </div>
-      <div className="grid grid-cols-7 mb-1.5">
-        {["一","二","三","四","五","六","日"].map((l) => (
-          <div key={l} className="text-center text-[9px] text-foreground/25 font-medium">{l}</div>
-        ))}
-      </div>
-      <div ref={cellRef} className="grid grid-cols-7 gap-y-1 gap-x-0.5">
-        {days.map((cell, i) =>
-          cell.date === null ? (
-            <div key={`pad-${i}`} />
-          ) : (
-            <div
-              key={cell.date}
-              className={cn(
-                "heat-cell-m aspect-square rounded-md flex items-center justify-center text-[10px] font-medium",
-                cell.date === today ? "ring-1 ring-violet-400/70 ring-offset-1 ring-offset-[var(--background)]" : ""
-              )}
-              style={{
-                background: cell.count > 0 ? getHeatColor(cell.count) : "var(--heat-empty)",
-                color: cell.count > 0 ? "var(--heat-cell-text)" : "var(--heat-cell-text-empty)",
-              }}
-              title={cell.count > 0 ? `${cell.count} 金币 · 学了 ${formatDuration(heatmapDuration[cell.date ?? ""] ?? 0)}` : (cell.date ?? "")}
-            >
-              {cell.day}
-            </div>
-          )
-        )}
-      </div>
-      <div className="flex items-center gap-1 mt-2 justify-end">
-        <span className="text-[9px] text-foreground/20">少</span>
-        {[0, 20, 60, 100, 150].map((v) => (
-          <div key={v} className="w-2.5 h-2.5 rounded-sm" style={{ background: getHeatColor(v) }} />
-        ))}
-        <span className="text-[9px] text-foreground/20">多</span>
-      </div>
-    </div>
-  )
-}
-
-// ─── Weekly Bar Chart ─────────────────────────────────────────────────────────
-
-const WEEK_DOW = ["日", "一", "二", "三", "四", "五", "六"]
-
-// data 的日期口径是 Asia/Shanghai（由服务端保证），最后一项恒为「今天」，
-// 因此今天的高亮不依赖客户端时区，不会与服务端错开一天。
-function WeeklyChart({ data }: { data: { date: string; count: number }[] }) {
-  const barRef = useRef<HTMLDivElement>(null)
-
-  const max = data.length > 0 ? Math.max(...data.map((d) => d.count)) : 0
-  const total = data.reduce((sum, d) => sum + d.count, 0)
-  const avg = data.length > 0 ? Math.round(total / data.length) : 0
-
-  useEffect(() => {
-    if (!barRef.current) return
-    const bars = barRef.current.querySelectorAll(".week-bar")
-    animate(bars, {
-      scaleY: [0, 1],
-      opacity: [0, 1],
-      duration: 260,
-      delay: stagger(40, { start: 0 }),
-      ease: "out(3)",
-    })
-  }, [data])
-
-  if (data.length === 0) return null
+  // 首格之前的留白（参考页渲染成空 <label>，这里显式占位保持 7 列对齐）
+  const padCount = new Date(year, month, 1).getDay()
+  const rows: (typeof cells[number] | null)[][] = []
+  {
+    const flat: (typeof cells[number] | null)[] = [
+      ...Array.from({ length: padCount }, () => null),
+      ...cells,
+    ]
+    while (flat.length % 7 !== 0) flat.push(null)
+    for (let i = 0; i < flat.length; i += 7) rows.push(flat.slice(i, i + 7))
+  }
 
   return (
-    <div>
-      <div className="flex items-baseline justify-between mb-3">
-        <div className="flex items-baseline gap-1">
-          <span className="text-[15px] font-semibold text-foreground/85 tabular-nums">{total}</span>
-          <span className="text-[10px] text-foreground/40">句 · 本周</span>
+    <div className="calendar">
+      <h5>
+        学习日历
+        <div className="state">
+          <label><i className="yxx" />已学习</label>
+          <label><i className="wwc" />未学习</label>
         </div>
-        <span className="text-[10px] text-foreground/35 tabular-nums">日均 {avg} 句</span>
+      </h5>
+      <div className="Date">
+        <button type="button" aria-label="上个月" onClick={() => setOffset((o) => Math.max(-11, o - 1))}>
+          <em><ChevronsLeft /></em>
+        </button>
+        <span>{year}年{month + 1}月</span>
+        <button type="button" aria-label="下个月" disabled={offset >= 0} onClick={() => setOffset((o) => Math.min(0, o + 1))}>
+          <em><ChevronsRight /></em>
+        </button>
       </div>
+      <div className="days">
+        <p>
+          {["日", "一", "二", "三", "四", "五", "六"].map((w) => <em key={w}>{w}</em>)}
+        </p>
+        {rows.map((row, ri) => (
+          <p key={ri}>
+            {row.map((c, ci) => (
+              <label key={c?.date ?? `pad-${ri}-${ci}`} className={c?.isToday ? "on" : undefined}>
+                {c && (
+                  <span className={c.studied ? "yxx" : "wwc"}>
+                    {c.day}
+                    <i />
+                  </span>
+                )}
+              </label>
+            ))}
+          </p>
+        ))}
+      </div>
+      <div className="tit">
+        <p>本月学习<b>{studiedDays} 天</b></p>
+        <p>连续天数<b>{streakDays} 天</b></p>
+        <p>本月平均时长<b>{avgMinutes} 分</b></p>
+      </div>
+    </div>
+  )
+}
 
-      {total === 0 ? (
-        <p className="text-[11px] text-muted-foreground/40 text-center py-6">本周还没有练习</p>
-      ) : (
-        <div ref={barRef} className="flex items-end justify-between gap-1.5">
-          {data.map((d, i) => {
-            const isToday = i === data.length - 1
-            // 上海时区正午取值，避免 UTC 解析把星期几算偏
-            const dow = WEEK_DOW[new Date(`${d.date}T12:00:00+08:00`).getDay()]
-            const ratio = max > 0 ? d.count / max : 0
-            const heightPct = d.count > 0 ? Math.max(ratio * 100, 12) : 0
-            return (
-              <div key={d.date} className="flex-1 flex flex-col items-center gap-1.5">
-                <div className="w-full h-20 flex items-end">
-                  {d.count > 0 ? (
-                    <div
-                      className={cn(
-                        "week-bar w-full rounded-md origin-bottom",
-                        isToday ? "bg-violet-400" : "bg-violet-400/35"
-                      )}
-                      style={{ height: `${heightPct}%` }}
-                    />
-                  ) : (
-                    <div className="w-full h-0.5 rounded-full bg-foreground/[0.08]" />
-                  )}
-                </div>
-                <span
-                  className={cn(
-                    "text-[9px] font-medium",
-                    isToday ? "text-violet-400" : "text-foreground/25"
-                  )}
-                  title={`${d.date} · ${d.count} 句`}
-                >
-                  {dow}
-                </span>
+// ─── Reference section: 客户服务与支持（复刻参考页 .cs-banner-compact）───────
+
+function CsBanner({ onContact }: { onContact: () => void }) {
+  return (
+    <div className="cs-banner-compact">
+      <div className="cs-left">
+        <div className="cs-icon-wrapper">
+          <Headphones />
+        </div>
+        <div className="cs-text">
+          <h3>客户服务与支持</h3>
+          <p>在使用中遇到问题，或有意见建议，欢迎随时联系我们</p>
+        </div>
+      </div>
+      <div className="cs-right">
+        <div className="follow-us-wrapper">
+          <button type="button" className="cs-btn follow-btn">
+            <MessageCircle style={{ color: "#10b981" }} />
+            关注我们
+          </button>
+          <div className="qrcode-popup">
+            {/* 二维码是公众号码，不是客服码 —— 标签必须诚实（同上文 ContactModal 注释） */}
+            <img src="/wechat-oa.jpeg" alt="公众号二维码" />
+            <p>扫码关注公众号</p>
+          </div>
+        </div>
+        <button type="button" className="cs-btn support-btn" onClick={onContact}>
+          <MessageCircle />
+          在线客服
+        </button>
+      </div>
+    </div>
+  )
+}
+
+// ─── Reference section: 会员状态卡片（复刻参考页 .membership-status-card）───
+
+function MembershipCard({
+  me,
+  todaySentences,
+  checkInGoal,
+  /** 今日 AI 口语评测次数 —— 我方额度是「调用次数」而非参考页的「分钟配额」 */
+  pronunciationToday,
+}: {
+  me: MeData | null
+  todaySentences: number
+  checkInGoal: number
+  pronunciationToday: number
+}) {
+  const tier: MemberTier = me?.member_tier ?? "free"
+  const isVip = tier !== "free"
+  const quotaPercent = checkInGoal > 0 ? Math.min(100, (todaySentences / checkInGoal) * 100) : 0
+
+  return (
+    <div className={cn("membership-status-card compact", isVip ? "vip" : "free")}>
+      <div className="membership-compact-layout">
+        {/* 左侧：用户信息 */}
+        <div className="user-info-compact">
+          <div className="user-avatar-wrapper">
+            {me?.avatar ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={me.avatar} alt="头像" className="user-avatar-img" />
+            ) : (
+              <div className="user-avatar-placeholder">
+                <BookOpen />
               </div>
-            )
-          })}
+            )}
+          </div>
+          <div className="user-details">
+            <div className="user-name">{me?.name ?? "同学"}</div>
+            <div className="membership-badge-row">
+              <span className={cn("badge-text", isVip ? "vip" : "free")}>
+                {memberTierLabel(tier)}
+              </span>
+              {!isVip && (
+                <Link href="/pricing" className="upgrade-link">
+                  获取练习配额
+                </Link>
+              )}
+            </div>
+          </div>
         </div>
+
+        {/* 中间：权益数据 */}
+        <div className="benefits-compact">
+          <div className="benefit-item-compact">
+            <div className="benefit-icon blue">
+              <Zap />
+            </div>
+            <div className="benefit-info">
+              {/* 参考页这里是「今日配额(分钟) / 30」—— 我方**没有分钟配额**这个概念，
+                  membership-benefits 的额度单位是 AI 调用次数，练习本身不限次。
+                  所以换成同源的真实指标：今日练习句数 / 签到目标。 */}
+              <span className="benefit-label">今日练习(句)</span>
+              <span className="benefit-value" style={{ display: "flex", alignItems: "baseline", gap: 2 }}>
+                {todaySentences}
+                <small style={{ fontSize: 12, color: "#9aa8bb", fontWeight: 500 }}> / {checkInGoal}</small>
+              </span>
+              <div style={{ width: "100%", height: 4, background: "#e2e8f0", borderRadius: 3, marginTop: 5, overflow: "hidden" }}>
+                <div style={{ width: `${quotaPercent}%`, height: "100%", background: "#3b82f6", borderRadius: 3, transition: "width 0.6s ease" }} />
+              </div>
+            </div>
+          </div>
+          <div className="benefit-item-compact">
+            <div className="benefit-icon purple">
+              <Mic />
+            </div>
+            <div className="benefit-info">
+              <span className="benefit-label">AI 口语评测</span>
+              <span className="benefit-value">{pronunciationToday}</span>
+            </div>
+          </div>
+        </div>
+
+        {/* 右侧：快捷功能 */}
+        <div className="quick-actions-compact">
+          <Link href="/home/settings" className="action-icon" data-tooltip="个人设置">
+            <Settings />
+          </Link>
+          <Link href="/pricing" className="action-icon" data-tooltip="会员权益">
+            <Crown />
+          </Link>
+          {/* 参考页第三个是「切换主题」；我方 2026-10 已删掉暗色体系，换成学习相关入口 */}
+          <Link href="/home/review" className="action-icon" data-tooltip="错题复习">
+            <BookMarked />
+          </Link>
+          <button
+            type="button"
+            className="action-icon logout"
+            data-tooltip="退出登录"
+            onClick={async () => {
+              try { await signOutAction() } catch { /* 忽略：无论成败都跳走 */ }
+              window.location.href = "/"
+            }}
+          >
+            <LogOut />
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ─── Reference section: 试用 banner（复刻参考页 .pro-trial-banner）──────────
+
+function TrialBanner({ onClaim, claiming }: { onClaim: () => void; claiming: boolean }) {
+  return (
+    <div className="pro-trial-banner">
+      <div className="trial-text">
+        <div className="trial-icon">
+          <Crown />
+        </div>
+        <div>
+          <h3>免费体验畅学版特权</h3>
+          {/* 天数取自 lib/trial-days（唯一事实源），不要写死 */}
+          <p>您拥有 1 次获取 {TRIAL_DAYS} 天畅学版的机会，立即解锁「{TRIAL_DAYS} 天无限练习时长」</p>
+        </div>
+      </div>
+      <div className="trial-action">
+        <button type="button" onClick={onClaim} disabled={claiming}>
+          {claiming ? "领取中…" : "申请免费体验"}
+          <ArrowRight />
+        </button>
+        <Link href="/pricing">
+          了解会员权益
+          <ChevronRight />
+        </Link>
+      </div>
+    </div>
+  )
+}
+
+// ─── Reference section: 词汇学习（复刻参考页 .vocab-stats）──────────────────
+
+function VocabCard({ wordCount, pendingReviews }: { wordCount: number; pendingReviews: number }) {
+  return (
+    <div className="vocab-stats">
+      <h5><BookText />词汇学习</h5>
+      {wordCount === 0 ? (
+        <div className="vocab-empty">
+          <div className="empty-visual">
+            <div className="empty-ring">
+              <svg viewBox="0 0 120 120">
+                <circle className="ring-bg" cx="60" cy="60" r="52" />
+              </svg>
+              <div className="ring-content">
+                <Plus />
+              </div>
+            </div>
+          </div>
+          <p>开启词汇学习之旅</p>
+          <Link href="/home/wordbook" className="vocab-start-btn">
+            创建学习计划
+          </Link>
+        </div>
+      ) : (
+        <>
+          <div className="vocab-stats-grid">
+            <div className="stat-item">
+              <span className="stat-num">{wordCount}</span>
+              <span className="stat-txt">已收藏单词</span>
+            </div>
+            <div className="stat-item">
+              <span className="stat-num">{pendingReviews}</span>
+              <span className="stat-txt">待复习项</span>
+            </div>
+          </div>
+          <Link href="/home/wordbook" className="vocab-action-btn">
+            <BookText />
+            继续背单词
+          </Link>
+        </>
       )}
     </div>
   )
 }
 
-// ─── WeChat Login Banner (uses useSearchParams, needs Suspense) ─────────────
+// ─── Reference section: 最近课程（复刻参考页 .progress3）────────────────────
+
+function RecentCourses({
+  recentPractices,
+  lastStudied,
+}: {
+  recentPractices: StatsData["recentPractices"]
+  lastStudied: StatsData["lastStudied"]
+}) {
+  // 后端已按 (courseId, lessonId) 去重并保持时间倒序；这里再按课程收一次，
+  // 同一课的多个课时只在「最近课程」里占一格。
+  const items = useMemo(() => {
+    const seen = new Set<string>()
+    return recentPractices.filter((p) => {
+      if (seen.has(p.courseId)) return false
+      seen.add(p.courseId)
+      return true
+    }).slice(0, 2)
+  }, [recentPractices])
+
+  return (
+    <div className="progress3">
+      <h5>最近课程</h5>
+      <div className="rates">
+        {items.length === 0 ? (
+          <div className="empty-tip">
+            <BookOpen />
+            <span>暂无课程</span>
+            <Link href="/home/store" className="add-course-btn">去添加课程</Link>
+          </div>
+        ) : (
+          items.map((p) => (
+            <div key={`${p.courseId}-${p.lessonId}`} className="rate">
+              <span className="course-title">{p.courseTitle}</span>
+              <Link
+                href={`/home/learn/${p.courseId}?lesson=${p.lessonId}`}
+                className="continue-btn"
+              >
+                继续
+              </Link>
+              <div className="course-meta">
+                <span className="lesson-count">
+                  <BookOpen />
+                  {p.lessonTitle}
+                </span>
+                <em className="last-practice">{relativeTime(p.studiedAt)}</em>
+              </div>
+            </div>
+          ))
+        )}
+      </div>
+      {items.length > 0 && lastStudied && (
+        <Link href={`/home/learn/${lastStudied.courseId}?lesson=${lastStudied.lessonId}`} className="pg">
+          <p><span style={{ width: "100%" }} /></p>
+          <em>继续学</em>
+        </Link>
+      )}
+    </div>
+  )
+}
+
+// ─── Reference section: 错题统计（复刻参考页 .col-3 .progress）───────────────
+
+/**
+ * 参考页这里是「拼写错误 / 语法错误 / 词汇错误」三分类。
+ * **我方数据库没有错题分类字段** —— `practice_records.mistakes` 只有一个总数，
+ * 照抄会得到三根恒为 0 的进度条。这里换成同源的、真实存在的三个档位：
+ * 已掌握 / 接近掌握 / 复习中（借 review_queue 的 FSRS 字段，
+ * 口径与 lib/review-utils.ts 的 masteryLabel 一致）。
+ */
+function MistakeStats({ stats }: { stats: StatsData }) {
+  const total = stats.totalMistakes ?? 0
+  const rb = stats.reviewBreakdown ?? { mastered: 0, almost: 0, reviewing: 0 }
+  const reviewTotal = rb.mastered + rb.almost + rb.reviewing
+  const pct = (n: number) => (reviewTotal > 0 ? Math.round((n / reviewTotal) * 100) : 0)
+
+  const rows = [
+    { key: "px", label: "已掌握", n: rb.mastered, p: pct(rb.mastered) },
+    { key: "yf", label: "接近掌握", n: rb.almost, p: pct(rb.almost) },
+    { key: "ch", label: "复习中", n: rb.reviewing, p: pct(rb.reviewing) },
+  ]
+
+  return (
+    <div className="progress">
+      <h5>错题统计</h5>
+      <b>
+        <TrendingUp />
+        <small>
+          累计错题
+          <strong>{total}</strong>
+        </small>
+      </b>
+      <div className="rates">
+        {rows.map((r) => (
+          <div key={r.key} className={cn("rate", r.key)}>
+            <label>{r.label}</label>
+            <p>
+              <em>{r.n}项</em>
+              <span style={{ width: `${r.p}%` }} />
+            </p>
+            <i>{r.p}%</i>
+          </div>
+        ))}
+      </div>
+      <Link href="/home/review" style={{ display: "block" }}>
+        <button type="button">智能错题复习</button>
+      </Link>
+    </div>
+  )
+}
+
+// ─── WeChat login feedback (URL params) ───────────────────────────────────────
 
 function WeChatLoginBanner() {
   const searchParams = useSearchParams()
@@ -418,14 +594,14 @@ function WeChatLoginBanner() {
     return <FollowOABanner />
   }
 
-  // new_user=1 (already following or not OA flow): show welcome trial modal + phone bind
+  // new_user=1 (already following or not OA flow): show welcome trial modal
+  //
+  // 这里原本还挂了一个 PhoneBindBanner（"建议绑定手机号"）。删掉是因为它现在
+  // 必然说错话：微信账号没绑手机号的用户**到不了这个页面** —— 微信回调与
+  // oa-check 都会先把人送去 /login?bind=1（见 lib/phone-gate），绑完才放进来。
+  // 也就是说能站在这里的人，手机号一定已经绑好了，再劝他绑一次纯属噪音。
   if (newUser === "1" && loginSuccess === "wechat") {
-    return (
-      <>
-        <WelcomeTrialModal />
-        <PhoneBindBanner />
-      </>
-    )
+    return <WelcomeTrialModal />
   }
 
   return null
@@ -437,145 +613,31 @@ function FollowOABanner() {
   if (dismissed) return null
 
   return (
-    <div
-      className="anim-card relative overflow-hidden rounded-2xl border p-5"
-      style={{
-        background: "linear-gradient(135deg, #7c3aed08, #a855f708)",
-        borderColor: "#7c3aed30",
-      }}
-    >
-      <div className="flex items-center gap-4">
-        <div
-          className="flex items-center justify-center w-10 h-10 rounded-xl shrink-0"
-          style={{ background: "#7c3aed18", border: "1px solid #7c3aed30" }}
-        >
-          <MessageCircle className="h-5 w-5 text-violet-400" />
-        </div>
-        <div className="flex-1 min-w-0">
-          <p className="text-sm font-semibold text-foreground/80">
-            关注服务号，接收学习提醒
-          </p>
-          <p className="text-[12px] text-foreground/45 mt-0.5">
-            打卡通知、复习提醒不再错过
-          </p>
-        </div>
-        <div className="shrink-0 w-16 h-16 rounded-lg overflow-hidden border border-border bg-card">
-          <img
-            src="/qrcode-oa.jpg"
-            alt="关注服务号"
-            className="w-full h-full object-cover"
-          />
-        </div>
-        <button
-          type="button"
-          onClick={() => setDismissed(true)}
-          className="shrink-0 p-1.5 rounded-lg text-foreground/25 hover:text-foreground/50 hover:bg-foreground/[0.06] transition-colors"
-        >
-          <X className="h-4 w-4" />
-        </button>
+    <div className="ref-bgwhite" style={{ display: "flex", alignItems: "center", gap: 16 }}>
+      <div className="cs-icon-wrapper" style={{ background: "rgba(59,130,246,0.1)" }}>
+        <MessageCircle />
       </div>
-    </div>
-  )
-}
-
-function PhoneBindBanner() {
-  const [dismissed, setDismissed] = useState(false)
-
-  if (dismissed) return null
-
-  return (
-    <div
-      className="anim-card relative overflow-hidden rounded-2xl border p-5"
-      style={{
-        background: "linear-gradient(135deg, #7c3aed08, #a855f708)",
-        borderColor: "#7c3aed30",
-      }}
-    >
-      <div className="flex items-center gap-4">
-        <div
-          className="flex items-center justify-center w-10 h-10 rounded-xl shrink-0"
-          style={{ background: "#7c3aed18", border: "1px solid #7c3aed30" }}
-        >
-          <Smartphone className="h-5 w-5 text-violet-400" />
-        </div>
-        <div className="flex-1 min-w-0">
-          <p className="text-sm font-semibold text-foreground/80">
-            建议绑定手机号
-          </p>
-          <p className="text-[12px] text-foreground/45 mt-0.5">
-            方便后续登录与找回账号
-          </p>
-        </div>
-        <Link
-          href="/home/settings"
-          className="shrink-0 rounded-lg px-4 py-2 text-[13px] font-medium text-white transition-colors hover:opacity-90"
-          style={{ background: "linear-gradient(135deg, #7c3aed, #a855f7)" }}
-        >
-          去绑定
-        </Link>
-        <button
-          type="button"
-          onClick={() => setDismissed(true)}
-          className="shrink-0 p-1.5 rounded-lg text-foreground/25 hover:text-foreground/50 hover:bg-foreground/[0.06] transition-colors"
-        >
-          <X className="h-4 w-4" />
-        </button>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <p style={{ fontSize: 14, fontWeight: 600, color: "#1e293b", margin: 0 }}>
+          关注服务号，接收学习提醒
+        </p>
+        <p style={{ fontSize: 12, color: "#64748b", margin: "2px 0 0" }}>
+          打卡通知、复习提醒不再错过
+        </p>
       </div>
-    </div>
-  )
-}
-
-// ─── Invite Card ──────────────────────────────────────────────────────────────
-
-function InviteCard() {
-  const [inviteData, setInviteData] = useState<{ inviteCode: string | null; inviteTotal: number } | null>(null)
-  const [copied, setCopied] = useState(false)
-
-  useEffect(() => {
-    fetch("/api/tasks/status")
-      .then((r) => r.json())
-      .then((d) => setInviteData({ inviteCode: d.inviteCode, inviteTotal: d.inviteTotal ?? 0 }))
-      .catch(() => null)
-  }, [])
-
-  const inviteLink = inviteData?.inviteCode
-    ? `${typeof window !== "undefined" ? window.location.origin : ""}/ref/${inviteData.inviteCode}`
-    : ""
-
-  const handleCopy = () => {
-    if (!inviteLink) return
-    navigator.clipboard.writeText(inviteLink).then(() => {
-      setCopied(true)
-      toast.success("邀请链接已复制！")
-      setTimeout(() => setCopied(false), 2000)
-    }).catch(() => null)
-  }
-
-  return (
-    <div
-      onClick={handleCopy}
-      className="anim-card rounded-2xl border p-3.5 cursor-pointer hover:opacity-90 transition-all duration-200 active:scale-[0.98]"
-      style={{ background: "var(--surface-violet)", borderColor: "var(--surface-violet-border)" }}
-    >
-      <div className="flex items-center gap-3">
-        <div
-          className="flex items-center justify-center w-9 h-9 rounded-lg shrink-0"
-          style={{ background: "var(--stat-2-icon-bg)", border: "1px solid var(--stat-2-border)" }}
-        >
-          <Gift className="h-4 w-4 text-amber-400" />
-        </div>
-        <div className="min-w-0">
-          <p className="text-[13px] font-semibold text-foreground/80">邀请好友</p>
-          <p className="text-[10px] text-foreground/40 mt-0.5">
-            {copied ? "链接已复制！" : "点击复制分享链接"}
-          </p>
-        </div>
-        {inviteData && inviteData.inviteTotal > 0 && (
-          <span className="text-[10px] text-muted-foreground/50 ml-auto shrink-0">
-            已邀请 {inviteData.inviteTotal} 人
-          </span>
-        )}
-      </div>
+      <img
+        src="/wechat-oa.jpeg"
+        alt="关注服务号"
+        style={{ width: 64, height: 64, borderRadius: 8, objectFit: "cover", flexShrink: 0 }}
+      />
+      <button
+        type="button"
+        onClick={() => setDismissed(true)}
+        aria-label="关闭"
+        style={{ background: "none", border: "none", cursor: "pointer", color: "#94a3b8", padding: 6 }}
+      >
+        ✕
+      </button>
     </div>
   )
 }
@@ -585,6 +647,7 @@ function InviteCard() {
 export function HomeClient({ name }: HomeClientProps) {
   const [activeTab, setActiveTab] = useState<"today" | "archive">("today")
   const [stats, setStats] = useState<StatsData | null>(null)
+  const [me, setMe] = useState<MeData | null>(null)
   const [loading, setLoading] = useState(true)
   const [fetchError, setFetchError] = useState(false)
   const [checkingIn, setCheckingIn] = useState(false)
@@ -595,7 +658,11 @@ export function HomeClient({ name }: HomeClientProps) {
   const [checkInGoal, setCheckInGoal] = useState(CHECK_IN_GOAL_DEFAULT)
   const [checkInRulesOpen, setCheckInRulesOpen] = useState(false)
   const [settingsOpen, setSettingsOpen] = useState(false)
+  const [contactOpen, setContactOpen] = useState(false)
   const [checkInVersion, setCheckInVersion] = useState(0)
+  const [claimingTrial, setClaimingTrial] = useState(false)
+  /** 今日 AI 口语评测次数（真实计数，来自 pronunciation_scores） */
+  const [pronunciationToday, setPronunciationToday] = useState(0)
 
   const checkInBtnRef = useRef<HTMLButtonElement>(null)
   const streakRef = useRef<HTMLSpanElement>(null)
@@ -613,6 +680,7 @@ export function HomeClient({ name }: HomeClientProps) {
       setCheckInDatesThisMonth(d.checkInDatesThisMonth ?? [])
       setTodaySentences(d.todaySentences ?? 0)
       setCheckInGoal(d.checkInGoal ?? CHECK_IN_GOAL_DEFAULT)
+      setPronunciationToday(d.pronunciationToday ?? 0)
     } catch (e) {
       console.error(e)
       setStats(null)
@@ -620,9 +688,22 @@ export function HomeClient({ name }: HomeClientProps) {
     }
   }, [])
 
+  // 会员信息（头像 / 档位 / 试用资格）：没有全局 user context，只能自己拉。
+  // 昵称优先用这个接口的返回值，props.name 只是首屏兜底。
+  const fetchMe = useCallback(async () => {
+    try {
+      const res = await fetch("/api/auth/me")
+      if (!res.ok) return
+      const d = await res.json()
+      if (d?.user) setMe(d.user)
+    } catch {
+      /* 会员卡降级为「普通用户」即可，不打扰用户 */
+    }
+  }, [])
+
   useEffect(() => {
-    fetchStats().finally(() => setLoading(false))
-  }, [fetchStats])
+    Promise.all([fetchStats(), fetchMe()]).finally(() => setLoading(false))
+  }, [fetchStats, fetchMe])
 
   // Refresh data when user returns to the page (visibility change or focus)
   // Debounced to avoid duplicate calls from rapid focus+visibility events
@@ -703,10 +784,35 @@ export function HomeClient({ name }: HomeClientProps) {
     }
   }, [checkedIn, checkingIn, todaySentences, checkInGoal])
 
-  const today = new Date()
-  const greetings = ["早上好", "上午好", "下午好", "晚上好"]
-  const hour = today.getHours()
-  const greeting = hour < 9 ? greetings[0] : hour < 12 ? greetings[1] : hour < 18 ? greetings[2] : greetings[3]
+  const handleClaimTrial = useCallback(async () => {
+    if (claimingTrial) return
+    setClaimingTrial(true)
+    try {
+      const res = await fetch("/api/trial/claim", { method: "POST" })
+      const data = await res.json()
+      if (res.ok && data.success) {
+        toast.success(`已解锁 ${data.days ?? TRIAL_DAYS} 天畅学版特权`)
+        fetchMe()
+        return
+      }
+      if (res.status === 409 || data.code === "ALREADY_CLAIMED") {
+        toast.info("体验会员每人仅可领取一次")
+        fetchMe()
+        return
+      }
+      toast.error(data.error || "领取失败，请稍后重试")
+    } catch {
+      toast.error("网络错误，请稍后重试")
+    } finally {
+      setClaimingTrial(false)
+    }
+  }, [claimingTrial, fetchMe])
+
+  const greeting = useMemo(() => {
+    const h = new Date().getHours()
+    const greetings = ["早上好", "上午好", "下午好", "晚上好"]
+    return h < 9 ? greetings[0] : h < 12 ? greetings[1] : h < 18 ? greetings[2] : greetings[3]
+  }, [])
 
   if (loading) {
     return (
@@ -719,12 +825,25 @@ export function HomeClient({ name }: HomeClientProps) {
     )
   }
 
+  const totalDurationHours = stats?.totalDurationHours ?? 0
+  const hoursPercent = Math.min(100, (totalDurationHours / THOUSAND_HOURS) * 100)
+
+  // 本月平均时长（分钟）：只对本月有练习记录的天取平均
+  const monthPrefix = toShanghaiDateStr().slice(0, 7)
+  const monthDurations = Object.entries(stats?.heatmapDuration ?? {})
+    .filter(([d, s]) => d.startsWith(monthPrefix) && s > 0)
+  const monthAvgMinutes = monthDurations.length > 0
+    ? Math.round(monthDurations.reduce((a, [, s]) => a + s, 0) / 60 / monthDurations.length)
+    : 0
+
+  const todayMinutes = (stats?.heatmapDuration?.[toShanghaiDateStr()] ?? 0) / 60
+
   return (
     <div ref={pageRef} className="h-full overflow-y-auto scrollbar-none">
-      <div className="w-full px-4 sm:px-6 lg:px-8 py-6 pb-16 max-w-7xl mx-auto">
+      <div className="home-ref" style={{ padding: "0 0 8px" }}>
 
-        {/* ── Tab switcher + greeting ── */}
-        <div className="flex items-center justify-between mb-5">
+        {/* ── Tab switcher + greeting（我方保留：档案 tab 是站内独有的功能）── */}
+        <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-1 rounded-xl p-1" style={{ background: "var(--surface)", border: "1px solid var(--surface-border)" }}>
             {(["today", "archive"] as const).map((tab) => (
               <button
@@ -744,18 +863,16 @@ export function HomeClient({ name }: HomeClientProps) {
           {activeTab === "today" && (
             <div className="flex items-center gap-2 sm:gap-4">
               <span className="hidden sm:inline text-sm font-medium text-foreground/60">
-                {greeting}，<span className="font-bold text-foreground/80">{name || "同学"}</span>
+                {greeting}，<span className="font-bold text-foreground/80">{me?.name || name || "同学"}</span>
               </span>
               <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap">
-                {stats?.todayCount !== undefined && (
-                  <div
-                    className="inline-flex items-center gap-1 sm:gap-1.5 rounded-full px-2 sm:px-2.5 py-1"
-                    style={{ background: "var(--banner-pill-today-bg)", border: "1px solid var(--banner-pill-today-border)" }}
-                  >
-                    <Zap className="h-3 w-3 text-amber-400" />
-                    <span className="text-[11px] sm:text-[12px] font-semibold" style={{ color: "var(--banner-pill-today-text)" }}>今日 {stats.todayCount} 句</span>
-                  </div>
-                )}
+                <div
+                  className="inline-flex items-center gap-1 sm:gap-1.5 rounded-full px-2 sm:px-2.5 py-1"
+                  style={{ background: "var(--banner-pill-today-bg)", border: "1px solid var(--banner-pill-today-border)" }}
+                >
+                  <Zap className="h-3 w-3 text-amber-400" />
+                  <span className="text-[11px] sm:text-[12px] font-semibold" style={{ color: "var(--banner-pill-today-text)" }}>今日 {stats?.todayCount ?? 0} 句</span>
+                </div>
                 <div
                   className="inline-flex items-center gap-1 sm:gap-1.5 rounded-full px-2 sm:px-2.5 py-1"
                   style={{ background: "var(--banner-pill-streak-bg)", border: "1px solid var(--banner-pill-streak-border)" }}
@@ -769,154 +886,99 @@ export function HomeClient({ name }: HomeClientProps) {
         </div>
 
         <div className={cn(activeTab === "today" ? "block" : "hidden")}>
-        <div className="space-y-5">
 
-        {/* ── Error banner ── */}
-        {fetchError && (
-          <div className="rounded-2xl border border-red-500/20 bg-red-500/5 p-4 flex items-center justify-between">
-            <span className="text-sm text-red-500/80">数据加载失败</span>
-            <button
-              onClick={fetchStats}
-              className="text-sm font-medium text-red-500 hover:text-red-400 transition-colors"
-            >
-              点击重试
-            </button>
+          {/* ── Error banner ── */}
+          {fetchError && (
+            <div className="rounded-2xl border border-red-500/20 bg-red-500/5 p-4 flex items-center justify-between" style={{ marginBottom: 14 }}>
+              <span className="text-sm text-red-500/80">数据加载失败</span>
+              <button
+                onClick={fetchStats}
+                className="text-sm font-medium text-red-500 hover:text-red-400 transition-colors"
+              >
+                点击重试
+              </button>
+            </div>
+          )}
+
+          {/* ── WeChat login feedback ── */}
+          <Suspense fallback={null}>
+            <WeChatLoginBanner />
+          </Suspense>
+
+          {/* ── Payment success modal ── */}
+          <Suspense fallback={null}>
+            <PaymentSuccessModal />
+          </Suspense>
+
+          {/* ══ 以下区块顺序 / 几何 / 色值严格对齐参考页 ══ */}
+
+          {/* 1. 客户服务与支持 */}
+          <div className="anim-card">
+            <CsBanner onContact={() => setContactOpen(true)} />
           </div>
-        )}
 
-        {/* ── WeChat login feedback ── */}
-        <Suspense fallback={null}>
-          <WeChatLoginBanner />
-        </Suspense>
-
-        {/* ── Payment success modal ── */}
-        <Suspense fallback={null}>
-          <PaymentSuccessModal />
-        </Suspense>
-
-        {/* ── Continue Learning / Start Learning ── */}
-        <Link
-          href={stats?.lastStudied
-            ? `/home/learn/${stats.lastStudied.courseId}?lesson=${stats.lastStudied.lessonId}`
-            : "/home/store"
-          }
-          className="flex items-center gap-3 rounded-2xl border p-3.5 hover:border-accent/30 transition-all duration-200 group"
-          style={{ background: "var(--surface-alt)", borderColor: "var(--surface-border)" }}
-        >
-          <div
-            className="flex items-center justify-center w-10 h-10 rounded-xl shrink-0"
-            style={{ background: "linear-gradient(135deg, #7c3aed, #a855f7)" }}
-          >
-            <BookOpen className="h-5 w-5 text-white" />
+          {/* 2. 会员状态卡片（含日签按钮：签到是我方业务，参考页没有，折进最贴近的位置） */}
+          <div className="anim-card">
+            <MembershipCard
+              me={me}
+              todaySentences={todaySentences}
+              checkInGoal={checkInGoal}
+              pronunciationToday={pronunciationToday}
+            />
           </div>
-          <div className="min-w-0 flex-1">
-            <p className="text-sm font-semibold text-foreground/80">
-              {stats?.lastStudied ? "继续学习" : "开始学习"}
-            </p>
-            <p className="text-[12px] text-foreground/40 mt-0.5 truncate">
-              {stats?.lastStudied
-                ? `${stats.lastStudied.courseTitle} · ${stats.lastStudied.lessonTitle}`
-                : "前往课程广场，选择你的第一课"}
-            </p>
-          </div>
-          <ChevronRight className="h-5 w-5 text-foreground/30 group-hover:text-foreground/50 transition-colors shrink-0" />
-        </Link>
 
-        {/* ── Three-column grid ── */}
-        <div className="grid grid-cols-1 lg:grid-cols-[1fr_1fr_260px] gap-5">
-
-          {/* ── Column 1: 签到区 ── */}
-          <div className="flex flex-col gap-5 h-full">
-            {/* Check-in card (compact) */}
-            <div
-              className="anim-card relative overflow-hidden rounded-2xl border p-5"
-              style={{
-                background: "var(--surface-violet)",
-                borderColor: "var(--surface-violet-border)",
-              }}
-            >
-              <div className="relative flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-4 mb-4">
-                <div className="flex items-center gap-3 sm:gap-3.5">
-                  <div
-                    className="flex items-center justify-center w-10 h-10 sm:w-12 sm:h-12 rounded-xl shrink-0"
-                    style={{ background: "var(--stat-2-icon-bg)", border: "1px solid var(--stat-2-border)" }}
-                  >
-                    <Flame className="h-5 w-5 sm:h-6 sm:w-6 text-amber-400" />
-                  </div>
-                  <div>
-                    <p className="text-foreground/65 text-[10px] sm:text-[11px] font-bold tracking-wider uppercase">连续打卡</p>
-                    <div className="flex items-baseline gap-1 sm:gap-1.5 mt-0.5">
-                      <span
-                        ref={streakRef}
-                        className="text-3xl sm:text-5xl font-black tabular-nums"
-                        style={{ background: "linear-gradient(135deg, #a78bfa, #ec4899)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}
-                      >
-                        {streak}
-                      </span>
-                      <span className="text-foreground/40 text-xs sm:text-sm font-medium">天</span>
-                    </div>
+          {/* 3. 今日打卡卡（我方业务，参考页无对应区块；DJ 用参考页白底卡几何） */}
+          <div className="ref-bgwhite anim-card">
+            <div className="ref-title">
+              <h2>今日打卡</h2>
+              <div className="textRight">
+                <div className="btns">
+                  <button type="button" onClick={() => setCheckInRulesOpen(true)}>
+                    <HelpCircle style={{ display: "inline", width: 14, height: 14, verticalAlign: "-2px", marginRight: 4 }} />
+                    签到规则
+                  </button>
+                </div>
+              </div>
+            </div>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 16, flexWrap: "wrap" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+                <div
+                  className="flex items-center justify-center w-12 h-12 rounded-xl shrink-0"
+                  style={{ background: "var(--stat-2-icon-bg)", border: "1px solid var(--stat-2-border)" }}
+                >
+                  <Flame className="h-6 w-6 text-amber-400" />
+                </div>
+                <div>
+                  <p style={{ fontSize: 12, color: "#94a3b8", margin: 0, fontWeight: 600 }}>连续打卡</p>
+                  <div style={{ display: "flex", alignItems: "baseline", gap: 4 }}>
+                    <span
+                      ref={streakRef}
+                      style={{ fontSize: 34, fontWeight: 850, lineHeight: 1.1, background: "linear-gradient(135deg, #a78bfa, #ec4899)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}
+                    >
+                      {streak}
+                    </span>
+                    <span style={{ fontSize: 13, color: "#94a3b8" }}>天</span>
                   </div>
                 </div>
-
-                <button
-                  ref={checkInBtnRef}
-                  onClick={handleCheckIn}
-                  disabled={checkedIn || checkingIn}
-                  aria-label={
-                    checkedIn ? "已签到" :
-                    !checkedIn && todaySentences < checkInGoal ? `还需练 ${checkInGoal - todaySentences} 句` :
-                    "签到打卡"
-                  }
-                  className={cn(
-                    "flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold transition-all duration-300 shrink-0",
-                    checkedIn
-                      ? "cursor-default bg-cyan-100 text-cyan-800 border border-cyan-300 dark:bg-cyan-900/40 dark:text-cyan-200 dark:border-cyan-700"
-                      : !checkedIn && todaySentences < checkInGoal
-                      ? "cursor-pointer opacity-70 border"
-                      : "text-white hover:opacity-90 active:scale-95"
-                  )}
-                  style={checkedIn
-                    ? undefined
-                    : !checkedIn && todaySentences < checkInGoal
-                    ? { background: "var(--muted)", borderColor: "var(--border)", color: "var(--muted-foreground)" }
-                    : { background: "linear-gradient(135deg, #7c3aed, #a855f7)", border: "1px solid #6d28d9", boxShadow: "0 0 18px #7c3aed50" }
-                  }
-                >
-                  {checkingIn ? (
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                  ) : checkedIn ? (
-                    <Check className="h-4 w-4" />
-                  ) : (
-                    <CalendarDays className="h-4 w-4" />
-                  )}
-                  {checkedIn ? "已签到" : "签到打卡"}
-                </button>
               </div>
 
-              {/* Diamond progress bar */}
-              <div>
-                <div className="flex items-center gap-2 mb-1.5">
-                  <span className="text-sm font-semibold text-foreground/70">
-                    📝 {todaySentences} / {checkInGoal} 句
+              <div style={{ flex: 1, minWidth: 220 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
+                  <span style={{ fontSize: 14, fontWeight: 600, color: "#475569" }}>
+                    今日 {todaySentences} / {checkInGoal} 句
                   </span>
-                  <button
-                    onClick={() => setCheckInRulesOpen(true)}
-                    className="flex items-center justify-center text-foreground/30 hover:text-foreground/60 transition-colors"
-                  >
-                    <HelpCircle className="h-3.5 w-3.5" />
-                  </button>
-                  <div className="flex-1" />
+                  <div style={{ flex: 1 }} />
                   {!checkedIn && todaySentences < checkInGoal && (
-                    <span className="text-[11px] text-muted-foreground/60">
-                      还差 {checkInGoal - todaySentences} 句可签到
-                    </span>
+                    <span style={{ fontSize: 12, color: "#94a3b8" }}>还差 {checkInGoal - todaySentences} 句可签到</span>
                   )}
                 </div>
-                <div className="h-1.5 rounded-full overflow-hidden" style={{ background: "var(--border)" }}>
+                <div style={{ height: 6, borderRadius: 999, overflow: "hidden", background: "#e2e8f0" }}>
                   <div
-                    className="h-full rounded-full transition-all duration-500"
                     style={{
-                      width: `${Math.min(100, (todaySentences / checkInGoal) * 100)}%`,
+                      height: "100%",
+                      borderRadius: 999,
+                      transition: "width 0.5s",
+                      width: `${Math.min(100, checkInGoal > 0 ? (todaySentences / checkInGoal) * 100 : 0)}%`,
                       background: todaySentences >= checkInGoal
                         ? "linear-gradient(90deg, #22c55e, #16a34a)"
                         : "linear-gradient(90deg, #7c3aed, #a855f7)",
@@ -924,130 +986,176 @@ export function HomeClient({ name }: HomeClientProps) {
                   />
                 </div>
               </div>
+
+              <button
+                ref={checkInBtnRef}
+                onClick={handleCheckIn}
+                disabled={checkedIn || checkingIn}
+                aria-label={
+                  checkedIn ? "已签到" :
+                  !checkedIn && todaySentences < checkInGoal ? `还需练 ${checkInGoal - todaySentences} 句` :
+                  "签到打卡"
+                }
+                className={cn(
+                  "flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold transition-all duration-300 shrink-0",
+                  checkedIn
+                    ? "cursor-default bg-cyan-100 text-cyan-800 border border-cyan-300"
+                    : !checkedIn && todaySentences < checkInGoal
+                    ? "cursor-pointer opacity-70 border"
+                    : "text-white hover:opacity-90 active:scale-95"
+                )}
+                style={checkedIn
+                  ? undefined
+                  : !checkedIn && todaySentences < checkInGoal
+                  ? { background: "var(--muted)", borderColor: "var(--border)", color: "var(--muted-foreground)" }
+                  : { background: "linear-gradient(135deg, #7c3aed, #a855f7)", border: "1px solid #6d28d9", boxShadow: "0 0 18px #7c3aed50" }
+                }
+              >
+                {checkingIn ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : checkedIn ? (
+                  <Check className="h-4 w-4" />
+                ) : (
+                  <CalendarDays className="h-4 w-4" />
+                )}
+                {checkedIn ? "已签到" : "签到打卡"}
+              </button>
+            </div>
+          </div>
+
+          {/* 4. 试用 banner（仅未领过体验会员时出现，与参考页的条件渲染一致） */}
+          {me?.trial_available && (
+            <div className="anim-card">
+              <TrialBanner onClaim={handleClaimTrial} claiming={claimingTrial} />
+            </div>
+          )}
+
+          {/* 5. 学习数据四格 + 千小时进度 */}
+          <div className="ref-bgwhite anim-card">
+            <div className="ref-title">
+              <h2>学习数据</h2>
+              <div className="textRight">
+                <div className="btns">
+                  <Link href="/home/store">
+                    <button type="button">
+                      <Plus style={{ display: "inline", width: 14, height: 14, verticalAlign: "-2px", marginRight: 4 }} />
+                      添加课程
+                    </button>
+                  </Link>
+                </div>
+              </div>
             </div>
 
-            {/* Monthly check-in calendar — fills remaining space */}
-            <div
-              className="anim-card rounded-2xl border p-5 flex-1 flex flex-col"
-              style={{ background: "var(--surface-violet)", borderColor: "var(--surface-violet-border)" }}
-            >
-              <MonthlyCheckInCalendar
-                checkInDates={checkInDatesThisMonth}
-                checkedInToday={checkedIn}
+            <div className="parame">
+              <ul>
+                {/* 参考页第一格是「今日练习时长(分钟)」，数值取当日 coin_logs.duration_seconds */}
+                <li>
+                  <span>今日练习时长(分钟)</span>
+                  <label><Zap /></label>
+                  <p><b>{fixed(todayMinutes)}<em /></b></p>
+                </li>
+                <li>
+                  <span>今日练习(句)</span>
+                  <label><TrendingUp /></label>
+                  <p><b>{stats?.todayCount ?? 0}<em /></b></p>
+                </li>
+                <li>
+                  <span>累计练习(句)</span>
+                  <label><BookMarked /></label>
+                  <p><b>{stats?.totalSentences ?? 0}</b></p>
+                </li>
+                <li>
+                  <span>连续天数(天)</span>
+                  <label><Flame /></label>
+                  <p><b>{streak}</b></p>
+                </li>
+              </ul>
+            </div>
+
+            <div className="hours">
+              <div className="time">
+                <div className="hours-content">
+                  <div className="hours-left">
+                    <div className="hours-title">用你的注意力填满一千小时，</div>
+                    <div className="hours-subtitle">就能练成任何你所需要的技能。</div>
+                  </div>
+                  <div className="hours-right">
+                    <div className="hours-percent">
+                      <span className="percent-num">{fixed(hoursPercent)}</span>
+                      <span className="percent-sign">%</span>
+                    </div>
+                    <div className="hours-progress">
+                      <div className="progress-bar" style={{ width: `${fixed(hoursPercent)}%` }} />
+                    </div>
+                    <div className="hours-label">
+                      <span className="hours-current">{fixed(totalDurationHours, 1)}H</span>
+                      <span className="hours-total">/{THOUSAND_HOURS}H COMPLETED</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* 6. col73：练习趋势（ECharts）+ 错题统计 */}
+          <div className="ref-col73">
+            <div className="ref-col-7 anim-card">
+              <h5 style={{ float: "left" }}>练习趋势</h5>
+              <div className="chat" style={{ clear: "both" }}>
+                <PracticeTrendChart data={stats?.weekly ?? []} height={300} />
+              </div>
+            </div>
+            <div className="ref-col-3 anim-card">
+              <MistakeStats stats={stats ?? {
+                streakDays: 0, todayCount: 0, checkedInToday: false,
+                heatmap: {}, heatmapDuration: {}, lastStudied: null,
+                recentPractices: [], checkInDatesThisMonth: [],
+                todaySentences: 0, checkInGoal, weekly: [], pendingReviews: 0,
+              }} />
+            </div>
+          </div>
+
+          {/* 7. col3：词汇学习 / 最近课程 / 学习日历 */}
+          <div className="ref-col3">
+            <div className="ref-col-3 anim-card">
+              <VocabCard
+                wordCount={stats?.wordbookCount ?? 0}
+                pendingReviews={stats?.pendingReviews ?? 0}
+              />
+            </div>
+            <div className="ref-col-3 anim-card" style={{ minHeight: 200 }}>
+              <RecentCourses
+                recentPractices={stats?.recentPractices ?? []}
+                lastStudied={stats?.lastStudied ?? null}
+              />
+            </div>
+            <div className="ref-col-3 anim-card">
+              <StudyCalendar
+                heatmap={stats?.heatmap ?? {}}
+                heatmapDuration={stats?.heatmapDuration ?? {}}
+                streakDays={streak}
               />
             </div>
           </div>
 
-          {/* ── Column 2: 每日任务 + 最近学习 ── */}
-          <div className="h-full flex flex-col gap-5">
-            <DailyTasks className="flex-1" refreshKey={checkInVersion} />
-            <div
-              className="anim-card rounded-2xl border p-5"
-              style={{ background: "var(--surface-alt)", borderColor: "var(--surface-border)" }}
-            >
-              <div className="flex items-center gap-2 mb-3">
-                <Clock className="h-3.5 w-3.5 text-sky-400" />
-                <h3 className="text-sm font-semibold text-foreground/70">最近学习</h3>
-              </div>
-              {stats?.recentPractices && stats.recentPractices.length > 0 ? (
-                <div className="space-y-1.5">
-                  {stats.recentPractices.slice(0, 4).map((p, i) => (
-                    <Link
-                      key={`${p.courseId}-${p.lessonId}-${i}`}
-                      href={`/home/learn/${p.courseId}?lesson=${p.lessonId}`}
-                      className="flex items-center gap-2 group/item rounded-lg px-2 py-1.5 -mx-2 hover:bg-foreground/[0.04] transition-colors"
-                    >
-                      <div className="flex-1 min-w-0">
-                        <p className="text-[12px] font-medium text-foreground/80 truncate">{p.courseTitle}</p>
-                        <p className="text-[10px] text-muted-foreground/55 truncate mt-0.5">{p.lessonTitle}</p>
-                      </div>
-                      <span className="text-[10px] text-foreground/25 shrink-0">{relativeTime(p.studiedAt)}</span>
-                    </Link>
-                  ))}
-                </div>
-              ) : (
-                <p className="text-[12px] text-muted-foreground/40 text-center py-3">暂无学习记录</p>
-              )}
+          {/* 8. 每日任务（我方业务，参考页无对应区块） */}
+          <div className="ref-col3" style={{ marginTop: 14 }}>
+            <div className="ref-col-3 anim-card" style={{ width: "100%", flex: "1 1 100%" }}>
+              <DailyTasks refreshKey={checkInVersion} />
             </div>
           </div>
 
-          {/* ── Column 3: 本周练习 + 热力图 + 邀请好友 + 课程广场 ── */}
-          <div className="space-y-3">
-            {/* Weekly practice chart */}
-            <div
-              className="anim-card rounded-2xl border p-4"
-              style={{ background: "var(--surface-alt)", borderColor: "var(--surface-border)" }}
-            >
-              <div className="flex items-center gap-2 mb-3">
-                <TrendingUp className="h-3.5 w-3.5 text-violet-400" />
-                <h3 className="text-[13px] font-semibold text-foreground/70">本周练习</h3>
-              </div>
-              {stats && <WeeklyChart data={stats.weekly ?? []} />}
+          {/* 9. 页脚 */}
+          <div className="site-footer">
+            <span className="footer-copyright">
+              © {new Date().getFullYear()} {BRAND.nameZh}. All Rights Reserved.
+            </span>
+            <div className="footer-links">
+              <Link href="/terms">用户协议</Link>
+              <Link href="/privacy">隐私政策</Link>
+              <Link href="/children-privacy">儿童隐私保护</Link>
             </div>
-
-            {/* Monthly heatmap */}
-            <div
-              className="anim-card rounded-2xl border p-4"
-              style={{ background: "var(--surface-alt)", borderColor: "var(--surface-border)" }}
-            >
-              <div className="flex items-center gap-2 mb-3">
-                <Trophy className="h-3.5 w-3.5 text-amber-400" />
-                <h3 className="text-[13px] font-semibold text-foreground/70">学习热力图</h3>
-              </div>
-              {stats && <MonthlyHeatmap heatmap={stats.heatmap} heatmapDuration={stats.heatmapDuration ?? {}} />}
-            </div>
-
-            {/* Invite friends */}
-            <InviteCard />
-
-            {/* Store link */}
-            <Link
-              href="/home/store"
-              className="anim-card flex items-center gap-3 rounded-2xl border p-3.5 hover:border-foreground/15 transition-all duration-200 group"
-              style={{ background: "var(--surface-alt)", borderColor: "var(--surface-border)" }}
-            >
-              <div
-                className="flex items-center justify-center w-9 h-9 rounded-lg shrink-0"
-                style={{ background: "#ec489918", border: "1px solid #ec489930" }}
-              >
-                <ShoppingBag className="h-4 w-4 text-[#ec4899]" />
-              </div>
-              <div className="min-w-0">
-                <p className="text-[13px] font-semibold text-foreground/80">课程广场</p>
-                <p className="text-[10px] text-foreground/40 mt-0.5">浏览更多课程</p>
-              </div>
-            </Link>
-
           </div>
-        </div>
-
-        {/* ── Bottom row: 复习本 / 笔记本 / 单词本 ── */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mt-5">
-          {[
-            { label: "复习本", desc: "待复习项", icon: BookOpen, href: "/home/review", color: "#06b6d4" },
-            { label: "笔记本", desc: "学习笔记", icon: FileText, href: "/home/notes", color: "#8b5cf6" },
-            { label: "单词本", desc: "我的单词", icon: BookText, href: "/home/wordbook", color: "#f59e0b" },
-          ].map(({ label, desc, icon: Icon, href, color }) => (
-            <Link
-              key={label}
-              href={href}
-              className="anim-card group flex items-center gap-4 rounded-2xl border p-4 hover:border-foreground/15 transition-all duration-200"
-              style={{ background: "var(--surface-alt)", borderColor: "var(--surface-border)" }}
-            >
-              <div
-                className="flex items-center justify-center w-10 h-10 rounded-xl shrink-0"
-                style={{ background: `${color}18`, border: `1px solid ${color}30` }}
-              >
-                <Icon className="h-5 w-5" style={{ color }} />
-              </div>
-              <div className="min-w-0">
-                <p className="text-sm font-semibold text-foreground/80">{label}</p>
-                <p className="text-[11px] text-foreground/40 mt-0.5">{desc}</p>
-              </div>
-            </Link>
-          ))}
-        </div>
-        </div>
         </div>
 
         <div className={cn(activeTab === "archive" ? "block" : "hidden")}>
@@ -1069,6 +1177,7 @@ export function HomeClient({ name }: HomeClientProps) {
         initialGoal={checkInGoal}
         onSaved={(g) => setCheckInGoal(g)}
       />
+      <ContactModal open={contactOpen} onClose={() => setContactOpen(false)} />
     </div>
   )
 }

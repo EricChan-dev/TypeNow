@@ -4,6 +4,7 @@ import { useState, useEffect } from "react"
 import { CalendarDays, Share2, Users, CheckCircle2, Circle, Loader2 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { toast } from "sonner"
+import { BRAND } from "@/lib/brand"
 
 interface TaskStatus {
   checkIn: boolean
@@ -57,7 +58,7 @@ export function DailyTasks({ className, refreshKey }: { className?: string; refr
       : typeof window !== "undefined" ? window.location.origin : ""
 
     if (navigator.share) {
-      navigator.share({ title: "TypeNow", text: "我在用 TypeNow 学英语，邀请你一起来练习！", url: inviteLink }).catch(() => null)
+      navigator.share({ title: BRAND.nameZh, text: `我在用 ${BRAND.nameZh} 学英语，邀请你一起来练习！`, url: inviteLink }).catch(() => null)
     } else {
       try {
         await navigator.clipboard.writeText(inviteLink)

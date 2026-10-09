@@ -1,19 +1,25 @@
 import Link from "next/link"
 import Image from "next/image"
-// 页脚「产品」列：改版前是 4 个落地页锚点（首页/功能/评价/问题），
-// 现在指向独立的功能介绍页与更新日志页。"首页"去掉（logo 已承担该入口），
-// "功能"换成真正的内容页 —— 锚点只能看落地页那段概述，独立页才讲得清每条能力的边界。
+import { BRAND, brandLockupWithEn } from "@/lib/brand"
+
+// 页脚「产品」列指向独立内容页。
+//
+// 改版注意：原先这里还有 /#testimonials 与 /#faq 两个锚点。新版落地页参照竞品
+// 收缩成了「玩法 / 演示 / 特色」三段，已经**没有**这两个 section —— 留着就是
+// 点了没反应的死链。它们对应的独立页是 /pricing（含 FAQ 与会员方案），
+// 所以这里直接指过去，而不是保留两个空锚点。
 const productLinks = [
   { href: "/features", label: "功能介绍" },
   { href: "/pricing", label: "会员方案" },
   { href: "/releases", label: "版本更新" },
-  { href: "/#testimonials", label: "用户评价" },
-  { href: "/#faq", label: "常见问题" },
 ]
 
 const companyLinks = [
   { href: "/terms", label: "用户协议" },
   { href: "/privacy", label: "隐私政策" },
+  // 儿童隐私此前只有《隐私政策》第 7 节的一句话，登录页与落地页却都摆着
+  // 「《儿童隐私保护政策》」的链接 —— 现在补上了独立页，页脚也一并放出来。
+  { href: "/children-privacy", label: "儿童隐私" },
 ]
 
 /**
@@ -36,14 +42,13 @@ export function Footer() {
           {/* Brand */}
           <div className="col-span-2 lg:col-span-3 flex flex-col gap-4">
             <Link href="/" className="flex items-center gap-2">
-              <Image src="/logo_w.svg" alt="TypeNow" width={24} height={24} className="hidden [.dark_&]:block" />
-              <Image src="/logo.svg" alt="TypeNow" width={24} height={24} className="block [.dark_&]:hidden" />
-              <span className="text-lg font-bold text-foreground">
-                码上英语 · TypeNow
+              <Image src="/logo.svg" alt={BRAND.nameZh} width={24} height={24} />
+              <span className="font-brand text-lg text-foreground">
+                {BRAND.lockup}
               </span>
             </Link>
             <p className="text-[13px] text-muted-foreground leading-relaxed max-w-xs">
-              AI 驱动的中译英打字练习平台。打一句、记一句、学会一句。
+              {BRAND.tagline}。打一句、记一句、学会一句。
             </p>
           </div>
 
@@ -100,7 +105,7 @@ export function Footer() {
         {/* Bottom bar */}
         <div className="flex flex-col sm:flex-row items-center justify-between gap-2 mt-8 pt-6 border-t border-border">
           <span className="text-xs text-muted-foreground">
-            &copy; 2026 TypeNow &middot; typenow.cn
+            &copy; 2026 <span className="font-brand">{brandLockupWithEn()}</span> &middot; typenow.cn
             &nbsp;&middot;&nbsp; 晋ICP备2026006473号
           </span>
           <span className="text-xs text-muted-foreground">

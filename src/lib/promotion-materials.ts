@@ -25,10 +25,12 @@
  * 纯模块、无服务端依赖：客户端组件直接用。
  */
 
-/** 素材库版本。每次改动素材都必须更新，否则留档失去意义。 */
-export const PROMOTION_MATERIALS_VERSION = "2026-10-01"
+import { BRAND } from "@/lib/brand"
 
-export const PROMOTION_MATERIALS_PUBLISHED_AT = "2026-10-01"
+/** 素材库版本。每次改动素材都必须更新，否则留档失去意义。 */
+export const PROMOTION_MATERIALS_VERSION = "2026-10-08"
+
+export const PROMOTION_MATERIALS_PUBLISHED_AT = "2026-10-08"
 
 /**
  * 禁用词（distribution-compliance.md 第七节）。
@@ -102,7 +104,7 @@ export const PLATFORM_RULES: PlatformRule[] = [
     note:
       "《交易导流违规管理细则》禁止「发布其他平台的链接、口令、截图、水印、二维码、小程序」，" +
       "以及「引导用户查看、添加、提供、交换私域信息」。处罚从警告到限制直播、直至永久封禁账号。" +
-      "所以在这里只能靠内容本身有价值，让用户自己去搜「码上英语」——不要放链接、不要放二维码、" +
+      `所以在这里只能靠内容本身有价值，让用户自己去搜「${BRAND.searchKeyword}」——不要放链接、不要放二维码、` +
       "也不要在评论区和私信里引导。",
     asOf: "小红书《交易导流违规管理细则》· 2025-03-12 生效",
   },
@@ -166,7 +168,7 @@ export const PROMOTION_MATERIALS: PromotionMaterial[] = [
       "给出邀请链接，并说明是免费注册、不用先付费",
     ],
     example:
-      "我之前背单词总是背完就忘，后来改用这个码上英语，是打中文、敲英文那种练法，" +
+      `我之前背单词总是背完就忘，后来改用这个${BRAND.searchKeyword}，是打中文、敲英文那种练法，` +
       "每句都有音标和词性拆解，练了大概两周，写东西的时候句子能直接出来了。" +
       "你要不要试试，用我这个链接注册就行，免费的：{邀请链接}",
     why:
@@ -213,7 +215,7 @@ export const PROMOTION_MATERIALS: PromotionMaterial[] = [
       "背单词总忘，我换了个笨办法：不再背单词，改成打整句。\n" +
       "就是把中文句子敲成英文，一句一句来，错的地方它会拆开讲音标和词性。\n" +
       "练了半个月，最大的变化是写邮件不用先想中文了。\n" +
-      "（我用的是码上英语，搜名字就有）",
+      `（我用的是${BRAND.searchKeyword}，搜名字就有）`,
     why:
       "小红书的算法奖励**有用的内容**，不奖励广告。所以这篇的主体是「一个方法」，" +
       "产品只是「我用它做到的」。这样即使不引流，笔记本身也能拿到自然流量 —— " +
@@ -231,13 +233,13 @@ export const PROMOTION_MATERIALS: PromotionMaterial[] = [
     scene: "短视频 / 学习直播",
     skeleton: [
       "前 3 秒给一个**具体场景**（比如一句你以前绝对说不出的英文）",
-      "中段演示你怎么练的（录屏，可以用码上英语的界面）",
-      "结尾说「想一起练的可以搜码上英语」，不在口播里放链接",
+      `中段演示你怎么练的（录屏，可以用${BRAND.searchKeyword}的界面）`,
+      `结尾说「想一起练的可以搜${BRAND.searchKeyword}」，不在口播里放链接`,
     ],
     example:
       "今天练会一句：'Let me sleep on it.' —— 意思是「让我考虑一晚」，不是「睡在上面」。\n" +
       "{录屏：把中文敲成英文的过程}\n" +
-      "我每天用码上英语练 10 分钟，想一起练的搜名字就行。",
+      `我每天用${BRAND.searchKeyword}练 10 分钟，想一起练的搜名字就行。`,
     why:
       "抖音按完播率分发，所以开头必须立刻给价值。录屏是内容本身（可以一直用下去），" +
       "不需要额外拍摄成本。",

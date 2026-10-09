@@ -163,7 +163,10 @@ describe("页面接线", () => {
   })
 
   it("落地页与价格页补上了页面级 metadata", () => {
-    expect(read("src/app/(public)/page.tsx")).toContain("export const metadata")
+    // 2026-10-08：落地页搬到了 (landing) 路由组。参考页自带整套顶栏/页脚，
+    // 与 (public)/layout.tsx 注入的 Navbar+Footer 冲突，所以首页单独成组，
+    // 只继承根布局；断言盯的还是同一个「首页」，只是路径跟着路由组走了。
+    expect(read("src/app/(landing)/page.tsx")).toContain("export const metadata")
     expect(read("src/app/(public)/pricing/page.tsx")).toContain("export const metadata")
   })
 })

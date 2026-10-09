@@ -1,5 +1,6 @@
 import type { Metadata } from "next"
 import { TextbookClient } from "@/components/home/store/TextbookClient"
+import { BRAND } from "@/lib/brand"
 
 /**
  * 教材同步。
@@ -9,7 +10,7 @@ import { TextbookClient } from "@/components/home/store/TextbookClient"
  * 「类别 → 子类」不是一回事。所以独立成页、复用课程卡片（见 TextbookClient 的注释）。
  */
 export const metadata: Metadata = {
-  title: "教材同步 - TypeNow",
+  title: `教材同步 - ${BRAND.nameZh}`,
 }
 
 export default function TextbookPage() {

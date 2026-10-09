@@ -11,14 +11,12 @@
  * 为什么自己写而不装 @ant-design/plots：那个库本身就依赖全量 echarts，
  * 换不来体积收益，还多一层 API。这里只有 ~70 行。
  *
- * 主题：后台支持深浅色切换（next-themes）。echarts 的暗色主题只能在
- * init 时指定，运行时切换必须 dispose 重建，所以把 theme 放进 deps 依赖里。
- * 不这么做的话，切到浅色后图表文字仍是白色，在白底上完全看不见 ——
- * 这是最容易被忽略、又最影响可用性的一类回归。
+ * 主题：全站已固定为浅色（2026-10 移除深浅色切换），所以这里不再需要
+ * 跟随 next-themes 重建图表实例 —— echarts 的暗色主题只能在 init 时指定，
+ * 原先放 `resolvedTheme` 进 deps 就是为了运行时切换，现在没有切换了。
  */
 
 import { useEffect, useRef } from "react"
-import { useTheme } from "next-themes"
 import * as echarts from "echarts/core"
 import { BarChart, LineChart, PieChart } from "echarts/charts"
 import {
@@ -62,18 +60,16 @@ export default function EChart({
 }: Props) {
   const ref = useRef<HTMLDivElement | null>(null)
   const chartRef = useRef<echarts.ECharts | null>(null)
-  const { resolvedTheme } = useTheme()
-  const dark = resolvedTheme === "dark"
 
-  // 初始化与主题重建
+  // 初始化
   useEffect(() => {
     const el = ref.current
     if (!el || empty) return
 
     // echarts 6 的 init 在元素已有实例时会告警并复用，不会重复创建 canvas；
-    // 显式 dispose 旧实例是为了换主题，否则暗色主题会一直留着
+    // 显式 dispose 旧实例是为了让 StrictMode 下的双次挂载不留残余。
     chartRef.current?.dispose()
-    const chart = echarts.init(el, dark ? "dark" : undefined, { renderer: "canvas" })
+    const chart = echarts.init(el, undefined, { renderer: "canvas" })
     chartRef.current = chart
 
     // ResizeObserver 而不是 window.resize：后台侧边栏折叠时窗口尺寸没变，
@@ -86,7 +82,7 @@ export default function EChart({
       chart.dispose()
       chartRef.current = null
     }
-  }, [dark, empty])
+  }, [empty])
 
   // 数据更新（不重建实例，保留动画过渡）
   useEffect(() => {
@@ -101,13 +97,13 @@ export default function EChart({
       chart.showLoading("default", {
         text: "加载中",
         color: "#6366F1",
-        textColor: dark ? "#e5e7eb" : "#374151",
-        maskColor: dark ? "rgba(0,0,0,0.45)" : "rgba(255,255,255,0.7)",
+        textColor: "#374151",
+        maskColor: "rgba(255,255,255,0.7)",
       })
     } else {
       chart.hideLoading()
     }
-  }, [loading, dark])
+  }, [loading])
 
   if (empty) {
     return (

@@ -1,0 +1,1050 @@
+/* 登录页样式：1:1 复刻参考页 `登录 - 句游英语.html` 的 login.css。
+ *
+ * 用户明确要求（m01483）：登录页「尽量保持一致，主要是样式，业务逻辑保留我们的」。
+ * 所以这里只搬运**表现层**，页面结构里凡是涉及登录流程的部分（发送验证码、
+ * 校验、微信扫码轮询、回跳）一律沿用我们自己的实现。
+ *
+ * 两条搬运约定：
+ * 1. 全部规则挂在 `.login-ref` 下。参考页直接把 `.login` / `.body` 铺在全局，
+ *    照抄会污染站内其它页面（我们已有一个 `body{}` 背景）。
+ * 2. 字号、行高、内边距、圆角、阴影、渐变全部保留参考页的**原值**，不做"优化"。
+ *    这些数值共同决定了版面，改任何一个都会重新出现"排版错乱"。
+ *
+ * 参考页字体：reset.css 与 login.css 都没有声明 font-family（login.css 第 443 行
+ * 那句 `'Noto Sans SC', font-family: sans-serif;` 是语法错误，被浏览器丢弃），
+ * 因此它实际用的是**浏览器默认字体** —— 在 macOS 上实测为 PingFang SC。
+ * 我们这里显式写出同一套系统字体栈，避免被 globals.css 的 Inter 改掉。
+ *
+ * 3. box-sizing 必须还原成 content-box。
+ *    参考页的 reset.css / main.css / remixicon.css 里没有任何 box-sizing 声明，
+ *    用的是浏览器默认的 content-box；而 Tailwind 的 preflight 会给全站每个元素
+ *    强加 `border-box`。这个差异会实打实地改变版面：
+ *      .loginMain 宽 1100，左栏 43%(=473) + 右栏 55%(=605) = 1078 < 1100，
+ *      border-box 下两者都不用收缩，实测左栏 473、右栏 605；
+ *      而 content-box 下两栏各自还要加上 112px 内边距（合计 1302 > 1100），
+ *      flex 按比例收缩后左栏 496.4、右栏 603.6 —— 这正是参考页的实测值。
+ *    所以这一条不是"洁癖复刻"，去掉它左右两栏各会偏 23px。
+ *    下面 6 处参考页**显式**写了 box-sizing:border-box 的规则（.rotate、结算圆点、
+ *    二维码虚线框等）特异性都高于 `.login-ref *`，仍然正常生效。
+ */
+.login-ref {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  min-height: 100vh;
+  font-family: -apple-system, BlinkMacSystemFont, "PingFang SC",
+    "Hiragino Sans GB", "Microsoft YaHei", "Helvetica Neue", Arial, sans-serif;
+  /* 参考页写在 <body style> 上的三层渐变背景，逐字照搬 */
+  background: radial-gradient(circle at 50% 0%, #e0f2fe 0%, transparent 70%),
+    radial-gradient(circle at 100% 100%, #eef2ff 0%, transparent 50%),
+    linear-gradient(180deg, #f8fafc 0%, #f1f5f9 100%);
+}
+
+/* 见上方第 3 条：把 Tailwind preflight 的 border-box 还原成参考页的 content-box。
+ * 注意选择器只到 `.login-ref *`（特异性 0,1,1），低于参考页里那些显式
+ * box-sizing:border-box 的规则，因此不会互相打架。 */
+.login-ref,
+.login-ref *,
+.login-ref *::before,
+.login-ref *::after {
+  box-sizing: content-box;
+}
+
+.login-ref .login {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  padding: 24px 0;
+}
+
+.login-ref .loginMain {
+  display: flex;
+  margin: 0 auto;
+  background: rgb(255 255 255 / 0.8);
+  border-radius: 40px;
+  width: 90vw;
+  max-width: 1100px;
+  overflow: hidden;
+}
+
+/* ── 左栏：品牌/轮播 ─────────────────────────────────────────────── */
+.login-ref .loginBanner {
+  width: 43%;
+  padding: 60px 56px;
+  background: linear-gradient(to bottom right, #2563eb, #4338ca);
+  display: flex;
+  flex-direction: column;
+}
+
+.login-ref .banner li {
+  display: none;
+  list-style: none;
+  text-align: left;
+}
+
+.login-ref .banner li.on {
+  display: block;
+}
+
+.login-ref .banner li strong {
+  display: block;
+  font-size: 48px;
+  line-height: 48px;
+  font-weight: 700;
+  color: #fff;
+  margin-bottom: 24px;
+  padding-top: 80px;
+}
+
+.login-ref .banner li strong b {
+  display: block;
+}
+
+.login-ref .banner li small {
+  font-size: 18px;
+  color: rgb(219 234 254);
+}
+
+.login-ref .banner li .inner {
+  display: block;
+  position: relative;
+  margin: 100px auto;
+  width: 256px;
+}
+
+.login-ref .banner li .inner .rotate {
+  box-shadow: 0 25px 50px -12px rgb(0 0 0 / 0.25);
+  padding: 16px;
+  background: rgb(255 255 255 / 0.1);
+  border: 1px solid rgb(255 255 255 / 0.2);
+  border-radius: 16px;
+  transform: rotate(-6deg);
+  position: relative;
+  width: 256px;
+  box-sizing: border-box;
+  transition: all 0.3s linear;
+  cursor: pointer;
+}
+
+.login-ref .banner li .inner .rotate:hover {
+  transform: rotate(0deg);
+}
+
+.login-ref .banner li .inner .rotate h5 {
+  margin-bottom: 12px;
+}
+
+.login-ref .banner li .inner .rotate h5 label {
+  display: flex;
+  font-size: 14px;
+  font-weight: normal;
+  color: #fff;
+  gap: 8px;
+  align-items: center;
+}
+
+.login-ref .banner li .inner .rotate h5 label i {
+  width: 32px;
+  height: 32px;
+  display: flex;
+  border-radius: 50%;
+  color: #fff;
+  background: rgb(255 255 255 / 0.1);
+  font-weight: normal;
+  align-items: center;
+  justify-content: center;
+  font-size: 15px;
+}
+
+/* 评级角标（Excellent / Perfect / …）。颜色由下方 li:nth-child 给出 */
+.login-ref .banner li .inner .rotate > span {
+  font-size: 12px;
+  line-height: 16px;
+  padding: 4px 8px;
+  border-radius: 6px;
+  font-weight: 700;
+  position: absolute;
+  right: 16px;
+  top: 16px;
+}
+
+.login-ref .banner li .inner .rotate .progress p {
+  height: 8px;
+  background: rgb(255 255 255 / 0.1);
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.login-ref .banner li .inner .rotate .progress p em {
+  background: rgb(74 222 128);
+  display: block;
+  height: 8px;
+}
+
+.login-ref .banner li .inner .rotate .progress label {
+  font-size: 12px;
+  line-height: 16px;
+  color: rgb(219 234 254);
+  display: flex;
+  justify-content: space-between;
+  margin-top: 8px;
+}
+
+.login-ref .banner li .inner .rotate .progress label b {
+  color: rgb(219 234 254);
+}
+
+.login-ref .banner li .inner .translate {
+  position: absolute;
+  background: #fff;
+  bottom: -24px;
+  right: -32px;
+  padding: 12px;
+  color: rgb(30 58 138);
+  border-radius: 12px;
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  align-items: center;
+  animation: login-ref-bounce 2s infinite;
+}
+
+@keyframes login-ref-bounce {
+  0%,
+  100% {
+    transform: translateY(-25%);
+    animation-timing-function: cubic-bezier(0.8, 0, 1, 1);
+  }
+  50% {
+    transform: none;
+    animation-timing-function: cubic-bezier(0, 0, 0.2, 1);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .login-ref .banner li .inner .translate {
+    animation: none;
+  }
+}
+
+.login-ref .banner li .inner .translate label {
+  display: flex;
+  align-items: center;
+}
+
+.login-ref .banner li .inner .translate label i {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  border: 2px solid rgb(255 255 255);
+  box-sizing: border-box;
+  margin-left: -4px;
+}
+
+.login-ref .banner li .inner .translate label i.op1 {
+  background: rgb(147 197 253);
+  margin-left: 0;
+}
+
+.login-ref .banner li .inner .translate label i.op2 {
+  background: rgb(59 130 246);
+}
+
+.login-ref .banner li .inner .translate label i.op3 {
+  background: rgb(29 78 216);
+}
+
+.login-ref .banner li .inner .translate b {
+  font-weight: 550;
+  font-size: 12px;
+}
+
+/* 每屏一套配色：strong 的强调行、评级角标、进度条 */
+.login-ref .banner li:nth-child(1) strong b {
+  color: #bfdbfe;
+}
+.login-ref .banner li:nth-child(1) .inner .rotate > span {
+  color: #052e16;
+  background: #4ade80;
+}
+.login-ref .banner li:nth-child(1) .inner .rotate .progress p em {
+  background: #4ade80;
+}
+
+.login-ref .banner li:nth-child(2) strong b {
+  color: #fef08a;
+}
+.login-ref .banner li:nth-child(2) .inner .rotate > span {
+  color: #422006;
+  background: #facc15;
+}
+.login-ref .banner li:nth-child(2) .inner .rotate .progress p em {
+  background: #facc15;
+}
+
+.login-ref .banner li:nth-child(3) strong b {
+  color: #fbcfe8;
+}
+.login-ref .banner li:nth-child(3) .inner .rotate > span {
+  color: rgb(5 46 22);
+  background: #f472b6;
+}
+.login-ref .banner li:nth-child(3) .inner .rotate .progress p em {
+  background: #f472b6;
+}
+
+.login-ref .banner li:nth-child(4) strong b {
+  color: #e9d5ff;
+}
+.login-ref .banner li:nth-child(4) .inner .rotate > span {
+  color: #3b0764;
+  background: #c084fc;
+}
+.login-ref .banner li:nth-child(4) .inner .rotate .progress p em {
+  background: #c084fc;
+}
+
+.login-ref .loginBanner .backIndex {
+  border-top: 1px solid rgb(255 255 255 / 0.1);
+  padding-top: 24px;
+  justify-content: space-between;
+  display: flex;
+  align-items: center;
+  margin-top: auto;
+}
+
+.login-ref .loginBanner .backIndex label,
+.login-ref .loginBanner .backIndex a {
+  font-size: 14px;
+  color: rgb(219 234 254);
+  line-height: 20px;
+  display: flex;
+  align-items: center;
+}
+
+.login-ref .loginBanner .backIndex label i,
+.login-ref .loginBanner .backIndex a i {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: rgb(255 255 255 / 0.1);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-right: 8px;
+  cursor: pointer;
+}
+
+.login-ref .loginBanner .backIndex label i:hover,
+.login-ref .loginBanner .backIndex a i:hover {
+  background: rgb(255 255 255 / 0.2);
+}
+
+.login-ref .loginBanner .backIndex p {
+  display: flex;
+  gap: 8px;
+}
+
+.login-ref .loginBanner .backIndex p button {
+  width: 8px;
+  height: 8px;
+  border-radius: 4px;
+  background: rgb(255 255 255 / 0.4);
+  cursor: pointer;
+  transition: all 0.15s linear;
+  border: none;
+  padding: 0;
+}
+
+.login-ref .loginBanner .backIndex p button:hover {
+  background: rgb(255 255 255 / 0.6);
+}
+
+.login-ref .loginBanner .backIndex p button.on {
+  width: 24px;
+  background: #fff;
+}
+
+/* ── 右栏：登录表单 ─────────────────────────────────────────────── */
+.login-ref .main_box {
+  width: 55%;
+  display: flex;
+  align-items: center;
+  flex-direction: column;
+  border-radius: 40px;
+  padding: 44px 56px;
+  position: relative;
+}
+
+.login-ref h3 {
+  text-align: left;
+  color: #0f172a;
+  font-size: 24px;
+  line-height: 32px;
+  font-weight: 700;
+  letter-spacing: -0.6px;
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  margin-bottom: 38px;
+  width: 420px;
+}
+
+/* 参考页这里放的是 338×80 的整块锁定标位图（图标+「句游英语」烘焙在同一张图里）；
+ * 我们的 logo.svg 是单图标，所以用「图标 + 真实文字」，与落地页顶栏同一种处理。 */
+.login-ref h3 img {
+  height: 40px;
+  width: auto;
+  object-fit: contain;
+}
+
+.login-ref h3 span {
+  font-size: 26px;
+  letter-spacing: -0.5px;
+  /* 字体族由 .font-brand 提供（站酷快乐体，同参考页 logo）。
+     字号刻意保持 26px 未动 —— 本次需求只要求换字体，改字号会牵动已经验收过的版面。 */
+}
+.login-ref .main_box .logintab {
+  padding-bottom: 37px;
+  gap: 24px;
+  display: flex;
+  font-size: 0;
+  width: 420px;
+  align-items: center;
+}
+
+.login-ref .main_box .logintab button {
+  margin-right: 0;
+  font-size: 17px;
+  font-style: normal;
+  font-weight: 500;
+  line-height: 28px;
+  position: relative;
+  cursor: pointer;
+  color: #94a3b8;
+  border-radius: 12px;
+  /* button 的浏览器默认样式要清掉，否则会带上灰底与边框 */
+  background: transparent;
+  border: none;
+  padding: 0;
+  font-family: inherit;
+  transition: all 0.15s linear;
+}
+
+.login-ref .main_box .logintab button.on {
+  color: #0f172a;
+  font-weight: 700;
+  padding-bottom: 10px;
+}
+
+.login-ref .main_box .logintab button:hover {
+  color: rgb(71 85 105);
+  background: rgb(248 250 252);
+}
+
+/* 绑定模式下「微信登录」被锁住（见 LoginForm 的 bindMode）：切过去只会看到
+   二维码，再扫一次仍是这个没手机号的账号，绕不出绑定。
+   必须写在 :hover 之后 —— 两者特异性相同（类+伪类），靠顺序覆盖，
+   否则鼠标划过去仍然变深色、看起来还能点。 */
+.login-ref .main_box .logintab button:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+.login-ref .main_box .logintab button:disabled:hover {
+  color: #94a3b8;
+  background: transparent;
+}
+
+.login-ref .main_box .logintab button:after {
+  display: block;
+  content: "";
+  clear: both;
+  background-color: transparent;
+  width: 24px;
+  height: 4px;
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  border-radius: 2px;
+}
+
+.login-ref .main_box .logintab button.on:after {
+  background-color: #2563eb;
+}
+
+.login-ref .main_box .loginContent {
+  width: 420px;
+}
+
+.login-ref .main_box .loginContent .content {
+  position: relative;
+  min-height: 340px;
+}
+
+.login-ref .content {
+  display: none;
+}
+
+.login-ref .content.on {
+  display: block;
+}
+
+/* 微信扫码区：承载我们自己的站内轮询二维码。
+ *
+ * 注意参考页里**根本没有 `code` 类**（已用 HTML 解析器核验）：它的微信 tab 是
+ * 整页跳转 `/User/Login?type=wechat`，站内没有二维码，那个虚线框只是它另一套
+ * 页面的遗留样式。我们保留站内扫码，于是沿用它的虚线框观感（2px dashed #e2e8f0、
+ * #f8fafc 底、16px 圆角）来装真正的二维码。
+ *
+ * 选择器用 `.content.code`（同一个元素上两个类），不是 `.content .code`（后代）——
+ * 我们的 markup 是 `class="content code"`，写成后代选择器会一条规则都不生效
+ * （实测 padding 被算成 0、虚线框与底色全丢）。 */
+.login-ref .content.code .code-box {
+  display: flex;
+  border: 2px dashed #e2e8f0;
+  align-items: center;
+  background: #f8fafc;
+  flex-direction: column;
+  width: 100%;
+  box-sizing: border-box;
+  border-radius: 16px;
+  justify-content: center;
+  padding: 16px;
+  cursor: pointer;
+}
+
+.login-ref .content.code .code-box:hover {
+  border-color: rgb(96 165 250);
+}
+
+.login-ref .content.code .code-box img {
+  display: block;
+  width: 224px;
+  height: auto;
+  border-radius: 8px;
+}
+
+.login-ref .content.code p {
+  display: block;
+  font-size: 15px;
+  text-align: center;
+  color: rgb(55 55 55);
+  line-height: 22px;
+  padding-top: 16px;
+}
+
+.login-ref .content.code p em {
+  display: block;
+  font-style: normal;
+  color: #64748b;
+  font-size: 14px;
+  cursor: pointer;
+  letter-spacing: 1px;
+}
+
+.login-ref .content.code p em:hover {
+  opacity: 0.92;
+}
+
+.login-ref .content .form {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+}
+
+.login-ref .content .form p {
+  position: relative;
+}
+
+.login-ref .content .form p input {
+  width: 100%;
+  outline: 2px solid transparent;
+  outline-offset: 1px;
+  box-sizing: border-box;
+  line-height: 49px;
+  border-radius: 12px;
+  background: rgb(248 250 252);
+  font-size: 15px;
+  color: rgb(15 23 42);
+  transition: all 0.2s linear;
+  padding-left: 15px;
+  border: 1px solid rgb(226 232 240);
+  text-align: left;
+}
+
+.login-ref .content .form p input::placeholder {
+  color: #94a3b7;
+  font-weight: 330;
+}
+
+.login-ref .content .form p input:focus {
+  border: 1px solid rgb(59 130 246);
+  outline: 2px solid rgb(59 130 246 / 0.1);
+}
+
+.login-ref .content .form p label {
+  color: rgb(51 65 85);
+  line-height: 20px;
+  font-size: 13px;
+  text-align: left;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-weight: 550;
+  margin-bottom: 8px;
+  margin-left: 4px;
+  flex-wrap: wrap;
+}
+
+.login-ref .content .form p button {
+  position: absolute;
+  right: 8px;
+  text-align: center;
+  color: rgb(37 99 235);
+  line-height: 20px;
+  font-size: 13px;
+  background: rgb(239 246 255);
+  bottom: 50%;
+  margin-bottom: -30px;
+  border-radius: 8px;
+  padding: 6px 16px;
+  font-weight: 550;
+  border: none;
+  cursor: pointer;
+}
+
+.login-ref .content .form p button:disabled {
+  color: #94a3b8;
+  background: rgb(241 245 249);
+  cursor: not-allowed;
+}
+
+.login-ref .content .form p span {
+  position: absolute;
+  font-style: normal;
+  display: flex;
+  color: rgb(100 116 139);
+  left: 16px;
+  align-items: center;
+  line-height: 20px;
+  font-size: 16px;
+  height: 20px;
+  top: 42px;
+  padding-right: 12px;
+  font-weight: 350;
+  border-right: 1px solid rgb(226 232 240);
+}
+
+.login-ref .content .form button.login {
+  background: rgb(37 99 235);
+  color: #fff;
+  width: 100%;
+  line-height: 28px;
+  padding: 14px 0;
+  font-size: 17px;
+  cursor: pointer;
+  font-weight: 700;
+  border-radius: 14px;
+  letter-spacing: 1px;
+  transition: all 0.1s linear;
+  box-shadow: 0 10px 20px -10px rgba(37, 99, 235, 0.5);
+}
+
+.login-ref .content .form button.login:hover:not(:disabled) {
+  background: rgb(29 78 216);
+  transform: translate3D(0, -2px, -3px);
+  opacity: 0.95;
+}
+
+.login-ref .content .form button.login:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.login-ref .phone-auto-register-tip {
+  color: rgb(148 163 184);
+  font-size: 12px;
+  font-weight: normal;
+  margin-left: 8px;
+}
+
+.login-ref .support-tip {
+  color: rgb(148 163 184);
+  font-size: 12px;
+  line-height: 18px;
+  text-align: left;
+  margin-top: -4px;
+  margin-bottom: -8px;
+}
+
+/* 「请联系客服」现在是 <button>（点开客服二维码弹窗），不再是跳转链接。
+   参考页这里是 <a>，所以按钮必须显式还原 <a> 的外观，否则会退化成浏览器
+   默认的灰底按钮 —— 与参考版式不符。这里把 button 与 a 并列写，两边都覆盖。 */
+.login-ref .support-tip a,
+.login-ref .support-tip button {
+  color: rgb(37 99 235);
+  margin-left: 4px;
+}
+
+.login-ref .support-tip button {
+  /* 抹掉 UA 按钮样式，使其视觉上与链接一致 */
+  background: none;
+  border: none;
+  padding: 0;
+  font: inherit;
+  font-size: 12px;
+  line-height: 18px;
+  cursor: pointer;
+}
+
+.login-ref .support-tip a:hover,
+.login-ref .support-tip button:hover,
+.login-ref .form-control span a:hover {
+  text-decoration: underline;
+  color: #1783ff;
+}
+
+/* 协议勾选框。
+ *
+ * 用户明确要求（本次问答）：**只还原样式，不拦截登录** —— 参考页未勾选时点
+ * 「立即登录」会弹服务协议弹窗阻断，我们不做这个阻断，因此这里没有 service 弹窗，
+ * 勾选框纯展示（可点、可切换）。底部另有一行「登录即表示同意」承担告知。 */
+/* 参考页这里**没有** display:flex —— 它就是个普通块级元素，靠父级
+ * `.main_box`（flex column + align-items:center）给的 fit-content 宽度定尺寸。
+ * 早先我在这里加了 display:flex，结果 flex 项的最大内容宽度按「各项之和」算，
+ * 实测宽 457px，而参考页是 420px。改回块级后与参考页同口径。 */
+.login-ref .form-control {
+  margin-top: 29px;
+}
+
+.login-ref .form-control button {
+  border: 1px solid rgb(203 213 225);
+  display: inline-block;
+  vertical-align: top;
+  width: 15px;
+  height: 15px;
+  flex: none;
+  border-radius: 6px;
+  position: relative;
+  top: 2px;
+  cursor: pointer;
+  overflow: hidden;
+  transition: all 0.2s linear;
+  padding: 0;
+  background: transparent;
+}
+
+.login-ref .form-control.on button {
+  background: rgb(59 130 246);
+  border-color: rgb(59 130 246);
+}
+
+.login-ref .form-control button svg {
+  color: #fff;
+  position: absolute;
+  top: 0;
+  display: none;
+  left: 0;
+  transition: all 0.2s linear;
+}
+
+.login-ref .form-control.on button svg {
+  display: block;
+}
+
+.login-ref .form-control span {
+  color: rgb(100 116 139);
+  font-size: 13px;
+  width: calc(100% - 32px);
+  margin-left: 5px;
+  text-align: left;
+  display: inline-block;
+  vertical-align: top;
+  font-weight: 400;
+  line-height: 20px;
+}
+
+/* 非拦截式告知：参考页未勾选时会弹服务协议弹窗阻断，我们不做阻断（用户决定），
+ * 因此把「登录即表示同意」的隐式同意说明放在参考页本来就有的 span small 槽位里，
+ * 既不新增一行版式，也不丢掉此前的告知。 */
+.login-ref .form-control span small {
+  display: block;
+  font-size: 12px;
+  padding-top: 4px;
+  color: rgb(148 163 184);
+}
+
+.login-ref .form-control span a {
+  cursor: pointer;
+  color: rgb(37 99 235);
+  margin: 0 4px;
+}
+
+.login-ref .logincopyright {
+  position: absolute;
+  bottom: 44px;
+  display: flex;
+  justify-content: space-between;
+  width: calc(100% - 112px);
+  font-size: 12px;
+}
+
+.login-ref .logincopyright label {
+  color: #94a3b8;
+  letter-spacing: 1px;
+}
+
+.login-ref .logincopyright p {
+  gap: 16px;
+  display: flex;
+}
+
+.login-ref .logincopyright p a,
+.login-ref .logincopyright p button {
+  color: #94a3b8;
+  letter-spacing: 2px;
+}
+
+/* 「帮助中心 / 关于我们」现在是 <button>（点开二维码弹窗），不再是跳转链接。
+   参考页这里是 <a>，所以必须显式抹掉 UA 的灰底/边框/内边距，否则会退化成
+   浏览器默认按钮 —— 与参考版式不符。同 `.support-tip button` 的处理。 */
+.login-ref .logincopyright p button {
+  background: none;
+  border: none;
+  padding: 0;
+  font: inherit;
+  font-size: 12px;
+  line-height: 18px;
+  cursor: pointer;
+}
+
+.login-ref .logincopyright p a:hover,
+.login-ref .logincopyright p button:hover {
+  color: #333;
+}
+
+.login-ref .loginBottom {
+  position: fixed;
+  bottom: 20px;
+  width: 100%;
+  text-align: center;
+  color: #94a3b8;
+  font-size: 12px;
+  z-index: 1111;
+  left: 0;
+  letter-spacing: 1px;
+}
+
+.login-ref .loginBottom a:hover {
+  color: #64748b;
+}
+
+/* ── 响应式 ─────────────────────────────────────────────────────────
+ * 参考页的宽度断点有重复且互相覆盖（两个 max-width:1200px 块、一个使
+ * .loginBanner 再次出现的规则）。这里只保留**最终生效**的那一套，避免把
+ * 参考页的历史包袱一起搬过来。 */
+@media screen and (max-width: 1200px) {
+  .login-ref .loginBanner {
+    display: none;
+  }
+  .login-ref .loginMain {
+    width: 95vw;
+    max-width: 520px;
+    border-radius: 28px;
+  }
+  .login-ref .main_box {
+    width: 100%;
+    padding: 44px 48px;
+    box-sizing: border-box;
+  }
+  .login-ref h3 {
+    width: 100%;
+  }
+  .login-ref .loginBottom {
+    display: none;
+  }
+  .login-ref .logincopyright {
+    position: relative;
+    bottom: auto;
+    width: 100%;
+    margin-top: 32px;
+  }
+  .login-ref .main_box .logintab,
+  .login-ref .main_box .loginContent {
+    width: 100%;
+    max-width: 420px;
+  }
+}
+
+@media screen and (max-width: 820px) {
+  .login-ref .loginMain {
+    flex-direction: column;
+    width: 92vw;
+    max-width: 480px;
+    border-radius: 24px;
+    margin-top: 20px;
+  }
+  .login-ref .main_box {
+    width: 100%;
+    padding: 40px 32px;
+    box-sizing: border-box;
+  }
+  .login-ref h3 {
+    justify-content: center;
+  }
+  .login-ref .phone-auto-register-tip {
+    display: block;
+    width: 100%;
+    margin-left: 0;
+    margin-top: 6px;
+    text-align: left;
+    position: absolute;
+    top: 100%;
+    left: 0;
+    font-size: 11px;
+  }
+  .login-ref .content .form p span {
+    top: auto;
+    bottom: 15px;
+  }
+  .login-ref .content .form {
+    gap: 28px;
+  }
+  .login-ref .support-tip {
+    margin-top: 2px;
+    margin-bottom: 0;
+    padding-left: 0;
+    margin-left: 0;
+  }
+  .login-ref .logincopyright {
+    position: relative;
+    bottom: auto;
+    width: 100%;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    margin-top: 40px;
+    font-size: 11px;
+  }
+}
+
+@media screen and (max-width: 480px) {
+  .login-ref .main_box {
+    padding: 30px 20px;
+    border-radius: 20px;
+  }
+  .login-ref .content.code .code-box {
+    width: 100%;
+    height: auto;
+    padding: 24px 16px;
+  }
+  .login-ref .content.code .code-box img {
+    width: 100%;
+  }
+  .login-ref .content.code p {
+    padding-top: 20px;
+  }
+  .login-ref .content .form p input {
+    font-size: 16px;
+  }
+  .login-ref .logincopyright {
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+    position: relative;
+    bottom: 0;
+    margin-top: 40px;
+    width: 100%;
+  }
+  .login-ref .loginBottom {
+    position: relative;
+    bottom: 0;
+    margin-top: 20px;
+    padding-bottom: 20px;
+  }
+  .login-ref h3 img {
+    height: 32px;
+  }
+  /* 参考页的品牌名和图标烘焙在同一张 338×80 的位图里，图标缩到 32px（40 的 80%）
+     时文字也跟着缩。我们是「图标 + 真实文字」两段结构，文字不会自己跟，
+     所以这里按同一比例补一条：26 × 0.8 = 20.8px，保持锁定标内部比例不变。 */
+  .login-ref h3 span {
+    font-size: 20.8px;
+  }
+}
+
+@media screen and (max-height: 900px) {
+  .login-ref .login {
+    padding: 24px 0;
+  }
+  .login-ref .main_box {
+    padding-top: 28px;
+    padding-bottom: 28px;
+    justify-content: center;
+  }
+  .login-ref .main_box .loginContent .content {
+    min-height: auto;
+  }
+  .login-ref h3 {
+    margin-bottom: 20px;
+  }
+  .login-ref h3 img {
+    height: 32px;
+  }
+  /* 同 max-width:480 断点：图标 40→32（80%），文字按比例微缩，维持锁定标比例。 */
+  .login-ref h3 span {
+    font-size: 20.8px;
+  }
+  .login-ref .main_box .logintab {
+    padding-bottom: 24px;
+  }
+  .login-ref .content .form {
+    gap: 18px;
+  }
+  .login-ref .content .form p input {
+    line-height: 44px;
+  }
+  .login-ref .content .form button.login {
+    padding: 10px 0;
+    font-size: 16px;
+  }
+  .login-ref .form-control {
+    margin-top: 20px;
+  }
+  .login-ref .logincopyright {
+    margin-top: 24px;
+  }
+}
+
+@media screen and (max-height: 700px) {
+  .login-ref .login {
+    padding: 10px 0;
+  }
+  .login-ref .main_box {
+    padding-top: 20px;
+    padding-bottom: 20px;
+  }
+  .login-ref h3 {
+    margin-bottom: 14px;
+  }
+  .login-ref .main_box .logintab {
+    padding-bottom: 16px;
+  }
+  .login-ref .content .form {
+    gap: 14px;
+  }
+  .login-ref .content .form p input {
+    line-height: 40px;
+  }
+  .login-ref .content .form button.login {
+    padding: 8px 0;
+    font-size: 15px;
+    border-radius: 10px;
+  }
+  .login-ref .form-control {
+    margin-top: 14px;
+  }
+}

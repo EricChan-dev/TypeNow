@@ -33,6 +33,23 @@ export function needsPhoneBinding(input: {
   return !(input.phone ?? "").trim()
 }
 
+/**
+ * 未绑定手机号的微信账号，被送去登录页完成绑定时用的路径。
+ *
+ * 复用登录页的「验证码登录」tab —— 用户在那里本来就要输手机号 + 验证码，
+ * 不必再学一套只有绑定时才出现的 UI。`bind=1` 是给登录页的开关（改用
+ * /api/auth/bind/phone、锁定到电话 tab、打一句"微信登录成功"的说明）。
+ *
+ * `next` 是绑定成功后的回跳目标，必须 encodeURIComponent 包一层：它自己
+ * 通常就带 query（如 /home?login_success=wechat&new_user=1），不编码会让
+ * 那些参数被当成 /login 的参数、回跳时全丢掉。
+ */
+export function loginBindPath(next?: string): string {
+  const params = new URLSearchParams({ bind: "1" })
+  if (next) params.set("next", next)
+  return `/login?${params.toString()}`
+}
+
 export type BindCollisionVerdict =
   /** 手机号没人用过 → 直接绑到当前账号 */
   | { action: "bind" }

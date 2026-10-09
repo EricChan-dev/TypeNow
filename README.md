@@ -33,6 +33,32 @@ DATABASE_URL=mysql://user:pass@127.0.0.1:3306/typenow
 DEEPSEEK_API_KEY=            # 不填则 AI 解析接口返回 503（不会伪造内容）
 ```
 
+### 可选：发短信的人机校验（阿里云验证码 2.0）
+
+登录页与设置页的「获取/发送验证码」共用 `POST /api/auth/send-sms`。配置下面两项后，
+该接口会要求客户端先通过阿里云人机校验（参考站句游英语用的是同一套）：
+
+```bash
+NEXT_PUBLIC_ALIYUN_CAPTCHA_SCENE_ID=   # 控制台「场景管理」→ 场景 ID
+NEXT_PUBLIC_ALIYUN_CAPTCHA_PREFIX=     # 控制台「概览 → 实例基本信息」→ 身份标
+ALIYUN_ACCESS_KEY_ID=                  # 与短信共用；RAM 需额外授予验证码权限
+ALIYUN_ACCESS_KEY_SECRET=
+```
+
+- **两项都不填 = 整条人机校验自动关闭**，本地开发无需申请阿里云账号。
+- 必须是 `NEXT_PUBLIC_`：客户端 `initAliyunCaptcha` 要用，构建期会替换成字面量；
+  改动后**必须重启 dev server**（`NEXT_PUBLIC_*` 不热更新）。
+- 验证码的**形态**（拖动图片对齐 / 滑块 / 点选…）在控制台建场景时选定，
+  隐含在 SceneId 里，代码侧改不了。
+- `prefix` **不是域名绑定**，只是运行时 API 主机的最左段，因此 localhost 可用、
+  无需 ICP 备案。
+- 校验脚本从 `o.alicdn.com` 动态加载，**禁止自托管**（官方明确要求，自托管会导致
+  无法更新、可能误拦截）。若将来加 CSP，需放行该域及 `*.aliyuncs.com` 相关域名。
+- 故障口径：阿里云侧异常（超时/5xx）→ **放行**；参数缺失或校验不通过 → **拦截**。
+  参数缺失必须拦，否则屏蔽验证码 CDN 即可绕过（见 `src/lib/aliyun-captcha.ts` 注释）。
+- 记账：验证码按次计费（¥0.005/次，**测试模式同样计费**）；上线前记得把场景从
+  「测试」切回「正式」。
+
 ```bash
 pnpm dev      # http://localhost:3000
 ```

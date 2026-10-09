@@ -1,5 +1,28 @@
 @import "tailwindcss";
 
+/* 品牌锁定标专用字体（站酷快乐体 ZCOOL KuaiLe 的子集，仅 10 个字形 / 1.4KB）。
+ *
+ * 用户要求（m02636）：「logo 旁的句学社，字体换为一种俏皮一些的字体，或者直接用
+ * 句游英语的 logo 字体」。经字形比对，这两个要求指向同一款字体 —— 参考站
+ * `logo.png` 里「句游英语」四个字与站酷快乐体的轮廓 IoU 达 0.907（逐字 0.911/
+ * 0.875/0.911/0.930），即其 logo 就是用这款字体排的，而它本身就是圆头圆角的
+ * 俏皮字。授权 SIL OFL 1.1，可商用可嵌入；OFL 未声明保留字体名，子集化与改名
+ * 均不受限。
+ *
+ * 字体文件由 `python3 brand/tools/build-webfont.py` 生成，**跟着仓库走**，
+ * 不像 landing-fonts.css 那样依赖 Google Fonts 外链 —— 品牌名出现在每个页面的
+ * 导航栏与页脚，是首屏关键路径，不该再欠一次网络依赖。
+ *
+ * font-display:swap 是刻意的：极端网络下宁可先显示后备字体，也不要让品牌名
+ * 整块空白。 */
+@font-face {
+  font-family: "TypeNow Brand";
+  src: url("/fonts/typenow-brand.woff2") format("woff2");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
@@ -17,11 +40,50 @@
   --font-mono: var(--font-geist-mono), monospace;
 }
 
-/* Light theme (default) */
+/* 品牌锁定标（「句学社」）专用排印。
+ *
+ * ── 为什么 font-weight 硬编码 400 ──────────────────────────────────────────
+ * 站酷快乐体**只有 Regular 一个字重**。调用点原来写的是 `font-bold`（700），
+ * 若照搬会让浏览器做**合成伪粗体**：笔画被横向撑粗、圆角被撑方，恰好毁掉这款
+ * 字体最要紧的圆头观感。所以这里直接锁死 400，并在调用点去掉 font-bold。
+ * 加 !important 是因为 Tailwind 的 `.font-bold` 与本类同为单类特异性，胜负
+ * 取决于源码顺序，靠顺序太脆。
+ *
+ * ── 为什么回退栈里同时留 Inter 和系统字体 ────────────────────────────────
+ * 子集只含「句学社TypeNow」10 个字形。万一将来有人把本类用到别的文案上，
+ * 缺字会逐字回退到 Inter／系统字体而不是显示豆腐块 —— 字体会「不统一」，
+ * 但不会不可读。真要用到新字，重跑 build-webfont.py 把字符加进 BRAND_CHARS。
+ *
+ * ── letter-spacing 说明 ─────────────────────────────────────────────────
+ * 站酷快乐体的字面比 Inter 宽（「句学社」advance = 2.76em），同样 font-size 下
+ * 比原来占更宽。调用点原有 `tracking-tight`(−0.025em) 保留即可，这里不再叠加，
+ * 避免同一属性两处设置互相打架。 */
+.font-brand {
+  /* 字体栈直接写在这里，不经过 CSS 变量。
+   *
+   * 踩过的坑：最初把栈放在 `@theme` 的 `--font-brand` 里、这里写
+   * `font-family: var(--font-brand)`，随后又把 `@theme` 那行删掉（担心 Tailwind
+   * 据此自动生成一个同名 `.font-brand` utility 与手写类打架）—— 结果变量没人定义，
+   * `font-family: var(--font-brand)` 成为**无效声明被整条丢弃**，品牌名静默回退到
+   * 继承字体（落地页是 Plus Jakarta Sans、登录页是系统栈），页面上看不出报错，
+   * 只有 `document.fonts` 里 "TypeNow Brand" 一直是 unloaded 才露馅。
+   * 直接内联后，本类不再依赖任何外部变量，改不动也删不掉。 */
+  font-family: "TypeNow Brand", var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+  font-weight: 400 !important;
+}
+
+/* Light theme (default)
+ *
+ * 品牌主色已固定为浅蓝 #2563eb（用户决定：不再有主题切换，主题色就是这个浅蓝）。
+ * 这个值同时是登录页与落地页的强调色，改动前先确认那两处的观感。
+ *
+ * 深色主题已在 2026-10 移除：`next-themes`、`.dark` 令牌块、导航栏的深浅色
+ * 切换按钮全部删除。原来用 `dark:` 前缀写的类已清理，`[.dark_&]:` 的 logo
+ * 换色变体也一并去掉 —— 站内只剩浅色一套。 */
 :root {
   --background: #ffffff;
   --foreground: #0f172a;
-  --primary: #f59e0b;
+  --primary: #2563eb;
   --primary-foreground: #ffffff;
   --muted: #f8fafc;
   --muted-foreground: #64748b;
@@ -67,79 +129,32 @@
   --banner-pill-streak-text: #92400e;
 }
 
-/* Dark theme */
-.dark {
-  --background: #060608;
-  --foreground: #f1f5f9;
-  --primary: #f59e0b;
-  --primary-foreground: #ffffff;
-  --muted: #0a0a10;
-  --muted-foreground: #94a3b8;
-  --border: #1e1e2a;
-  --card: #0f0f14;
-  --card-foreground: #f1f5f9;
-  --accent: #6366f1;
-  --success: #22c55e;
-  --warning: #f59e0b;
-  /* Surface tokens for theme-aware cards */
-  --surface: #0f0f14;
-  --surface-alt: #0c0c12;
-  --surface-border: #1e1e2a;
-  --surface-violet: #110d22;
-  --surface-violet-border: #2d2051;
-  --surface-divider: #1e1e2a;
-  /* Heatmap tokens */
-  --heat-empty: #0d0d16;
-  --heat-low: #2d1b69;
-  --heat-mid: #4c1d95;
-  --heat-high: #7c3aed;
-  --heat-max: #a78bfa;
-  --heat-cell-text: #e2e8f0;
-  --heat-cell-text-empty: #2d2d40;
-  --bar-empty: #111124;
-  /* Stat card accent tokens */
-  --stat-1-bg: #150719; --stat-1-border: #3b0f4a; --stat-1-icon-bg: #2d0f23;
-  --stat-2-bg: #140e03; --stat-2-border: #3d2c00; --stat-2-icon-bg: #2a1f04;
-  --stat-3-bg: #031415; --stat-3-border: #003a40; --stat-3-icon-bg: #052028;
-  /* Calendar tokens */
-  --cal-today-bg: #0e7490; --cal-today-text: #ffffff;
-  --cal-checkin-bg: #1e1535; --cal-checkin-text: #a78bfa;
-  /* Greeting banner tokens */
-  --banner-bg: linear-gradient(135deg, #12071f 0%, #1c1040 50%, #0c0a1a 100%);
-  --banner-border: #2d2051;
-  --banner-title: #ffffff;
-  --banner-subtitle: rgba(196,181,253,0.6);
-  --banner-pill-today-bg: #1a0f2e;
-  --banner-pill-today-border: #3d2060;
-  --banner-pill-today-text: #fde68a;
-  --banner-pill-streak-bg: #1a1006;
-  --banner-pill-streak-border: #3d2c00;
-  --banner-pill-streak-text: #fcd34d;
-}
-
 body {
   background: var(--background);
   color: var(--foreground);
   font-family: var(--font-sans);
   min-height: 100vh;
-  transition: background-color 0.35s ease, color 0.35s ease;
 }
 
-/* Smooth theme transitions for common elements */
-*,
-*::before,
-*::after {
-  transition-property: background-color, border-color, color, fill, stroke;
-  transition-duration: 0.35s;
-  transition-timing-function: ease;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  *,
-  *::before,
-  *::after {
-    transition-duration: 0s !important;
-  }
+/* 落地页专用字体层（字体本身由 src/app/(landing)/landing-fonts.css 的 @import 提供）。
+ *
+ * 参考页 style.css 里写的是：
+ *   body { font-family:'Plus Jakarta Sans','Noto Sans SC',-apple-system,…;
+ *          letter-spacing:-0.01em; }
+ * 这两条决定了每个字形的宽高与字距，是它版式的一部分 —— 缺了就会「看起来错乱」，
+ * 即使盒模型尺寸完全对齐。
+ *
+ * letter-spacing 用 em 写在 16px 的容器上，算出来是 -0.16px，再按**计算值**继承给
+ * 子孙（CSS 的 letter-spacing 继承的是计算后的长度，不会在子元素上按各自的
+ * font-size 重算），这一点与参考页的实测结果一致：正文 -0.16px、h1 则由
+ * tracking-tight 覆盖为 -0.025em。
+ *
+ * 只作用于 (landing) 子树，站内其它页面保持原字体。 */
+.landing-ref {
+  font-family: "Plus Jakarta Sans", "Noto Sans SC", -apple-system,
+    BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial,
+    "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+  letter-spacing: -0.01em;
 }
 
 /* Custom scrollbar */

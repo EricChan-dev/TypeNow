@@ -16,7 +16,7 @@ interface SubRecord {
 // 而且 partner 被写成「永久会员」—— 它现在只是终身会员（推广资格已解绑）。
 
 const STATUS_LABELS: Record<string, { label: string; className: string }> = {
-  active: { label: "生效中", className: "text-green-600 dark:text-green-400" },
+  active: { label: "生效中", className: "text-green-600" },
   expired: { label: "已到期", className: "text-muted-foreground" },
   cancelled: { label: "已取消", className: "text-red-500" },
 }

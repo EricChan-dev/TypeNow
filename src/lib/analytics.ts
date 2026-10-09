@@ -155,9 +155,8 @@ export function trackLoginSuccess(method: "phone" | "wechat") {
   track("login_success", { method })
 }
 
-export function trackThemeToggle(theme: string) {
-  track("theme_toggle", { theme })
-}
+// trackThemeToggle 已随深浅色切换功能一并移除（2026-10）。
+// 历史数据里仍可能有 theme_toggle 事件，后台事件列表会把未知事件名原样展示。
 
 // ─── 首启漏斗（见 src/lib/analytics-events 的 FUNNEL_STEPS） ──────────────────
 //

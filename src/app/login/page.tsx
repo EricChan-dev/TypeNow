@@ -1,106 +1,73 @@
 import { Suspense } from "react"
-import Link from "next/link"
 import Image from "next/image"
-import { ArrowLeft } from "lucide-react"
 import { LoginForm } from "@/components/auth/LoginForm"
+import { LoginBanner } from "@/components/auth/LoginBanner"
+import { LoginSupportLinks } from "@/components/auth/LoginSupportLinks"
+import { BRAND, brandLockupWithEn } from "@/lib/brand"
 
-const decoTexts = [
-  { text: "LEARN", size: "text-[72px]", opacity: "opacity-[0.08]", weight: "font-extrabold", x: "left-5", y: "top-10", rotate: "-15" },
-  { text: "ABC", size: "text-[56px]", opacity: "opacity-[0.10]", weight: "font-extrabold", x: "right-20", y: "top-28", rotate: "10" },
-  { text: "A", size: "text-[96px]", opacity: "opacity-[0.07]", weight: "font-black", x: "right-4", y: "top-4", rotate: "-8" },
-  { text: "GROW", size: "text-[48px]", opacity: "opacity-[0.09]", weight: "font-bold", x: "left-10", y: "bottom-1/3", rotate: "12" },
-  { text: "English", size: "text-[44px]", opacity: "opacity-[0.08]", weight: "font-semibold", x: "left-24", y: "bottom-24", rotate: "5" },
-  { text: "C", size: "text-[64px]", opacity: "opacity-[0.06]", weight: "font-black", x: "right-8", y: "top-1/2", rotate: "15" },
-  { text: "READ", size: "text-[52px]", opacity: "opacity-[0.09]", weight: "font-bold", x: "right-24", y: "bottom-28", rotate: "-10" },
-  { text: "WRITE", size: "text-[40px]", opacity: "opacity-[0.07]", weight: "font-bold", x: "right-12", y: "bottom-16", rotate: "8" },
-  { text: "Aa", size: "text-[88px]", opacity: "opacity-[0.05]", weight: "font-black", x: "left-20", y: "top-40", rotate: "-5" },
-]
-
+/**
+ * 登录页。
+ *
+ * 版面 1:1 复刻参考页 `登录 - 句游英语.html`（用户 m01483：「登录页也改造一下，
+ * 尽量保持一致，主要是样式，业务逻辑保留我们的」）。样式全部在 ./login.css，
+ * 作用域是 `.login-ref`，不污染站内其它页面。
+ *
+ * 品牌相关的位置换成我们的：h3 的锁定标、页脚的版权行与备案号。其余文案与
+ * 版式照搬参考页 —— 这与落地页的处理一致，代码注释里记下这个约定，避免以后
+ * 有人看到「像玩游戏一样组装句子」这类句子以为是从竞品复制的笔误而"修正"掉。
+ *
+ * 左栏轮播在 LoginBanner 里（客户端组件，3s 自动切换）。
+ */
 export default function LoginPage() {
   return (
-    <div className="flex flex-col h-screen">
-      {/* ── Content Area ── */}
-      <div className="flex flex-1 min-h-0">
-        {/* ── Left: Brand Panel ── */}
-        <aside className="hidden md:flex w-[45%] bg-[#1E40AF] relative flex-col items-center justify-center overflow-hidden px-12">
-          {/* Decorative rotated text */}
-          {decoTexts.map((d) => (
-            <span
-              key={d.text}
-              className={`absolute ${d.x} ${d.y} ${d.size} ${d.opacity} ${d.weight} text-white select-none pointer-events-none`}
-              style={{ transform: `rotate(${d.rotate}deg)` }}
+    <div className="login-ref">
+      <div className="login">
+        <div className="loginMain">
+          <LoginBanner />
+
+          <div className="main_box">
+            {/* 品牌锁定标。参考页放的是一张 338×80 的整块位图（图标+「句游英语」
+                烘焙在同一张图里），我们的 logo.svg 是单图标，所以用「图标+真实
+                文字」，与落地页顶栏同一种处理。 */}
+            <h3>
+              <Image src="/logo.svg" alt="" aria-hidden width={40} height={40} />
+              {/* 参考页这一块是 338×80 的 logo.png —— 图标与「句游英语」烘焙在同一张
+                  位图里，用的就是站酷快乐体（字形 IoU 0.907，见 globals.css 的
+                  @font-face 注释）。所以这里排同一款字体，真实文字部分即与参考页同源；
+                  font-brand 自带 400 字重锁定（该字体只有 Regular）。 */}
+              <span className="font-brand">{BRAND.lockup}</span>
+            </h3>
+
+            <Suspense
+              fallback={
+                <div className="loginContent">
+                  <div className="content on">
+                    <p className="support-tip">加载中…</p>
+                  </div>
+                </div>
+              }
             >
-              {d.text}
-            </span>
-          ))}
+              <LoginForm />
+            </Suspense>
 
-          {/* Content */}
-          <div className="relative z-10 flex flex-col items-center text-center">
-            {/* Logo */}
-            <div className="flex items-center gap-2.5 mb-14">
-              <Image src="/logo_w.svg" alt="TypeNow" width={38} height={38} />
-              <span className="text-2xl font-bold text-white tracking-[1.5px]">
-                码上英语 · TypeNow
-              </span>
-            </div>
-
-            {/* Illustration */}
-            <div className="relative w-full max-w-[360px] h-[300px] mb-7 rounded-2xl overflow-hidden">
-              <Image
-                src="/login-illustration.png"
-                alt="English learning illustration"
-                fill
-                className="object-cover"
-                priority
-              />
-            </div>
-
-            {/* Slogan */}
-            <p className="text-[26px] font-medium text-white tracking-[3px] mb-4">
-              码上一小句，人生一大步
-            </p>
-
-            {/* Divider */}
-            <div className="w-12 h-[3px] rounded-sm bg-white/30" />
-          </div>
-        </aside>
-
-        {/* ── Right: Login Panel ── */}
-        <section className="flex flex-1 flex-col bg-background min-w-0">
-          {/* Top Bar */}
-          <div className="flex items-center justify-between px-8 py-5 shrink-0">
-            <Link
-              href="/"
-              className="inline-flex items-center gap-1.5 text-sm text-[#1E40AF] hover:opacity-80 transition-opacity"
-            >
-              <ArrowLeft className="h-4 w-4" />
-              返回首页
-            </Link>
-            <span className="text-sm text-[#64748B]">typenow.cn</span>
-          </div>
-
-          {/* Centered Login Form */}
-          <div className="flex-1 flex items-center justify-center px-6">
-            <div className="w-full max-w-[380px]">
-              {/* Subtitle */}
-              <p className="text-[15px] text-[#64748B] text-center mb-8">
-                登录以开始你的英语学习之旅
-              </p>
-
-              <Suspense fallback={<div className="text-sm text-muted-foreground text-center">加载中...</div>}>
-                <LoginForm />
-              </Suspense>
+            <div className="logincopyright">
+              <label>
+                © 2026 <span className="font-brand">{BRAND.lockup}</span>
+              </label>
+              {/* 「帮助中心 / 关于我们」不再是跳转链接 —— 用户要求点击后就地
+                  展示公众号/客服二维码（见 LoginSupportLinks 顶部注释）。 */}
+              <LoginSupportLinks />
             </div>
           </div>
-        </section>
+        </div>
       </div>
 
-      {/* ── Footer ── */}
-      <footer className="flex items-center justify-center py-4 border-t border-border bg-background shrink-0">
-        <span className="text-xs text-[#64748B]">
-          &copy; 2026 TypeNow &middot; typenow.cn
-        </span>
-      </footer>
+      <div className="loginBottom">
+        © 2026 <span className="font-brand">{brandLockupWithEn()}</span> &nbsp;·&nbsp;
+        <a href="https://beian.miit.gov.cn/" target="_blank" rel="noopener noreferrer">
+          晋ICP备2026006473号
+        </a>
+      </div>
     </div>
   )
 }

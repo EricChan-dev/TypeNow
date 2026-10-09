@@ -1,6 +1,6 @@
 import crypto from "crypto"
 import { NextRequest, NextResponse } from "next/server"
-import { createOAQrCode, isWeChatOAConfigured } from "@/lib/wechat"
+import { createOAQrCode, isWeChatOAConfigured, WechatApiError } from "@/lib/wechat"
 
 /**
  * 把邀请码编进二维码 scene。
@@ -65,6 +65,21 @@ export async function GET(request: NextRequest) {
     // 不要把内部的 err.message 直接回给客户端：微信接口的错误信息里可能带着
     // appid、access_token 片段或内部 URL。日志留全量，响应给通用文案。
     console.error("[wechat/oa-qrcode] 创建二维码失败:", err)
+
+    // 少数错误是**运维配置问题、有明确修复动作**，给通用文案会让排障人无从下手。
+    // 目前只区分 40164（出口 IP 不在公众号白名单）——它回一句「获取二维码失败」
+    // 完全等于没说，而修法是确定的。其余一律保持通用文案，不泄漏内部细节。
+    if (err instanceof WechatApiError && err.errcode === 40164) {
+      return NextResponse.json(
+        {
+          error:
+            "公众号二维码暂不可用：服务器出口 IP 不在公众平台白名单，请在公众号后台「设置与开发 → 基本配置 → IP 白名单」中添加后重试",
+          code: "OA_IP_NOT_ALLOWED",
+        },
+        { status: 500 }
+      )
+    }
+
     return NextResponse.json({ error: "获取二维码失败，请稍后重试" }, { status: 500 })
   }
 }

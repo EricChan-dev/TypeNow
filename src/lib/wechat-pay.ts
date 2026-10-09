@@ -3,6 +3,7 @@ import { readFileSync } from "fs"
 // 定价与商品名的唯一事实源。放在 lib/pricing 而不是这里：
 // 那个模块是纯函数且要同时被客户端价格页使用，不能反向依赖本文件的支付依赖。
 import { findPlan, planAmount, type PlanKey } from "@/lib/pricing"
+import { BRAND } from "@/lib/brand"
 
 const WECHAT_PAY_HOST = "https://api.mch.weixin.qq.com"
 
@@ -673,8 +674,8 @@ export function getPlanAmount(plan: string, isFirstPurchase: boolean): number | 
  */
 export function getPlanDescription(plan: string): string {
   const spec = findPlan(plan)
-  if (!spec) return "TypeNow 会员"
-  return `TypeNow ${spec.label}`
+  if (!spec) return `${BRAND.nameZh} 会员`
+  return `${BRAND.nameZh} ${spec.label}`
 }
 
 export interface TransferResult {
@@ -694,7 +695,7 @@ export async function wechatTransferBatch(params: {
   const body = {
     appid: params.appId,
     out_batch_no: params.outBatchNo,
-    batch_name: "TypeNow 推广佣金提现",
+    batch_name: `${BRAND.nameZh} 推广佣金提现`,
     batch_remark: params.remark,
     total_amount: params.amount,
     total_num: 1,

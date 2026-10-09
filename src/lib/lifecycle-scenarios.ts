@@ -24,6 +24,7 @@
  */
 
 import { toShanghaiDateStr } from "@/lib/practice-stats"
+import { BRAND } from "@/lib/brand"
 
 // ─── 类型 ────────────────────────────────────────────────────────────────────
 
@@ -360,7 +361,10 @@ export function decideSend(params: {
  *
  * 短信模板（阿里云，类型必须选「通知短信」）只用于年卡场景，变量名同理必须一致：
  *
- *     你的${tier}将于${date}到期，你已练习${count}句。请登录码上英语查看学习报告。
+ *     你的${tier}将于${date}到期，你已练习${count}句。请登录句学社查看学习报告。
+ *       ⚠️ 品牌改名后这行必须与阿里云控制台上**实际提交审核**的模板逐字一致。
+ *       改这一行不会改到线上模板 —— 需要到控制台重新提交审核，审核通过前
+ *       线上发的仍是旧文案（发出去的是旧名不影响功能，但别以为改了代码就生效了）。
  *       tier  会员类型 → 变量属性「其他」
  *       date  到期日  → 变量属性「时间」（官方支持 YYYY-MM-DD）
  *       count 已练习句数，**纯数字** → 变量属性「数量」，单位"句"在正文里
@@ -531,7 +535,7 @@ export function buildMessage(ctx: MessageContext): BuiltMessage {
         title: "开始你的第一次练习",
         body:
           `你已领取${tierLabel}，还没有开始练习。\n` +
-          `打开 TypeNow 选一课，练 5 句就能看到学习记录与错句复习队列。`,
+          `打开 ${BRAND.nameZh} 选一课，练 5 句就能看到学习记录与错句复习队列。`,
         templateData: {},
       }
 
@@ -539,10 +543,10 @@ export function buildMessage(ctx: MessageContext): BuiltMessage {
       return {
         title: "你还有一份体验会员未领取",
         body:
-          `你已注册 TypeNow，还有一份${"体验会员"}未领取。\n` +
+          `你已注册 ${BRAND.nameZh}，还有一份${"体验会员"}未领取。\n` +
           `领取后可以练习完整课程，并生成学习记录与错句复习队列。`,
         templateData: {
-          first: "你已注册 TypeNow",
+          first: `你已注册 ${BRAND.nameZh}`,
           keyword1: "体验会员未领取",
           remark: "点击领取体验会员",
         },

@@ -1,0 +1,94 @@
+/* 落地页专属组件样式 —— 与参考页 style.css 的对应规则逐字一致。
+ *
+ * 参考页的 .word-btn / .puzzle-slot-btn 定义在它自己的 style.css 里，是那份文件
+ * 保存下来的资源之一。之前这版还原把它们等价改写成了内联 Tailwind 类，结果
+ * 立体键帽的 3px 实心阴影、hover 下沉、选中置灰、槽内卡片 hover 变红并显示 ✕
+ * 这些细节全丢了 —— 拼词卡看起来就「不像」参考页。
+ *
+ * 现在直接照搬原 CSS。选择器统一加 `.landing-ref` 前缀限定在首页子树内，
+ * 避免污染站内其它页面。
+ */
+
+/* 单词卡片（模拟游戏立体键帽） */
+.landing-ref .word-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.5rem 0.875rem;
+  background-color: #ffffff;
+  color: #1e293b;
+  font-size: 0.875rem;
+  font-weight: 700;
+  border-radius: 0.75rem;
+  border: 1.5px solid #e2e8f0;
+  box-shadow: 0 3px 0 0 #cbd5e1;
+  cursor: pointer;
+  user-select: none;
+  transition: all 0.15s ease-out;
+}
+
+.landing-ref .word-btn:hover {
+  background-color: #f8fafc;
+  border-color: #94a3b8;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 0 0 #94a3b8;
+}
+
+.landing-ref .word-btn:active {
+  transform: translateY(2px);
+  box-shadow: 0 1px 0 0 #94a3b8;
+}
+
+/* 单词已被选入句子槽：置灰下沉，且不可再点。
+   注意用的是 pointer-events:none 而不是把按钮从 DOM 移除 —— 参考页就是这样，
+   按钮始终留在原地，布局不会因为选词而回流跳动。 */
+.landing-ref .word-btn.selected {
+  opacity: 0.35;
+  pointer-events: none;
+  filter: grayscale(1);
+  transform: translateY(2px);
+  box-shadow: 0 1px 0 0 #e2e8f0;
+}
+
+/* 已放入句子槽的单词卡片 */
+.landing-ref .puzzle-slot-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.45rem 0.8rem;
+  background-color: #3b82f6;
+  color: #ffffff;
+  font-size: 0.875rem;
+  font-weight: 700;
+  border-radius: 0.75rem;
+  border: 1.5px solid #2563eb;
+  box-shadow: 0 3px 0 0 #1d4ed8;
+  cursor: pointer;
+  user-select: none;
+  transition: all 0.15s ease-out;
+  animation: popIn 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+.landing-ref .puzzle-slot-btn:hover {
+  background-color: #ef4444;
+  border-color: #dc2626;
+  box-shadow: 0 3px 0 0 #b91c1c;
+}
+
+/* hover 时在卡片尾部追加一个 ✕，暗示「点了就撤销」 */
+.landing-ref .puzzle-slot-btn:hover::after {
+  content: ' ✕';
+  font-size: 0.75rem;
+  margin-left: 0.25rem;
+}
+
+@keyframes popIn {
+  0% {
+    opacity: 0;
+    transform: scale(0.85);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}

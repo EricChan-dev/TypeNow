@@ -76,6 +76,28 @@ type WechatErrorResponse = {
   errmsg: string
 }
 
+/**
+ * 带微信 errcode 的接口错误。
+ *
+ * 为什么需要它：微信的失败原因里，**有一部分是运维配置问题、不是代码问题** ——
+ * 最典型的是 `40164`（调用方出口 IP 不在公众号后台白名单）。这类错误回给用户
+ * 一句通用的「获取二维码失败」等于把排障成本全推给用户，而它其实有明确的
+ * 修复动作（把出口 IP 加进白名单）。所以把 errcode 透传到上层，让路由能针对
+ * 少数可行动的错误给出可执行提示，其余仍一律用通用文案 + 日志。
+ *
+ * 注意：消息文本里可能带 appid / token 片段 / 内部 URL，**只用于服务端日志**，
+ * 任何情况下都不要回给客户端（见 oa-qrcode 路由的 catch）。
+ */
+export class WechatApiError extends Error {
+  readonly errcode?: number
+
+  constructor(message: string, errcode?: number) {
+    super(message)
+    this.name = "WechatApiError"
+    this.errcode = errcode
+  }
+}
+
 function isWechatError(
   data: unknown
 ): data is WechatErrorResponse {
@@ -215,7 +237,9 @@ export async function getOAGlobalAccessToken(): Promise<string> {
   const data = await res.json()
 
   if (isWechatError(data)) {
-    throw new Error(`获取 access_token 失败: ${data.errmsg}`)
+    // 带上 errcode：40164（IP 不在白名单）这类配置问题要在路由层被识别出来，
+    // 才能给出「去公众号后台加白名单」这种可执行提示，而不是笼统的一句失败。
+    throw new WechatApiError(`获取 access_token 失败: ${data.errmsg}`, data.errcode)
   }
 
   cachedOAToken = {
@@ -457,7 +481,7 @@ export async function createOAQrCode(
       40164: "IP 不在白名单中",
     }
     const message = messages[data.errcode] || `创建二维码失败 (${data.errcode})`
-    throw new Error(message)
+    throw new WechatApiError(message, data.errcode)
   }
 
   const result = data as OACreateQrCodeResponse

@@ -1,0 +1,15 @@
+/* 落地页专用字体层 —— 与参考页 style.css 第 2 行逐字一致。
+ *
+ * 参考页就是这么加载字体的（外链 Google Fonts，不走本地自托管）。这里保持同样
+ * 的 @import，是为了让「拉丁字母走 Plus Jakarta Sans、汉字走 Noto Sans SC」这套
+ * 字形与参考页完全对齐 —— 字形宽度和字距变了，整页看起来就会像「排版错乱」，
+ * 哪怕盒模型尺寸分毫不差。
+ *
+ * 曾经试过用 next/font/google 自托管，但 Turbopack 在本机拉不到字体文件
+ * （`Can't resolve '@vercel/turbopack-next/internal/font/google/font'`），
+ * 所以退回参考页的原方案。
+ *
+ * 这个文件只被 src/app/(landing)/layout.tsx 引入，因此只有首页会请求这两个
+ * 字体族，站内其它页面（/home、/practice…）不受影响。
+ */
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Noto+Sans+SC:wght@400;500;700;900&display=swap');

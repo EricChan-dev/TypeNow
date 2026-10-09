@@ -5,6 +5,7 @@ import { toast } from "sonner"
 import QRCode from "qrcode"
 import { ChevronRight, ArrowLeft, AlertTriangle } from "lucide-react"
 import { PaymentSuccessModal } from "@/components/payment/PaymentSuccessModal"
+import { BRAND } from "@/lib/brand"
 import {
   ATTRIBUTION_WINDOW_DAYS,
   COMMISSION_RATE,
@@ -137,7 +138,7 @@ export default function PartnerDashboard() {
       if (linkIncluded) {
         toast.success("已复制（含你的邀请链接）")
       } else {
-        toast.success(`${m.platform}不能放链接，已只复制文字 —— 请引导对方搜索「码上英语」`)
+        toast.success(`${m.platform}不能放链接，已只复制文字 —— 请引导对方搜索「${BRAND.searchKeyword}」`)
       }
     })
   }
@@ -158,11 +159,17 @@ export default function PartnerDashboard() {
       ctx.fillStyle = grad
       ctx.fillRect(0, 0, 750, 1334)
 
-      // Brand name
+      // Brand name。
+      //
+      // canvas 不会等网页字体加载完 —— 不等的话，首次点「生成海报」时字体还没
+      // 就绪，ctx.font 会静默落回系统字体（系统里并没有装站酷快乐体，所以是
+      // 彻底的降级，而且不报任何错）。这里显式等一下；字体已在字体栈里，
+      // 通常前面几个页面已经加载过，这一行几乎不耗时。
+      await document.fonts.load("64px 'TypeNow Brand'", BRAND.lockup)
       ctx.fillStyle = "#ffffff"
-      ctx.font = "bold 64px system-ui"
+      ctx.font = "64px 'TypeNow Brand', system-ui"
       ctx.textAlign = "center"
-      ctx.fillText("码上英语", 375, 200)
+      ctx.fillText(BRAND.lockup, 375, 200)
 
       ctx.fillStyle = "rgba(255,255,255,0.5)"
       ctx.font = "32px system-ui"

@@ -3,6 +3,7 @@
 import { useState } from "react"
 import { ChevronDown } from "lucide-react"
 import { cn } from "@/lib/utils"
+import { BRAND } from "@/lib/brand"
 
 interface FAQItem {
   question: string
@@ -13,7 +14,7 @@ const faqData: FAQItem[] = [
   {
     question: "和背单词 App 有什么不同？",
     answer:
-      `背单词解决的是"认识"，TypeNow 解决的是"会用"。你可能认识 apple 这个词，但能脱口而出 "An apple a day keeps the doctor away" 吗？TypeNow 从中译英打字切入，把单词放回真实句子里练，学的不是孤立的词汇，而是真正能用出来的表达。打完一句、记住一句、学会一句。`,
+      `背单词解决的是"认识"，${BRAND.nameZh} 解决的是"会用"。你可能认识 apple 这个词，但能脱口而出 "An apple a day keeps the doctor away" 吗？${BRAND.nameZh} 从中译英打字切入，把单词放回真实句子里练，学的不是孤立的词汇，而是真正能用出来的表达。打完一句、记住一句、学会一句。`,
   },
   {
     question: "适合什么英语水平？",
@@ -28,12 +29,12 @@ const faqData: FAQItem[] = [
 {
     question: "孩子用安全吗？能看到学习情况吗？",
     answer:
-      "放心，TypeNow 是纯粹的学习工具，没有社交干扰和无关内容。Pro 会员支持按场景、按时间的深度学习统计——学了什么、学了多久、掌握程度如何，随时查看。",
+      `放心，${BRAND.nameZh} 是纯粹的学习工具，没有社交干扰和无关内容。Pro 会员支持按场景、按时间的深度学习统计——学了什么、学了多久、掌握程度如何，随时查看。`,
   },
   {
     question: "为什么没有 App？",
     answer:
-      "TypeNow 的核心体验是用键盘打字造句——在电脑前专注练习，手感更爽，效率更高。这类需要沉浸的学习方式，PC 端体验远好于手机。手机浏览器可以打开查看课程和进度，但打字练习依赖物理键盘，触屏设备的软键盘在部分输入法下无法稳定识别按键，所以请以电脑练习为准。",
+      `${BRAND.nameZh} 的核心体验是用键盘打字造句——在电脑前专注练习，手感更爽，效率更高。这类需要沉浸的学习方式，PC 端体验远好于手机。手机浏览器可以打开查看课程和进度，但打字练习依赖物理键盘，触屏设备的软键盘在部分输入法下无法稳定识别按键，所以请以电脑练习为准。`,
   },
   {
     question: "怎么通过推广赚钱？需要付费吗？",

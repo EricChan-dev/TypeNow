@@ -3,11 +3,12 @@ import Link from "next/link"
 import { ArrowRight, Check, Info } from "lucide-react"
 import { FEATURE_GROUPS } from "@/lib/product-features"
 import { AuthLink } from "@/components/layout/AuthLink"
+import { BRAND } from "@/lib/brand"
 
 export const metadata: Metadata = {
-  title: "功能介绍 - TypeNow",
+  title: `功能介绍 - ${BRAND.nameZh}`,
   description:
-    "TypeNow 能做什么：中译英打字练习、间隔重复复习、点词详情与 AI 句子讲解、学习统计、推广计划。每条能力都注明已知边界。",
+    `${BRAND.nameZh} 能做什么：中译英打字练习、间隔重复复习、点词详情与 AI 句子讲解、学习统计、推广计划。每条能力都注明已知边界。`,
 }
 
 /**
@@ -26,7 +27,7 @@ export default function FeaturesPage() {
       <header className="flex flex-col gap-4">
         <h1 className="text-3xl font-bold tracking-tight">功能介绍</h1>
         <p className="text-base text-muted-foreground leading-relaxed">
-          TypeNow 是一款中译英打字练习工具：看中文、敲英文，把「认识」变成「能用出来」。
+          {BRAND.nameZh} 是一款中译英打字练习工具：看中文、敲英文，把「认识」变成「能用出来」。
           下面是我们**实际提供**的能力清单。
         </p>
         <p className="flex items-start gap-2 rounded-xl bg-card border border-border px-4 py-3 text-sm text-muted-foreground leading-relaxed">

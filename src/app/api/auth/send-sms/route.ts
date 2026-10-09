@@ -5,6 +5,7 @@ import { verificationCodes } from "@/lib/db/schema"
 import { eq, and, gte, lt, count } from "drizzle-orm"
 import { sendVerificationCode } from "@/lib/aliyun-sms"
 import { getClientIP } from "@/lib/rate-limit"
+import { isCaptchaConfigured, verifyCaptcha } from "@/lib/aliyun-captcha"
 
 const PHONE_REGEX = /^1[3-9]\d{9}$/
 
@@ -13,7 +14,7 @@ function isDevMode() {
 }
 
 export async function POST(request: Request) {
-  let body: { phone?: string }
+  let body: { phone?: string; captchaVerifyParam?: string }
   try {
     body = await request.json()
   } catch {
@@ -23,6 +24,40 @@ export async function POST(request: Request) {
   const phone = body.phone?.trim()
   if (!phone || !PHONE_REGEX.test(phone)) {
     return NextResponse.json({ error: "请输入有效的手机号" }, { status: 400 })
+  }
+
+  // ── 人机校验（阿里云验证码 2.0）─────────────────────────────────────────────
+  // 放在手机号校验之后、限流之前：参数不合法就不必再查库。
+  // 未配置环境变量时 (isCaptchaConfigured() === false) 整段跳过，
+  // 本地开发与尚未开通验证码的环境不受影响。
+  if (isCaptchaConfigured()) {
+    const captchaVerifyParam =
+      typeof body.captchaVerifyParam === "string" ? body.captchaVerifyParam : ""
+
+    // 缺参必须**拒**，这是刻意的 fail-closed：
+    // 官方 FAQ Q17 说明验证码脚本初始化失败时仍会触发 captchaVerifyCallback，
+    // 调用时参数为空。若这里放行，攻击者只要屏蔽验证码 CDN (o.alicdn.com)
+    // 就能完全绕过人机校验，把这条防线变成摆设。
+    if (!captchaVerifyParam.trim()) {
+      return NextResponse.json(
+        { error: "人机验证无效，请刷新页面后重试", captchaFailed: true },
+        { status: 400 }
+      )
+    }
+
+    const verdict = await verifyCaptcha(captchaVerifyParam)
+    if (verdict.result === "fail") {
+      // captchaFailed 让前端区分「人机验证没过」与「短信发送失败」：
+      // 前者要把 captchaResult 回传成 false，让验证码控件刷新、用户重试；
+      // 后者是人机已通过、业务失败，不能刷新验证码把用户赶回去重拖一次。
+      return NextResponse.json(
+        { error: "人机验证未通过，请重试", captchaFailed: true },
+        { status: 400 }
+      )
+    }
+    // verdict.result === "unavailable" → 阿里云侧异常/未配好 → **放行**。
+    // 官方口径：验证码是安全增强手段，不应成为业务可用性的单点故障。
+    // verifyCaptcha 内部已 console.error 留痕，这里不再重复。
   }
 
   // Dev mode (no DB): use fixed code 123456

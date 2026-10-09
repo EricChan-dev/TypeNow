@@ -20,6 +20,7 @@ import {
 } from "@/lib/desktop-only"
 
 import { alignWordsWithEnglish } from "@/lib/word-align"
+import { BRAND } from "@/lib/brand"
 import { sentenceCoinReward } from "@/lib/coins"
 import { Voiceprint } from "@/components/home/learn/Voiceprint"
 
@@ -1671,8 +1672,8 @@ export function LearnClient({
 
           {/* Brand text */}
           <div className="text-center space-y-2">
-            <p className="text-white/60 text-xl font-bold tracking-[4px]">码上英语</p>
-            <p className="text-white/20 text-xs tracking-[6px] font-mono uppercase">TypeNow</p>
+            <p className="font-brand text-white/60 text-xl tracking-[4px]">{BRAND.nameZh}</p>
+            <p className="text-white/20 text-xs tracking-[6px] font-mono uppercase">{BRAND.nameEn}</p>
           </div>
 
           {/* Motivational quote */}

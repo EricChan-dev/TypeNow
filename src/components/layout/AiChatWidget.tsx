@@ -7,6 +7,7 @@ import { cn } from "@/lib/utils"
 import { isImmersivePracticeRoute } from "@/lib/immersive-route"
 import { subscribeOpenAiChat } from "@/lib/ai-chat"
 import { FREE_AI_CHAT_PER_DAY, MEMBER_DAILY_DIAMONDS } from "@/lib/membership-benefits"
+import { BRAND } from "@/lib/brand"
 
 interface Message {
   role: "user" | "assistant"
@@ -209,7 +210,7 @@ export function AiChatWidget() {
             {messages.length === 0 && (
               <div className="flex flex-col items-center justify-center h-full text-center text-muted-foreground/50 text-sm gap-2">
                 <Bot className="h-8 w-8 text-violet-400/40" />
-                <p>你好！我是小码，TypeNow 英语学习助手</p>
+                <p>你好！我是小码，{BRAND.nameZh}英语学习助手</p>
                 <p className="text-xs">问我任何英语学习问题吧 😊</p>
               </div>
             )}

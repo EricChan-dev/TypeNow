@@ -7,7 +7,7 @@
  */
 import { describe, it, expect } from "vitest"
 import * as mod from "@/lib/phone-gate"
-import { decideBindCollision, needsPhoneBinding } from "@/lib/phone-gate"
+import { decideBindCollision, needsPhoneBinding, loginBindPath } from "@/lib/phone-gate"
 
 const base = {
   currentUserId: "shell",
@@ -32,10 +32,39 @@ describe("needsPhoneBinding", () => {
     expect(needsPhoneBinding({ phone: null, devBypass: true })).toBe(false)
   })
 
-  it("拦截方式不含「跳转」语义：改为盖弹窗后不再有落地路径", () => {
-    // 这条断言是给未来的人看的：曾经用 redirect 到一个独立页，
-    // 结果是「正在看的课/句都被拽走，绑完还得自己找回来」。现在是全局弹窗。
+  it("拦截方式不含「独立落地页」语义：不再有 PHONE_BIND_PATH 这种'目的地'路径", () => {
+    // 这条断言是给未来的人看的：曾经用 redirect 到一个独立绑定页，
+    // 结果是「正在看的课/句都被拽走，绑完还得自己找回来」。
+    // 后来改成全局弹窗（盖在 home/layout 上），再后来改成登录校验——
+    // 现在是送去登录页的「验证码登录」tab（loginBindPath），
+    // 复用用户本来就会用的表单，而不是一个只有绑定才出现的界面。
+    // 所以这里钉的是：不要再冒出一个「绑定专用落地路径」。
     expect(Object.keys(mod)).not.toContain("PHONE_BIND_PATH")
+  })
+})
+
+describe("loginBindPath", () => {
+  it("不带 next 时只带 bind=1", () => {
+    expect(loginBindPath()).toBe("/login?bind=1")
+  })
+
+  it("带 next 时原样带上（让用户绑完能回到他本来要去的地方）", () => {
+    expect(loginBindPath("/home?login_success=wechat")).toBe(
+      "/login?bind=1&next=%2Fhome%3Flogin_success%3Dwechat",
+    )
+  })
+
+  it("next 里的 query 必须被编码，否则会串成外层参数", () => {
+    // 不编码的话 `?next=/home?a=1` 里的 a=1 会被解析成绑定页自己的参数，
+    // 回跳目标就丢了 —— 这正是 URLSearchParams 存在的理由。
+    const path = loginBindPath("/a?b=1&c=2")
+    expect(path.startsWith("/login?bind=1&next=")).toBe(true)
+    expect(path).not.toContain("?b=1&c=2")
+    expect(decodeURIComponent(path.split("next=")[1])).toBe("/a?b=1&c=2")
+  })
+
+  it("空字符串 next 不产生 next 参数（避免 ?next= 这种空壳）", () => {
+    expect(loginBindPath("")).toBe("/login?bind=1")
   })
 })
 

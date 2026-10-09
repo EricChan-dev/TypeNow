@@ -156,3 +156,54 @@ describe("绑定手机号 · 验证码", () => {
     expect((await row(target))?.wechat_openid).toBeNull()
   })
 })
+
+describe("绑定手机号 · 开发态登录旁路不被拦（回归）", () => {
+  /**
+   * 三个开发态登录入口都必须发 `dev:<userId>` 前缀的**旁路 cookie**。
+   *
+   * 曾经它们都走 createSession() 发真会话（裸 UUID），而开发态建出来的账号
+   * 没有手机号，home/layout 的 needsPhoneBinding 会把它 302 回 /login?bind=1。
+   * 表现就是用户报的「开发模式桌面端一键登录，登录不进去」—— 而且只有
+   * dev_wechat_user 那个账号因为历史原因带了手机号才"看起来是好的"，
+   * 另外两个(dev_qrcode_login / dev_oa_user)必炸，属于最难排查的那种：
+   * 换一个入口就换一种现象。
+   *
+   * 这里对三个入口都钉两件事：
+   *   1. 下发的 cookie 带 `dev:` 前缀（isDevBypassSession 认得出）
+   *   2. 带着它请求 /home 返回 200，不被弹去绑定手机号
+   */
+  const DEV_ENTRIES = [
+    { name: "dev-login（桌面端一键登录）", path: "/api/auth/dev-login", cookies: {} },
+    {
+      name: "callback?code=dev_mock",
+      path: "/api/auth/wechat/callback?code=dev_mock&state=x",
+      cookies: {},
+    },
+    {
+      name: "oa-check?dev_scene",
+      path: "/api/auth/wechat/oa-check?dev_scene=e2e-scene",
+      cookies: { wechat_oa_scene: "e2e-scene" },
+    },
+  ]
+
+  for (const entry of DEV_ENTRIES) {
+    it(`${entry.name} 下发 dev: 旁路 cookie 且能进 /home`, async () => {
+      const api = ApiClient.anonymous()
+      for (const [k, v] of Object.entries(entry.cookies)) api.setCookie(k, v)
+
+      const res = await api.get(entry.path)
+      expect([200, 302, 307], `${entry.name} 应正常响应`).toContain(res.status)
+
+      const session = api.getCookie("typenow_session")
+      expect(session, `${entry.name} 必须下发会话 cookie`).toBeTruthy()
+      // Next 把 cookie 值里的冒号写成 %3A，两种形态都要认得
+      expect(
+        decodeURIComponent(session!),
+        `${entry.name} 必须发旁路 cookie（dev: 前缀），不能发裸 UUID 真会话`,
+      ).toMatch(/^dev:/)
+
+      const home = await api.get("/home", { redirect: "manual" })
+      expect(home.status, "开发态旁路账号不该被弹去绑定手机号").toBe(200)
+    })
+  }
+})

@@ -1,0 +1,1738 @@
+/* 首页内容区样式：1:1 复刻参考页 `主页 - 句游英语.html` 的版式。
+ *
+ * 用户裁定（m04728）：改造主页内容区，参考句游英语，1:1 复刻版式但保留本项目
+ * 业务逻辑与路由。沿用登录页的先例（m01483 + src/app/login/login.css）：
+ * 只搬运**表现层**，全部规则挂在 `.home-ref` 下，不污染站内其它页面。
+ *
+ * 搬运约定：
+ * 1. 字号、行高、内边距、圆角、阴影、色值全部保留参考页的**原值**，不做"优化"。
+ *    这些数值共同决定版面，改任何一个都会重新出现"排版错乱"。
+ * 2. box-sizing 保持 Tailwind 的 border-box（不像 login.css 那样还原 content-box）。
+ *    参考页里 `.col-7` / `.col-3` 本来就显式写了 `box-sizing:border-box`，
+ *    它们的 `calc(((100% - 28px)/3)*2 + 14px)` 宽度在 border-box 下才成立；
+ *    唯一依赖 content-box 的是 `.parame li{width:25%}`（四格 + 60px gap），
+ *    这里改用 `flex:1` 得到完全相同的视觉结果，避免动全站盒模型。
+ * 3. 参考页的深色模式（`:root[themes="dark"]`）一律不搬 —— 我们 2026-10 已删掉
+ *    整套 `.dark` 令牌与 `next-themes`，见 globals.css。只保留浅色值。
+ * 4. 参考页用 remixicon 字体图标（`<i class="ri-*">`），我们统一用 lucide 组件，
+ *    所以字体图标的 font-size/color 规则改写成 `svg` 的宽高/颜色。
+ * 5. card1~4.png / lxb.png 等是对方素材，不搬；对应的 background-image 规则丢掉。
+ *
+ * 令牌来源：`~/Downloads/主页 - 句游英语_files/reset.css`（浅色分支）。
+ */
+
+.home-ref {
+  /* 参考页设计令牌（reset.css 浅色分支，逐字搬运） */
+  --ref-bodyT: #333;
+  --ref-bodyGrayT: #666666;
+  --ref-body999: #999999;
+  --ref-mainBox: #f1f4fd;
+  --ref-bgwhite: #f8fafe;
+  --ref-progressHome: #edf5fe;
+  --ref-calendarH: #cee6fe;
+  --ref-calendarB: #edf5fe;
+  --ref-calendarP: #fff;
+  --ref-calendarShadow: 0px 0px 9px 0px #b2c3fc;
+  --ref-bordere8e9eb: #e8e9eb;
+  --ref-bedf2f9: #edf2f9;
+  --ref-f1f5f9: #f1f4f7;
+  --ref-e2e8f0: #e2e8f0;
+  --ref-color64748b: #64748b;
+  --ref-color94a3b8: #94a3b8;
+  --ref-bghours: #fff;
+  --ref-texthour: #94a3b7;
+
+  /* 参考页没有声明 font-family，实际用的是浏览器默认字体（macOS = PingFang SC）。
+     这里显式写出同一套系统字体栈，避免被 globals.css 的 Inter 改掉。 */
+  font-family: -apple-system, BlinkMacSystemFont, "PingFang SC",
+    "Hiragino Sans GB", "Microsoft YaHei", "Helvetica Neue", Arial, sans-serif;
+  color: var(--ref-bodyT);
+}
+
+/* ── 通用白底卡（common.css .bgwhite）───────────────────────────────────────── */
+
+.home-ref .ref-bgwhite {
+  padding: 20px;
+  margin-bottom: 14px;
+  background: var(--ref-bgwhite);
+  border-radius: 10px;
+}
+
+.home-ref .ref-title {
+  margin-bottom: 20px;
+  position: relative;
+  min-height: 35px;
+  line-height: 35px;
+}
+
+.home-ref .ref-title h2 {
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--ref-bodyT);
+}
+
+.home-ref .ref-title .textRight {
+  position: absolute;
+  right: 0;
+  top: 50%;
+  margin-top: -20px;
+}
+
+.home-ref .ref-title .textRight button {
+  background: #fff;
+  line-height: 33px;
+  height: 34px;
+  border-radius: 7px;
+  border: 1px solid var(--ref-bordere8e9eb);
+  padding: 0 15px;
+  margin-left: 15px;
+  font-size: 14px;
+  color: var(--ref-bodyT);
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.home-ref .ref-title .textRight button:hover {
+  background: #1e5ff8;
+  border-color: #1e5ff8;
+  color: #fff;
+}
+
+/* ── 客户服务与支持（参考页 inline block 0）────────────────────────────────── */
+
+.home-ref .cs-banner-compact {
+  margin-bottom: 24px;
+  padding: 16px 24px;
+  border-radius: 16px;
+  background: var(--ref-bgwhite);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.04);
+  position: relative;
+  z-index: 50;
+  overflow: visible !important;
+}
+
+.home-ref .cs-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.home-ref .cs-icon-wrapper {
+  width: 40px;
+  height: 40px;
+  background: rgba(59, 130, 246, 0.1);
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.home-ref .cs-icon-wrapper svg {
+  width: 22px;
+  height: 22px;
+  color: #3b82f6;
+}
+
+.home-ref .cs-text h3 {
+  font-size: 16px;
+  font-weight: 700;
+  margin: 0 0 4px 0;
+  color: #1e293b;
+}
+
+.home-ref .cs-text p {
+  font-size: 13px;
+  margin: 0;
+  color: #64748b;
+}
+
+.home-ref .cs-right {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.home-ref .cs-btn {
+  border: none;
+  padding: 8px 16px;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  transition: all 0.2s;
+  text-decoration: none;
+}
+
+.home-ref .cs-btn:hover {
+  transform: translateY(-2px);
+}
+
+.home-ref .cs-btn svg {
+  width: 16px;
+  height: 16px;
+}
+
+.home-ref .follow-btn {
+  background: rgba(148, 163, 184, 0.15);
+  color: #475569;
+}
+
+.home-ref .follow-btn:hover {
+  background: rgba(148, 163, 184, 0.25);
+}
+
+.home-ref .support-btn {
+  background: rgba(59, 130, 246, 0.1);
+  color: #2563eb;
+}
+
+.home-ref .support-btn:hover {
+  background: rgba(59, 130, 246, 0.18);
+}
+
+/* hover 二维码气泡 */
+.home-ref .follow-us-wrapper {
+  position: relative;
+}
+
+.home-ref .qrcode-popup {
+  position: absolute;
+  top: calc(100% + 10px);
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 12px;
+  border-radius: 12px;
+  background: #fff;
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
+  display: none;
+  z-index: 100;
+}
+
+.home-ref .qrcode-popup img {
+  width: 120px;
+  height: 120px;
+  display: block;
+  border-radius: 8px;
+}
+
+.home-ref .qrcode-popup p {
+  font-size: 12px;
+  text-align: center;
+  margin: 8px 0 0 0;
+  color: #64748b;
+}
+
+.home-ref .qrcode-popup::after {
+  content: "";
+  position: absolute;
+  top: -5px;
+  left: 50%;
+  transform: translateX(-50%) rotate(45deg);
+  width: 10px;
+  height: 10px;
+  background: #fff;
+}
+
+.home-ref .follow-us-wrapper:hover .qrcode-popup {
+  display: block;
+  animation: refFadeIn 0.2s ease;
+}
+
+@keyframes refFadeIn {
+  from {
+    opacity: 0;
+    transform: translate(-50%, -10px);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, 0);
+  }
+}
+
+/* ── 会员状态卡片（参考页 home.css + inline block 2 compact 版）────────────── */
+
+.home-ref .membership-status-card {
+  background: #fff;
+  border-radius: 16px;
+  padding: 24px;
+  margin-bottom: 24px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.03);
+  border: 1px solid #eef2f6;
+  transition: all 0.3s ease;
+}
+
+.home-ref .membership-status-card:hover {
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.06);
+  transform: translateY(-2px);
+}
+
+.home-ref .membership-status-card.vip {
+  position: relative;
+  overflow: hidden;
+}
+
+.home-ref .membership-status-card.vip::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 200px;
+  height: 100%;
+  background: linear-gradient(
+    135deg,
+    rgba(251, 191, 36, 0.05) 0%,
+    rgba(245, 158, 11, 0.1) 100%
+  );
+  clip-path: polygon(20% 0%, 100% 0, 100% 100%, 0% 100%);
+  pointer-events: none;
+}
+
+.home-ref .membership-status-card.compact {
+  padding: 20px 24px;
+  overflow: visible !important;
+}
+
+.home-ref .membership-status-card.compact.vip::before {
+  border-radius: 16px;
+}
+
+.home-ref .membership-compact-layout {
+  display: flex;
+  align-items: center;
+  gap: 32px;
+}
+
+/* 左侧用户信息 */
+.home-ref .user-info-compact {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 200px;
+}
+
+.home-ref .user-info-compact .user-avatar-wrapper {
+  width: 56px;
+  height: 56px;
+  flex-shrink: 0;
+}
+
+.home-ref .user-avatar-wrapper {
+  position: relative;
+  border-radius: 50%;
+  padding: 2px;
+  border: 1px solid #e2e8f0;
+}
+
+.home-ref .membership-status-card.vip .user-avatar-wrapper {
+  border-color: #fbbf24;
+  background: linear-gradient(135deg, #fbbf24, #f59e0b);
+}
+
+.home-ref .user-avatar-img,
+.home-ref .user-avatar-placeholder {
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 2px solid white;
+}
+
+.home-ref .user-avatar-placeholder {
+  background: #f8fafc;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.home-ref .user-avatar-placeholder svg {
+  width: 28px;
+  height: 28px;
+  color: #cbd5e1;
+}
+
+.home-ref .user-info-compact .user-details {
+  flex: 1;
+  min-width: 0;
+}
+
+.home-ref .user-info-compact .user-name {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--ref-bodyT);
+  margin-bottom: 4px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.home-ref .membership-badge-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.home-ref .membership-badge-row .badge-text {
+  font-size: 12px;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-weight: 500;
+}
+
+.home-ref .membership-badge-row .badge-text.vip {
+  background: linear-gradient(135deg, #f59e0b, #d97706);
+  color: #fff;
+}
+
+.home-ref .membership-badge-row .badge-text.free {
+  background: var(--ref-f1f5f9);
+  color: var(--ref-color64748b);
+}
+
+.home-ref .membership-badge-row .expire-date {
+  font-size: 12px;
+  color: var(--ref-color94a3b8);
+}
+
+.home-ref .membership-badge-row .upgrade-link {
+  font-size: 12px;
+  color: #f59e0b;
+  text-decoration: none;
+  font-weight: 500;
+}
+
+.home-ref .membership-badge-row .upgrade-link:hover {
+  color: #d97706;
+}
+
+/* 中间权益数据 */
+.home-ref .benefits-compact {
+  display: flex;
+  flex: 1;
+  padding: 0 32px;
+  justify-content: space-around;
+  align-items: center;
+  border-left: 1px solid var(--ref-bedf2f9);
+  border-right: 1px solid var(--ref-bedf2f9);
+}
+
+.home-ref .benefit-item-compact {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.home-ref .benefit-item-compact .benefit-icon {
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  transition: all 0.3s ease;
+}
+
+.home-ref .benefit-item-compact .benefit-icon svg {
+  width: 22px;
+  height: 22px;
+  color: inherit;
+}
+
+.home-ref .benefit-item-compact:hover .benefit-icon {
+  transform: translateY(-2px);
+}
+
+.home-ref .benefit-icon.blue {
+  background: rgba(59, 130, 246, 0.1);
+  color: #3b82f6;
+}
+
+.home-ref .benefit-icon.purple {
+  background: rgba(139, 92, 246, 0.1);
+  color: #8b5cf6;
+}
+
+.home-ref .benefit-icon.slate {
+  background: rgba(100, 116, 139, 0.1);
+  color: #64748b;
+}
+
+.home-ref .benefit-item-compact .benefit-info {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.home-ref .benefit-item-compact .benefit-label {
+  font-size: 13px;
+  color: var(--ref-color94a3b8);
+  line-height: 1;
+  font-weight: 500;
+}
+
+.home-ref .benefit-item-compact .benefit-value {
+  font-size: 20px;
+  font-weight: 850;
+  color: var(--ref-bodyT);
+  line-height: 1;
+  letter-spacing: -0.5px;
+}
+
+/* 右侧快捷功能 */
+.home-ref .quick-actions-compact {
+  display: flex;
+  gap: 8px;
+}
+
+.home-ref .action-icon {
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--ref-f1f5f9);
+  border-radius: 10px;
+  text-decoration: none;
+  transition: all 0.3s ease;
+  border: 1px solid transparent;
+  position: relative;
+}
+
+.home-ref .action-icon::after {
+  content: attr(data-tooltip);
+  position: absolute;
+  bottom: calc(100% + 8px);
+  left: 50%;
+  transform: translateX(-50%) translateY(4px);
+  background: rgba(30, 41, 59, 0.9);
+  color: #fff;
+  font-size: 12px;
+  padding: 6px 10px;
+  border-radius: 6px;
+  white-space: nowrap;
+  opacity: 0;
+  visibility: hidden;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  pointer-events: none;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+  z-index: 100;
+  font-weight: 500;
+}
+
+.home-ref .action-icon::before {
+  content: "";
+  position: absolute;
+  bottom: calc(100% + 4px);
+  left: 50%;
+  transform: translateX(-50%);
+  border-width: 4px 4px 0 4px;
+  border-style: solid;
+  border-color: rgba(30, 41, 59, 0.9) transparent transparent transparent;
+  opacity: 0;
+  visibility: hidden;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  pointer-events: none;
+  z-index: 100;
+}
+
+.home-ref .action-icon:hover::after {
+  opacity: 1;
+  visibility: visible;
+  transform: translateX(-50%) translateY(0);
+}
+
+.home-ref .action-icon:hover::before {
+  opacity: 1;
+  visibility: visible;
+}
+
+.home-ref .action-icon:hover {
+  background: var(--ref-bgwhite);
+  border-color: var(--ref-bedf2f9);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+}
+
+.home-ref .action-icon svg {
+  width: 18px;
+  height: 18px;
+  color: var(--ref-color64748b);
+  transition: color 0.3s ease;
+}
+
+.home-ref .action-icon:nth-child(1):hover svg {
+  color: #3b82f6;
+}
+
+.home-ref .action-icon:nth-child(2):hover svg {
+  color: #f59e0b;
+}
+
+.home-ref .action-icon:nth-child(3):hover svg {
+  color: #8b5cf6;
+}
+
+.home-ref .action-icon.logout:hover svg {
+  color: #ef4444;
+}
+
+/* ── 试用 banner（参考页 inline，逐字搬运）────────────────────────────────── */
+
+.home-ref .pro-trial-banner {
+  margin-bottom: 24px;
+  padding: 22px 30px;
+  background: linear-gradient(135deg, #fffcf3 0%, #ffedd5 100%);
+  border: 1px solid #fed7aa;
+  border-radius: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  box-shadow: 0 8px 24px rgba(245, 158, 11, 0.1);
+  gap: 20px;
+}
+
+.home-ref .pro-trial-banner .trial-text {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+}
+
+.home-ref .pro-trial-banner .trial-icon {
+  width: 50px;
+  height: 50px;
+  background: linear-gradient(135deg, #fef3c7, #fde68a);
+  border-radius: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 4px 12px rgba(245, 158, 11, 0.2);
+  flex-shrink: 0;
+}
+
+.home-ref .pro-trial-banner .trial-icon svg {
+  width: 26px;
+  height: 26px;
+  color: #d97706;
+}
+
+.home-ref .pro-trial-banner h3 {
+  font-size: 18px;
+  font-weight: 800;
+  color: #92400e;
+  margin: 0 0 6px 0;
+  letter-spacing: 0.5px;
+}
+
+.home-ref .pro-trial-banner p {
+  font-size: 14px;
+  color: #b45309;
+  margin: 0;
+  font-weight: 500;
+}
+
+.home-ref .trial-action {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
+}
+
+.home-ref .trial-action button {
+  background: linear-gradient(135deg, #f59e0b, #d97706);
+  color: #fff;
+  border: none;
+  padding: 11px 26px;
+  border-radius: 30px;
+  font-size: 15px;
+  font-weight: 700;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  transition: all 0.3s ease;
+  box-shadow: 0 6px 16px rgba(217, 119, 6, 0.35);
+}
+
+.home-ref .trial-action button svg {
+  width: 16px;
+  height: 16px;
+}
+
+.home-ref .trial-action button:hover {
+  transform: scale(1.05);
+  box-shadow: 0 8px 25px rgba(234, 100, 12, 0.45);
+}
+
+.home-ref .trial-action button:disabled {
+  opacity: 0.6;
+  cursor: default;
+  transform: none;
+}
+
+.home-ref .trial-action a {
+  font-size: 13px;
+  color: #b45309;
+  text-decoration: none;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.home-ref .trial-action a:hover {
+  color: #92400e;
+}
+
+.home-ref .trial-action a svg {
+  width: 14px;
+  height: 14px;
+}
+
+/* ── 学习数据四格（home.css .report .parame）──────────────────────────────── */
+
+.home-ref .parame ul {
+  display: flex;
+  gap: 20px;
+}
+
+/* 参考页是 width:25% + content-box；这里用 flex:1 得到同样的四等分。 */
+.home-ref .parame li {
+  flex: 1;
+  min-width: 0;
+  position: relative;
+  background: #fff;
+  border-radius: 16px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.03);
+  padding: 22px 20px;
+  transition: all 0.3s ease;
+}
+
+.home-ref .parame li:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.05);
+}
+
+.home-ref .parame li span {
+  color: #333;
+  font-size: 14px;
+}
+
+.home-ref .parame li p b {
+  font-size: 37px;
+  display: block;
+  padding: 5px 0;
+  color: #222;
+  line-height: 1.2;
+}
+
+.home-ref .parame li p b em {
+  font-size: 14px;
+  font-weight: normal;
+  font-style: normal;
+  margin-left: 9px;
+  color: #777777;
+}
+
+/* ── 千小时进度（home.css .hours）──────────────────────────────────────────── */
+
+.home-ref .hours {
+  width: 100%;
+  margin: 25px auto 10px;
+}
+
+.home-ref .hours .time {
+  width: 100%;
+  background: var(--ref-bghours);
+  padding: 36px 40px;
+  border-radius: 20px;
+  transition: all 0.2s linear;
+  box-shadow: rgba(255, 255, 255, 0.6);
+}
+
+.home-ref .hours .time:hover {
+  transform: translateY(-5px);
+  box-shadow: 0px 10px 20px 0px rgba(0, 0, 0, 0.1);
+}
+
+.home-ref .hours-content {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 40px;
+}
+
+.home-ref .hours-left {
+  flex: 1;
+  min-width: 0;
+}
+
+.home-ref .hours-title {
+  font-size: 34px;
+  color: var(--ref-bodyT);
+  font-weight: 800;
+  line-height: 1.3;
+  letter-spacing: -0.5px;
+  margin-bottom: 6px;
+}
+
+.home-ref .hours-subtitle {
+  font-size: 34px;
+  color: #3b6efdf7;
+  font-weight: 800;
+  line-height: 1.3;
+  letter-spacing: -0.5px;
+}
+
+.home-ref .hours-right {
+  flex-shrink: 0;
+  width: 200px;
+  text-align: right;
+}
+
+.home-ref .hours-percent {
+  margin-bottom: 12px;
+}
+
+.home-ref .percent-num {
+  font-size: 48px;
+  font-weight: 700;
+  color: var(--ref-bodyT);
+  letter-spacing: -1px;
+}
+
+.home-ref .percent-sign {
+  font-size: 20px;
+  color: #3f83f4;
+  font-weight: 600;
+  margin-left: 2px;
+  vertical-align: top;
+  position: relative;
+  top: 8px;
+}
+
+.home-ref .hours-progress {
+  height: 10px;
+  background: var(--ref-f1f5f9);
+  border-radius: 5px;
+  overflow: hidden;
+  margin-bottom: 10px;
+}
+
+.home-ref .hours-progress .progress-bar {
+  height: 100%;
+  background: linear-gradient(90deg, #3f83f4, #5266ec);
+  border-radius: 5px;
+  min-width: 4px;
+  transition: width 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.home-ref .hours-label {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--ref-texthour);
+}
+
+.home-ref .hours-current {
+  color: #5266ec;
+  font-weight: 600;
+}
+
+.home-ref .hours-total {
+  color: var(--ref-texthour);
+}
+
+/* ── col73：练习趋势 + 错题统计（home.css .report .col73）────────────────── */
+
+.home-ref .ref-col73 {
+  display: flex;
+  gap: 14px;
+  margin-top: 14px;
+}
+
+.home-ref .ref-col-7,
+.home-ref .ref-col-3 {
+  position: relative;
+  background: var(--ref-bgwhite);
+  border-radius: 16px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.03);
+  box-sizing: border-box;
+}
+
+.home-ref .ref-col-7 {
+  width: calc(((100% - 28px) / 3) * 2 + 14px);
+  padding: 24px;
+}
+
+.home-ref .ref-col-3 {
+  width: calc((100% - 28px) / 3);
+  padding: 24px 20px 20px;
+}
+
+.home-ref h5 {
+  font-size: 16px;
+  line-height: 20px;
+  margin-bottom: 10px;
+  display: block;
+  font-weight: 700;
+  color: var(--ref-bodyT);
+}
+
+.home-ref h5 svg {
+  color: #3280fb;
+  width: 21px;
+  height: 21px;
+  display: inline-block;
+  vertical-align: middle;
+  position: relative;
+  top: -1px;
+  margin-right: 6px;
+}
+
+/* 错题统计 */
+.home-ref .progress b {
+  display: block;
+  text-align: center;
+  font-size: 44px;
+  color: var(--ref-bodyT);
+  margin: 16px auto 19px;
+  background: var(--ref-progressHome);
+  padding: 18px 0;
+  border-radius: 8px;
+  font-weight: 400;
+}
+
+.home-ref .progress b svg {
+  display: inline-block;
+  vertical-align: middle;
+  width: 44px;
+  height: 44px;
+  color: #3f83f4;
+}
+
+.home-ref .progress b small {
+  font-size: 14px;
+  display: inline-block;
+  font-weight: normal;
+  color: var(--ref-bodyT);
+  vertical-align: middle;
+  margin-left: 20px;
+  text-align: left;
+}
+
+.home-ref .progress b small strong {
+  display: block;
+  font-size: 42px;
+}
+
+.home-ref .progress button {
+  width: 100%;
+  line-height: 48px;
+  border-radius: 14px;
+  color: #fff;
+  cursor: pointer;
+  background: linear-gradient(135deg, #2c5af4 0%, #4b87ff 100%);
+  font-size: 16px;
+  font-weight: 600;
+  border: none;
+  box-shadow: 0px 4px 12px rgba(44, 90, 244, 0.2);
+  transition: all 0.3s ease;
+}
+
+.home-ref .progress button:hover {
+  transform: translateY(-2px);
+  box-shadow: 0px 6px 16px rgba(44, 90, 244, 0.3);
+}
+
+.home-ref .progress .rates {
+  padding-bottom: 32px;
+}
+
+.home-ref .progress .rates .rate {
+  margin-top: 17px;
+  display: block;
+}
+
+.home-ref .progress .rates .rate label {
+  font-size: 14px;
+  color: var(--ref-bodyT);
+  display: inline-block;
+  vertical-align: middle;
+  width: 70px;
+}
+
+.home-ref .ref-col-3 .rate i {
+  width: 45px;
+  text-align: right;
+  border-radius: 8px;
+  font-style: normal;
+  display: inline-block;
+  vertical-align: middle;
+  font-size: 13px;
+  line-height: 14px;
+  position: relative;
+  top: -2px;
+}
+
+.home-ref .ref-col-3 .rate p {
+  height: 14px;
+  border-radius: 2px;
+  background: #cee6fe;
+  position: relative;
+  display: inline-block;
+  width: calc(100% - 115px);
+  vertical-align: middle;
+}
+
+.home-ref .ref-col-3 .rate p span {
+  transition: all 0.2s linear;
+  display: block;
+  width: 0px;
+  height: 14px;
+  border-radius: 3px;
+  background: #4b87ff;
+}
+
+.home-ref .ref-col-3 .rate p em {
+  font-style: normal;
+  margin-left: 4px;
+  position: absolute;
+  left: 0;
+  top: -1px;
+  line-height: 16px;
+  color: #fff;
+  font-size: 12px;
+}
+
+/* 三档配色：已掌握 / 接近掌握 / 复习中 */
+.home-ref .ref-col-3 .rate.px p span {
+  background: #4b87ff;
+}
+
+.home-ref .ref-col-3 .rate.yf p span {
+  background: #4acbde;
+}
+
+.home-ref .ref-col-3 .rate.ch p span {
+  background: #a697f3;
+}
+
+.home-ref .progress .rates .rate.px p {
+  background: #cee6fe;
+}
+
+.home-ref .progress .rates .rate.yf p {
+  background: #d5f7f4;
+}
+
+.home-ref .progress .rates .rate.ch p {
+  background: #ece9fb;
+}
+
+.home-ref .progress .rates .rate label span {
+  float: right;
+  color: #838383;
+  font-size: 14px;
+}
+
+/* ── col3：词汇学习 / 最近课程 / 学习日历（home.css .report .col3）───────── */
+
+.home-ref .ref-col3 {
+  display: flex;
+  gap: 14px;
+  margin: 14px 0 0;
+}
+
+.home-ref .ref-col3 .ref-col-3 {
+  padding: 24px;
+}
+
+/* 词汇学习（vocab-stats） */
+.home-ref .vocab-stats {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.home-ref .vocab-stats h5 {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.home-ref .vocab-stats h5 svg {
+  color: #4b87ff;
+}
+
+.home-ref .vocab-stats .mastery-ring {
+  position: relative;
+  width: 80px;
+  height: 80px;
+  margin-bottom: 10px;
+}
+
+.home-ref .vocab-stats .mastery-ring svg {
+  width: 100%;
+  height: 100%;
+  transform: rotate(-90deg);
+}
+
+.home-ref .vocab-stats .mastery-ring .ring-bg {
+  fill: none;
+  stroke: #e8eef5;
+  stroke-width: 8;
+}
+
+.home-ref .vocab-stats .mastery-ring .ring-progress {
+  fill: none;
+  stroke: #4b87ff;
+  stroke-width: 8;
+  stroke-linecap: round;
+  stroke-dasharray: 263.89;
+  stroke-dashoffset: calc(263.89 - (263.89 * var(--percent, 0) / 100));
+  transition: stroke-dashoffset 1s ease-out;
+  filter: drop-shadow(0 2px 4px rgba(75, 135, 255, 0.3));
+}
+
+.home-ref .vocab-stats .mastery-ring .ring-content {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  text-align: center;
+}
+
+.home-ref .vocab-stats .mastery-ring .ring-value {
+  display: block;
+  font-size: 18px;
+  font-weight: 700;
+  color: #2c5af4;
+  line-height: 1;
+  margin-bottom: 2px;
+}
+
+.home-ref .vocab-stats .mastery-ring .ring-label {
+  display: block;
+  font-size: 10px;
+  color: var(--ref-body999);
+  white-space: nowrap;
+  transform: scale(0.9);
+}
+
+.home-ref .vocab-stats .vocab-stats-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  width: 100%;
+  margin-bottom: 10px;
+}
+
+.home-ref .vocab-stats .vocab-stats-grid .stat-item {
+  text-align: center;
+  padding: 8px 6px;
+  background: linear-gradient(135deg, #f8fafc 0%, #f0f5fa 100%);
+  border-radius: 10px;
+  transition: transform 0.2s ease;
+}
+
+.home-ref .vocab-stats .vocab-stats-grid .stat-item:hover {
+  transform: translateY(-2px);
+}
+
+.home-ref .vocab-stats .vocab-stats-grid .stat-num {
+  display: block;
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--ref-bodyT);
+  line-height: 1.2;
+}
+
+.home-ref .vocab-stats .vocab-stats-grid .stat-txt {
+  display: block;
+  font-size: 11px;
+  color: var(--ref-body999);
+  margin-top: 2px;
+}
+
+.home-ref .vocab-stats .vocab-action-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  width: 100%;
+  padding: 12px;
+  background: linear-gradient(135deg, #2c5af4 0%, #4b87ff 100%);
+  color: #fff;
+  border-radius: 10px;
+  font-size: 15px;
+  font-weight: 500;
+  text-decoration: none;
+  transition: all 0.25s ease;
+  box-shadow: 0 3px 10px rgba(44, 90, 244, 0.25);
+}
+
+.home-ref .vocab-stats .vocab-action-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 5px 15px rgba(44, 90, 244, 0.35);
+}
+
+.home-ref .vocab-stats .vocab-action-btn svg {
+  width: 18px;
+  height: 18px;
+}
+
+.home-ref .vocab-stats .vocab-empty {
+  text-align: center;
+  padding: 20px;
+}
+
+.home-ref .vocab-stats .vocab-empty .empty-visual {
+  margin-bottom: 16px;
+}
+
+.home-ref .vocab-stats .vocab-empty .empty-ring {
+  position: relative;
+  width: 100px;
+  height: 100px;
+  margin: 0 auto;
+}
+
+.home-ref .vocab-stats .vocab-empty .empty-ring svg {
+  width: 100%;
+  height: 100%;
+}
+
+.home-ref .vocab-stats .vocab-empty .empty-ring .ring-bg {
+  fill: none;
+  stroke: #e8eef5;
+  stroke-width: 8;
+  stroke-dasharray: 8 8;
+}
+
+.home-ref .vocab-stats .vocab-empty .ring-content {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+}
+
+.home-ref .vocab-stats .vocab-empty .ring-content svg {
+  width: 32px;
+  height: 32px;
+  color: #c0c8d4;
+}
+
+.home-ref .vocab-stats .vocab-empty p {
+  font-size: 14px;
+  color: #999;
+  margin-bottom: 16px;
+}
+
+.home-ref .vocab-stats .vocab-start-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 28px;
+  background: linear-gradient(135deg, #4caf50 0%, #66bb6a 100%);
+  color: #fff;
+  border-radius: 20px;
+  font-size: 14px;
+  font-weight: 500;
+  text-decoration: none;
+  transition: all 0.25s ease;
+  box-shadow: 0 3px 10px rgba(76, 175, 80, 0.25);
+}
+
+.home-ref .vocab-stats .vocab-start-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 5px 15px rgba(76, 175, 80, 0.35);
+}
+
+/* 最近课程（progress3） */
+.home-ref .progress3 .rates .rate {
+  border-radius: 10px;
+  padding: 6px 10px;
+  margin-top: 4px;
+  background: var(--ref-calendarP);
+  transition: all 0.25s ease;
+  position: relative;
+  border: 1px solid transparent;
+}
+
+.home-ref .progress3 .rates .rate:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(44, 90, 244, 0.12);
+  border-color: rgba(44, 90, 244, 0.15);
+}
+
+.home-ref .progress3 .empty-tip {
+  color: #999;
+  vertical-align: middle;
+  display: block;
+  position: absolute;
+  text-align: center;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+}
+
+.home-ref .progress3 .empty-tip svg {
+  font-size: 48px;
+  width: 48px;
+  height: 48px;
+  color: #d0d5dd;
+  display: block;
+  margin: 0 auto;
+}
+
+.home-ref .progress3 .empty-tip span {
+  font-size: 14px;
+  color: #999;
+  display: block;
+  margin-top: 8px;
+}
+
+.home-ref .progress3 .empty-tip .add-course-btn {
+  margin-top: 8px;
+  padding: 8px 20px;
+  background: linear-gradient(135deg, #2c5af4 0%, #4b87ff 100%);
+  color: #fff;
+  border-radius: 20px;
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  box-shadow: 0 2px 8px rgba(44, 90, 244, 0.25);
+  display: inline-block;
+}
+
+.home-ref .progress3 .empty-tip .add-course-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(44, 90, 244, 0.35);
+}
+
+/* 参考页 .progress3 列表项里的课程标题 / 元信息 / 进度条 */
+.home-ref .progress3 .course-title {
+  display: block;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--ref-bodyT);
+  line-height: 1.3;
+  padding-right: 65px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.home-ref .progress3 .continue-btn {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  background: linear-gradient(135deg, #2c5af4 0%, #4b87ff 100%);
+  color: #fff;
+  border-radius: 16px;
+  padding: 4px 12px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  box-shadow: 0 2px 6px rgba(44, 90, 244, 0.25);
+}
+
+.home-ref .progress3 .continue-btn:hover {
+  background: linear-gradient(135deg, #1e4ad9 0%, #3d78f0 100%);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 10px rgba(44, 90, 244, 0.35);
+}
+
+.home-ref .progress3 .course-meta {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-weight: normal;
+  padding-top: 2px;
+  padding-bottom: 2px;
+  font-size: 12px;
+  color: var(--ref-body999);
+}
+
+.home-ref .progress3 .course-meta .lesson-count {
+  display: inline-flex;
+  align-items: center;
+  font-size: 13px;
+}
+
+.home-ref .progress3 .course-meta .lesson-count svg {
+  width: 14px;
+  height: 14px;
+  margin-right: 4px;
+  color: #4b87ff;
+  opacity: 0.8;
+}
+
+.home-ref .progress3 .course-meta .last-practice {
+  font-style: normal;
+  font-size: 12px;
+  color: var(--ref-body999);
+  opacity: 0.85;
+}
+
+.home-ref .progress3 .pg {
+  padding-right: 45px;
+  position: relative;
+}
+
+.home-ref .progress3 .pg p {
+  background: #e8eef5;
+  border-radius: 4px;
+  overflow: hidden;
+  height: 6px;
+}
+
+.home-ref .progress3 .pg p span {
+  display: block;
+  height: 6px;
+  background: linear-gradient(90deg, #4b87ff 0%, #2c5af4 100%);
+  border-radius: 4px;
+  transition: width 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.home-ref .progress3 .pg em {
+  position: absolute;
+  right: 0;
+  top: 3px;
+  width: 50px;
+  text-align: right;
+  font-style: normal;
+  color: #1173d5;
+  font-size: 14px;
+}
+
+/* ── 学习日历（home.css .calendar）─────────────────────────────────────────── */
+
+.home-ref .calendar h5 {
+  overflow: hidden;
+}
+
+.home-ref .calendar .state {
+  float: right;
+  margin-top: -4px;
+}
+
+.home-ref .calendar .state label {
+  color: var(--ref-bodyGrayT);
+  font-weight: normal;
+  font-size: 13px;
+  margin-left: 8px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.home-ref .calendar .state i {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  display: inline-block;
+  background: #ccc;
+}
+
+.home-ref .calendar .state i.yxx {
+  background: #4acbde;
+}
+
+.home-ref .calendar .state i.wwc {
+  background: #ccc;
+}
+
+.home-ref .calendar .Date {
+  background: var(--ref-calendarH);
+  line-height: 2.9rem;
+  display: flex;
+  justify-content: space-between;
+  padding: 0 8px;
+  height: 2.9rem;
+  border-top-left-radius: 8px;
+  border-top-right-radius: 8px;
+  align-items: center;
+}
+
+.home-ref .calendar .Date button {
+  background: none;
+  border: none;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  color: var(--ref-bodyT);
+}
+
+.home-ref .calendar .Date button:disabled {
+  opacity: 0.3;
+  cursor: default;
+}
+
+.home-ref .calendar .Date em {
+  font-size: 20px;
+  display: inline-block;
+  color: var(--ref-bodyT);
+  vertical-align: middle;
+}
+
+.home-ref .calendar .Date em svg {
+  width: 20px;
+  height: 20px;
+}
+
+.home-ref .calendar .Date span {
+  display: inline-block;
+  vertical-align: middle;
+  font-size: 14px;
+  color: var(--ref-bodyT);
+}
+
+.home-ref .calendar .days {
+  padding: 0 12px 12px;
+  background: var(--ref-calendarB);
+  border-bottom-left-radius: 8px;
+  border-bottom-right-radius: 8px;
+}
+
+.home-ref .calendar .days p {
+  display: flex;
+  gap: 12px;
+}
+
+.home-ref .calendar .days p:first-child {
+  margin-top: 0;
+}
+
+.home-ref .calendar .days p em {
+  width: 14.2%;
+  font-style: normal;
+  text-align: center;
+  color: var(--ref-body999);
+  line-height: 38px;
+}
+
+.home-ref .calendar .days p label {
+  width: 14.2%;
+  font-style: normal;
+  color: var(--ref-bodyT);
+}
+
+.home-ref .calendar .days p label span {
+  width: 100%;
+  display: block;
+  text-align: center;
+  font-size: 14px;
+  border-radius: 10px;
+  position: relative;
+  line-height: 22px;
+  padding: 8px 0;
+}
+
+.home-ref .calendar .days p label span i {
+  display: block;
+  width: 4px;
+  height: 4px;
+  background: transparent;
+  border-radius: 50%;
+  margin: 0 auto;
+}
+
+.home-ref .calendar .days p label.on span {
+  background: #2c5af4;
+  color: #fff;
+  box-shadow: var(--ref-calendarShadow);
+}
+
+.home-ref .calendar .days p label span.yxx i {
+  background: #4acbde;
+}
+
+.home-ref .calendar .days p label span.wwc i {
+  background: #ccc;
+}
+
+.home-ref .calendar .tit {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 15px;
+}
+
+.home-ref .calendar .tit p {
+  color: var(--ref-body999);
+  font-size: 13px;
+  background: var(--ref-calendarP);
+  width: 33.33%;
+  padding: 8px 11px;
+  margin-bottom: 0;
+  line-height: 1.5;
+  border-radius: 8px;
+}
+
+.home-ref .calendar .tit p b {
+  display: block;
+  font-size: 15px;
+  color: var(--ref-bodyGrayT);
+  margin-top: 6px;
+}
+
+/* ── 页脚（参考页 inline）────────────────────────────────────────────────── */
+
+.home-ref .site-footer {
+  padding: 20px 0 30px;
+  margin-top: 10px;
+  font-size: 12px;
+  clear: both;
+  user-select: none;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 20px;
+  flex-wrap: wrap;
+}
+
+.home-ref .site-footer .footer-copyright {
+  color: var(--ref-color94a3b8);
+}
+
+.home-ref .site-footer .footer-links {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.home-ref .site-footer .footer-links a {
+  color: var(--ref-color94a3b8);
+  text-decoration: none;
+  transition: color 0.3s;
+}
+
+.home-ref .site-footer .footer-links a:hover {
+  color: #3b82f6 !important;
+}
+
+/* ── 响应式（参考页 inline block 2 的媒体查询，逐字搬运）────────────────── */
+
+@media screen and (max-width: 1200px) {
+  .home-ref .membership-compact-layout {
+    gap: 20px;
+  }
+
+  .home-ref .benefits-compact {
+    gap: 16px;
+    padding: 0 16px;
+  }
+}
+
+@media screen and (max-width: 992px) {
+  .home-ref .membership-compact-layout {
+    flex-wrap: wrap;
+    gap: 16px;
+  }
+
+  .home-ref .user-info-compact {
+    min-width: auto;
+  }
+
+  .home-ref .benefits-compact {
+    border-left: none;
+    border-right: none;
+    border-top: 1px solid var(--ref-bedf2f9);
+    padding: 16px 0 0 0;
+    width: 100%;
+  }
+
+  .home-ref .quick-actions-compact {
+    margin-left: auto;
+  }
+
+  .home-ref .ref-col73,
+  .home-ref .ref-col3 {
+    flex-wrap: wrap;
+  }
+
+  .home-ref .ref-col-7,
+  .home-ref .ref-col-3 {
+    width: 100%;
+  }
+}
+
+@media screen and (max-width: 768px) {
+  .home-ref .membership-status-card.compact {
+    padding: 16px;
+  }
+
+  .home-ref .membership-compact-layout {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .home-ref .user-info-compact {
+    width: 100%;
+  }
+
+  .home-ref .benefits-compact {
+    justify-content: space-between;
+  }
+
+  .home-ref .benefit-item-compact {
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    gap: 6px;
+  }
+
+  .home-ref .quick-actions-compact {
+    justify-content: center;
+    margin-left: 0;
+  }
+
+  .home-ref .parame ul {
+    flex-wrap: wrap;
+  }
+
+  .home-ref .parame li {
+    flex: 1 1 calc(50% - 10px);
+  }
+
+  .home-ref .hours-content {
+    flex-direction: column;
+    gap: 20px;
+  }
+
+  .home-ref .hours-right {
+    width: 100%;
+    text-align: left;
+  }
+
+  .home-ref .hours-title,
+  .home-ref .hours-subtitle {
+    font-size: 24px;
+  }
+
+  .home-ref .cs-banner-compact {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 14px;
+  }
+
+  .home-ref .cs-right {
+    width: 100%;
+    justify-content: flex-end;
+  }
+
+  .home-ref .pro-trial-banner {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+}

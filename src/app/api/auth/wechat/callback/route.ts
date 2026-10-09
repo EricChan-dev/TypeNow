@@ -3,7 +3,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { db } from "@/lib/db"
 import { users } from "@/lib/db/schema"
 import { eq } from "drizzle-orm"
-import { createSession } from "@/lib/auth/session"
+import { createSession, COOKIE_NAME, DEV_SESSION_PREFIX } from "@/lib/auth/session"
 import { getUserById, getUserByWechatUnionid } from "@/lib/auth/user"
 import { encrypt } from "@/lib/crypto"
 import { generateInviteCode } from "@/lib/subscription"
@@ -12,6 +12,7 @@ import { INVITE_REGISTER_DAYS } from "@/lib/invite-rules"
 import { requestSignupContext, signupFields } from "@/lib/signup-source"
 import { FIRST_TOUCH_COOKIE, parseFirstTouch } from "@/lib/first-touch"
 import { recordServerEvent, visitorIdFromRequest } from "@/lib/analytics-server"
+import { needsPhoneBinding, loginBindPath } from "@/lib/phone-gate"
 import {
   exchangeCodeForAccessToken,
   getUserInfo,
@@ -246,6 +247,21 @@ async function upsertWeChatUser(
   if (!isSubscribed) {
     homeUrl.searchParams.set("follow_oa", "0")
   }
+
+  // 微信账号没绑手机号 → 不在 /home 上盖弹窗，直接送去登录页完成绑定
+  // （用户 m03647：要的是"登录校验"，不是全局弹窗）。
+  //
+  // 放在**建号/登录之后、进站之前**是这套设计的要害：此时微信壳账号还没有任何
+  // 练习数据，撞号时只需把 openid 转到手机号账号上，不必做数据合并 —— 系统没有
+  // 那个能力（22 张表按 user_id 挂载，其中 8 个唯一约束会冲突）。见 lib/phone-gate。
+  //
+  // 回跳目标带上完整 query，绑完仍能看到「微信登录成功」与新人引导。
+  if (needsPhoneBinding({ phone: user.phone })) {
+    return NextResponse.redirect(
+      new URL(loginBindPath(homeUrl.pathname + homeUrl.search), siteOrigin(request)),
+    )
+  }
+
   return NextResponse.redirect(homeUrl)
 }
 
@@ -326,12 +342,15 @@ async function handleWechatBind(
 async function handleDevLogin(request: NextRequest): Promise<NextResponse> {
   const homeUrl = new URL("/home", siteOrigin(request))
 
-  if (!db) {
-    // No DB at all — use cookie-only session
-    const res = NextResponse.redirect(homeUrl)
-    res.cookies.set("typenow_session", "dev:dev_wechat_user", {
+  // 开发态一律发**旁路 cookie**（dev:<userId>），不走 createSession 发真会话。
+  // /home 的 layout 用 needsPhoneBinding 拦人，只在 isDevBypassSession() 为真时放行，
+  // 而它认的是 cookie 的 `dev:` 前缀。开发态账号不保证有手机号（dev_qrcode_login、
+  // dev_oa_user 都没有），发真会话就会「登录成功却被弹回 /login?bind=1」。
+  const withDevSession = (res: NextResponse, userId: string) => {
+    res.cookies.set(COOKIE_NAME, `${DEV_SESSION_PREFIX}${userId}`, {
       httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
+      // 恒为 false：本函数只被 development 分支调用（见 GET 里的 code === "dev_mock" 判定）
+      secure: false,
       sameSite: "lax",
       expires: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
       path: "/",
@@ -339,8 +358,14 @@ async function handleDevLogin(request: NextRequest): Promise<NextResponse> {
     return res
   }
 
+  const devOpenid = "dev_wechat_user"
+
+  if (!db) {
+    // No DB at all — use cookie-only session
+    return withDevSession(NextResponse.redirect(homeUrl), devOpenid)
+  }
+
   try {
-    const devOpenid = "dev_wechat_user"
     let [user] = await db
       .select()
       .from(users)
@@ -354,19 +379,12 @@ async function handleDevLogin(request: NextRequest): Promise<NextResponse> {
       user = newUser
     }
 
-    await createSession(user.id)
-    return NextResponse.redirect(homeUrl)
+    return withDevSession(NextResponse.redirect(homeUrl), user.id)
   } catch {
-    // DB connection failed — use cookie-only session
-    const res = NextResponse.redirect(homeUrl)
-    res.cookies.set("typenow_session", "dev:dev_wechat_user", {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "lax",
-      expires: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
-      path: "/",
-    })
-    return res
+    // DB connection failed — use cookie-only session.
+    // 此时拿不到真实 id，退回固定 openid：getSession 只按前缀放行，
+    // 具体 user 查不到会让页面当作未登录处理，但至少不会被绑定闸门拦住。
+    return withDevSession(NextResponse.redirect(homeUrl), devOpenid)
   }
 }
 
