@@ -103,6 +103,7 @@ export interface ServerUser {
   is_partner?: boolean
   level: number
   member_tier?: MemberTier
+  pro_expires?: string | null
   diamonds?: number
   coins?: number
   check_in_goal?: number

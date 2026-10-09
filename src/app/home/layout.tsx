@@ -1,17 +1,21 @@
 // 首页改版样式（1:1 复刻参考页版式）。沿用登录页的先例（app/login/layout.tsx
-// 导入 ./login.css）：全部规则挂在 `.home-ref` 作用域下，所以放在 /home 的
-// layout 里不会波及站内其它页面，也不需要额外包一层组件。
+// 导入 ./login.css）：全部规则挂在 `.home-ref` / `.home-ref-shell` 作用域下，
+// 所以放在 /home 的 layout 里不会波及站内其它页面，也不需要额外包一层组件。
+//
+// 两个文件分工：
+//   · home-ref.css   —— 内容区（`.home-ref` 作用域），对应参考页的 .bgwhite / .col3 等区块
+//   · home-shell.css —— 外框骨架（`.home-ref-shell` 作用域），对应参考页的
+//                       .container-fuild / .sidebar-wrapper / .main-wrapper / .mainBox
 import "./home-ref.css"
+import "./home-shell.css"
 
 import { redirect } from "next/navigation"
 import { getUser, isDbConfigured } from "@/app/actions/auth"
 import { isDevBypassSession } from "@/lib/auth/session"
 import { needsPhoneBinding } from "@/lib/phone-gate"
 import { getActiveSubscription } from "@/lib/subscription"
-import { ConditionalTopbar } from "@/components/home/ConditionalTopbar"
 import { HomeShell } from "@/components/home/HomeShell"
 import { ExpiryWarningModal } from "@/components/home/ExpiryWarningModal"
-import { ExpiryBanner } from "@/components/home/ExpiryBanner"
 import { CHECK_IN_GOAL_DEFAULT } from "@/lib/coins"
 
 export default async function HomeLayout({
@@ -78,19 +82,18 @@ export default async function HomeLayout({
       }
     : null
 
+  // 不再包一层 flex 容器：外框根节点 `.home-ref-shell` 自己就是 100dvh 的固定外壳
+  // （参考页 body 也是 overflow:hidden 的固定外壳）。多包一层只会让根布局的
+  // `body.flex.flex-col` 参与进来，把 100dvh 撑成 100% + 兄弟节点高度。
   return (
-    <div className="flex flex-col h-screen overflow-hidden bg-background">
-      <ConditionalTopbar serverUser={serverUser} />
-      {serverUser && (
-        <ExpiryBanner memberTier={serverUser.member_tier} proExpires={serverUser.pro_expires} />
-      )}
-      <HomeShell>{children}</HomeShell>
+    <>
+      <HomeShell serverUser={serverUser}>{children}</HomeShell>
       {serverUser && (
         <ExpiryWarningModal
           memberTier={serverUser.member_tier}
           proExpires={serverUser.pro_expires}
         />
       )}
-    </div>
+    </>
   )
 }

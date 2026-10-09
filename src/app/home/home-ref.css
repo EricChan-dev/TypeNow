@@ -21,12 +21,34 @@
  * 令牌来源：`~/Downloads/主页 - 句游英语_files/reset.css`（浅色分支）。
  */
 
-.home-ref {
-  /* 参考页设计令牌（reset.css 浅色分支，逐字搬运） */
+.home-ref,
+.home-ref-shell {
+  /* 参考页设计令牌（reset.css 浅色分支，逐字搬运）。
+   *
+   * 外框（`.home-ref-shell`）与内容区（`.home-ref`）共用同一套令牌：外框是内容区
+   * 的祖先，令牌在最外层声明一次即可，避免两处各写一份色值后逐渐走样。 */
   --ref-bodyT: #333;
+  --ref-bodyBg: #fff;
   --ref-bodyGrayT: #666666;
   --ref-body999: #999999;
   --ref-mainBox: #f1f4fd;
+
+  /* 侧边栏导航（reset.css 浅色分支） */
+  --ref-asideText: #444a57;
+  --ref-asideItemBg: #cee6fe;
+  --ref-asideItemB: #a0cbf6;
+  --ref-asideItemText: #1f3a54;
+
+  /* 侧边栏底部用户区 */
+  --ref-userbg: #cfe6fd7a;
+  --ref-userboxBg: #fff;
+  --ref-userBoder: #efefef75;
+  --ref-userHover: #fdfdfd;
+  --ref-bgf9f9f9: #f6f4f4;
+  --ref-color3c4b5f: #3c4b5f;
+  --ref-color505d6f: #505d6f;
+  --ref-color97a5b8: #97a5b8;
+
   --ref-bgwhite: #f8fafe;
   --ref-progressHome: #edf5fe;
   --ref-calendarH: #cee6fe;

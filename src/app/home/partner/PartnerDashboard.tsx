@@ -252,7 +252,7 @@ export default function PartnerDashboard() {
 
   if (!data) {
     return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
+      <div className="min-h-full flex items-center justify-center">
         <div className="text-muted-foreground text-sm">加载中...</div>
       </div>
     )
@@ -267,7 +267,10 @@ export default function PartnerDashboard() {
   const platformRule = ruleForPlatform(materialPlatform)
 
   return (
-    <div className="min-h-screen bg-background text-foreground pb-20">
+    // min-h-full 而不是 min-h-screen：页面现在住在 `.ref-mainbox` 里，
+    // 那个盒子本身已经比视口矮（要减去外框的 margin 与内边距），
+    // 再撑一个 100vh 会固定多出一条滚动条。
+    <div className="min-h-full text-foreground pb-20">
       <canvas ref={canvasRef} className="hidden" />
 
       <div className="max-w-lg mx-auto px-4 pt-8 flex flex-col gap-6">

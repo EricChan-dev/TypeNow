@@ -115,9 +115,10 @@ export default function PartnerJoin() {
   )
 
   return (
-    <div className="min-h-full bg-background text-foreground">
-      {/* Mobile sticky bottom CTA */}
-      <div className="md:hidden fixed bottom-0 left-0 right-0 z-10 bg-background/95 backdrop-blur-sm border-t border-border px-4 py-4">
+    <div className="min-h-full text-foreground">
+      {/* Mobile sticky bottom CTA —— left-16（=64px）让开移动端那根图标栏，
+          否则按钮左缘会被固定侧边栏压住。它只在 <768px 出现，正是图标栏的宽度。 */}
+      <div className="md:hidden fixed bottom-0 left-16 right-0 z-10 bg-background/95 backdrop-blur-sm border-t border-border px-4 py-4">
         {ctaBlock}
       </div>
 
