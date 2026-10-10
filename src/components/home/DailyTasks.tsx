@@ -16,7 +16,17 @@ interface TaskStatus {
   diamonds: number
 }
 
-export function DailyTasks({ className, refreshKey }: { className?: string; refreshKey?: number }) {
+export function DailyTasks({
+  className,
+  refreshKey,
+  bare,
+}: {
+  className?: string
+  refreshKey?: number
+  /** 让调用方提供卡片外框与标题（并排进 .ref-checkin-row 时用），
+      本组件只渲染任务列表本身。 */
+  bare?: boolean
+}) {
   const [status, setStatus] = useState<TaskStatus | null>(null)
   const [loadError, setLoadError] = useState(false)
   const [sharing, setSharing] = useState(false)
@@ -104,6 +114,63 @@ export function DailyTasks({ className, refreshKey }: { className?: string; refr
     },
   ]
 
+  const body = loadError ? (
+    <p className="text-xs text-red-400/60 text-center py-4">任务加载失败</p>
+  ) : !status ? (
+    <div className="space-y-3">
+      {[1, 2, 3].map((i) => (
+        <div key={i} className="flex items-center gap-3 animate-pulse">
+          <div className="w-8 h-8 rounded-lg bg-foreground/[0.06]" />
+          <div className="flex-1 space-y-1.5">
+            <div className="h-3 bg-foreground/[0.06] rounded w-2/3" />
+            <div className="h-2 bg-foreground/[0.04] rounded w-1/3" />
+          </div>
+        </div>
+      ))}
+    </div>
+  ) : (
+    <div className="space-y-3">
+      {tasks.map(({ key, icon: Icon, color, bgColor, label, reward, done, action }) => (
+        <div
+          key={key}
+          className={cn(
+            "flex items-center gap-3 rounded-xl p-2.5",
+            done ? "bg-emerald-500/[0.04]" : "bg-foreground/[0.02]"
+          )}
+        >
+          <div className={cn("flex items-center justify-center w-8 h-8 rounded-lg shrink-0", bgColor)}>
+            <Icon className={cn("h-4 w-4", color)} />
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-medium text-foreground truncate">{label}</p>
+            <p className="text-xs text-muted-foreground mt-0.5">{reward}</p>
+          </div>
+          {action ? (
+            done ? (
+              <CheckCircle2 className="h-5 w-5 text-green-500 shrink-0" />
+            ) : (
+              <button
+                onClick={action}
+                disabled={sharing}
+                className="shrink-0 flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-50"
+                style={{ background: "linear-gradient(135deg, #3b82f6, #6366f1)" }}
+              >
+                {sharing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : "去分享"}
+              </button>
+            )
+          ) : done ? (
+            <CheckCircle2 className="h-5 w-5 text-green-500 shrink-0" />
+          ) : (
+            <Circle className="h-5 w-5 text-muted-foreground/30 shrink-0" />
+          )}
+        </div>
+      ))}
+    </div>
+  )
+
+  // bare：调用方已经给了参考页白底卡和 `.ref-title h2`，这里只交列表本身。
+  if (bare) return <div className={className}>{body}</div>
+
   return (
     <div
       className={cn("anim-card rounded-2xl border p-5 flex flex-col", className)}
@@ -113,60 +180,7 @@ export function DailyTasks({ className, refreshKey }: { className?: string; refr
         <span className="text-base"></span>
         <h3 className="text-sm font-semibold text-foreground/70">每日任务</h3>
       </div>
-
-      {loadError ? (
-        <p className="text-xs text-red-400/60 text-center py-4">任务加载失败</p>
-      ) : !status ? (
-        <div className="space-y-3">
-          {[1, 2, 3].map((i) => (
-            <div key={i} className="flex items-center gap-3 animate-pulse">
-              <div className="w-8 h-8 rounded-lg bg-foreground/[0.06]" />
-              <div className="flex-1 space-y-1.5">
-                <div className="h-3 bg-foreground/[0.06] rounded w-2/3" />
-                <div className="h-2 bg-foreground/[0.04] rounded w-1/3" />
-              </div>
-            </div>
-          ))}
-        </div>
-      ) : (
-        <div className="space-y-3">
-          {tasks.map(({ key, icon: Icon, color, bgColor, label, reward, done, action }) => (
-            <div
-              key={key}
-              className={cn(
-                "flex items-center gap-3 rounded-xl p-2.5",
-                done ? "bg-emerald-500/[0.04]" : "bg-foreground/[0.02]"
-              )}
-            >
-              <div className={cn("flex items-center justify-center w-8 h-8 rounded-lg shrink-0", bgColor)}>
-                <Icon className={cn("h-4 w-4", color)} />
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium text-foreground truncate">{label}</p>
-                <p className="text-xs text-muted-foreground mt-0.5">{reward}</p>
-              </div>
-              {action ? (
-                done ? (
-                  <CheckCircle2 className="h-5 w-5 text-green-500 shrink-0" />
-                ) : (
-                  <button
-                    onClick={action}
-                    disabled={sharing}
-                    className="shrink-0 flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-50"
-                    style={{ background: "linear-gradient(135deg, #3b82f6, #6366f1)" }}
-                  >
-                    {sharing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : "去分享"}
-                  </button>
-                )
-              ) : done ? (
-                <CheckCircle2 className="h-5 w-5 text-green-500 shrink-0" />
-              ) : (
-                <Circle className="h-5 w-5 text-muted-foreground/30 shrink-0" />
-              )}
-            </div>
-          ))}
-        </div>
-      )}
+      {body}
     </div>
   )
 }

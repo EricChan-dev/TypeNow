@@ -80,6 +80,22 @@
   border-radius: 10px;
 }
 
+/* ── 今日打卡 + 每日任务并排（两者均为我方业务，参考页无对应区块）────────────
+   参考页的 .col73 是 2:1，但那是「趋势图 + 统计卡」的主次关系；这里两块信息量
+   相当，取 1:1。 */
+.home-ref .ref-checkin-row {
+  display: flex;
+  align-items: stretch;
+  gap: 14px;
+  margin-bottom: 14px;
+}
+
+.home-ref .ref-checkin-row > .ref-bgwhite {
+  flex: 1 1 0;
+  min-width: 0;
+  margin-bottom: 0;
+}
+
 .home-ref .ref-title {
   margin-bottom: 20px;
   position: relative;
@@ -1681,6 +1697,14 @@
   .home-ref .ref-col73,
   .home-ref .ref-col3 {
     flex-wrap: wrap;
+  }
+
+  .home-ref .ref-checkin-row {
+    flex-wrap: wrap;
+  }
+
+  .home-ref .ref-checkin-row > .ref-bgwhite {
+    flex: 1 1 100%;
   }
 
   .home-ref .ref-col-7,

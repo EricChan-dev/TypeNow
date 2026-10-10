@@ -861,27 +861,9 @@ export function HomeClient({ name }: HomeClientProps) {
             ))}
           </div>
           {activeTab === "today" && (
-            <div className="flex items-center gap-2 sm:gap-4">
-              <span className="hidden sm:inline text-sm font-medium text-foreground/60">
-                {greeting}，<span className="font-bold text-foreground/80">{me?.name || name || "同学"}</span>
-              </span>
-              <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap">
-                <div
-                  className="inline-flex items-center gap-1 sm:gap-1.5 rounded-full px-2 sm:px-2.5 py-1"
-                  style={{ background: "var(--banner-pill-today-bg)", border: "1px solid var(--banner-pill-today-border)" }}
-                >
-                  <Zap className="h-3 w-3 text-amber-400" />
-                  <span className="text-[11px] sm:text-[12px] font-semibold" style={{ color: "var(--banner-pill-today-text)" }}>今日 {stats?.todayCount ?? 0} 句</span>
-                </div>
-                <div
-                  className="inline-flex items-center gap-1 sm:gap-1.5 rounded-full px-2 sm:px-2.5 py-1"
-                  style={{ background: "var(--banner-pill-streak-bg)", border: "1px solid var(--banner-pill-streak-border)" }}
-                >
-                  <Flame className="h-3 w-3 text-amber-400" />
-                  <span className="text-[11px] sm:text-[12px] font-semibold" style={{ color: "var(--banner-pill-streak-text)" }}>连续 {streak} 天</span>
-                </div>
-              </div>
-            </div>
+            <span className="hidden sm:inline text-sm font-medium text-foreground/60">
+              {greeting}，<span className="font-bold text-foreground/80">{me?.name || name || "同学"}</span>
+            </span>
           )}
         </div>
 
@@ -927,7 +909,9 @@ export function HomeClient({ name }: HomeClientProps) {
             />
           </div>
 
-          {/* 3. 今日打卡卡（我方业务，参考页无对应区块；DJ 用参考页白底卡几何） */}
+          {/* 3+8. 今日打卡 + 每日任务并排（两者均为我方业务，参考页无对应区块；
+                 用参考页白底卡几何，1:1 分栏） */}
+          <div className="ref-checkin-row">
           <div className="ref-bgwhite anim-card">
             <div className="ref-title">
               <h2>今日打卡</h2>
@@ -1023,6 +1007,15 @@ export function HomeClient({ name }: HomeClientProps) {
             </div>
           </div>
 
+          {/* 每日任务（我方业务，参考页无对应区块）—— 与今日打卡并排 */}
+          <div className="ref-bgwhite anim-card">
+            <div className="ref-title">
+              <h2>每日任务</h2>
+            </div>
+            <DailyTasks refreshKey={checkInVersion} bare />
+          </div>
+          </div>
+
           {/* 4. 试用 banner（仅未领过体验会员时出现，与参考页的条件渲染一致） */}
           {me?.trial_available && (
             <div className="anim-card">
@@ -1047,26 +1040,25 @@ export function HomeClient({ name }: HomeClientProps) {
             </div>
 
             <div className="parame">
+              {/* 四格不带图标：参考页的 `.report .parame li label { display:none }`
+                  本来就是隐藏的（home.css:35），我们当初漏了这条规则才显出来。
+                  与其补一条 CSS 再把它藏掉，不如不渲染这个 label。 */}
               <ul>
                 {/* 参考页第一格是「今日练习时长(分钟)」，数值取当日 coin_logs.duration_seconds */}
                 <li>
                   <span>今日练习时长(分钟)</span>
-                  <label><Zap /></label>
                   <p><b>{fixed(todayMinutes)}<em /></b></p>
                 </li>
                 <li>
                   <span>今日练习(句)</span>
-                  <label><TrendingUp /></label>
                   <p><b>{stats?.todayCount ?? 0}<em /></b></p>
                 </li>
                 <li>
                   <span>累计练习(句)</span>
-                  <label><BookMarked /></label>
                   <p><b>{stats?.totalSentences ?? 0}</b></p>
                 </li>
                 <li>
                   <span>连续天数(天)</span>
-                  <label><Flame /></label>
                   <p><b>{streak}</b></p>
                 </li>
               </ul>
@@ -1135,13 +1127,6 @@ export function HomeClient({ name }: HomeClientProps) {
                 heatmapDuration={stats?.heatmapDuration ?? {}}
                 streakDays={streak}
               />
-            </div>
-          </div>
-
-          {/* 8. 每日任务（我方业务，参考页无对应区块） */}
-          <div className="ref-col3" style={{ marginTop: 14 }}>
-            <div className="ref-col-3 anim-card" style={{ width: "100%", flex: "1 1 100%" }}>
-              <DailyTasks refreshKey={checkInVersion} />
             </div>
           </div>
 
