@@ -10,17 +10,19 @@ export async function GET() {
   const session = await getSession()
   if (!session) return NextResponse.json({ error: "请先登录" }, { status: 401 })
 
-  // 门禁依据是**免费主动同意《推广合作协议》**（partner_agreed_at），不是付费。
+  // ⚠️ 门禁依据在 2026-10-10 重新变回 `is_partner`（= 付过 ¥699 合伙人版）。
   //
-  // 改造前这里看 `is_partner`（= 买过 ¥499），等于「付费才能取得推广资格」，
-  // 命中《禁止传销条例》第七条(二)。同意协议免费，所以拿它当门禁安全。
+  // 2026-09-29 曾把它改成「免费同意《推广合作协议》即可」（partner_agreed_at），
+  // 理由就是「付费取得推广资格」命中《禁止传销条例》第七条(二)「变相入门费」，
+  // 那是当年自查九个要件里唯一命中的一条。
   //
-  // 这里仍要查 inviteCode / wechatOpenid：**邀请码在注册时就已经为每个人生成**
-  // （见 api/auth/verify-code 等三处），也就是说推广工具一直对全量用户可用 ——
-  // 过去缺的只是「佣金准入」这一道门。这也正是本次改动量很小的原因。
+  // 现在为对齐句游英语的合伙人版改回付费门禁，法律风险随之恢复。
+  // 这对应 docs/distribution-compliance.md:27-28 的复核触发条件
+  // （「把推广资格与任何付费商品重新绑定」→ 改代码前先找律师），复核尚未进行；
+  // 决策方已书面确认承担风险。见 docs/membership-alignment-risk-2026-10.md。
   const [promoter] = await db
     .select({
-      partnerAgreedAt: users.partnerAgreedAt,
+      isPartner: users.isPartner,
       inviteCode: users.inviteCode,
       wechatOpenid: users.wechatOpenid,
     })
@@ -31,8 +33,8 @@ export async function GET() {
   if (!promoter) {
     return NextResponse.json({ error: "账号不存在" }, { status: 403 })
   }
-  if (!promoter.partnerAgreedAt) {
-    return NextResponse.json({ error: "请先加入推广计划" }, { status: 403 })
+  if (!promoter.isPartner) {
+    return NextResponse.json({ error: "请先开通合伙人版" }, { status: 403 })
   }
 
   // Thaw cooling commissions that have passed available_at

@@ -25,16 +25,17 @@
  *    它们统一进 INCLUDED_FOR_EVERYONE，由单测把关（见
  *    `src/__tests__/membership-benefits.test.ts`）。
  *
- * 3. **推广权益不得出现在任何付费档里（2026-09-29 合规改造）。**
- *    此前 `PARTNER_BENEFITS` 把「邀请链接 / 佣金 50% / 提现 / 数据看板」全部挂在
- *    ¥399 商品上，等于在商品说明里承诺「付费买到推广与赚钱资格」—— 那正是
- *    《禁止传销条例》第七条(二)「变相入门费」在**经营对象**层面的构成方式，
- *    光改代码准入判断不够，页面上还写着。
+ * 3. **推广权益重新装回付费档（2026-10-10，⚠️ 未经律师复核）。**
+ *    2026-09-29 曾把推广权益从付费档拆出（拆成 LIFETIME_BENEFITS 学习权益 +
+ *    PROMOTER_BENEFITS 免费权益），理由是《禁止传销条例》第七条(二)「变相入门费」。
  *
- *    现在拆成两张表，语义完全分开：
- *      LIFETIME_BENEFITS —— 终身会员的**学习**权益（真商品）
- *      PROMOTER_BENEFITS —— 推广权益，**免费**，任何注册用户均可加入
- *    并由单测看住「推广权益不得回到付费档里」。见 docs/distribution-compliance.md。
+ *    2026-10-10 为对齐句游英语的合伙人版，这条解绑**被改了回来**：
+ *    合伙人版（¥699）重新包含推广/佣金权益。这与
+ *    `docs/distribution-compliance.md:27-28` 的复核触发条件
+ *    （「把推广资格与任何付费商品重新绑定」→ 改代码前先找律师）**直接冲突**，
+ *    该复核尚未进行。决策方已书面确认承担风险。
+ *
+ *    风险评估与完整的反向改动清单见 docs/membership-alignment-risk-2026-10.md。
  *
  * 本模块**不得引入 db / drizzle**：价格页是客户端组件，拖进服务端依赖会污染
  * 浏览器 bundle（与 `lib/trial-days` 同样的理由）。
@@ -111,8 +112,8 @@ export const PRO_AI_ANALYZE_PER_DAY = 200
  *   - `content` ：内容解锁（本项目唯一真实门禁 = 每课试学句数）
  *   - `quota`   ：同一能力，会员每日次数更多（必须 pro > free）
  *   - `grant`   ：会员每日固定发放的资源（钻石）。免费用户拿不到，但不是"次数更多"
- *   - `lifetime`：终身会员专属（一次买断，永久有效）
- *   - `promoter`：推广权益。**免费**，任何注册用户均可加入，与付费档无关
+ *   - `lifetime`：合伙人版的学习权益（一次买断，永久有效）
+ *   - `promoter`：**合伙人版专属**推广权益（2026-10-10 起重新与付费绑定）
  */
 export type BenefitGate =
   | { kind: "content" }
@@ -194,9 +195,10 @@ export const INCLUDED_FOR_EVERYONE: readonly string[] = [
 ]
 
 /**
- * 终身会员专属权益。
+ * 合伙人版专属的**学习**权益。
  *
- * 这里**只有**学习权益。推广/佣金权益一律不在付费档里 —— 见文件头约束 3。
+ * ⚠️ 2026-10-10 起，合伙人版还包含推广权益（见 PROMOTER_BENEFITS）。
+ * 两者分开表达只是为了 UI 分区，**不再表示「推广与付费无关」**。
  */
 export const LIFETIME_BENEFITS: readonly Benefit[] = [
   {
@@ -208,12 +210,16 @@ export const LIFETIME_BENEFITS: readonly Benefit[] = [
 ]
 
 /**
- * 推广权益：**免费**，任何注册用户均可加入。
+ * 推广权益：**合伙人版专属**。
  *
- * 与 LIFETIME_BENEFITS 严格分开，正是 2026-09-29 合规改造的核心 ——
- * 「取得推广资格」不能收任何费用（《禁止传销条例》第七条(二)）。
- * 这张表只能出现在独立的推广中心里，**不得**出现在价格页任何付费档的权益清单中，
- * 由单测把关。
+ * ⚠️ **2026-10-10 变更，未经律师复核。**
+ * 这张表此前是「免费，任何注册用户均可加入」（2026-09-29 合规改造），
+ * 现改为随合伙人版（¥699）附赠 —— 即「付费取得推广资格」。
+ *
+ * 这直接命中《禁止传销条例》第七条(二)「变相入门费」，也是
+ * `docs/distribution-compliance.md:27-28` 列明的「改代码前先找律师」触发条件。
+ * 决策方已书面确认承担风险；风险评估见
+ * docs/membership-alignment-risk-2026-10.md。
  */
 export const PROMOTER_BENEFITS: readonly Benefit[] = [
   {
@@ -296,10 +302,10 @@ function priceCell(key: PlanKey, unit: string): string {
  * 「买哪个付费档」，永远回答不了「为什么要付费」。免费列的内容与
  * INCLUDED_FOR_EVERYONE / PRO_BENEFITS 保持一致。
  *
- * **2026-09-29 合规改造：删掉了「专属邀请链接 / 海报」「首次付款佣金 50%」
- * 「续费佣金 30%」「提现」这 4 行。** 它们此前挂在合伙人列，等于在价格页上
- * 把推广与赚钱当成付费商品的一部分卖。推广权益现在统一由 PROMOTER_BENEFITS
- * 表达，且对全部注册用户免费开放。
+ * **2026-10-10：把推广类 4 行装回「合伙人版」列。**
+ * 它们原本挂在合伙人列（2026-09-29 因合规改造删除），现在重新加回，
+ * 与 PROMOTER_BENEFITS 改为合伙人版专属保持一致。
+ * ⚠️ 未经律师复核，见 docs/membership-alignment-risk-2026-10.md。
  */
 export const COMPARISON_ROWS: readonly ComparisonRow[] = [
   {
@@ -374,6 +380,39 @@ export const COMPARISON_ROWS: readonly ComparisonRow[] = [
     yearly: "按年",
     lifetime: "永久终身",
   },
+  // ── 2026-10-10 装回合伙人版列的推广类 4 行（2026-09-29 曾因合规删除）──────
+  {
+    feature: "专属邀请链接 / 二维码 / 海报",
+    free: NOT_APPLICABLE,
+    monthly: NOT_APPLICABLE,
+    quarterly: NOT_APPLICABLE,
+    yearly: NOT_APPLICABLE,
+    lifetime: "尊享",
+  },
+  {
+    feature: "首次付款佣金",
+    free: NOT_APPLICABLE,
+    monthly: NOT_APPLICABLE,
+    quarterly: NOT_APPLICABLE,
+    yearly: NOT_APPLICABLE,
+    lifetime: "50%",
+  },
+  {
+    feature: "续费佣金",
+    free: NOT_APPLICABLE,
+    monthly: NOT_APPLICABLE,
+    quarterly: NOT_APPLICABLE,
+    yearly: NOT_APPLICABLE,
+    lifetime: "30%",
+  },
+  {
+    feature: "收益提现",
+    free: NOT_APPLICABLE,
+    monthly: NOT_APPLICABLE,
+    quarterly: NOT_APPLICABLE,
+    yearly: NOT_APPLICABLE,
+    lifetime: "全额提现至微信零钱",
+  },
   {
     feature: "价格",
     free: "¥0",
@@ -387,9 +426,12 @@ export const COMPARISON_ROWS: readonly ComparisonRow[] = [
 /**
  * 价格页对比表下方的一句说明。
  *
- * 这句话替换掉了原来的「合伙人会员额外获得推广权益」—— 那句是把推广当商品卖。
- * 现在的口径是「付费档之间只差时长与价格，推广对所有人免费」，
- * 与 LIFETIME_BENEFITS / PROMOTER_BENEFITS 的拆分保持一致。
+ * ⚠️ **2026-10-10 反向改动**：这句话此前是「推广权益与任何付费档无关：
+ * 所有注册用户都可以免费加入推广计划」。现在推广权益回到合伙人版，
+ * 该口径不再成立，故改写为区分「学习权益人人相同」与「推广为合伙人版专属」。
+ *
+ * 注意这里**不能**出现「赚钱 / 零风险 / 躺赚」类话术 ——
+ * 见 docs/distribution-compliance.md §七 禁用词。
  */
 export const COMPARISON_NOTE =
-  "四档付费会员的课程与功能完全相同，只差时长与价格。推广权益与任何付费档无关：所有注册用户都可以免费加入推广计划，按被推荐人的实际付费金额获得佣金。"
+  "四档付费会员的学习权益完全一致，只差时长与价格。合伙人版（¥699）在此基础上额外享有推广权益：专属邀请链接、按被推荐人实际付费金额计算的佣金，以及收益提现。"

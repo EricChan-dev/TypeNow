@@ -3,7 +3,9 @@
  *
  * 参考句乐部的双轨设计：佣金制（星火计划，对应我们的 partner_commissions）
  * 与天数制（邀请有礼）**并行、互不冲突**。本文件只管天数制。
- * （2026-09-29 合规改造后，佣金制已解绑为「所有注册用户均可加入」，与套餐无关。）
+ * ⚠️ 2026-10-10：佣金制重新绑回合伙人版（¥699 附赠推广权益），
+ * 2026-09-29 的「所有注册用户均可加入」已撤销。本文件的天数制不受影响。
+ * 见 docs/membership-alignment-risk-2026-10.md。
  *
  * 句乐部的规则（官方帮助文档）：
  *   - 好友注册：好友获得 7 天体验会员（仅限首次注册）
@@ -31,7 +33,7 @@ export const INVITE_ATTRIBUTION_DAYS = 30
 
 const DAY_MS = 24 * 60 * 60 * 1000
 
-/** 可触发邀请首购奖励的套餐。partner（终身会员）不参与天数制，见 purchaseReward。 */
+/** 可触发邀请首购奖励的套餐。partner（合伙人版）不参与天数制，见 purchaseReward。 */
 export type InvitePurchasePlan = "monthly" | "quarterly" | "yearly"
 
 export interface InvitePurchaseReward {
@@ -52,10 +54,11 @@ export interface InvitePurchaseReward {
  * 收紧的理由：原值一次年卡首购就送出 50 天会员，对一个尚无收入的产品是纯让利；
  * 而且邀请人拉一个新用户即得 30 天，会让「拉人」比「卖课」更划算 —— 激励方向错了。
  *
- * partner（终身会员）返回 null。注意在 2026-09-29 的合规改造后，这条的理由变了：
- * 不再是「它本身就是推广身份、另有现金佣金，叠加就是双重让利」（那个前提已随
- * 推广资格解绑而消失），而是一个纯粹的产品判断 —— 一次 ¥499 的交易不该再叠加
- * 几十天会员。现金佣金现在对**所有注册用户**开放，与本套餐无关。
+ * partner（合伙人版）返回 null。
+ * ⚠️ 2026-10-10：该档现为 ¥699 且重新含推广权益，但**仍然不参与天数制** ——
+ * 理由回到最初的双重让利判断：它本身已是推广身份、另有现金佣金，再叠加几十天
+ * 会员就是双重让利。这与 2026-09-29 曾写的「纯粹产品判断」不同，是该次
+ * 解绑被撤销后随之恢复的口径。见 docs/membership-alignment-risk-2026-10.md。
  */
 export function purchaseReward(plan: string): InvitePurchaseReward | null {
   if (plan === "yearly") return { inviterDays: 7, inviteeDays: 7 }

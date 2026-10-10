@@ -1,25 +1,70 @@
 import { redirect } from "next/navigation"
-import { memberTierLabel, type MemberTier } from "@/lib/pricing"
-import Link from "next/link"
-import Image from "next/image"
+import { BookOpen, Gem, ShieldCheck, Zap } from "lucide-react"
 import { getUser } from "@/app/actions/auth"
 import { getActiveSubscription } from "@/lib/subscription"
-import { Crown, CalendarDays, ChevronRight, Handshake } from "lucide-react"
+import { memberTierLabel, type MemberTier } from "@/lib/pricing"
+import { BRAND } from "@/lib/brand"
+import { COMPARISON_NOTE, COMPARISON_ROWS, NOT_APPLICABLE } from "@/lib/membership-benefits"
 import { MembershipHistory } from "./MembershipHistory"
+import { MembershipPlans } from "./MembershipPlans"
+import "./membership-upgrade.css"
 
-const TIER_COLORS: Record<MemberTier, string> = {
-  free: "bg-muted text-muted-foreground border border-transparent",
-  trial: "bg-amber-500/20 text-amber-500 border border-amber-400/60",
-  monthly: "bg-blue-500/20 text-blue-500 border border-blue-400/60",
-  quarterly: "bg-cyan-500/20 text-cyan-500 border border-cyan-400/60",
-  yearly: "bg-violet-500/20 text-violet-500 border border-violet-400/60",
-  partner: "text-primary-foreground border",
+/**
+ * 会员权益页 —— 1:1 复刻参考页 `VIP会员权益 - 句游英语.html` 的版式。
+ *
+ * 用户裁定（m07434）：参考页与我们的差异太大，要求改到一致。沿用登录页
+ * （app/login）与首页内容区（app/home/home-ref.css）的先例：只搬**表现层**，
+ * 业务逻辑、路由与全部数字仍走本项目的事实源。
+ *
+ * 为什么不是「把参考页 HTML 抄过来」：
+ *   1. 参考页把定价写在 button 的 `data-price` 属性里（29.00 / 79.00 / 199.00），
+ *      我们改价时那种写法必然漂移 —— 数字一律从 `lib/pricing` 取。
+ *   2. 参考页的对比表里有 3 行卖的是**我们没有的功能**
+ *      （「发音偏好选择」「分段练习」「高级 AI 语音引擎」）。照抄等于虚假宣传，
+ *      正是 `lib/membership-benefits` 文件头记录过的「7 条里 4 条是代码里不存在的
+ *      功能」那个坑。所以表格结构照搬，**行内容用我们自己的 `COMPARISON_ROWS`**。
+ *   3. 参考页的 `练习时长 30 分钟` 免费限额我们没有（打字练习人人不限次），
+ *      首页 hero 的三枚胶囊相应改成我们真实的差异点。
+ *
+ * 三张套餐卡在 `./MembershipPlans`（客户端组件）—— 畅学版卡上有月/季/年切换。
+ */
+
+/** 当前身份的一句话摘要（参考页没有身份卡，这里压成 hero 下方一行，不占版面）。 */
+function statusLine(memberTier: MemberTier, proExpires: Date | null): string {
+  if (memberTier === "partner") return `${memberTierLabel(memberTier)} · 永久有效，无需续费`
+  if (memberTier === "free") return `${memberTierLabel(memberTier)} · 尚未开通付费权益`
+  const plan = memberTierLabel(memberTier)
+  if (!proExpires) return plan
+  const d = proExpires
+  return `${plan} · 有效期至 ${d.getFullYear()} 年 ${d.getMonth() + 1} 月 ${d.getDate()} 日`
 }
 
-function formatDate(d: Date | null): string {
-  if (!d) return "—"
-  return `${d.getFullYear()} 年 ${d.getMonth() + 1} 月 ${d.getDate()} 日`
-}
+/** 服务承诺（参考页 4 张卡的结构与长度；措辞按我们的真实能力写，不抄不可验证的承诺）。 */
+const SERVICE_PROMISES = [
+  {
+    Icon: ShieldCheck,
+    title: "提供永久免费体验",
+    body: "还在犹豫是否订阅？没关系。平台保留了永久免费的体验版本。每天都有可练习的内容，不用花一分钱也能持续学习。",
+  },
+  {
+    Icon: Zap,
+    title: "高可用极速体验",
+    body: "采用高可用云服务架构与就近接入节点，语音评测与 AI 讲解均为在线实时响应，让您的学习不因等待而中断。",
+  },
+  {
+    Icon: BookOpen,
+    title: "长期研发与教研投入",
+    body: "团队持续迭代产品与课程内容，不断补充新的句子与 AI 语料。您只需一次付费，即可持续享受新增内容带来的价值。",
+  },
+  {
+    Icon: Gem,
+    title: "坚持底线的亲民定价",
+    body: "拒绝暴利溢价和隐藏消费。我们把运营成本压缩到极致，价格远低行业均值，只为让 AI 能力服务于每一位学习者。",
+  },
+] as const
+
+/** 需要按「金额胶囊」渲染合伙人列的佣金类行（值形如 `50%` / `30%`）。 */
+const COMMISSION_FEATURES = new Set(["首次付款佣金", "续费佣金"])
 
 export default async function MembershipPage() {
   const user = await getUser()
@@ -33,125 +78,135 @@ export default async function MembershipPage() {
   }
 
   const isPartner = memberTier === "partner"
-  const isPro = user.isPro
+  // `users.is_pro` / `users.is_partner` 是 tinyint，Drizzle 推出来是 number；
+  // 客户端组件的 props 声明成 boolean，这里显式收敛，别把 0/1 漏下去。
+  const isPro = memberTier !== "free"
+
+  // 参考页把「价格」放在对比表**第一行**，而 `COMPARISON_ROWS` 按价格页的历史顺序
+  // 把它排在最后。这里只调整渲染顺序，不另写一份数字 —— 曾经额外补过一行价格，
+  // 结果是同一个表格里出现两遍价格。
+  const priceRow = COMPARISON_ROWS.find((row) => row.feature === "价格")
+  const comparisonRows = priceRow
+    ? [priceRow, ...COMPARISON_ROWS.filter((row) => row !== priceRow)]
+    : COMPARISON_ROWS
 
   return (
-    <div className="max-w-2xl mx-auto px-4 py-8 space-y-6">
-      <h1 className="text-2xl font-bold text-foreground">会员中心</h1>
+    <div className="mainBox membership-upgrade-page">
+      <div className="maxWidth">
+        {/* ── Hero ─────────────────────────────────────────────────────────── */}
+        <section className="upgrade-hero">
+          <div className="title upgrade-title-block">
+            <h2>
+              解锁 <b className="brand-text-gradient">{BRAND.nameZh}</b> 全部潜力
+            </h2>
+          </div>
+          {/* 参考页三枚胶囊说的是「每日练习时长」；我们没有时长限制，
+              改为三条真实的差异点（内容门禁 / 额度 / 终身）。 */}
+          <div className="hero-highlights">
+            <span>免费版每课可试学</span>
+            <span>畅学版解锁全部课程</span>
+            <span>合伙人版终身畅享</span>
+          </div>
+          <p className="hero-status">{statusLine(memberTier, user.proExpires ?? null)}</p>
+        </section>
 
-      {/* Current status */}
-      <div className="rounded-2xl border border-border bg-card p-6 space-y-4">
-        <div className="flex items-center gap-3">
-          {!isPartner && (
-            <div className="flex items-center justify-center w-10 h-10 rounded-xl bg-muted">
-              <Crown className="h-5 w-5 text-amber-500" />
-            </div>
-          )}
-          {isPartner && (
-            <div
-              className="flex items-center justify-center w-10 h-10 rounded-xl"
-              style={{ background: "linear-gradient(135deg, #b45309, #f59e0b)" }}
-            >
-              <Image src="/VIP.png" alt="VIP" width={24} height={24} />
-            </div>
-          )}
-          <div>
-            <p className="text-xs text-muted-foreground mb-1">当前身份</p>
-            <span
-              className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[12px] font-semibold ${TIER_COLORS[memberTier]}`}
-              style={isPartner ? { background: "linear-gradient(135deg, #b45309 0%, #d97706 60%, #f59e0b 100%)", borderColor: "rgba(251,191,36,0.6)" } : undefined}
-            >
-              {memberTier !== "free" && (
-                <Image src="/VIP.png" alt="VIP" width={13} height={13} className="shrink-0" />
-              )}
-              {memberTierLabel(memberTier)}
+        <div className="introduce simple-upgrade-page">
+          {/* ── 三张套餐卡（客户端：畅学版可切月/季/年）────────────────────── */}
+          <MembershipPlans memberTier={memberTier} isPro={isPro} isPartner={isPartner} />
+
+          {/* ── 感谢语 ──────────────────────────────────────────────────────── */}
+          <div className="gratitude-msg-box">
+            <Gem />
+            <span>
+              您的每一分付费，都将促进产品体验的提升与课程内容的持续丰富。感谢您的支持！
             </span>
           </div>
-        </div>
 
-        {isPartner ? (
-          <div className="flex items-center gap-2 text-sm text-muted-foreground">
-            <CalendarDays className="h-4 w-4 shrink-0" />
-            <span>永久有效，无需续费</span>
-          </div>
-        ) : isPro && user.proExpires ? (
-          <div className="flex items-center gap-2 text-sm text-muted-foreground">
-            <CalendarDays className="h-4 w-4 shrink-0" />
-            <span>到期时间：{formatDate(user.proExpires)}</span>
-          </div>
-        ) : (
-          <p className="text-sm text-muted-foreground">暂无会员权益</p>
-        )}
-      </div>
-
-      {/* Pricing options */}
-      {!isPartner && (
-        <div className="rounded-2xl border border-border bg-card p-6 space-y-4">
-          <h2 className="text-base font-semibold text-foreground">{isPro ? "提前续费" : "开通会员"}</h2>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            {/* Monthly */}
-            <Link
-              href="/pricing"
-              className="relative rounded-xl border border-border p-4 hover:border-violet-500/50 hover:bg-muted/50 transition-colors group"
+          {/* ── 详细权益对比 ────────────────────────────────────────────────── */}
+          <div className="function compact-comparison">
+            <h3>详细权益对比</h3>
+            <div
+              className="upgrade-comparison-scroll"
+              tabIndex={0}
+              role="region"
+              aria-label="详细权益对比，可左右滑动查看"
             >
-              <p className="text-sm font-semibold text-foreground">月度会员</p>
-              <p className="text-2xl font-bold text-foreground mt-1">
-                ¥29<span className="text-sm font-normal text-muted-foreground"> / 月</span>
-              </p>
-              <ChevronRight className="absolute right-4 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground group-hover:text-foreground transition-colors" />
-            </Link>
+              <div className="inner">
+                <div className="head three-col-head">
+                  <label>
+                    <small>核心功能</small>
+                  </label>
+                  <span>
+                    <b>免费版</b>
+                  </span>
+                  <span>
+                    <b>畅学版</b>
+                  </span>
+                  <span>
+                    <b>合伙人版</b>
+                  </span>
+                </div>
 
-            {/* Yearly */}
-            <Link
-              href="/pricing"
-              className="relative rounded-xl border border-violet-500/40 bg-violet-500/5 p-4 hover:border-violet-500/70 hover:bg-violet-500/10 transition-colors group"
-            >
-              <div className="flex items-center gap-2">
-                <p className="text-sm font-semibold text-foreground">年度会员</p>
-                <span className="text-[10px] font-bold bg-accent text-primary-foreground px-1.5 py-0.5 rounded-full">推荐</span>
+                <div className="body three-col-body">
+                  {comparisonRows.map((row) => (
+                    <p key={row.feature}>
+                      <label>
+                        <strong>{row.feature}</strong>
+                      </label>
+                      {(
+                        [
+                          ["col-free", row.free],
+                          ["col-pro", row.quarterly],
+                          ["col-partner", row.lifetime],
+                        ] as const
+                      ).map(([cls, value]) => (
+                        <span key={cls} className={cls}>
+                          {value === NOT_APPLICABLE ? (
+                            <span className="tc-text-muted">—</span>
+                          ) : COMMISSION_FEATURES.has(row.feature) && cls === "col-partner" ? (
+                            <span className="tc-badge-pill highlight">
+                              <span className="tc-badge-data">{value}</span>
+                            </span>
+                          ) : (
+                            <b>{value}</b>
+                          )}
+                        </span>
+                      ))}
+                    </p>
+                  ))}
+                </div>
               </div>
-              <p className="text-2xl font-bold text-foreground mt-1">
-                ¥199<span className="text-sm font-normal text-muted-foreground"> / 年</span>
-              </p>
-              <p className="text-xs text-violet-500 font-medium mt-1">相比月度节省 ¥149</p>
-              <p className="text-[11px] text-muted-foreground line-through">月度 ×12 = ¥348</p>
-              <ChevronRight className="absolute right-4 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground group-hover:text-violet-500 transition-colors" />
-            </Link>
+            </div>
+            <p className="comparison-note">{COMPARISON_NOTE}</p>
           </div>
 
-          <Link
-            href="/pricing"
-            className="flex items-center justify-center w-full py-2.5 rounded-xl text-sm font-semibold text-white transition-opacity hover:opacity-90"
-            style={{ background: "linear-gradient(135deg, #7c3aed, #a855f7)" }}
-          >
-            查看全部套餐
-          </Link>
-        </div>
-      )}
-
-      {/* 推广入口：对**所有**用户展示（2026-09-29 合规改造后推广资格免费开放，
-          与是否持有终身会员无关）。文案只描述"按实际成交拿佣金"，不承诺收益，
-          也不再用「合伙人」这个暗示付费身份的说法。 */}
-      <Link
-        href="/home/partner"
-        className="flex items-center justify-between rounded-2xl border border-amber-500/30 bg-amber-500/5 p-5 hover:bg-amber-500/10 transition-colors group"
-      >
-        <div className="flex items-center gap-3">
-          <div className="flex items-center justify-center w-9 h-9 rounded-xl bg-amber-500/15">
-            <Handshake className="h-5 w-5 text-amber-500" />
+          {/* ── 我们的服务承诺 ──────────────────────────────────────────────── */}
+          <div className="service-promise-title">
+            <h3>
+              我们的服务承诺
+              <span />
+            </h3>
           </div>
-          <div>
-            <p className="text-sm font-semibold text-foreground">免费加入推广计划</p>
-            <p className="text-xs text-muted-foreground mt-0.5">按被推荐人的实际付费金额获得佣金</p>
+          <div className="upgrade-service-grid">
+            {SERVICE_PROMISES.map(({ Icon, title, body }) => (
+              <div key={title} className="upgrade-svc-card">
+                <div>
+                  <span>
+                    <Icon />
+                  </span>
+                  <strong>{title}</strong>
+                </div>
+                <p>{body}</p>
+              </div>
+            ))}
+          </div>
+
+          {/* ── 订阅记录 ────────────────────────────────────────────────────── */}
+          <div className="membership-history-card">
+            <h3>订阅记录</h3>
+            <MembershipHistory />
           </div>
         </div>
-        <ChevronRight className="h-4 w-4 text-muted-foreground group-hover:text-amber-500 transition-colors" />
-      </Link>
-
-      {/* Subscription history */}
-      <div className="rounded-2xl border border-border bg-card p-6 space-y-4">
-        <h2 className="text-base font-semibold text-foreground">订阅记录</h2>
-        <MembershipHistory />
       </div>
     </div>
   )

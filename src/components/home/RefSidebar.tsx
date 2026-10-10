@@ -135,7 +135,11 @@ export function RefSidebar({
           字标在折叠态隐藏（文字会被 is-collapsed 规则连同导航标签一起收起）。 */}
       <div className="ref-logo">
         <Link href="/home" style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
-          <Image src="/logo.svg" alt={BRAND.nameZh} width={36} height={36} />
+          {/* 侧边栏 logo 在首屏内，且是 Next 判定出的 LCP 元素。默认 lazy
+              会让它晚一步才请求，既拖慢 LCP 也会触发
+              「Image ... detected as the Largest Contentful Paint (LCP)」警告，
+              故显式 eager。尺寸只有 36×36 的 SVG，提前加载代价近乎为零。 */}
+          <Image src="/logo.svg" alt={BRAND.nameZh} width={36} height={36} loading="eager" />
           {!collapsed && (
             <span
               className="font-brand"

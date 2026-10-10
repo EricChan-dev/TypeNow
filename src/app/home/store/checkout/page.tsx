@@ -6,8 +6,8 @@ import { Clock, Sparkles, ArrowLeft, CheckCircle2 } from "lucide-react"
 import QRCode from "qrcode"
 import Link from "next/link"
 
-// 档位名走唯一事实源（lib/pricing）：原先这里手写了三档、漏了季度档，
-// 而且 partner 被写成「合伙人终身会员」—— 推广资格已解绑，它只是终身会员。
+// 档位名走唯一事实源（lib/pricing）：原先这里手写了三档、漏了季度档。
+// partner 档现名「合伙人版」（2026-10-10 起含推广权益，⚠️ 未经律师复核）。
 import { memberTierLabel } from "@/lib/pricing"
 
 export default function CheckoutPage() {

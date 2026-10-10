@@ -4,8 +4,8 @@ import { useEffect, useState } from "react"
 import { useSearchParams } from "next/navigation"
 import { CheckCircle2, PartyPopper } from "lucide-react"
 
-// 档位名走唯一事实源（lib/pricing）：加季度档时才不会漏，
-// 且终身档不再叫「合伙人会员」（推广资格已从该商品解绑）。
+// 档位名走唯一事实源（lib/pricing）：加季度档时才不会漏。
+// 终身档现名「合伙人版」（2026-10-10 起含推广权益，⚠️ 未经律师复核）。
 import { memberTierLabel } from "@/lib/pricing"
 import { BRAND } from "@/lib/brand"
 

@@ -86,7 +86,21 @@ export function PracticeTrendChart({ data, height = 300 }: Props) {
     chart.setOption(
       {
         color: ["#f97316"],
-        grid: { left: "0%", right: "3%", top: "2%", bottom: "2%", containLabel: true },
+        // ECharts 6 起 `grid.containLabel` 已废弃，且**默认不再生效**：只有显式
+        // `echarts.use(LegacyGridContainLabel)` 才会走旧行为，否则控制台报
+        // "Specified `grid.containLabel` but no `use(LegacyGridContainLabel`)"，
+        // 并且轴标签会溢出容器（右侧「星期日」被裁掉）。
+        // 官方给出的等价新写法（见 node_modules/echarts/types/dist/echarts.d.ts:2958）：
+        //   `containLabel: true` ≡ { outerBoundsMode: "same", outerBoundsContain: "axisLabel" }
+        // 这里用新 API，不引 legacy 包（首页体积预算敏感，见文件头说明）。
+        grid: {
+          left: "0%",
+          right: "3%",
+          top: "2%",
+          bottom: "2%",
+          outerBoundsMode: "same",
+          outerBoundsContain: "axisLabel",
+        },
         tooltip: { trigger: "axis", axisPointer: { type: "none" } },
         xAxis: {
           type: "category",

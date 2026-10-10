@@ -13,7 +13,8 @@ interface SubRecord {
 }
 
 // 档位名走唯一事实源（lib/pricing）。此前这里自己写了一份映射，漏了季度档，
-// 而且 partner 被写成「永久会员」—— 它现在只是终身会员（推广资格已解绑）。
+// 把 partner 写成了「永久会员」。该档现名「合伙人版」（2026-10-10 起
+// 学习权益 + 推广权益，⚠️ 未经律师复核，见 docs/membership-alignment-risk-2026-10.md）。
 
 const STATUS_LABELS: Record<string, { label: string; className: string }> = {
   active: { label: "生效中", className: "text-green-600" },

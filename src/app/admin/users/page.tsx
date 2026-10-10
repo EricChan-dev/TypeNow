@@ -107,7 +107,7 @@ export default function UsersList() {
         />
         <Table.Column
           dataIndex="isPartner"
-          title="终身会员"
+          title="合伙人版"
           width={80}
           render={(p: boolean) => (p ? <Tag color="gold">是</Tag> : <Tag>—</Tag>)}
         />

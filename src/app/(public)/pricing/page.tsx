@@ -65,7 +65,7 @@ export default function PricingPage() {
           选择适合你的方案
         </h1>
         <p className="mt-5 text-lg text-muted-foreground max-w-lg">
-          按需选择，新用户首次购买享首期优惠。推广计划对所有人免费开放。
+          按需选择，新用户首次购买享首期优惠。开通合伙人版即附赠推广权益。
         </p>
       </section>
 
@@ -105,7 +105,7 @@ export default function PricingPage() {
                   <div className="text-sm font-bold text-muted-foreground text-center">月度会员</div>
                   <div className="text-sm font-bold text-muted-foreground text-center">季度会员</div>
                   <div className="text-sm font-bold text-accent text-center">年度会员</div>
-                  <div className="text-sm font-bold text-amber-500 text-center">终身会员</div>
+                  <div className="text-sm font-bold text-amber-500 text-center">合伙人版</div>
                 </div>
 
                 {COMPARISON_ROWS.map((row, i) => (
@@ -130,13 +130,14 @@ export default function PricingPage() {
             </div>
           </div>
 
-          {/* 付费档之间没有功能差别 —— 差异只在时长与价格。这也是句乐部的做法
+          {/* 学习权益在四档付费之间没有差别 —— 差异只在时长与价格。这也是句乐部的做法
               （其官方 FAQ 专门回答"几种会员权益一样吗"），目的是避免
               "买了月卡发现功能不够"的挫败感。
 
-              这句话同时承担合规职责：它挑明**推广权益与付费档无关**。
-              改版前这里写的是"合伙人会员额外获得推广权益"—— 等于在价格页上
-              把推广资格当成付费商品卖，正是这次改造要消除的表述。 */}
+              ⚠️ 2026-10-10 反向改动：这段注释此前写着"这句话同时承担合规职责：
+              它挑明**推广权益与付费档无关**"。现在推广权益重新绑回合伙人版，
+              该合规职责**已不成立**，COMPARISON_NOTE 也已改写。
+              见 docs/membership-alignment-risk-2026-10.md。 */}
           <p className="text-sm text-muted-foreground text-center">
             {COMPARISON_NOTE}
           </p>
@@ -166,7 +167,7 @@ export default function PricingPage() {
           准备好提升英语了吗？
         </h2>
         <p className="mt-4 text-base text-muted-foreground max-w-md">
-          立即开始，觉得好用再升级。想分享给朋友？推广计划免费加入。
+          立即开始，觉得好用再升级。想分享给朋友？开通合伙人版即可参与推广。
         </p>
         <div className="mt-8 flex items-center gap-4">
           <Link
@@ -180,7 +181,7 @@ export default function PricingPage() {
             href="/home/partner"
             className="inline-flex items-center justify-center gap-2 rounded-[10px] border border-amber-500/50 px-8 py-4 text-base font-semibold text-amber-500 hover:bg-amber-500/10 transition-colors"
           >
-            免费加入推广计划
+            了解合伙人版
           </Link>
         </div>
       </section>

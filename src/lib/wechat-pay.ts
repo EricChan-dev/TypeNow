@@ -668,9 +668,12 @@ export function getPlanAmount(plan: string, isFirstPurchase: boolean): number | 
 /**
  * 微信支付订单商品名（会出现在用户的账单里）。
  *
- * 终身档**刻意不叫「合伙人」**：2026-09-29 合规改造后该商品只是终身会员，
- * 不含任何推广权益（推广资格对所有注册用户免费开放）。把纯消费商品写成
- * 「合伙人」，等于在用户账单上把一个身份资格当商品卖 —— 正是要消除的表述。
+ * 商品名直接取 `spec.label`，因此终身档现在显示为「TypeNow 合伙人版」。
+ *
+ * ⚠️ 2026-10-10 反向改动：2026-09-29 时这里刻意**不叫**「合伙人」（当时该商品
+ * 只是纯学习权益，推广资格免费开放）。现在推广权益重新随该商品附赠，
+ * 「合伙人版」是准确的商品名，但仍属未经律师复核的越线，
+ * 见 docs/membership-alignment-risk-2026-10.md。
  */
 export function getPlanDescription(plan: string): string {
   const spec = findPlan(plan)

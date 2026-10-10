@@ -124,24 +124,29 @@ async function triggerCommission(
   }
   if (!buyer.createdAt || orderTime - new Date(buyer.createdAt).getTime() > ATTRIBUTION_WINDOW_MS) return
 
-  // ── 推广资格在 2026-09-29 已与付费解绑：任何注册用户都能拿佣金 ──────────────
+  // ── 推广资格在 2026-10-10 重新绑定到合伙人版（⚠️ 未经律师复核）──────────────
   //
   // ⚠️ 下面这两行是《禁止传销条例》第七条(二)「变相入门费」在**数据层的唯一落点**。
   //
-  // 改动前它是 `if (!partner || !partner.isPartner) return`，语义是"付过 ¥399 合伙人
-  // 才能拿现金佣金"——这正是当初九个审查要件里**唯一命中**的那个，而且是权重最高的：
-  // 交费取得的是"发展他人加入的资格"，命中七(二)；而单级直推只让人通过七(三)。
+  // 2026-09-29 曾把这里改成「任何注册用户都能拿佣金」，以消除当初九个审查要件里
+  // **唯一命中**的那个 —— 交费取得的是"发展他人加入的资格"，命中七(二)；
+  // 而单级直推只让人通过七(三)。
   //
-  // 现在推广资格对全部注册用户开放，付费档只剩学习权益。
-  // **不要再把任何付费条件加回这里** —— 那会立刻恢复原来的法律风险，
-  // 而且是在用户完全看不见的地方。依据见 docs/distribution-compliance.md。
+  // 2026-10-10 为对齐句游英语的合伙人版，**改回了付费门禁**，即
+  // "付过 ¥699 合伙人版才能拿现金佣金"。这恢复了原来的法律风险，
+  // 而且发生在用户完全看不见的地方。
+  //
+  // 这直接对应 docs/distribution-compliance.md:27-28 的复核触发条件
+  // （「把推广资格与任何付费商品重新绑定」→ 改代码前先找律师），
+  // 该复核**尚未进行**；决策方已书面确认承担风险。
+  // 风险评估见 docs/membership-alignment-risk-2026-10.md。
   const [partner] = await db
-    .select({ id: users.id })
+    .select({ id: users.id, isPartner: users.isPartner })
     .from(users)
     .where(eq(users.id, buyer.referredBy))
     .limit(1)
 
-  if (!partner) return
+  if (!partner || !partner.isPartner) return
 
   // 「首购」只看真正结算过的佣金。被退款扣回的记录（clawed_back）等于从没
   // 结算过：如果把它也算进去，被邀请人退款后重新购买会被判成续费，佣金从 50%

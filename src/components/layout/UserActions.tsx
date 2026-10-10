@@ -47,8 +47,10 @@ const TIER_CONFIG: Record<MemberTier, TierConfig> = {
     avatarRing: "ring-2 ring-offset-2 ring-violet-500 ring-offset-background",
   },
   partner: {
-    // 语义已收窄为「终身会员」：2026-09-29 合规改造把推广资格从该商品解绑
-    label: "终身会员",
+    // 语义＝「合伙人版」：终身学习权益 + 推广权益。
+    // ⚠️ 2026-10-10 起推广资格重新随该商品附赠（2026-09-29 曾解绑），
+    // 未经律师复核，见 docs/membership-alignment-risk-2026-10.md。
+    label: "合伙人版",
     className: "border text-white",
     style: {
       background: "linear-gradient(135deg, #b45309 0%, #d97706 60%, #f59e0b 100%)",
@@ -197,9 +199,10 @@ export function UserActions({ serverUser, variant = "public" }: UserActionsProps
               <Link href="/home/membership" className="shrink-0">
                 <TierBadge tier={user.member_tier} size="sm" />
               </Link>
-              {/* 推广入口对**所有**用户展示。2026-09-29 合规改造后推广资格免费开放，
-                  不再与 ¥499 终身会员绑定（见 lib/membership-benefits 的
-                  PROMOTER_BENEFITS），所以这里没有 `is_partner` 条件。 */}
+              {/* 入口对所有用户展示，但**进入推广中心的门禁已改回 `is_partner`**
+                  （2026-10-10：为对齐句游英语合伙人版，推广资格重新绑回 ¥699 商品，
+                  2026-09-29 的免费开放被撤销）。非合伙人点进去会看到合伙人版开通页。
+                  ⚠️ 未经律师复核，见 docs/membership-alignment-risk-2026-10.md。 */}
               <Link
                 href="/home/partner"
                 className="hidden sm:inline-flex items-center gap-1.5 rounded-full bg-amber-500/10 border border-amber-500/30 px-3 py-1 text-[12px] font-semibold text-amber-500 hover:bg-amber-500/20 transition-colors whitespace-nowrap"
@@ -279,10 +282,10 @@ export function UserActions({ serverUser, variant = "public" }: UserActionsProps
                       <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />
                     </Link>
                   )}
-                  {/* 推广入口对所有人开放（2026-09-29 合规改造），
-                      文案也只描述"按真实付费金额拿佣金"，不承诺收益。 */}
+                  {/* 推广入口：⚠️ 2026-10-10 起重新只为合伙人版开放。
+                      文案只描述"按真实付费金额拿佣金"，不承诺收益。 */}
                   <Link href="/home/partner" onClick={() => setDropdownOpen(false)} className="flex items-center justify-between px-4 py-2.5 text-sm text-foreground hover:bg-muted transition-colors">
-                    <span className="flex items-center gap-3"><Handshake className="h-4 w-4 text-amber-500" />免费加入推广计划</span>
+                    <span className="flex items-center gap-3"><Handshake className="h-4 w-4 text-amber-500" />推广中心</span>
                     <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />
                   </Link>
                 </div>

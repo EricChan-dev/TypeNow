@@ -11,12 +11,15 @@
  *      因此这里同时断言路由确实从事实源 import，而不是自己写了个数。
  *   3. 已知的假宣称关键词不得重新出现（它们曾真实上线过）。
  *
- * **2026-09-29 新增第 4 条：推广权益不得回到付费档里。**
- * 此前 `PARTNER_BENEFITS` 把「邀请链接 / 佣金 / 提现 / 看板」整体挂在 ¥399 商品上，
- * 等于在商品说明里承诺「付费买到推广与赚钱资格」—— 命中《禁止传销条例》
- * 第七条(二) 的「变相入门费」，而且是在**经营对象**层面。
- * 现在拆成 LIFETIME_BENEFITS（学习权益）+ PROMOTER_BENEFITS（免费，人人可加入），
- * 由本文件最后一组测试看住这个结构不许退化。
+ * **第 4 条（2026-10-10 已反转）：推广权益与付费档的关系。**
+ * 2026-09-29 曾要求「推广权益不得回到付费档里」，理由是 `PARTNER_BENEFITS` 把
+ * 「邀请链接 / 佣金 / 提现 / 看板」挂在 ¥399 商品上，命中《禁止传销条例》
+ * 第七条(二) 的「变相入门费」。
+ * 2026-10-10 为对齐句游英语合伙人版，该绑定被**主动恢复**（¥699 附赠推广权益）。
+ * 这是已知风险下的决策，未经律师复核，见
+ * docs/membership-alignment-risk-2026-10.md。
+ * 最后一组测试因此改为看住越线后仍不可破的红线（单级、按销售额计酬、
+ * 提现口径、不承诺收益、留痕）。
  *
  * 顺带守住一条工程约束：本模块**不许**引入 db/drizzle —— 价格页是客户端组件，
  * 拖进服务端依赖会污染浏览器 bundle。
@@ -233,39 +236,32 @@ describe("COMPARISON_ROWS · 对比表", () => {
 })
 
 /**
- * 2026-09-29 合规改造的回归护栏。
+ * 合规结构的回归护栏 —— **2026-10-10 已整体反转**。
  *
- * 这一组是整个文件里最重要的：它保证「付费＝取得推广资格」这个结构
- * 不会以任何形式复活 —— 无论是改回数据表、还是改文案。
+ * 上一版（2026-09-29）这一组断言的是「推广权益必须与付费档彻底分离」：
+ * 对比表不得出现佣金/提现/邀请，LIFETIME_BENEFITS 只能有 lifetime gate，
+ * COMPARISON_NOTE 必须点明「推广与付费无关」。那套断言现在**全部不再成立**，
+ * 因为产品决策已改为「推广权益随合伙人版（¥699）附赠」。
+ *
+ * ⚠️ 这次反转不是合规结论的改变，而是**已知风险下的主动越线**：
+ * 它直接命中文档 `docs/distribution-compliance.md:27-28` 的复核触发条件
+ * 「把推广资格与任何付费商品重新绑定」。决策与风险披露见
+ * docs/membership-alignment-risk-2026-10.md。
+ *
+ * 因此这一组测试的职责从「禁止付费绑定推广」改为**看住越线后仍不可破的红线**：
+ *   1. 计酬依据必须是**销售额**而非人头数（两高一部 2013《意见》第 5 条）；
+ *   2. 只能是**单级**推广，不得出现多级/团队计酬/拉人头表述；
+ *   3. 提现口径必须与 partner/withdraw 代码事实一致（全额，无 ¥50 门槛）；
+ *   4. COMPARISON_NOTE 必须点明推广为合伙人版专属，且不得承诺收益；
+ *   5. 越线必须**留痕**：事实源里要引用风险文档，否则后人会误以为评过。
  */
-describe("合规结构：推广权益必须与付费档彻底分离", () => {
-  it("对比表里不得出现任何推广/佣金/提现行", () => {
-    const features = COMPARISON_ROWS.map((r) => r.feature).join(" ")
-    for (const word of ["佣金", "提现", "邀请", "推广", "返佣"]) {
-      expect(features).not.toContain(word)
-    }
-  })
-
-  it("付费档的权益文案里不得出现「佣金」", () => {
-    const paidText = [
-      ...PRO_BENEFITS.map((b) => `${b.label} ${b.claim}`),
-      ...LIFETIME_BENEFITS.map((b) => `${b.label} ${b.claim}`),
-    ].join(" ")
-    expect(paidText).not.toContain("佣金")
-  })
-
-  it("LIFETIME_BENEFITS 只有 lifetime gate，不含任何 promoter gate", () => {
-    expect(LIFETIME_BENEFITS.length).toBeGreaterThan(0)
-    for (const b of LIFETIME_BENEFITS) {
-      expect(b.gate.kind).toBe("lifetime")
-    }
-  })
-
-  it("PROMOTER_BENEFITS 全部是 promoter gate（免费权益，与套餐无关）", () => {
-    expect(PROMOTER_BENEFITS.length).toBeGreaterThan(0)
-    for (const b of PROMOTER_BENEFITS) {
-      expect(b.gate.kind).toBe("promoter")
-    }
+describe("合规结构：越线后仍不可破的红线", () => {
+  it("佣金口径写的是「按实际成交金额」，不是按人数", () => {
+    // 计酬依据是销售额而非人头数 —— 2013 年两高一部《意见》第 5 条划的线。
+    const first = PROMOTER_BENEFITS.find((b) => b.id === "promoter-commission-first")
+    const renew = PROMOTER_BENEFITS.find((b) => b.id === "promoter-commission-renew")
+    expect(first?.claim).toContain("实际成交金额")
+    expect(renew?.claim).toContain("实际成交金额")
   })
 
   it("提现口径是「全额」而不是「¥50 起」（后者与 partner/withdraw 不符）", () => {
@@ -274,16 +270,44 @@ describe("合规结构：推广权益必须与付费档彻底分离", () => {
     expect(withdraw?.claim).not.toContain("¥50")
   })
 
-  it("佣金口径写的是「按实际成交金额」，不是按人数", () => {
-    // 计酬依据是销售额而非人头数，这是 2013 年两高一部《意见》第 5 条划的线。
-    const first = PROMOTER_BENEFITS.find((b) => b.id === "promoter-commission-first")
-    expect(first?.claim).toContain("实际成交金额")
+  it("全站口径不得出现多级分销 / 团队计酬 / 拉人头 / 躺赚类表述", () => {
+    const all = [
+      COMPARISON_NOTE,
+      ...COMPARISON_ROWS.map((r) => r.feature),
+      ...PROMOTER_BENEFITS.map((b) => `${b.label} ${b.claim}`),
+      ...LIFETIME_BENEFITS.map((b) => `${b.label} ${b.claim}`),
+      ...PRO_BENEFITS.map((b) => `${b.label} ${b.claim}`),
+    ].join(" ")
+    for (const word of ["下级", "多级", "层级", "团队计酬", "拉人头", "躺赚", "零风险", "月入过万"]) {
+      expect(all).not.toContain(word)
+    }
   })
 
-  it("对比表下方的说明必须点明「推广与付费档无关」", () => {
-    expect(COMPARISON_NOTE).toContain("免费")
+  it("COMPARISON_NOTE 必须点明「推广为合伙人版专属」，且不得承诺收益", () => {
+    expect(COMPARISON_NOTE).toContain("合伙人版")
     expect(COMPARISON_NOTE).toContain("推广")
-    expect(COMPARISON_NOTE).not.toContain("合伙人会员额外获得推广权益")
+    // 2026-10-10 起推广不再免费，说明里不得再出现「免费」。
+    expect(COMPARISON_NOTE).not.toContain("免费")
+  })
+
+  it("PROMOTER_BENEFITS 全部是 promoter gate（现为合伙人版专属权益）", () => {
+    expect(PROMOTER_BENEFITS.length).toBeGreaterThan(0)
+    for (const b of PROMOTER_BENEFITS) {
+      expect(b.gate.kind).toBe("promoter")
+    }
+  })
+
+  it("LIFETIME_BENEFITS 只有 lifetime gate（学习权益，与推广权益分列表述）", () => {
+    expect(LIFETIME_BENEFITS.length).toBeGreaterThan(0)
+    for (const b of LIFETIME_BENEFITS) {
+      expect(b.gate.kind).toBe("lifetime")
+    }
+  })
+
+  it("越线必须留痕：事实源里要引用风险文档", () => {
+    const src = read("src/lib/membership-benefits.ts")
+    expect(src).toContain("membership-alignment-risk-2026-10")
+    expect(src).toContain("未经律师复核")
   })
 })
 

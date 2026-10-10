@@ -49,7 +49,7 @@ const TIER_LABEL: Record<MemberTier, string> = {
   monthly: "月度会员",
   quarterly: "季度会员",
   yearly:  "年度会员",
-  partner: "终身会员",
+  partner: "合伙人版",
   free:    "普通用户",
 }
 

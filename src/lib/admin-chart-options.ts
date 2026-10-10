@@ -8,6 +8,17 @@
  *
  * 所有构造器都必须能接受**空数组**并返回一个合法 option：埋点库刚上线时
  * 每个事件都是 0 条，图表不能白屏或抛错 —— "没有数据"本身就是要展示的信息。
+ *
+ * ── grid 为什么写 outerBoundsMode 而不是 containLabel ──────────────────────
+ * 项目用的是 ECharts 6（`echarts@^6.1.0`）。6 起 `grid.containLabel` 已废弃，
+ * 且**默认不再生效**：不显式 `echarts.use(LegacyGridContainLabel)` 的话，
+ * 控制台会报 "Specified `grid.containLabel` but no `use(LegacyGridContainLabel`)"，
+ * 轴标签也不再被收进容器内（长标签会被裁掉）。
+ * 官方等价新写法（`node_modules/echarts/types/dist/echarts.d.ts:2958`）：
+ *   `containLabel: true` ≡ { outerBoundsMode: "same", outerBoundsContain: "axisLabel" }
+ * 本文件的 6 个构造器已全部迁移，勿再写回 containLabel。
+ * 同理，管理后台的 `src/components/admin/EChart.tsx` **没有**注册 legacy 包，
+ * 所以这些 option 必须用新 API 才有效。
  */
 
 import type { EChartsCoreOption } from "echarts/core"
@@ -50,7 +61,7 @@ export function trendOption(
       // 图例用中文名：event_type 原文（trial_claimed）对运营不可读
       data: series.map(eventLabel),
     },
-    grid: { left: 8, right: 16, bottom: 8, top: 40, containLabel: true },
+    grid: { left: 8, right: 16, bottom: 8, top: 40, outerBoundsMode: "same", outerBoundsContain: "axisLabel" },
     xAxis: {
       type: "category",
       boundaryGap: false,
@@ -102,7 +113,7 @@ export function eventRankOption(rows: EventRankRow[]): EChartsCoreOption {
     color: [PALETTE[0], PALETTE[1]],
     tooltip: { trigger: "axis", axisPointer: { type: "shadow" } },
     legend: { top: 0 },
-    grid: { left: 8, right: 48, bottom: 8, top: 36, containLabel: true },
+    grid: { left: 8, right: 48, bottom: 8, top: 36, outerBoundsMode: "same", outerBoundsContain: "axisLabel" },
     xAxis: { type: "value", minInterval: 1 },
     yAxis: {
       type: "category",
@@ -148,7 +159,7 @@ export function multiLineOption(
     color: PALETTE,
     tooltip: { trigger: "axis" },
     legend: { type: "scroll", top: 0, data: series.map((s) => s.label) },
-    grid: { left: 8, right: 16, bottom: 8, top: 40, containLabel: true },
+    grid: { left: 8, right: 16, bottom: 8, top: 40, outerBoundsMode: "same", outerBoundsContain: "axisLabel" },
     xAxis: {
       type: "category",
       boundaryGap: false,
@@ -184,7 +195,7 @@ export function pageRankOption(rows: PageRankRow[]): EChartsCoreOption {
   return {
     color: [PALETTE[4]],
     tooltip: { trigger: "axis", axisPointer: { type: "shadow" } },
-    grid: { left: 8, right: 48, bottom: 8, top: 16, containLabel: true },
+    grid: { left: 8, right: 48, bottom: 8, top: 16, outerBoundsMode: "same", outerBoundsContain: "axisLabel" },
     xAxis: { type: "value", minInterval: 1 },
     yAxis: { type: "category", data: ordered.map((r) => r.page) },
     series: [
@@ -217,7 +228,7 @@ export function hourlyOption(rows: HourlyRow[]): EChartsCoreOption {
   return {
     color: [PALETTE[2]],
     tooltip: { trigger: "axis", axisPointer: { type: "shadow" } },
-    grid: { left: 8, right: 16, bottom: 8, top: 16, containLabel: true },
+    grid: { left: 8, right: 16, bottom: 8, top: 16, outerBoundsMode: "same", outerBoundsContain: "axisLabel" },
     xAxis: {
       type: "category",
       data: hours.map((h) => `${String(h).padStart(2, "0")}:00`),
@@ -253,7 +264,7 @@ export function funnelRateOption(
         return `${s.label}<br/>人数：${s.value}<br/>较上一步：${rate}`
       },
     },
-    grid: { left: 8, right: 48, bottom: 8, top: 16, containLabel: true },
+    grid: { left: 8, right: 48, bottom: 8, top: 16, outerBoundsMode: "same", outerBoundsContain: "axisLabel" },
     xAxis: { type: "value", minInterval: 1 },
     yAxis: { type: "category", data: ordered.map((s) => s.label) },
     series: [

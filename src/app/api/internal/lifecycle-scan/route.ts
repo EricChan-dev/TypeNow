@@ -128,7 +128,7 @@ const TIER_LABELS: Record<LifecycleTier, string> = {
   monthly: "月度会员",
   quarterly: "季度会员",
   yearly: "年度会员",
-  partner: "终身会员",
+  partner: "合伙人版",
 }
 
 /** 发一条，并把结果计入统计。任何异常都只记录、不抛出。 */
