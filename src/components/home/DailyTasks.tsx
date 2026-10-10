@@ -117,31 +117,31 @@ export function DailyTasks({
   const body = loadError ? (
     <p className="text-xs text-red-400/60 text-center py-4">任务加载失败</p>
   ) : !status ? (
-    <div className="grid grid-cols-3 gap-3">
+    <div className="grid grid-cols-3 gap-2">
       {[1, 2, 3].map((i) => (
-        <div key={i} className="flex flex-col items-center gap-2 rounded-xl p-3 animate-pulse">
-          <div className="w-8 h-8 rounded-lg bg-foreground/[0.06]" />
-          <div className="w-full space-y-1.5">
-            <div className="h-3 bg-foreground/[0.06] rounded w-2/3 mx-auto" />
-            <div className="h-2 bg-foreground/[0.04] rounded w-1/2 mx-auto" />
+        <div key={i} className="flex items-center gap-2 rounded-xl p-2.5 animate-pulse">
+          <div className="w-8 h-8 rounded-lg bg-foreground/[0.06] shrink-0" />
+          <div className="flex-1 space-y-1.5 min-w-0">
+            <div className="h-3 bg-foreground/[0.06] rounded w-2/3" />
+            <div className="h-2 bg-foreground/[0.04] rounded w-1/3" />
           </div>
         </div>
       ))}
     </div>
   ) : (
-    <div className="grid grid-cols-3 gap-3">
+    <div className="grid grid-cols-3 gap-2">
       {tasks.map(({ key, icon: Icon, color, bgColor, label, reward, done, action }) => (
         <div
           key={key}
           className={cn(
-            "flex flex-col items-center text-center gap-2 rounded-xl p-3 min-w-0",
+            "flex items-center gap-2 rounded-xl p-2.5 min-w-0",
             done ? "bg-emerald-500/[0.04]" : "bg-foreground/[0.02]"
           )}
         >
           <div className={cn("flex items-center justify-center w-8 h-8 rounded-lg shrink-0", bgColor)}>
             <Icon className={cn("h-4 w-4", color)} />
           </div>
-          <div className="min-w-0 w-full">
+          <div className="flex-1 min-w-0">
             <p className="text-sm font-medium text-foreground truncate">{label}</p>
             <p className="text-xs text-muted-foreground mt-0.5 leading-tight">{reward}</p>
           </div>
@@ -152,7 +152,7 @@ export function DailyTasks({
               <button
                 onClick={action}
                 disabled={sharing}
-                className="flex items-center justify-center gap-1 px-3 py-1.5 rounded-lg text-xs font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-50"
+                className="shrink-0 flex items-center justify-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-50"
                 style={{ background: "linear-gradient(135deg, #3b82f6, #6366f1)" }}
               >
                 {sharing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : "去分享"}
