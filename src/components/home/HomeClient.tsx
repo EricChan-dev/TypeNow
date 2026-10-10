@@ -85,10 +85,6 @@ interface MeData {
   role: string
 }
 
-interface HomeClientProps {
-  name: string
-}
-
 /** 一千小时 = 首页「千小时进度」的目标常量。 */
 const THOUSAND_HOURS = 1000
 
@@ -644,8 +640,9 @@ function FollowOABanner() {
 
 // ─── Main Component ───────────────────────────────────────────────────────────
 
-export function HomeClient({ name }: HomeClientProps) {
-  const [activeTab, setActiveTab] = useState<"today" | "archive">("today")
+export function HomeClient() {
+  // 顶部切换栏已移除，activeTab 恒为 "today"：档案面板保留挂载但暂时没有入口。
+  const [activeTab] = useState<"today" | "archive">("today")
   const [stats, setStats] = useState<StatsData | null>(null)
   const [me, setMe] = useState<MeData | null>(null)
   const [loading, setLoading] = useState(true)
@@ -808,12 +805,6 @@ export function HomeClient({ name }: HomeClientProps) {
     }
   }, [claimingTrial, fetchMe])
 
-  const greeting = useMemo(() => {
-    const h = new Date().getHours()
-    const greetings = ["早上好", "上午好", "下午好", "晚上好"]
-    return h < 9 ? greetings[0] : h < 12 ? greetings[1] : h < 18 ? greetings[2] : greetings[3]
-  }, [])
-
   if (loading) {
     return (
       <div className="flex items-center justify-center h-full">
@@ -842,31 +833,8 @@ export function HomeClient({ name }: HomeClientProps) {
     <div ref={pageRef} className="h-full overflow-y-auto scrollbar-none">
       <div className="home-ref" style={{ padding: "0 0 8px" }}>
 
-        {/* ── Tab switcher + greeting（我方保留：档案 tab 是站内独有的功能）── */}
-        <div className="flex items-center justify-between mb-4">
-          <div className="flex items-center gap-1 rounded-xl p-1" style={{ background: "var(--surface)", border: "1px solid var(--surface-border)" }}>
-            {(["today", "archive"] as const).map((tab) => (
-              <button
-                key={tab}
-                onClick={() => setActiveTab(tab)}
-                className={cn(
-                  "px-4 py-1.5 rounded-lg text-sm font-semibold transition-all duration-200",
-                  activeTab === tab
-                    ? "bg-accent text-primary-foreground shadow-sm"
-                    : "text-muted-foreground hover:text-foreground"
-                )}
-              >
-                {tab === "today" ? "今日" : "档案"}
-              </button>
-            ))}
-          </div>
-          {activeTab === "today" && (
-            <span className="hidden sm:inline text-sm font-medium text-foreground/60">
-              {greeting}，<span className="font-bold text-foreground/80">{me?.name || name || "同学"}</span>
-            </span>
-          )}
-        </div>
-
+        {/* 顶部那栏（今日/档案切换 + 问候语）已按用户要求整栏去掉。
+            档案面板暂时没有入口，但按用户选择保留挂载（见文件末尾）。 */}
         <div className={cn(activeTab === "today" ? "block" : "hidden")}>
 
           {/* ── Error banner ── */}
