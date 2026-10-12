@@ -107,6 +107,25 @@ import { TRIAL_DAYS } from "@/lib/trial-days"
 import type { TrialInfo } from "@/lib/free-trial"
 
 /**
+ * 音效调用一律包一层守卫 —— 与参考站逐处对齐：那边 17 个调用点（practice.js
+ * 3285/3303/3317/3333/… ）全都写成
+ *   `if (typeof playTypingSound === 'function') playTypingSound();`
+ *
+ * 不要把这层守卫当「可有可无的防御」删掉。音频模块是**独立 chunk**，dev 下
+ * Turbopack 内存触顶会自动重启（日志：`Server is approaching the used memory
+ * threshold, restarting`），此时浏览器缓存里那份 sfx chunk 与新的模块图对不上，
+ * 导出对象上根本没有 playTyping。裸调用会抛 `TypeError: ...playTyping is not a
+ * function`，把它**下面那行真正干活的语句**一起带走：
+ *   · `:832` 抛错 → 字符虽已入槽但后续逻辑中断；
+ *   · `:888` 抛错 → `focusSlot(index, 1)` 永不执行 → **空格/右箭头无法跳到下一词**。
+ * 用户看到的就是「打字报错 + 空格不能切词」两个症状，其实是同一个异常。
+ * 加守卫后音效失效只会静音，输入路径不受影响。
+ */
+const sfxTyping = () => { const f = playTyping; if (typeof f === "function") f() }
+const sfxError = () => { const f = playError; if (typeof f === "function") f() }
+const sfxChime = () => { const f = playChime; if (typeof f === "function") f() }
+
+/**
  * 听写模式（键盘打字）—— 逐字对齐句游英语参考站。
  *
  * 为什么另起一个组件而不是改 LearnClient：参考站的听写界面与旧版练习页在
@@ -829,7 +848,7 @@ export function DictationPractice({
         const next = el.value + e.key
         kdValueRef.current.set(index, next)
         setSlotValue(index, next)
-        playTyping()
+        sfxTyping()
         // 用户一改动就清掉错误标记（参考站同）
         if (slot.wasIncorrect) {
           setSlots((prev) => {
@@ -855,9 +874,9 @@ export function DictationPractice({
           const next = el.value.slice(0, -1)
           kdValueRef.current.set(index, next)
           setSlotValue(index, next)
-          playTyping()
+          sfxTyping()
         } else {
-          playTyping()
+          sfxTyping()
           focusSlot(index, -1)
         }
         return
@@ -867,7 +886,7 @@ export function DictationPractice({
         e.preventDefault()
         kdValueRef.current.set(index, "")
         setSlotValue(index, "")
-        playTyping()
+        sfxTyping()
         return
       }
 
@@ -885,14 +904,14 @@ export function DictationPractice({
       // 分段练习同样如此（参考站 practice.js:3331 空格/右箭头/Tab 都跳下一格）
       if (e.key === " " || e.key === "ArrowRight") {
         e.preventDefault()
-        playTyping()
+        sfxTyping()
         focusSlot(index, 1)
         return
       }
 
       if (e.key === "ArrowLeft") {
         e.preventDefault()
-        playTyping()
+        sfxTyping()
         focusSlot(index, -1)
         return
       }
@@ -907,7 +926,7 @@ export function DictationPractice({
       if (e.key === "Tab") {
         if (el.id.startsWith("fragment-word-")) {
           e.preventDefault()
-          playTyping()
+          sfxTyping()
           focusSlot(index, 1)
         }
         return
@@ -979,7 +998,7 @@ export function DictationPractice({
       setResultMessage("")
 
       if (allCorrect) {
-        playChime()
+        sfxChime()
         const parentId = baseSentenceId(sentence?.id ?? "")
         setCompleted((prev) => new Set(prev).add(currentIndexRef.current))
         // 上报进度（fire-and-forget），与旧版走同一个接口
@@ -1000,7 +1019,7 @@ export function DictationPractice({
         setStatus("review")
         await playReviewAudio()
       } else {
-        playError()
+        sfxError()
         sentenceMistakesRef.current += 1
         // 抖动/RED 高亮不在这里做：`.word-input.incorrect` 自带
         // `animation: shake 0.4s ease`，而槽位上的 `wasIncorrect` 已经在渲染时
@@ -1087,7 +1106,7 @@ export function DictationPractice({
       if (document.activeElement instanceof HTMLInputElement) document.activeElement.blur()
 
       if (allCorrect) {
-        playChime()
+        sfxChime()
         fragmentMistakesRef.current = 0
         // 参考站 `setTimeout(nextFragment, 800)`：给用户看「全绿」的那一下
         window.setTimeout(() => {
@@ -1100,7 +1119,7 @@ export function DictationPractice({
           }
         }, 800)
       } else {
-        playError()
+        sfxError()
         fragmentMistakesRef.current += 1
         setFragmentResult("error")
         if (firstWrongIndex >= 0) {
@@ -1309,7 +1328,7 @@ export function DictationPractice({
         // 参考站 `triggerSuccessEffects()` + `playSuccessSound()`。彩蛋开关
         // （`confetti_effect`）在我们的实现里由 `playChime` 自己读取，
         // 与听写模式答对走同一条路径 —— 两个模式的音效口径必须一致。
-        playChime()
+        sfxChime()
       }
       if (score >= 70) markSpeakingComplete()
     },
@@ -1476,7 +1495,7 @@ export function DictationPractice({
       // 而 React 复用的是同一个节点、类名来自 state。
       setResultMessage("")
       if (correct) {
-        playChime()
+        sfxChime()
         const idx = currentIndexRef.current
         const total = sentencesRef.current.length
         setCompleted((prev) => new Set(prev).add(idx))
@@ -1505,7 +1524,7 @@ export function DictationPractice({
         setStatus("review")
         void playReviewAudio()
       } else {
-        playError()
+        sfxError()
         sentenceMistakesRef.current += 1
         // 参考站拼图答错只做三件事：错误音、本句错误计数、结果条置 error。
         // `.shake-animation` 由拼图组件自己加在 `#puzzleAnswerArea` 上
