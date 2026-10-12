@@ -13,6 +13,7 @@
  * 刻意**不在**这里做数据清洗：库里存的是 UD 标准标签，标准标签有其价值
  * （将来接语法分析、做错题归类都靠它）。翻译只发生在展示层。
  */
+import { WORD_SENTINEL } from "@/lib/word-align"
 
 /**
  * UD 标签 → 中文。键统一大写，查表前把输入大写化 ——
@@ -88,10 +89,17 @@ const POS_LABELS: Record<string, string> = {
  * 未知标签**原样返回**而不是显示"未知"：UD 标签本身是标准化的、有信息量的，
  * 遇到没登记的新标签时露出原文比一律糊成"未知"更有助于发现问题。
  * 空值返回空串（调用方据此决定要不要渲染这块）。
+ *
+ * 例外是 `词`：它是 `word-align.ts` 给「是词但词性未知」打的**内部哨兵**，
+ * 不是词性。`alignWordsWithEnglish` 用它把 token 分成「可输入的词」和
+ * 「不可输入的标点」，而 `expandSentences` 会把这份 words 原样交给
+ * `CompletedSentence`，于是哨兵会渲染成一个孤零零的「词」字。
+ * 生产库里只存过 `标点`（41,278 行），`词` 纯属我们的内部约定，必须消化掉。
  */
 export function posLabel(pos: string | null | undefined): string {
   if (!pos) return ""
   const raw = String(pos).trim()
   if (!raw) return ""
+  if (raw === WORD_SENTINEL) return ""
   return POS_LABELS[raw.toUpperCase()] ?? POS_LABELS[raw] ?? raw
 }

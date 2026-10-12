@@ -61,6 +61,14 @@ describe("posLabel：健壮性", () => {
     expect(posLabel("标点")).toBe("标点")
   })
 
+  it("内部哨兵 `词` 不能漏进界面", () => {
+    // word-align.ts 用 `词` 表示「是词但词性未知」——它不是词性，是
+    // alignWordsWithEnglish 区分「可输入的词 / 不可输入的标点」用的内部标记。
+    // expandSentences 会把这份 words 交给 CompletedSentence，若原样露出，
+    // 用户会在词卡下方看到一个孤零零的「词」字。
+    expect(posLabel("词")).toBe("")
+  })
+
   it("空白返回空串（调用方据此决定要不要渲染这一块）", () => {
     expect(posLabel("")).toBe("")
     expect(posLabel("   ")).toBe("")

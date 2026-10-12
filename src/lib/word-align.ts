@@ -10,12 +10,24 @@ import { isTypingMatch, tokenizeEnglish } from "@/lib/typing-compare"
  */
 const WORD_RE = /^(?=.*[a-zA-Z\d])[a-zA-Z\d'-]+$/
 
+/**
+ * `pos` 字段在这条链路上是**三态**的，两个哨兵值必须与真实词性区分开：
+ *   · 真实词性 —— UD 标签（`NOUN`/`VERB`/…）或中文（`名词`/`动词`/…）
+ *   · `标点`   —— 不可输入的符号位，练习页据此不生成输入格
+ *   · `词`     —— **是词但词性未知**，为了不误判成标点而必须占一个非空值
+ *
+ * 生产库里只存在 `标点`（41,278 行）和 `""`（2,185 行），`词` 纯属我们的内部
+ * 约定。因此 `词` 绝不能进 UI —— 展示层要用 `posLabel()` 把它翻成空串。
+ */
+export const WORD_SENTINEL = "词"
+export const PUNCT_SENTINEL = "标点"
+
 function plainWord(token: string): Word {
   return {
     english: token,
     chinese: null,
     phonetic: null,
-    pos: WORD_RE.test(token) ? "词" : "标点",
+    pos: WORD_RE.test(token) ? WORD_SENTINEL : PUNCT_SENTINEL,
   }
 }
 
