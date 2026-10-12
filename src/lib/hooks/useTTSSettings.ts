@@ -305,10 +305,18 @@ function speakWithBrowser(
  * 而且没有任何提示** —— 用户只会觉得「这软件发音时好时坏」。
  *
  * 现在如实返回 false，由调用方决定怎么交代（练习页给一个「点一下开启发音」的按钮）。
+ *
+ * `overrides.count` 是**连播次数**，对应参考站 `playTTS(text, autoPlay, overrideCount)`
+ * 的第三参（tts.js:824-846）。口径与参考站逐字对齐：
+ *   · 不传 ⇒ 1 次（词发音、设置页试听、回顾屏朗读都是这个口径）；
+ *   · 0 ⇒ **一声不响**，即「自动播放次数 = 手动」那一档 —— 参考站此时
+ *     `playbackCount` 就是 0，`for` 循环体一次都不进；
+ *   · N>1 ⇒ 连播 N 次，每次等上一遍**播完**再停 600ms（tts.js:841）。
+ * 手动点播放按钮时调用方要把 0 换成 1（参考站 `manualCount`，practice.js:1926）。
  */
 export async function globalSpeak(
   text: string,
-  overrides?: { voice?: string; youdaoVoice?: string; source?: TTSSource },
+  overrides?: { voice?: string; youdaoVoice?: string; source?: TTSSource; count?: number },
 ): Promise<boolean> {
   if (typeof window === "undefined" || !text) return false
   const mySeq = ++speakSeq
@@ -317,15 +325,51 @@ export async function globalSpeak(
   const youdaoVoice = overrides?.youdaoVoice ?? s.youdaoVoice
   // 设置页试听要能试听「非当前来源」的发音人，所以 source 也允许覆盖。
   const source = overrides?.source ?? s.source
+  // 未传按 1 次；0 是「手动档」的合法值，不能被 ?? 或 || 吞掉。
+  const rawCount = overrides?.count
+  const count =
+    rawCount === undefined || !Number.isFinite(rawCount) ? 1 : Math.max(0, Math.floor(rawCount))
+  // 手动档：本次不发声。序号已经在上面自增，正在途中的朗读会因 `mySeq !== speakSeq`
+  // 自行放弃，所以不会「设成手动了却还在念上一句」。
+  if (count === 0) return false
   // 停掉上一段 + 浏览器路径都带上本次序号
   const browserFallback = () =>
     speakWithBrowser(text, { voice, rate: s.rate, volume: s.volume }, mySeq)
 
+  /**
+   * 连播时的遍间等待：先等上一遍播完，再停 600ms（参考站 tts.js:841）。
+   * 返回 false 表示期间有更新的朗读把它顶掉了，循环应立即退出。
+   *
+   * **失效令牌不能用最初的 `mySeq`**：循环里每一遍都要先 `stopSpeaking()`
+   * （见下面那段注释），而 `stopSpeaking()` 自己就会 `speakSeq++` —— 它推进
+   * 序号是为了作废"还在路上的 fetch"，不是宣告"有新的朗读"。拿最初的 mySeq 去
+   * 比对的话，我们自己每停一次就把自己判成"已被顶掉"，循环第一遍之后必然退出，
+   * `count` 形同虚设（这正是「自动播放次数」曾经是死开关的根因）。
+   *
+   * 所以令牌是**可认领的**：每遍 `stopSpeaking()` 之后立刻把它认领成当前
+   * `speakSeq`（那次推进算我们自己的），此后只有**别人**再推进才表示被顶掉。
+   */
+  let token = mySeq
+  const superseded = () => speakSeq > token
+
+  const gapBefore = async (i: number): Promise<boolean> => {
+    if (i === 0) return true
+    await waitForSpeechEnd()
+    if (superseded()) return false
+    await new Promise((r) => window.setTimeout(r, 600))
+    return !superseded()
+  }
+
   if (source === "browser") {
-    browserFallback()
+    let playedAny = false
+    for (let i = 0; i < count; i++) {
+      if (!(await gapBefore(i))) return false
+      browserFallback()
+      playedAny = true
+    }
     // speechSynthesis 不出声时不会抛错也不会给事件，没有可靠的探测手段。
     // 谎报 false 会让所有系统语音用户都看到一个多余的按钮，所以按「成功」处理。
-    return true
+    return playedAny
   }
 
   try {
@@ -344,55 +388,67 @@ export async function globalSpeak(
     // 期间又有人要念别的内容：这次丢弃。不加这道判断，先发后到的请求会把
     // 后发的那一句盖掉（进练习页会先后触发两次朗读，见 LearnClient）
     if (mySeq !== speakSeq) return false
-    /**
-     * **就在播放前**停掉上一段。
-     *
-     * 这一行原先在函数开头（fetch 之前），那是错的：两次并发调用会各自
-     * "先停、再取"，取回音频的先后顺序不确定 —— 先发的那次若后取回，
-     * 它会在没人停它的状态下直接 play，于是两段音频同时出声
-     * （用户报的"同时发音 greeting 和 good"就是它）。
-     * 只有紧挨着 play 之前停，才能保证同一时刻只有一段在响。
-     */
-    stopSpeaking()
-    // stopSpeaking() 刚把上一段的等待方叫醒，这里紧接着为本次播放建新的
-    // deferred —— 顺序不能反，否则会把自己这次的等待方立刻放走。
-    beginPlayback()
-    const audio = new Audio(URL.createObjectURL(blob))
-    currentAudio = audio
-    // 收尾必须带 `currentAudio === audio` 的判断：期间可能有更新的朗读把
-    // currentAudio 换成别的音频，那时这次的回调不该去改全局状态。
-    // 只有**仍然是当前这段**时才收尾并叫醒等待方：被更新的朗读顶掉时，
-    // `stopSpeaking()` 已经叫醒过等待方了；这里若无条件叫醒，会把*新*那段
-    // 的等待方提前放走（旧音频的 ended 总是晚于新朗读的开始）。
-    const settle = () => {
-      if (currentAudio === audio) {
-        currentAudio = null
-        setSpeaking(false)
-        resolveEnd()
+
+    let playedAny = false
+    // 音频只取一次，之后复用同一个 blob —— 参考站也是先 `audioSourceData`
+    // 取好再在循环里反复 `playSingleAudio`（tts.js:838-845），不重复请求接口。
+    for (let i = 0; i < count; i++) {
+      if (!(await gapBefore(i))) return playedAny
+      /**
+       * **就在播放前**停掉上一段。
+       *
+       * 这一行原先在函数开头（fetch 之前），那是错的：两次并发调用会各自
+       * "先停、再取"，取回音频的先后顺序不确定 —— 先发的那次若后取回，
+       * 它会在没人停它的状态下直接 play，于是两段音频同时出声
+       * （用户报的"同时发音 greeting 和 good"就是它）。
+       * 只有紧挨着 play 之前停，才能保证同一时刻只有一段在响。
+       */
+      stopSpeaking()
+      // 认领令牌：这次 `speakSeq++` 是我们自己停上一遍造成的，不算"被顶掉"。
+      token = speakSeq
+      // stopSpeaking() 刚把上一段的等待方叫醒，这里紧接着为本次播放建新的
+      // deferred —— 顺序不能反，否则会把自己这次的等待方立刻放走。
+      beginPlayback()
+      const audio = new Audio(URL.createObjectURL(blob))
+      currentAudio = audio
+      // 收尾必须带 `currentAudio === audio` 的判断：期间可能有更新的朗读把
+      // currentAudio 换成别的音频，那时这次的回调不该去改全局状态。
+      // 只有**仍然是当前这段**时才收尾并叫醒等待方：被更新的朗读顶掉时，
+      // `stopSpeaking()` 已经叫醒过等待方了；这里若无条件叫醒，会把*新*那段
+      // 的等待方提前放走（旧音频的 ended 总是晚于新朗读的开始）。
+      const settle = () => {
+        if (currentAudio === audio) {
+          currentAudio = null
+          setSpeaking(false)
+          resolveEnd()
+        }
+      }
+      audio.onended = () => {
+        URL.revokeObjectURL(audio.src)
+        settle()
+      }
+      audio.onerror = () => {
+        settle()
+      }
+      try {
+        await audio.play()
+        // play() 在**开始播放**时即 resolve，所以这里标记"在响"，
+        // 由 onended 负责收尾 —— 这正是「停止」按钮能用的前提。
+        if (currentAudio === audio) setSpeaking(true)
+        playedAny = true
+      } catch {
+        // 自动播放被拦。这**不是**「有道不可用」，所以不能顺手降级成系统语音 ——
+        // 系统语音被同一条策略管着，一样发不出声，降级只会让失败更难被看见。
+        if (currentAudio === audio) {
+          currentAudio = null
+          setSpeaking(false)
+        }
+        // 第一遍就播不出来 ⇒ 整次朗读失败，如实回报给调用方去提示用户；
+        // 连播途中才失败 ⇒ 前面已经响过，按成功处理，别让按钮又亮一次。
+        return playedAny
       }
     }
-    audio.onended = () => {
-      URL.revokeObjectURL(audio.src)
-      settle()
-    }
-    audio.onerror = () => {
-      settle()
-    }
-    try {
-      await audio.play()
-      // play() 在**开始播放**时即 resolve，所以这里标记"在响"，
-      // 由 onended 负责收尾 —— 这正是「停止」按钮能用的前提。
-      if (currentAudio === audio) setSpeaking(true)
-      return true
-    } catch {
-      // 自动播放被拦。这**不是**「有道不可用」，所以不能顺手降级成系统语音 ——
-      // 系统语音被同一条策略管着，一样发不出声，降级只会让失败更难被看见。
-      if (currentAudio === audio) {
-        currentAudio = null
-        setSpeaking(false)
-      }
-      return false
-    }
+    return playedAny
   } catch (err) {
     // 有道不可用（未配密钥 / 配额用尽 / 超时）时静默无声是最糟的结果：
     // 打字应用宁可退回系统语音，也要让用户听到发音。降级必须留下痕迹。

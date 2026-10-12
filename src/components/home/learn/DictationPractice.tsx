@@ -377,6 +377,22 @@ export function DictationPractice({
   const pausedRef = useRef(false)
   const autoNextRef = useRef(false)
   const successPlayRef = useRef(DEFAULT_SUCCESS_PLAY)
+  /**
+   * 「自动播放次数」的同步镜像。
+   *
+   * 自动朗读发生在 `globalSpeak` 的 `setTimeout` 回调、快捷键监听器和底栏
+   * `onClick` 里，这些地方要么绑在首渲染闭包上、要么不依赖 `loopCount`，
+   * 所以一律读这个 ref 而不是 state。
+   */
+  const loopCountRef = useRef(1)
+  /**
+   * 手动播放按钮 / 播放快捷键要用的次数。
+   *
+   * 参考站 practice.js:1925 是 `const manualCount = ttsPlaybackCount === 0 ? 1 : null;`
+   * —— 手动档（0）补成 1 次保证一定出声，其余档沿用设定次数。
+   * 从 `loopCountRef` 直接推比再存一个 ref 稳妥：少一处渲染期写入。
+   */
+  const manualPlayCount = () => (loopCountRef.current === 0 ? 1 : loopCountRef.current)
   const revealRef = useRef(3)
   const showChineseRef = useRef(true)
   const trackedCompleteRef = useRef(false)
@@ -430,6 +446,7 @@ export function DictationPractice({
   pausedRef.current = paused
   autoNextRef.current = autoNext
   successPlayRef.current = successPlayCount
+  loopCountRef.current = loopCount
   revealRef.current = revealThreshold
   showChineseRef.current = showChinese
   timerRef.current = timer
@@ -785,10 +802,12 @@ export function DictationPractice({
     setStatus("input")
     setShowHint(false)
     setFragmentResult("")
-    // 进入本回合后自动朗读原音（参考站行为）：分段读片段，整句读整句
+    // 进入本回合后自动朗读原音（参考站行为）：分段读片段，整句读整句。
+    // 次数取「自动播放次数」——0 表示手动档，此时**不自动出声**
+    // （参考站 tts.js:828 `playbackCount = ttsPlaybackCount`，0 时循环不执行）。
     const text = inFragmentPractice ? currentFragment?.text : sentence.english
     if (text) {
-      window.setTimeout(() => { void globalSpeak(text) }, 60)
+      window.setTimeout(() => { void globalSpeak(text, { count: loopCountRef.current }) }, 60)
     }
     /*
       依赖里必须有 `inFragmentPractice`：**同一句话**上开关/跳过会切换词表
@@ -1156,7 +1175,11 @@ export function DictationPractice({
       if (i > 0) await new Promise((r) => window.setTimeout(r, 1000))
       if (epoch !== reviewEpochRef.current) return
       const started = Date.now()
-      await globalSpeak(text)
+      // 这层循环自己负责「答对后播几次」（`successPlayCount`，参考站
+      // practice.js:4945），所以每次只让它念 1 遍 —— 参考站这里显式传
+      // `overrideCount = 1`（practice.js:4961）。传 `loopCount` 会让两个
+      // 计数相乘，是错的。
+      await globalSpeak(text, { count: 1 })
       // 每次播放至少停留 1.5s，防 TTS 静默失败时瞬间跳走
       const elapsed = Date.now() - started
       if (elapsed < 1500) await new Promise((r) => window.setTimeout(r, 1500 - elapsed))
@@ -1751,7 +1774,9 @@ export function DictationPractice({
       if (matchShortcut(e, "play", shortcuts)) {
         e.preventDefault()
         const s = sentencesRef.current[currentIndexRef.current]
-        if (s?.english) void globalSpeak(s.english)
+        // 手动播放：参考站 `manualCount = ttsPlaybackCount === 0 ? 1 : null`
+        // （practice.js:1925）—— 手动档也要响一次，其余档沿用设定的次数。
+        if (s?.english) void globalSpeak(s.english, { count: manualPlayCount() })
         return
       }
       if (matchShortcut(e, "favorite", shortcuts)) {
@@ -2871,7 +2896,7 @@ export function DictationPractice({
                   type="button"
                   id="ttsBtn"
                   className="dock-btn btn-main"
-                  onClick={() => { if (sentence?.english) void globalSpeak(sentence.english) }}
+                  onClick={() => { if (sentence?.english) void globalSpeak(sentence.english, { count: manualPlayCount() }) }}
                 >
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                     <path d="M11 5L6 9H2v6h4l5 4z" />
