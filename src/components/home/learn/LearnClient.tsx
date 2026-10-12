@@ -19,42 +19,14 @@ import {
   subscribeDesktopNotice,
 } from "@/lib/desktop-only"
 
-import { alignWordsWithEnglish } from "@/lib/word-align"
 import { BRAND } from "@/lib/brand"
 import { sentenceCoinReward } from "@/lib/coins"
 import { Voiceprint } from "@/components/home/learn/Voiceprint"
-
-// Flatten DB sentences: if a sentence has chunks, emit one Sentence per chunk
-function expandSentences(raw: Sentence[]): Sentence[] {
-  return raw.flatMap((s) => {
-    if (!s.chunks || s.chunks.length === 0) {
-      // words 以 english 的分词为骨架重建：导入的 words 普遍缺标点，
-      // 直接用会让练习页那行的标点与翻译对不上。
-      const normalized: Sentence = { ...s, words: alignWordsWithEnglish(s.english, s.words) }
-      return [normalized]
-    }
-    const parentWords = s.words ?? []
-    return [...s.chunks]
-      .sort((a, b) => a.order - b.order)
-      .map((chunk) => ({
-        id: `${s.id}_c${chunk.order}`,
-        english: chunk.text,
-        chinese: chunk.chinese,
-        words_count: chunk.text.trim().split(/\s+/).length,
-        category: s.category ?? "daily",
-        difficulty: s.difficulty ?? 1,
-        tags: s.tags ?? [],
-        lesson_id: s.lesson_id,
-        words: alignWordsWithEnglish(chunk.text, parentWords),
-        chunks: null,
-        // ⚠️ 这里**不能**继承 s.pronunciation：跟读分是按**练习项**存的，每个分块
-        // 是独立朗读、独立评分的一段文字，各有各的一行。父行的分属于"整句"这个
-        // 练习项（只有没被展开时才存在），把它挂到每个分块上会让大纲里三个分块
-        // 都显示同一个分、包括从没录过的那个；也会让历史卡片显示另一段录音的分。
-        // 分块自己的分由 /api/courses/sentences 按练习项 id 匹配下发。
-      }))
-  })
-}
+// expandSentences 已提到 lib 里：听写模式的新实现（DictationPractice）必须与这里
+// 用同一份「分块 id 怎么拼」的逻辑，否则同一句的进度会分裂到两个 id 上。
+import { expandSentences } from "@/lib/sentence-expand"
+import { normalizePracticeMode } from "@/lib/practice-mode"
+import { ModeSwitcher } from "@/components/home/learn/ModeSwitcher"
 
 // ─── POS grouping for completion screen ──────────────────────────────────────
 
@@ -246,10 +218,22 @@ function LearnClientMessage({
 export function LearnClient({
   courseId,
   lessonId,
+  urlMode,
 }: {
   courseId: string
   lessonId: string
+  /**
+   * URL 上的 `?mode=`。听写模式已由 DictationPractice 接管，所以本组件正常只会
+   * 收到拼图/学习/口语三种；但恢复进度时仍要把模式带上，否则三种模式会共用
+   * 听写那一行会话，进度互相覆盖（`practice_sessions` 的唯一键是
+   * `(user_id, lesson_id, mode)`）。
+   */
+  urlMode?: string
 }) {
+  // 归一化后再用：接口只认四个合法值，脏参数一律落到听写（normalizePracticeMode
+  // 不抛异常）。这里不读 localStorage —— 服务端渲染阶段没有 window，
+  // 读了会导致水合不一致；页面级分发由 PracticeModeGate 负责。
+  const mode = normalizePracticeMode(urlMode)
   const [sentences, setSentences] = useState<Sentence[]>([])
   /** 加载态：以前只有「取到句子」和「没取到句子」两种，空课时与接口报错都表现为无限加载。 */
   const [loadState, setLoadState] = useState<"loading" | "ready" | "error">("loading")
@@ -498,7 +482,7 @@ export function LearnClient({
           // 「恢复到第几句」的判定全在 lib/practice-session（纯函数、有单测），
           // 这里只负责把结果套到界面上：越界一律夹回可用下标，
           // 绝不让恢复反而把用户送进一个读不到句子的空屏。
-          fetch(`/api/practice/sessions?lessonId=${lessonId}`)
+          fetch(`/api/practice/sessions?lessonId=${lessonId}&mode=${mode}`)
             .then((r) => (r.ok ? r.json() : null))
             .then((res) => {
               const decision = decideResume(res?.session, expanded.length)
@@ -518,7 +502,7 @@ export function LearnClient({
       .catch((e) => { console.error(e); setLoadState("error") })
     // courseId 也是这个 effect 的输入（埋点要带上它），所以必须列进依赖，
     // 否则换课程时不会重新上报 lesson_start。
-  }, [lessonId, courseId])
+  }, [lessonId, courseId, mode])
 
   /**
    * 领取体验会员（5 天）。
@@ -661,6 +645,7 @@ export function LearnClient({
       body: JSON.stringify({
         lessonId,
         courseId,
+        mode,
         // current_index 的语义是「下一句要练的下标」，不是「已练句数」
         currentIndex: idx + 1,
         sentenceCount: total,
@@ -669,7 +654,7 @@ export function LearnClient({
         state: idx >= total - 1 ? "completed" : "active",
       }),
     }).catch((e) => { console.error(e) })
-  }, [status, lessonId, courseId])
+  }, [status, lessonId, courseId, mode])
 
   // Persist the practice attempt. This is the only writer of practice_records,
   // which /api/home/stats and /api/archive/stats aggregate.
@@ -1815,6 +1800,19 @@ export function LearnClient({
 
         {/* Right: action icons — collapse lesser-used on mobile */}
         <div className="flex items-center gap-1 sm:gap-2 shrink-0">
+          {/*
+            模式切换器。这一层旧界面（Tailwind 写的）原本没有任何切换入口，
+            切到拼图/学习/口语之后就再也回不到听写 —— 模式底座缺一块。
+            放在动作图标区最左侧：靠近参考站里它所在的 `.header-right` 位置。
+            组件自带 `.mode-switcher-scope`（`display:contents`），不参与 flex
+            排版，切换器本体直接落进这个 flex 行。
+          */}
+          <ModeSwitcher
+            courseId={courseId}
+            lessonId={lessonId}
+            mode={mode}
+            completedCount={completedCount}
+          />
           <TooltipButton label={showAnswer ? "隐藏答案" : "显示答案"} onClick={debouncedToggleAnswer}>
             {showAnswer ? <EyeOff className="h-5 w-5 sm:h-6 sm:w-6" /> : <Eye className="h-5 w-5 sm:h-6 sm:w-6" />}
           </TooltipButton>

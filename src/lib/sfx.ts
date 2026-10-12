@@ -96,6 +96,33 @@ function getCtx(): AudioContext | null {
   }
 }
 
+/**
+ * 击键音的最小间隔（毫秒）。
+ *
+ * 参考站 sound.js:331 写死 `if (gap < 40) return;`，注释是「防连击双响
+ * （40ms ≈ 支持 25次/秒 的快速输入）」。照抄这个数字，别自己另调：
+ * 打字快的人一秒敲 10~15 次，40ms 的窗口刚好把「同一个字的连击」
+ * 和「正常连续输入」分开，调大了会漏音、调小了会嗡嗡响。
+ */
+const TYPING_SOUND_MIN_GAP_MS = 40
+
+let lastTypingSoundAt = -Infinity
+
+/**
+ * 1. 击键音 —— 参考站 playTypingSound 的等价实现。
+ *
+ * 参考站放的是 `/audio/modern-technology-select.wav`，我们 public/ 下
+ * **没有**这个文件（用户已确认改用合成音），所以这里落回 playTick 的音色，
+ * 但保留了参考站那层 40ms 节流：没有节流的话，按住一个键不放或是快速连打，
+ * 每个字符都会叠一层音，听感是噪音而不是打字声。
+ */
+export function playTyping(): void {
+  const now = typeof performance !== "undefined" ? performance.now() : Date.now()
+  if (now - lastTypingSoundAt < TYPING_SOUND_MIN_GAP_MS) return
+  lastTypingSoundAt = now
+  playTick()
+}
+
 /** 1. 字符输入 / 词确认 —— 干脆的咔哒声 */
 export function playTick(): void {
   const ctx = getCtx()
@@ -132,6 +159,31 @@ export function playBuzz(): void {
     osc.start(t)
     osc.stop(t + 0.1)
   })
+}
+
+/**
+ * 4. 答错 —— 参考站 playErrorSound 的逐字等价实现。
+ *
+ * 参考站这段是**合成**的（sound.js:639），不是音频文件，所以能 1:1 照抄参数：
+ * sawtooth 400Hz → 200Hz 指数下滑 0.3s，增益 0.15 → 0.01 指数衰减。
+ * 注意参考站用的是 `gain.gain.setValueAtTime(0.15, now)` 起手而不是从 0 渐入，
+ * 所以起音是硬的 —— 这正是它听起来像"错误提示音"而不是"音符"的原因。
+ */
+export function playError(): void {
+  const ctx = getCtx()
+  if (!ctx) return
+  const now = ctx.currentTime
+  const osc = ctx.createOscillator()
+  const gain = ctx.createGain()
+  osc.connect(gain)
+  gain.connect(ctx.destination)
+  osc.frequency.setValueAtTime(400, now)
+  osc.frequency.exponentialRampToValueAtTime(200, now + 0.3)
+  osc.type = "sawtooth"
+  gain.gain.setValueAtTime(0.15, now)
+  gain.gain.exponentialRampToValueAtTime(0.01, now + 0.3)
+  osc.start(now)
+  osc.stop(now + 0.3)
 }
 
 /** 3. 整句完成 —— 明亮的上升琶音 */

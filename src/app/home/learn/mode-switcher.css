@@ -1,0 +1,263 @@
+/* 自动生成 —— 请勿手改。
+ * 来源：句游英语参考站 practice-cyber.css（**模式切换器**子集）。
+ * 生成器：scripts/extract-practice-css.py（作用域前缀 .mode-switcher-scope）。
+ * 重新生成：python3 scripts/extract-practice-css.py
+ *
+ * 为什么单独一份：模式切换器是听写页与非听写页共用的组件，但拼图/学习/口语
+ * 目前仍走旧的 LearnClient（没有 .practice-shell），.practice-shell 前缀
+ * 的规则在那里一条都不会命中。规则仍从参考站抽取，与 practice.css 同源。
+ */
+
+.mode-switcher-scope:not(:where(.practice-shell) *) {
+    
+    --neon-cyan: #00f0ff;
+    
+    
+    
+    
+
+    
+    
+    
+    
+
+    
+    
+
+    --font-header: 'Orbitron', sans-serif;
+    --font-tech: 'Rajdhani', monospace;
+    --font-body: 'Inter', 'Noto Sans SC', sans-serif;
+    
+
+    
+    
+}
+.mode-switcher-scope[data-theme="light"]:not(:where(.practice-shell) *) {
+    
+    
+    --neon-cyan: #0c4a6e;
+    
+    
+    
+    
+    
+    
+    
+    
+    
+
+    
+    
+    
+    
+
+    
+    
+}
+
+.mode-switcher-scope[data-theme="light"] .mode-dropdown-trigger {
+    background: rgba(2, 132, 199, 0.08);
+    border-color: rgba(2, 132, 199, 0.2);
+    color: #0284c7;
+}
+.mode-switcher-scope[data-theme="light"] .mode-dropdown-trigger:hover {
+    background: rgba(2, 132, 199, 0.15);
+    border-color: rgba(2, 132, 199, 0.4);
+}
+.mode-switcher-scope[data-theme="light"] .mode-dropdown-menu {
+    background: rgba(255, 255, 255, 0.98);
+    border-color: #e2e8f0;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.12);
+}
+.mode-switcher-scope[data-theme="light"] .mode-dropdown-item {
+    color: #475569;
+}
+.mode-switcher-scope[data-theme="light"] .mode-dropdown-item:hover {
+    background: rgba(2, 132, 199, 0.08);
+    color: #1e293b;
+}
+.mode-switcher-scope[data-theme="light"] .mode-dropdown-item.active {
+    color: #0284c7;
+    background: rgba(2, 132, 199, 0.06);
+}
+.mode-switcher-scope .mode-dropdown-wrapper {
+    position: relative;
+}
+.mode-switcher-scope .mode-dropdown-trigger {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    padding: 4px 10px;
+    background: rgba(0, 240, 255, 0.08);
+    border: 1px solid rgba(0, 240, 255, 0.2);
+    border-radius: 6px;
+    color: var(--neon-cyan, #00f0ff);
+    cursor: pointer;
+    font-size: 0.75rem;
+    font-family: var(--font-header);
+    transition: opacity 0.2s ease, transform 0.2s ease, background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease, box-shadow 0.2s ease;
+    white-space: nowrap;
+}
+.mode-switcher-scope .mode-dropdown-trigger:hover {
+    background: rgba(0, 240, 255, 0.15);
+    border-color: rgba(0, 240, 255, 0.4);
+}
+.mode-switcher-scope .mdt-icon {
+    display: flex;
+    align-items: center;
+}
+.mode-switcher-scope .mdt-arrow {
+    opacity: 0.6;
+    transition: transform 0.2s;
+}
+.mode-switcher-scope .mode-dropdown-wrapper.open .mdt-arrow {
+    transform: rotate(180deg);
+}
+.mode-switcher-scope .mode-dropdown-menu {
+    display: none;
+    position: absolute;
+    top: calc(100% + 6px);
+    right: 0;
+    min-width: 120px;
+    background: rgba(15, 17, 25, 0.95);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border: 1px solid rgba(0, 240, 255, 0.15);
+    border-radius: 8px;
+    padding: 4px;
+    z-index: 300;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+}
+.mode-switcher-scope .mode-dropdown-wrapper.open .mode-dropdown-menu {
+    display: block;
+}
+.mode-switcher-scope .mode-dropdown-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    padding: 8px 12px;
+    background: transparent;
+    border: none;
+    color: rgba(255,255,255,0.7);
+    font-size: 0.78rem;
+    cursor: pointer;
+    border-radius: 5px;
+    transition: opacity 0.15s ease, transform 0.15s ease, background-color 0.15s ease, border-color 0.15s ease;
+    font-family: inherit;
+}
+.mode-switcher-scope .mode-dropdown-item:hover {
+    background: rgba(0, 240, 255, 0.1);
+    color: #fff;
+}
+.mode-switcher-scope .mode-dropdown-item.active {
+    color: var(--neon-cyan, #00f0ff);
+    background: rgba(0, 240, 255, 0.08);
+}
+.mode-switcher-scope .custom-modal-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.85);
+    backdrop-filter: blur(8px);
+    z-index: 10000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    animation: fadeIn 0.2s ease-out;
+}
+.mode-switcher-scope .custom-modal {
+    background: rgba(13, 15, 20, 0.98);
+    border: 1px solid var(--neon-cyan);
+    padding: 30px 40px;
+    border-radius: 12px;
+    min-width: 420px;
+    max-width: 90%;
+    box-shadow: 0 0 60px rgba(0, 0, 0, 0.9), inset 0 0 0 1px rgba(0, 240, 255, 0.1);
+    transform: scale(0.95);
+    animation: zoomIn 0.3s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+}
+.mode-switcher-scope .custom-modal-title {
+    font-family: var(--font-header);
+    font-size: 1.4rem;
+    color: #fff;
+    margin-bottom: 16px;
+    text-shadow: 0 0 10px rgba(0, 240, 255, 0.3);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    padding-bottom: 10px;
+}
+.mode-switcher-scope .custom-modal-message {
+    font-family: var(--font-body);
+    font-size: 1rem;
+    color: #a0a0a0;
+    margin-bottom: 30px;
+    line-height: 1.6;
+    white-space: pre-wrap;
+}
+.mode-switcher-scope .custom-modal-buttons {
+    display: flex;
+    justify-content: flex-end;
+    gap: 16px;
+}
+.mode-switcher-scope .custom-modal-button {
+    padding: 10px 24px;
+    border-radius: 4px;
+    font-family: var(--font-tech);
+    font-weight: 700;
+    text-transform: uppercase;
+    cursor: pointer;
+    transition: opacity 0.2s, transform 0.2s, background-color 0.2s, border-color 0.2s, color 0.2s, box-shadow 0.2s;
+    border: none;
+    font-size: 0.9rem;
+}
+.mode-switcher-scope .custom-modal-button-cancel {
+    background: transparent;
+    color: #888;
+    border: 1px solid #444;
+}
+.mode-switcher-scope .custom-modal-button-cancel:hover {
+    color: #fff;
+    border-color: #777;
+    background: rgba(255, 255, 255, 0.05);
+}
+.mode-switcher-scope .custom-modal-button-confirm {
+    background: var(--neon-cyan);
+    color: #000;
+    clip-path: polygon(10px 0, 100% 0, 100% calc(100% - 10px), calc(100% - 10px) 100%, 0 100%, 0 10px);
+    position: relative;
+    overflow: hidden;
+    padding-left: 30px;
+    padding-right: 30px;
+}
+.mode-switcher-scope .custom-modal-button-confirm::before {
+    content: '';
+    position: absolute;
+    top: 2px;
+    left: 2px;
+    right: 2px;
+    bottom: 2px;
+    border: 1px solid rgba(255, 255, 255, 0.4);
+    clip-path: inherit;
+    opacity: 0;
+    transition: 0.2s;
+}
+.mode-switcher-scope .custom-modal-button-confirm:hover {
+    background: #fff;
+    box-shadow: 0 0 25px var(--neon-cyan);
+    transform: translateY(-2px);
+}
+.mode-switcher-scope .custom-modal-button-confirm:hover::before {
+    opacity: 1;
+}
+
+/* ── keyframes ── */
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(-10px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}

@@ -1,0 +1,20 @@
+/* 练习页专用字体层 —— 与参考站 practice-cyber.css 第 2 行的 @import 逐字一致。
+ *
+ * 参考站就是这么加载字体的（外链 Google Fonts，不自托管）：
+ *   Noto Sans SC（汉字）、Orbitron（标题/数码管风格）、Rajdhani（科技感正文与输入框）、
+ *   Inter（正文）。
+ *
+ * 为什么必须照抄这四个字族：`practice.css` 里的 `--font-tech: 'Rajdhani'`、
+ * `--font-header: 'Orbitron'` 被输入框宽度、倒计时数字、标题字距大量引用。字形宽度
+ * 一换，整行输入的排版就会位移 —— 而参考站的输入框宽度是**用 Canvas 量文字像素宽**
+ * 反推出来的（measureWordInputWidth），字体不同会让算出来的宽度全部偏差，
+ * 长词被裁、短词松垮。所以字体在这里不是"好看"，是尺寸链的一环。
+ *
+ * 沿用 (landing)/landing-fonts.css 的先例：不放在 globals.css 里，避免站内其它页面
+ * 也跟着请求这四个字体族（练习页才用得到）。
+ *
+ * 注：`next/font/google` 走不通 —— 本机 Turbopack 拉不到字体文件
+ * （`Can't resolve '@vercel/turbopack-next/internal/font/google/font'`），
+ * 落地页当初就是因此退回参考页的原方案。
+ */
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;700&family=Orbitron:wght@400;600;800&family=Rajdhani:wght@400;500;600&family=Inter:wght@400;500;600&display=swap');

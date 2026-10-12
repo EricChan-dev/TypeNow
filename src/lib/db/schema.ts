@@ -906,6 +906,14 @@ export const practiceSessions = mysqlTable(
     // 两个数含义不同；拿已练句数当恢复下标，一旦题目数变动就会指到越界位置，
     // 前端读不到句子，表现为「点继续练习白屏」。
     currentIndex: int("current_index").notNull().default(0),
+    // 练习模式：dictation（听写/键盘打字）| puzzle（拼图）| learning（学习）| speaking（口语）。
+    //
+    // 参考站四种模式各有各的进度，恢复槽位必须是「每课时每模式一行」。
+    // 若沿用旧的 (user_id, lesson_id) 唯一键，切模式会覆盖彼此的恢复位置。
+    //
+    // 默认 'dictation'：本列引入之前只有键盘打字一种练习方式，
+    // 存量行归入听写模式即与旧行为一致，不丢进度。
+    mode: varchar("mode", { length: 16 }).notNull().default("dictation"),
     state: varchar("state", { length: 16 }).notNull().default("active"),
     // 只统计本次会话，用于结算页展示；跨会话的累计值走 user_course_progress。
     sentenceCount: int("sentence_count").notNull().default(0),
@@ -916,9 +924,12 @@ export const practiceSessions = mysqlTable(
     completedAt: datetime("completed_at"),
   },
   (t) => [
-    // 每个 (user, lesson) 只保留一个恢复槽位：重练同一课要复用同一行而不是不断累积。
-    // 若允许多行，GET 时无法判定「上次」是哪一行，恢复位置会随查询计划漂移。
-    uniqueIndex("uk_practice_session").on(t.userId, t.lessonId),
+    // 每个 (user, lesson, mode) 只保留一个恢复槽位：重练同一课的同一模式要复用同一行
+    // 而不是不断累积。若允许多行，GET 时无法判定「上次」是哪一行，恢复位置会随查询计划漂移。
+    //
+    // 加 mode 的理由：四种模式（听写/拼图/学习/口语）各有各的进度。只按 (user, lesson)
+    // 建唯一键时，切模式会覆盖彼此的恢复位置 —— 「练到第 30 句听写，切口语再回来变成第 0 句」。
+    uniqueIndex("uk_practice_session").on(t.userId, t.lessonId, t.mode),
     index("idx_practice_session_user").on(t.userId, t.updatedAt),
   ]
 )
@@ -955,6 +966,36 @@ export const wordbookItems = mysqlTable(
   (t) => [
     uniqueIndex("uniq_user_word").on(t.userId, t.word),
     index("idx_wordbook_user").on(t.userId),
+  ]
+)
+
+// ─── Sentence Favorites (收藏句子) ───────────────────────────────────────────
+//
+// 参考站练习页底栏有一颗星（`#favoriteBtn`，快捷键 ⌘/Ctrl+U），收藏的是**句子**
+// 而不是单词 —— 单词收藏走 `wordbook_items`，两者在参考站里也是两个独立接口
+// (`/User/Api/Favorite/Sentence` vs `/User/Api/Favorite/Word`)。
+//
+// **一个练习项一行**：UNIQUE(user_id, sentence_id)。带 chunks 的句子在练习页会
+// 展开成多个分块练习项（`<sentenceId>_c<order>`），各自可独立收藏，与
+// `pronunciation_scores` 的口径一致（见上面那张表的说明）。
+//
+// 业务上不算学习进度：收藏不写 practice_records / review_queue / 课程进度。
+export const sentenceFavorites = mysqlTable(
+  "sentence_favorites",
+  {
+    id: varchar("id", { length: 36 }).primaryKey().default(sql`(UUID())`),
+    userId: varchar("user_id", { length: 36 }).notNull(),
+    // 练习项 id（可能带 `_c<order>` 后缀），不是原句 id；故无法建外键
+    sentenceId: varchar("sentence_id", { length: 64 }).notNull(),
+    courseId: varchar("course_id", { length: 36 }),
+    lessonId: varchar("lesson_id", { length: 36 }),
+    // 句子原文快照：原句被改/删后收藏夹里仍能看到当时收藏的内容
+    sentenceText: text("sentence_text"),
+    createdAt: datetime("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  },
+  (t) => [
+    uniqueIndex("uk_favorite_user_sentence").on(t.userId, t.sentenceId),
+    index("idx_favorite_user_time").on(t.userId, t.createdAt),
   ]
 )
 

@@ -75,6 +75,39 @@ export function checkRateLimit(
 }
 
 /**
+ * 看一眼额度，**不消费**。
+ *
+ * 为什么需要它：口语模式的「今日评测次数已用完」卡片必须在**开口之前**就
+ * 显示出来（参考站 `speaking.js:145 updateSpeakingLimitUI` 在 `idle` 时就会
+ * 跑一次）。而 `checkRateLimit` 是「判 + 记账」一体，拿它去查询会白扣一次额度
+ * —— 那是**比没有卡片更糟**的 bug：用户每次刷新页面都少一次评测机会。
+ *
+ * 返回值与 `checkRateLimit` 的判据完全同源（同一个桶、同一条
+ * `timestamps.length >= maxAttempts`），保证「查询说还有额度」与「真的能评」
+ * 不会给出矛盾答案。桶不存在时按「一次都没用过」回答，而**不**顺手建桶 ——
+ * 未开始练习的用户不该在内存里留下痕迹。
+ */
+export function peekRateLimit(
+  storeName: string,
+  key: string,
+  maxAttempts: number,
+  windowMs: number,
+): { allowed: boolean; used: number; remaining: number; retryAfter?: number } {
+  const bucket = stores.get(storeName)?.get(key)
+  const now = Date.now()
+  const used = bucket
+    ? bucket.timestamps.filter((t) => now - t < windowMs).length
+    : 0
+  const remaining = Math.max(0, maxAttempts - used)
+  if (used >= maxAttempts) {
+    // 与 checkRateLimit 同一条公式：最早那次消费出窗即恢复。
+    const oldest = (bucket?.timestamps ?? []).filter((t) => now - t < windowMs)[0] ?? now
+    return { allowed: false, used, remaining: 0, retryAfter: Math.ceil((oldest + windowMs - now) / 1000) }
+  }
+  return { allowed: true, used, remaining }
+}
+
+/**
  * Get the client IP from a Next.js request.
  */
 export function getClientIP(request: Request): string {

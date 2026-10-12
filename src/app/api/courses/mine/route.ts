@@ -88,13 +88,20 @@ export async function GET() {
      * 刻意**不用** `user_course_progress.sentenceCount` 算进度百分比 ——
      * 那一列是 GREATEST(...) 维护的单调累计值（重练会持续增长），拿它当分子
      * 会出现 >100% 的进度条。`practice_sessions.state='completed'` 配合
-     * UNIQUE(user_id, lesson_id)（保证一课一行）才是精确的「这课练完了」信号。
+     * UNIQUE(user_id, lesson_id, mode) 才是「这课练完了」的信号。
+     *
+     * 必须是 count(DISTINCT lesson_id)：加了 mode 之后同一课在每个模式各占一行，
+     * 用户把一课在听写和口语都练完会得到两行 completed。直接 count(*) 会让
+     * 分子翻倍、进度条超过 100%。「完成了几课」按课时去重才是用户理解的口径。
      *
      * 这里刻意**不做**软删除过滤：用户当初确实练过，内容下架不该改写他的进度历史。
      * （soft-delete 模块顶部把「练习记录等历史统计」明确列为故意不过滤的场景。）
      */
     db
-      .select({ courseId: practiceSessions.courseId, n: sql<number>`count(*)` })
+      .select({
+        courseId: practiceSessions.courseId,
+        n: sql<number>`count(distinct ${practiceSessions.lessonId})`,
+      })
       .from(practiceSessions)
       .where(
         and(

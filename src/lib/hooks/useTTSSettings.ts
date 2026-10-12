@@ -127,6 +127,61 @@ let currentAudio: HTMLAudioElement | null = null
 let speakSeq = 0
 
 /**
+ * 当前这次播放的「播完」deferred。
+ *
+ * 为什么要单独开一套：`globalSpeak` 的返回值语义是**有没有开始播**（有道路径里
+ * 它是 `await audio.play()` 的产物，而 `play()` 一开始播就 resolve）。「词发音
+ * 按钮的脉冲动画」「念完再干下一件事」这类场景要的却是**播完了没有**。
+ * 把两者混在一个 promise 上，调用方只能二选一：要么按钮永远不亮，要么
+ * 「停止」按钮失效。
+ *
+ * 参考站对应的是 `playTTS` → `playSingleAudio`，它 `await` 到 `ended`
+ * 才 resolve（tts.js:500），所以 `handleWordSpeakClick` 的
+ * `finally { btn.classList.remove('playing') }` 能撑满整段播放。
+ */
+let endDeferred: { promise: Promise<void>; resolve: () => void } | null = null
+let endTimer: ReturnType<typeof setTimeout> | null = null
+
+/**
+ * 播放超时兜底。参考站同样是 15s（tts.js `PLAYBACK_TIMEOUT_MS`）：
+ * `ended` / `pause` / `error` 都不触发时（解码卡死、设备被拔），
+ * 没有它等待方会永远挂着。
+ */
+const PLAYBACK_TIMEOUT_MS = 15000
+
+/** 开始一次播放：先叫醒上一个等待方，再给这次建一个新的 deferred。 */
+function beginPlayback(): void {
+  resolveEnd()
+  let resolveFn!: () => void
+  const promise = new Promise<void>((r) => {
+    resolveFn = r
+  })
+  endDeferred = { promise, resolve: resolveFn }
+  endTimer = setTimeout(resolveEnd, PLAYBACK_TIMEOUT_MS)
+}
+
+/** 收尾：叫醒等待方。幂等，重复调用安全。 */
+function resolveEnd(): void {
+  if (endTimer) {
+    clearTimeout(endTimer)
+    endTimer = null
+  }
+  const d = endDeferred
+  endDeferred = null
+  d?.resolve()
+}
+
+/**
+ * 等当前这次朗读播完。此刻没有朗读在播时立即 resolve。
+ *
+ * 与 `globalSpeak` 的分工：`globalSpeak` 回答「出声了没有」（用于自动播放被拦时
+ * 提示用户），本函数回答「播完了没有」（用于播放中的视觉状态、念完再进下一步）。
+ */
+export function waitForSpeechEnd(): Promise<void> {
+  return endDeferred ? endDeferred.promise : Promise.resolve()
+}
+
+/**
  * 「此刻是否有朗读在响」的订阅式状态。
  *
  * 为什么需要它：`globalSpeak` 返回的布尔值只说明**有没有开始播**——
@@ -151,6 +206,16 @@ function setSpeaking(next: boolean): void {
 /** 当前是否有朗读在响。作为 useSyncExternalStore 的 getSnapshot。 */
 export function isSpeaking(): boolean {
   return speaking
+}
+
+/**
+ * 当前正在播放的音频元素（没有则为 null）。
+ *
+ * 导出的目的：声音频谱条需要把这个元素接进 AnalyserNode 才能取到频谱数据。
+ * 只读，不转移所有权 —— 元素的 play/pause 生命周期仍由本模块管理。
+ */
+export function getCurrentAudioElement(): HTMLAudioElement | null {
+  return currentAudio
 }
 
 /** 订阅朗读状态变化；返回取消订阅函数（用法与 useSyncExternalStore 一致）。 */
@@ -184,6 +249,8 @@ export function stopSpeaking(): void {
   }
   // pause() 不会触发 ended，所以这里必须自己收尾，否则订阅方会一直以为还在响
   setSpeaking(false)
+  // 同理，等「播完」的调用方也收不到 ended —— 主动叫醒，别让它们挂死。
+  resolveEnd()
 }
 
 let cachedVoices: SpeechSynthesisVoice[] = []
@@ -193,6 +260,10 @@ function speakWithBrowser(
   opts: { voice: string; rate: number; volume: number },
   seq: number,
 ) {
+  // 「播完」的 deferred 必须**同步**建好：调用方 `await globalSpeak()` 拿到 true
+  // 之后立刻 `await waitForSpeechEnd()`，而下面的 rAF 还没执行 —— 建晚了就会
+  // 拿到「当前没有朗读」的空 promise，`speakingWordIndex` 会立刻被清掉。
+  beginPlayback()
   const synth = window.speechSynthesis
   const u = new SpeechSynthesisUtterance(text)
   u.lang = "en-GB"
@@ -213,12 +284,14 @@ function speakWithBrowser(
     // onend / onerror 收尾。若浏览器吞掉了这次 speak（Chrome 的已知怪癖），
     // 状态会停在 true —— 由下一次 stopSpeaking() 或新的朗读纠正。
     setSpeaking(true)
-    u.onend = () => {
-      if (seq === speakSeq) setSpeaking(false)
+    const done = () => {
+      if (seq === speakSeq) {
+        setSpeaking(false)
+        resolveEnd()
+      }
     }
-    u.onerror = () => {
-      if (seq === speakSeq) setSpeaking(false)
-    }
+    u.onend = done
+    u.onerror = done
     synth.speak(u)
   })
 }
@@ -281,22 +354,29 @@ export async function globalSpeak(
      * 只有紧挨着 play 之前停，才能保证同一时刻只有一段在响。
      */
     stopSpeaking()
+    // stopSpeaking() 刚把上一段的等待方叫醒，这里紧接着为本次播放建新的
+    // deferred —— 顺序不能反，否则会把自己这次的等待方立刻放走。
+    beginPlayback()
     const audio = new Audio(URL.createObjectURL(blob))
     currentAudio = audio
     // 收尾必须带 `currentAudio === audio` 的判断：期间可能有更新的朗读把
     // currentAudio 换成别的音频，那时这次的回调不该去改全局状态。
-    audio.onended = () => {
-      URL.revokeObjectURL(audio.src)
+    // 只有**仍然是当前这段**时才收尾并叫醒等待方：被更新的朗读顶掉时，
+    // `stopSpeaking()` 已经叫醒过等待方了；这里若无条件叫醒，会把*新*那段
+    // 的等待方提前放走（旧音频的 ended 总是晚于新朗读的开始）。
+    const settle = () => {
       if (currentAudio === audio) {
         currentAudio = null
         setSpeaking(false)
+        resolveEnd()
       }
     }
+    audio.onended = () => {
+      URL.revokeObjectURL(audio.src)
+      settle()
+    }
     audio.onerror = () => {
-      if (currentAudio === audio) {
-        currentAudio = null
-        setSpeaking(false)
-      }
+      settle()
     }
     try {
       await audio.play()
