@@ -79,7 +79,8 @@ TypeNow/
 → `docs/pages/04-practice.md` + `specs/practice-page.md`（核心链路）
 
 **要动练习页**：`practice-page-alignment-matrix.md`（先看已拍板的决策，别重复讨论）
-→ `specs/practice-page.md` → `src/components/home/learn/LearnClient.tsx`
+→ `specs/practice-page.md` → `src/components/home/learn/DictationPractice.tsx`
+（四种模式共用这一个外壳；旧 `LearnClient` 已随 B4 删除，历史与理由见 `PracticeModeGate.tsx` 顶部注释）
 
 **要动数据/内容**：`docs/architecture.md` §四 → `docs/julebu-import-guide.md`
 → `pnpm audit:content` 先看现状再动手

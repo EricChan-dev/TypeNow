@@ -18,7 +18,13 @@
  * 这类有语义的符号。所以 don't ≠ dont 依然成立。
  */
 
-/** 与 LearnClient / courses API 共用的英文分词正则。 */
+/**
+ * 英文分词正则。
+ *
+ * 只在本文件的 `tokenizeEnglish()` 里用（`:110` 的 `match(TOKEN_RE)`）。
+ * 别处要分词请走 `tokenizeEnglish()`，不要自己再写一份 —— `word-align.ts:58`
+ * 就是复用它，分成两套会出现「同一句里标点一会儿算词一会儿不算」。
+ */
 export const TOKEN_RE = /[a-zA-Z\d'-]+|[.,!?;:'"()…—]/g
 
 /** 排版字符 → 键盘等价写法。 */

@@ -769,7 +769,9 @@ export const coinLogs = mysqlTable(
      * 本次练习耗时（秒），仅 sentence 有意义；服务端裁剪到 24 小时以内。
      *
      * 为什么放在这里而不是 practice_records：练习时长**只在领奖请求里上报**
-     * （客户端在句子完成时把 durationSeconds 一起发过来，见 LearnClient），
+     * （客户端在句子完成时把 durationSeconds 一起发过来，见
+     * `DictationPractice.tsx:1412` 与 `:1753` 的
+     * `Math.max(1, Math.round((Date.now() - sentenceStartRef.current) / 1000))`），
      * practice_records 根本没有这一列。此前它记在 diamond_logs 上，双货币拆分后
      * 练习奖励改发金币，所以跟着搬到这里 —— 否则首页热力图的学习时长会变成 0。
      * （e2e 的 factories.ts 里专门有一条注释提醒过这件事。）

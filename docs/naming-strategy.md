@@ -295,7 +295,7 @@ export const BRAND = {
 | 落地页 metadata / 首屏 | [src/app/(public)/page.tsx](../src/app/(public)/page.tsx#L28) | 标题、副标题、Hero |
 | 登录页 | [src/app/login/page.tsx](../src/app/login/page.tsx#L43) | `码上英语 · TypeNow` |
 | 顶栏/导航/页脚 | [HomeTopbar.tsx](../src/components/home/HomeTopbar.tsx#L15) · [Navbar.tsx](../src/components/layout/Navbar.tsx#L72) · [Footer.tsx](../src/components/layout/Footer.tsx#L42) | 品牌锁配 |
-| 学习完成页 | [LearnClient.tsx](../src/components/home/learn/LearnClient.tsx#L1674) | 打卡图上的品牌名 |
+| 练习页顶栏（课程名为空时兜底） | [DictationPractice.tsx](../src/components/home/learn/DictationPractice.tsx#L2239) | `courseTitle \|\| BRAND.nameZh`；旧 `LearnClient` 的打卡图品牌名已随 B4 删除 |
 | 推广中心 Canvas 海报 | [PartnerDashboard.tsx](../src/app/home/partner/PartnerDashboard.tsx#L165) | `ctx.fillText("码上英语")` |
 | 代理落地页 | [RefLandingClient.tsx](../src/app/ref/[code]/RefLandingClient.tsx#L40) | 大字品牌名 |
 | 推广素材话术库 | [promotion-materials.ts](../src/lib/promotion-materials.ts) | 5 处，含"让用户搜『码上英语』"的口播词 —— **最容易漏且直接影响拉新** |

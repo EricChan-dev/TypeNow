@@ -292,45 +292,53 @@ describe("源码约束：不许写回旧的那一套（防回退）", () => {
 })
 
 describe("源码约束：录音侧必须真的产出 WAV", () => {
-  const panelCode = stripComments(read("src/components/home/learn/VoicePanel.tsx"))
+  // 这组断言原先读 VoicePanel.tsx，那是 LearnClient 树的录音实现 —— B4 删掉
+  // LearnClient 死代码后它一起消失了。但断言守护的**行为**没有消失：在线口语
+  // 路径（InlineSpeakingBar）仍在录音、仍要把 webm 转成 WAV 再上传，编码与
+  // 特性探测搬进了 lib/recorder.ts，所以这里把断言跟着搬到真正在跑的实现上，
+  // 而不是删掉——删掉等于这块从此无人看守。
+  const recorderCode = stripComments(read("src/lib/recorder.ts"))
+  const barCode = stripComments(read("src/components/home/learn/InlineSpeakingBar.tsx"))
 
   it("录音后编码成 16k 单声道 WAV（不能再把 webm 当 wav 发出去）", () => {
-    expect(panelCode).toContain("encodePcm16WavMono")
-    expect(panelCode).toContain("OfflineAudioContext")
-    expect(panelCode).toContain("EVALUATE_SAMPLE_RATE")
+    expect(recorderCode).toContain("encodePcm16WavMono")
+    expect(recorderCode).toContain("OfflineAudioContext")
+    expect(recorderCode).toContain("EVALUATE_SAMPLE_RATE")
   })
 
   it("有特性探测与 mimeType 协商，不是硬编码 webm", () => {
-    expect(panelCode).toContain("detectRecordingSupport")
-    expect(panelCode).toContain("isTypeSupported")
-    expect(panelCode).not.toContain('new MediaRecorder(stream, { mimeType: "audio/webm;codecs=opus" })')
+    expect(recorderCode).toContain("detectRecordingSupport")
+    expect(recorderCode).toContain("isTypeSupported")
+    expect(barCode).not.toContain(
+      'new MediaRecorder(stream, { mimeType: "audio/webm;codecs=opus" })',
+    )
   })
 
   it("录音前停掉朗读（否则参考音被录进去会评出假高分）", () => {
-    const idx = panelCode.indexOf("await navigator.mediaDevices.getUserMedia")
+    const idx = barCode.indexOf("await navigator.mediaDevices.getUserMedia")
     expect(idx).toBeGreaterThan(-1)
-    expect(panelCode.slice(0, idx)).toContain("stopSpeaking()")
+    expect(barCode.slice(0, idx)).toContain("stopSpeaking()")
   })
 
   it("定时器被保存并清理（旧实现的定时器会把下一次录音掐断）", () => {
-    expect(panelCode).toContain("stopTimerRef")
-    expect(panelCode).toContain("clearTimers")
-    expect(panelCode).toContain("clearTimeout")
+    // 收尾从 VoicePanel 的 stopTimerRef 改成了集中式 clearTimers()，语义相同：
+    // 每条提前返回的路径都要清计时器，否则保底计时器会把下一次录音掐断。
+    expect(barCode).toContain("clearTimers")
+    expect(barCode).toContain("clearTimeout")
   })
 
   it("卸载时释放麦克风并作废这次录音", () => {
-    expect(panelCode).toContain("discardRef")
-    expect(panelCode).toContain("releaseStream")
-    expect(panelCode).toContain("getTracks().forEach")
+    expect(barCode).toContain("discardRef")
+    expect(barCode).toContain("getTracks().forEach")
   })
 
   it("上传的 sentenceId 是**练习项自己的 id**，不能改写成原句 id", () => {
-    // 跟读分按**练习项**存：有 chunks 的句子会被 LearnClient 展开成
-    // `<原句 id>_c<order>`（expandSentences），而每个分块是独立朗读、独立评分的
-    // 一段文字，各有各的一行。若在这里统一改写成 baseSentenceId(sentence.id)，
-    // 一句 3 个分块就只剩一个分数格 —— 录完分块 1 再录分块 2 会把前一个覆盖掉。
-    // 所以这里断言"没有发生那次改写"，而不只是断言某个字符串存在。
-    expect(panelCode).toContain("const sentenceId = sentence.id")
-    expect(panelCode).not.toContain("baseSentenceId(sentence.id)")
+    // 跟读分按**练习项**存：有 chunks 的句子会被展开成 `<原句 id>_c<order>`
+    // （expandSentences），每个分块独立朗读、独立评分，各有各的一行。若统一
+    // 改写成 baseSentenceId(sentence.id)，一句 3 个分块就只剩一个分数格。
+    // 在线路径把 sentenceId 原样透传给 requestEvaluate，这里同样断言"没有
+    // 发生那次改写"。
+    expect(barCode).not.toContain("baseSentenceId(sentence.id)")
+    expect(barCode).toContain("requestEvaluate(wav, text, sentenceId")
   })
 })

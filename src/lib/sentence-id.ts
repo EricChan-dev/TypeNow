@@ -2,8 +2,8 @@
  * 句 id 的两种形态：原句 id 与「分块练习项」id。
  *
  * 练习页会把「有 chunks 的句子」展开成若干条练习项，id 形如
- * `<原句 id>_c<order>`（见 LearnClient 的 expandSentences）。于是同一个页面上
- * 有**两套 id 口径**，用错了都不会当场报错：
+ * `<原句 id>_c<order>`（见 `src/lib/sentence-expand.ts:37 expandSentences()`）。
+ * 于是同一个页面上有**两套 id 口径**，用错了都不会当场报错：
  *
  *   · **练习进度**类接口（review/complete、wordbook、practice/record）认**原句 id**，
  *     数据库里并不存在 `xxx_c0` 这一行 → 用 `baseSentenceId()`。

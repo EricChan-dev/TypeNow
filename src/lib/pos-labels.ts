@@ -92,9 +92,10 @@ const POS_LABELS: Record<string, string> = {
  *
  * 例外是 `词`：它是 `word-align.ts` 给「是词但词性未知」打的**内部哨兵**，
  * 不是词性。`alignWordsWithEnglish` 用它把 token 分成「可输入的词」和
- * 「不可输入的标点」，而 `expandSentences` 会把这份 words 原样交给
- * `CompletedSentence`，于是哨兵会渲染成一个孤零零的「词」字。
- * 生产库里只存过 `标点`（41,278 行），`词` 纯属我们的内部约定，必须消化掉。
+ * 「不可输入的标点」，而这份 words 会被原样交给 `CompletedSentence`
+ * （`src/components/home/ReviewClient.tsx:413`），于是哨兵会渲染成一个
+ * 孤零零的「词」字。生产库里只存过 `标点`（41,278 行），`词` 纯属我们的
+ * 内部约定，必须消化掉。
  */
 export function posLabel(pos: string | null | undefined): string {
   if (!pos) return ""

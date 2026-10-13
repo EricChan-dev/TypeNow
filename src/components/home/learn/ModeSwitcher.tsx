@@ -14,20 +14,29 @@ import {
  *
  * 为什么要抽成组件：参考站四种模式共用同一个顶栏，切换器常驻在
  * `.header-right` 里（`practice.js:1351 switchMode`）。我们重写听写模式时
- * 只在 `DictationPractice` 里实现了一份，拼图/学习/口语仍走旧的 `LearnClient`
- * —— 那个界面是 Tailwind 写的、没有顶栏，于是切过去之后**没有入口切回来**。
- * 抽出来两处共用，切换器才真正成为「模式底座」。
+ * 只在 `DictationPractice` 里实现了一份，当时拼图/学习/口语仍走旧的
+ * `LearnClient` —— 那个界面是 Tailwind 写的、没有顶栏，于是切过去之后
+ * **没有入口切回来**。抽出来两处共用，切换器才真正成为「模式底座」。
+ * （后来四种模式全部收编进 `DictationPractice`，那个旧界面已连同
+ * `LearnClient` 整棵树删除；组件这层抽象保留，因为它仍然是唯一入口。）
  *
  * 样式来自参考站，但作用域前缀是 `.mode-switcher-scope` 而不是
- * `.practice-shell`：`LearnClient` 整棵树都不在 `.practice-shell` 里，
+ * `.practice-shell`：当初非听写模式整棵树都不在 `.practice-shell` 里，
  * 用后者一条规则都命中不了。规则由 `scripts/extract-practice-css.py`
  * 从同一份参考 CSS 生成到 `mode-switcher.css`，不手写、不复制。
  *
- * 切换确认弹窗用 portal 挂到 `document.body`：
- * 参考站把它挂在 `body` 下（`modal.js:12`），而我们若就地渲染，
- * 弹窗会落进 `LearnClient` 那些带 `transform`/`will-change` 的祖先里
+ * ⚠️ 这份第二作用域现在仍然**必须**保留，不是历史遗留：它的规则带
+ * `:not(:where(.practice-shell) *)` 守卫，而在 `.practice-shell` 内部
+ * 依然命中 —— 实测听写页里 `.mode-switcher-scope` 这条守卫为 false，
+ * 但 `mode-dropdown` / `mdt-` / `custom-modal` 三族共 7 条后代规则照常生效。
+ * 换句话说 `.practice-shell` 那份（`practice.css`）管不到切换器的这几族，
+ * 删掉这份文件下拉就会退化成无样式裸按钮。
+ *
+ * 切换确认弹窗用 portal 挂到 `.practice-shell`（拿不到才退回 `body`）：
+ * 参考站把它挂在 `body` 下（`modal.js:12`），但我们的主题变量写在壳上。
+ * 而若**就地**渲染，弹窗会落进那些带 `transform`/`will-change` 的祖先里
  * —— 参考 CSS 的 `position:fixed` 会改以那个祖先为 containing block，
- * 遮罩盖不满视口（内联口语条就踩过这个坑）。挂到 body 就没有这层祖先。
+ * 遮罩盖不满视口（内联口语条就踩过这个坑）。portal 出来就没有这层祖先。
  * portal 出来的那层也要带上 `.mode-switcher-scope`，否则
  * `.custom-modal-*` 那些后代规则匹配不到、CSS 变量也解析不出来。
  */

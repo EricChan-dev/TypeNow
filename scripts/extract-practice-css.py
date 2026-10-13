@@ -20,17 +20,24 @@ OUT = os.path.join(REPO, "src/app/home/learn/practice.css")
 PREFIX = ".practice-shell"
 
 # 第二个作用域：**模式切换器**（顶部下拉 + 切换确认弹窗）是听写页与非听写页
-# 共用的组件。听写页整页在 .practice-shell 里，样式自然命中；但拼图/学习/口语
-# 三种模式目前仍走旧的 LearnClient（Tailwind 界面，**没有** .practice-shell），
-# 照搬 .practice-shell 前缀会一条都命中不了 —— 下拉会退化成无样式裸按钮。
+# 共用的组件。听写页整页在 .practice-shell 里，样式自然命中；但**历史上**
+# 拼图/学习/口语三种模式走的是旧的 LearnClient（Tailwind 界面，**没有**
+# .practice-shell），照搬 .practice-shell 前缀会一条都命中不了 ——
+# 下拉会退化成无样式裸按钮。
 # 所以同一个组件所需的那一小撮规则用第二个前缀另出一份文件，
 # 组件自己挂 .mode-switcher-scope 承载。规则仍由本脚本从参考站抽取，
 # 不手写、不复制粘贴，避免两份源码走偏。
+#
+# ⚠️ 旧界面（LearnClient）已随 B4 删除，但**这份不能跟着删**：本脚本给每条
+# 规则加的守卫是 `:not(:where(.practice-shell) *)`，在壳内依然成立 ——
+# 实测听写页里 .mode-switcher-scope 这条守卫为 false，而 mode-dropdown /
+# mdt- / custom-modal 三族共 7 条后代规则照常生效；而 practice.css 那份
+# 对这三族是 0 命中。删掉这份，切模下拉就没有样式了。
 OUT2 = os.path.join(REPO, "src/app/home/learn/mode-switcher.css")
 PREFIX2 = ".mode-switcher-scope"
 # 模式切换器所需的选择器关键字。刻意只收这三族：下拉本体、下拉内部件、
 # 切换确认弹窗。其余（cyber-header / control-dock / info-card …）都属于整页骨架，
-# 不该跟着第二份文件进 LearnClient。
+# 不该跟着第二份文件走。
 MODE_SWITCHER_INCLUDE = ["mode-dropdown", "mdt-", "custom-modal"]
 
 # 听写模式实际用到的选择器关键字（按参考页 DOM 实测枚举）
@@ -546,11 +553,11 @@ def main():
     with open(OUT, "w", encoding="utf-8") as f:
         f.write(header + body + "\n\n/* ── keyframes ── */\n" + kf_css + "\n")
 
-    # ── 第二份：模式切换器（供没有 .practice-shell 的非听写模式使用）────────────
+    # ── 第二份：模式切换器（供没有 .practice-shell 的调用方使用）──────────────
     # 只重跑一遍抽取，前缀换成 .mode-switcher-scope。变量表也要带上：
     # `.mdt-*` 用 var(--font-header)、`.custom-modal-button-confirm` 用
-    # var(--neon-cyan)，而 LearnClient 的祖先链上没有 .practice-shell，
-    # 变量得由这层自己定义。keyframes 同样按正文实际引用重算
+    # var(--neon-cyan)，而当初非听写模式（LearnClient）的祖先链上没有
+    # .practice-shell，变量得由这层自己定义。keyframes 同样按正文实际引用重算
     # （`custom-modal` 的 animation 引用了 fadeIn / zoomIn，其中 zoomIn
     # 在参考 CSS 里从未定义 —— 与听写侧同一处理口径，不补写）。
     defined2: list = []
@@ -589,9 +596,12 @@ def main():
         " * 生成器：scripts/extract-practice-css.py（作用域前缀 " + PREFIX2 + "）。\n"
         " * 重新生成：python3 scripts/extract-practice-css.py\n"
         " *\n"
-        " * 为什么单独一份：模式切换器是听写页与非听写页共用的组件，但拼图/学习/口语\n"
-        " * 目前仍走旧的 LearnClient（没有 .practice-shell），.practice-shell 前缀\n"
+        " * 为什么单独一份：模式切换器是听写页与非听写页共用的组件，最初非听写\n"
+        " * 模式走的是旧 LearnClient（没有 .practice-shell），.practice-shell 前缀\n"
         " * 的规则在那里一条都不会命中。规则仍从参考站抽取，与 practice.css 同源。\n"
+        " * 注意：旧界面已删除，但这份**仍不能省** —— 它的规则带\n"
+        " * `:not(:where(.practice-shell) *)` 守卫，在壳内依然命中 mode-dropdown /\n"
+        " * mdt- / custom-modal 三族，而 practice.css 那份对这三族是 0 命中。\n"
         " */\n\n"
     )
     with open(OUT2, "w", encoding="utf-8") as f:

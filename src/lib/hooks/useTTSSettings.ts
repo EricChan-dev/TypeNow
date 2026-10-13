@@ -120,7 +120,7 @@ let currentAudio: HTMLAudioElement | null = null
  * 就说明期间又有人要念别的内容，这次直接丢弃。
  *
  * 为什么需要它：globalSpeak 是先 fetch 音频再播放的，取回来要几百毫秒。
- * 并发两次调用时（进练习页会先后触发两次，见 LearnClient 的 resumeResolved），
+ * 并发两次调用时（进练习页会先后触发两次：先恢复会话、再自动播放本轮句子），
  * 先发的那次完全可能**后**取回音频 —— 没有这道判断，它就会把后发的那一句盖掉，
  * 甚至两段一起出声。
  */
@@ -386,7 +386,7 @@ export async function globalSpeak(
     if (!res.ok) throw new Error(`HTTP ${res.status}`)
     const blob = await res.blob()
     // 期间又有人要念别的内容：这次丢弃。不加这道判断，先发后到的请求会把
-    // 后发的那一句盖掉（进练习页会先后触发两次朗读，见 LearnClient）
+    // 后发的那一句盖掉（进练习页会先后触发两次朗读）
     if (mySeq !== speakSeq) return false
 
     let playedAny = false

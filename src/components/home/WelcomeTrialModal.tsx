@@ -17,8 +17,10 @@ const STORAGE_KEY = "welcome_trial_offer_shown"
  * 那句话就成了假话 —— 用户会被恭喜拿到一份并不存在的权益。
  * 因此改为如实的领取邀请：只在「还没领过」时出现，点一下真的去领。
  *
- * 与试学墙（LearnClient 里练完 3 句后的弹窗）是同一个动作的两个入口：
- * 这个负责让还没开始练的人也知道有免费的 5 天，那个负责在用户最想要的时刻承接。
+ * 与试学墙（`DictationPractice` 里练完 3 句后的弹窗，见
+ * `DictationPractice.tsx:4284` 的 `trial?.truncated || trialAvailable`）
+ * 是同一个动作的两个入口：这个负责让还没开始练的人也知道有免费的 5 天，
+ * 那个负责在用户最想要的时刻承接。
  */
 export function WelcomeTrialModal() {
   const [open, setOpen] = useState(false)

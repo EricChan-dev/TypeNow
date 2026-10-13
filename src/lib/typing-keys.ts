@@ -2,7 +2,8 @@
  * 打字按键语义 —— 练习页与复习页共用的唯一口径。
  *
  * 存在的理由：这两页历史上各写各的，空格键语义直接冲突。
- *   LearnClient  —— 空格 = 确认当前词（`e.key === " "` → confirmWord）
+ *   练习页（现 `DictationPractice`，重写前叫 LearnClient）
+ *                —— 空格 = 确认当前词（`e.key === " "` → confirmWord）
  *   ReviewClient —— 空格被当作普通字符追加进输入（`e.key.length === 1`），
  *                   于是「hel␣l」经 normalizeForTyping 折叠空白后必然判错，
  *                   用户用正常打字习惯敲空格，词中每个空格都记一次错误。

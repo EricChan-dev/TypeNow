@@ -4,10 +4,13 @@ import { PracticeModeGate } from "@/components/home/learn/PracticeModeGate"
 // `[courseId]/practice.css` 并报 Module not found。
 import "../practice.css"
 import "../practice-fonts.css"
-// 模式切换器的样式单独一份：它是听写页与非听写页共用的组件，但非听写模式
+// 模式切换器的样式单独一份：它是听写页与非听写页共用的组件，最初非听写模式
 // 走的是旧 LearnClient（不在 `.practice-shell` 里），`practice.css` 里那套
 // `.practice-shell …` 前缀的选择器在那儿一条都命中不了。两份文件同源
 // （都由 scripts/extract-practice-css.py 从参考 CSS 抽取），作用域前缀不同。
+// 旧界面虽已删除，这份仍不能省：它的规则带 `:not(:where(.practice-shell) *)`
+// 守卫，在壳内依然命中 mode-dropdown / mdt- / custom-modal 三族（见
+// ModeSwitcher.tsx 顶部注释），删掉下拉会退化成无样式裸按钮。
 import "../mode-switcher.css"
 
 export default async function LearnPage({

@@ -110,8 +110,9 @@ export async function savePronunciationScore(params: {
   // 写入（INSERT 分支）落成不同的内容，而这种漂移只在"重录"时才现形。
   // sentence_id 没有局部变量，因为它的"处理"就是不处理 —— 原样进 SQL。
   //
-  // 注：正常流量传的是练习项 id（LearnClient 展开出来的原句 id 或 `<原句 id>_c<n>`），
-  // 所以这两条拒写分支不该出现在实际流量里；它们挡的是畸形/恶意值，不是常规路径。
+  // 注：正常流量传的是练习项 id（客户端摊平出来的原句 id 或 `<原句 id>_c<n>`，
+  // 见 lib/sentence-expand.ts），所以这两条拒写分支不该出现在实际流量里；
+  // 它们挡的是畸形/恶意值，不是常规路径。
   if (sentenceId.length > SENTENCE_ID_MAX_LEN) {
     // 必须留下能定位问题的信息：长度说明"为什么被拒"，前缀说明"是哪个值"。
     // 前缀要截断 —— 畸形值可能有几 MB，整条打进日志会把真正有用的上下文冲掉。

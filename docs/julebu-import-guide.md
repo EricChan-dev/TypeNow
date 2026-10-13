@@ -119,7 +119,7 @@ Julebu Sentence       TypeNow Sentence
 ### 无需改动
 
 - **API `/api/courses/sentences`** — 使用 `db.select()` 自动返回所有列
-- **LearnClient.tsx** — words 数组结构向后兼容
+- **`DictationPractice.tsx`**（旧名为 `LearnClient.tsx`，已随 B4 删除）— words 数组结构向后兼容
 - **WordDetailPopover** — 独立的词典查询 popover，不依赖 sentence.words
 
 ### 音标展示逻辑

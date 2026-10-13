@@ -125,8 +125,11 @@ describe("触屏提示事件与 device 维度", () => {
   })
 
   it("练习页的提示接线完整：出现报一次、关闭也报一次", () => {
+    // 指向重写版练习外壳。以前指向 LearnClient，但它在 PracticeModeGate 里
+    // 已经不可达（四种模式全部分发到 DictationPractice），触屏提示随 B4
+    // 移植进了 DictationPractice —— 断言必须跟着走，否则测的是死代码。
     const src = fs.readFileSync(
-      path.join(process.cwd(), "src/components/home/learn/LearnClient.tsx"),
+      path.join(process.cwd(), "src/components/home/learn/DictationPractice.tsx"),
       "utf8",
     )
     expect(src).toContain("trackTouchNoticeShown()")

@@ -7,9 +7,11 @@
  * 库里根本没有 `xxx_c0` 这一行；而跟读评分认**练习项 id**，因为每个分块是
  * 独立朗读、独立评分的一段文字，各有各的分数行。
  *
- * 这个后缀在 LearnClient 里被就地手写了 4 遍，任何一处漏掉，
+ * 这个后缀历史上在旧练习页（LearnClient）里被就地手写了 4 遍，任何一处漏掉，
  * 用户看到的就是「Review item not found」这种莫名其妙的失败 —— 而且
  * 因为只在特定内容上触发，很难复现。抽出来用一个函数兜住。
+ * （旧练习页已删除，但契约未变：`baseSentenceId` / `isChunkPracticeItemId`
+ * 仍是跟读评分与导入侧的唯一口径。）
  */
 import { describe, it, expect } from "vitest"
 import { baseSentenceId, isChunkPracticeItemId } from "@/lib/sentence-id"

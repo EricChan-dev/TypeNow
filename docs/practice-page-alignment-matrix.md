@@ -8,6 +8,13 @@
 > 下一步是阶段 2（核心手感：把 `ReviewClient` 的逐字符引擎抽成 `src/lib/typing-engine.ts`）。
 >
 > 本文档同时是**决策台账**——开始讨论练习页改动前先看 §五，不要重复讨论已定的事项。
+>
+> ⚠️ **代码位置已过时（2026-10）**：本文表格里的行号与文件名指向**重写前的**旧练习页
+> `src/components/home/learn/LearnClient.tsx`。四种模式（听写/拼图/学习/口语）现已
+> 全部收编进 `src/components/home/learn/DictationPractice.tsx`，旧文件连同其 13 个
+> 依赖已删除。表格的**结论与决策仍然有效**（它们描述的是"当时缺什么、决定做什么"），
+> 但**引用行号不要再照抄**——要定位实现请直接看 `DictationPractice.tsx`
+> （它不使用 Tailwind，全部是 `.practice-shell` 作用域的具名类）。
 
 ---
 

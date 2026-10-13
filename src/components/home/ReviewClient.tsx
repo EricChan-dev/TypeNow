@@ -398,9 +398,11 @@ export function ReviewClient() {
 
       {/* Main content
 
-          同样不能用 justify-center 居中（见 LearnClient 里的说明）：在 overflow-y-auto
+          同样不能用 justify-center 居中：在 overflow-y-auto
           容器里会让超出部分滚不回来，长句的第一行会被永久裁掉。
-          用 mt-auto / mb-auto 替代：装得下就居中，装不下就顶对齐并完整滚动。 */}
+          用 mt-auto / mb-auto 替代：装得下就居中，装不下就顶对齐并完整滚动。
+          （同一条经验在练习页也成立，见 DictationPractice.tsx 里
+          `.cyber-main` 那套顶对齐 + 完整滚动的布局。） */}
       <div className="flex-1 flex flex-col items-center px-8 py-10 overflow-y-auto gap-8">
         {/* Chinese hint */}
         <p className="mt-auto text-2xl font-semibold text-foreground/70 text-center max-w-2xl">

@@ -7,7 +7,6 @@ import {
   resolvePracticeMode,
 } from "@/lib/practice-mode"
 import { DictationPractice } from "./DictationPractice"
-import { LearnClient } from "./LearnClient"
 
 /**
  * `storage` 事件订阅。同标签页内我们自己是写入方（下面那个 effect），
@@ -125,5 +124,17 @@ export function PracticeModeGate({
     */
     return <DictationPractice courseId={courseId} lessonId={lessonId} mode={mode} />
   }
-  return <LearnClient courseId={courseId} lessonId={lessonId} urlMode={mode} />
+
+  /*
+    四种模式在上面全部 return 了，而 `PRACTICE_MODES` 恰好就是这四个
+    （`src/lib/practice-mode.ts:12`），`resolvePracticeMode` 不可能返回别的值 ——
+    所以 `mode` 到这里已被 TS 收窄成 `never`，不需要兜底分支。
+
+    这里曾经有一行 `return <LearnClient … />`。它不是死代码清理时才没用的：
+    自四种模式全部改走 `DictationPractice` 起，类型上它就已经不可达了 ——
+    编译器能证明，但没人去删，于是连带 `LearnClient` 整棵树（14 个文件）一直
+    留在仓库里被当成「可能还在用」。留着比删掉更危险：`analytics-events` 的
+    触屏提示接线测试就是照着它写的，测的是永远不会执行的代码。
+  */
+  return null
 }

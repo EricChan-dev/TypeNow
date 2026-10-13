@@ -20,8 +20,8 @@ export function normalizeSentences(raw: Sentence[]): Sentence[] {
 /**
  * 把接口下发的句子摊平成「练习项」列表。
  *
- * 为什么要摊平：有 chunks（分块）的句子，**旧版练习页**要的是每个分块一条练习项，
- * 以便分块各自独立朗读、独立跟读评分，所以它们必须有各自的 id。
+ * 为什么要摊平：有 chunks（分块）的句子，**重写前的旧版练习页**要的是每个分块
+ * 一条练习项，以便分块各自独立朗读、独立跟读评分，所以它们必须有各自的 id。
  *
  * 这个函数原本是 `LearnClient.tsx` 里的一个私有函数，只被它自己的一处调用点使用。
  * 重写听写模式时它必须被两个实现共用，否则"分块 id 怎么拼"这件事会有两份实现，
@@ -31,8 +31,15 @@ export function normalizeSentences(raw: Sentence[]): Sentence[] {
  * 分块 id 形态 `<原句 id>_c<order>` 是**对外契约**：`review/complete`、`wordbook`、
  * 跟读评分、`baseSentenceId()` 都按这个形态解析。改这里等于改协议。
  *
- * ⚠️ 只给 `LearnClient`（拼图/学习/口语三种旧模式）用，**不要**在听写模式里调用 ——
- * 听写模式走 `normalizeSentences()`，理由见上方注释。
+ * ⚠️ 当前**没有生产调用点**：唯一调用者 LearnClient 已随 B4 删除，四种模式现在
+ * 全部走 `normalizeSentences()`（保留 chunks），所以 `_c<n>` 形态的练习项 id
+ * 已不再被生产出来。之所以保留而不是删掉：`/api/youdao/evaluate` 仍在用
+ * `isChunkPracticeItemId()` 校验传入的 id 形状（route.ts:38），
+ * `baseSentenceId()` 也仍按同一正则剥离后缀 —— 契约的**消费端**还活着，
+ * 这里保留的是它的定义与测试；一旦连消费端也移除，这个函数才能一起删。
+ *
+ * ⚠️ **不要**在听写模式里调用 —— 听写模式走 `normalizeSentences()`，
+ * 理由见上方注释。
  */
 export function expandSentences(raw: Sentence[]): Sentence[] {
   return raw.flatMap((s) => {

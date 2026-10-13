@@ -95,7 +95,20 @@ import { startVisualizer, stopVisualizer } from "@/lib/audio-visualizer"
 import { playError, playTyping, playChime } from "@/lib/sfx"
 import { fireSuccessBurst, startCompletionFireworks, resetConfetti } from "@/lib/confetti"
 import { toast } from "sonner"
-import { trackLessonStart, trackPracticeComplete, trackPaywallShown, trackTrialClaimed } from "@/lib/analytics"
+import {
+  trackLessonStart,
+  trackPracticeComplete,
+  trackPaywallShown,
+  trackTouchNoticeDismissed,
+  trackTouchNoticeShown,
+  trackTrialClaimed,
+} from "@/lib/analytics"
+import {
+  dismissDesktopNotice,
+  getDesktopNoticeServerSnapshot,
+  getDesktopNoticeSnapshot,
+  subscribeDesktopNotice,
+} from "@/lib/desktop-only"
 import { InlineSpeakingBar } from "@/components/home/learn/InlineSpeakingBar"
 import { SpeakingPractice } from "@/components/home/learn/SpeakingPractice"
 import { PuzzlePractice } from "@/components/home/learn/PuzzlePractice"
@@ -251,6 +264,40 @@ export function DictationPractice({
    * 只有这条订阅流才反映真实状态。
    */
   const speaking = useSyncExternalStore(subscribeSpeaking, isSpeaking, () => false)
+
+  /**
+   * === Layer 2.4: 触屏设备提示（PC 优先）===
+   *
+   * 只提示不拦截：平板上接了外接键盘的用户照样能正常练习，硬拦会把本来
+   * 能用的场景一并挡掉。判定与持久化都在 `src/lib/desktop-only.ts`，
+   * 那里记着这条产品决策的完整来龙去脉（练习页输入完全依赖 keydown，
+   * 软键盘能否吐出可用的 keydown 取决于各家输入法，实测不可靠；所以
+   * 退守 PC 优先，改为如实告知用户换电脑）。
+   *
+   * 与 sfx 开关同样用订阅式读值而不是在 effect 里 setState：服务端不知道
+   * 设备形态，先渲染提示条再撤掉会闪一下；订阅还能在用户平板上插上鼠标/
+   * 键盘时（`(hover: none)` 变 false）自动收起提示。
+   */
+  const showDesktopNotice = useSyncExternalStore(
+    subscribeDesktopNotice,
+    getDesktopNoticeSnapshot,
+    getDesktopNoticeServerSnapshot,
+  )
+
+  /**
+   * 触屏提示出现时上报一次。
+   *
+   * 每次挂载只报一次是必须的：`showDesktopNotice` 会随 `(hover: none)` 变化
+   * （平板插上/拔掉键盘），跟着它报会在同一次访问里重复计数，于是「触屏用户
+   * 有多少」这个分母直接被放大。
+   */
+  const touchNoticeTrackedRef = useRef(false)
+  useEffect(() => {
+    if (showDesktopNotice && !touchNoticeTrackedRef.current) {
+      touchNoticeTrackedRef.current = true
+      trackTouchNoticeShown()
+    }
+  }, [showDesktopNotice])
 
   // ── 菜单/面板开合 ───────────────────────────────────────────────────────────
   // 模式下拉与切换确认弹窗的状态都随组件移进 `ModeSwitcher` 了，
@@ -2559,6 +2606,71 @@ export function DictationPractice({
         </header>
 
         <main className="cyber-main" id="practiceContent">
+          {/*
+            === Layer 2.4: 触屏设备提示（PC 优先）===
+
+            位置放在 `main` 的第一子节点而不是 `header` 里：参考站顶栏是
+            `position:fixed`（`height:44px`），而 `.cyber-main` 用
+            `padding-top:54px` 让开它；把提示条塞进 fixed 顶栏会撑破那 44px，
+            放在这里则自然落在顶栏正下方、把内容往下推一行。
+
+            样式用内联而不是新建类：`practice.css` 是
+            `scripts/extract-practice-css.py` 从参考站抽取的产物，文件头写着
+            「自动生成 —— 请勿手改」，手写类会在下次重新生成时被抹掉。
+            这里取壳上已有的 `--neon-yellow` 变量，保证深浅三种主题下都不跑偏。
+          */}
+          {showDesktopNotice && (
+            <div
+              style={{
+                flexShrink: 0,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                marginBottom: 10,
+              }}
+            >
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 10,
+                  padding: "6px 12px",
+                  borderRadius: 999,
+                  border: "1px solid rgba(255, 204, 0, 0.25)",
+                  background: "rgba(255, 204, 0, 0.06)",
+                  fontSize: 12,
+                  color: "rgba(255, 255, 255, 0.7)",
+                }}
+              >
+                <span style={{ color: "var(--neon-yellow)", flexShrink: 0, display: "flex" }}>
+                  <IconKeyboard />
+                </span>
+                <span>打字练习需要物理键盘，建议在电脑上打开，手感与识别都更可靠</span>
+                <button
+                  type="button"
+                  aria-label="关闭"
+                  onClick={() => {
+                    // 关掉≠开始练习：它只说明这条提示打扰到了人。
+                    // 之后有没有 practice_complete 才是「移动端是不是劝退」的答案。
+                    trackTouchNoticeDismissed()
+                    dismissDesktopNotice()
+                  }}
+                  style={{
+                    border: 0,
+                    background: "transparent",
+                    cursor: "pointer",
+                    color: "rgba(255, 255, 255, 0.35)",
+                    fontSize: 14,
+                    lineHeight: 1,
+                    padding: 0,
+                  }}
+                >
+                  ✕
+                </button>
+              </div>
+            </div>
+          )}
+
           {status === "complete" ? (
             <CompletionScreen
               sentenceCount={sentences.length}

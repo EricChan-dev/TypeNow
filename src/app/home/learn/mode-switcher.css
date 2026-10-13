@@ -3,9 +3,12 @@
  * 生成器：scripts/extract-practice-css.py（作用域前缀 .mode-switcher-scope）。
  * 重新生成：python3 scripts/extract-practice-css.py
  *
- * 为什么单独一份：模式切换器是听写页与非听写页共用的组件，但拼图/学习/口语
- * 目前仍走旧的 LearnClient（没有 .practice-shell），.practice-shell 前缀
+ * 为什么单独一份：模式切换器是听写页与非听写页共用的组件，最初非听写
+ * 模式走的是旧 LearnClient（没有 .practice-shell），.practice-shell 前缀
  * 的规则在那里一条都不会命中。规则仍从参考站抽取，与 practice.css 同源。
+ * 注意：旧界面已删除，但这份**仍不能省** —— 它的规则带
+ * `:not(:where(.practice-shell) *)` 守卫，在壳内依然命中 mode-dropdown /
+ * mdt- / custom-modal 三族，而 practice.css 那份对这三族是 0 命中。
  */
 
 .mode-switcher-scope:not(:where(.practice-shell) *) {
