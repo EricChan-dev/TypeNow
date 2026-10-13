@@ -93,6 +93,7 @@ import { findNextLesson } from "@/lib/course-nav"
 import { getCurrentAudioElement, globalSpeak, isSpeaking, stopSpeaking, subscribeSpeaking, waitForSpeechEnd } from "@/lib/hooks/useTTSSettings"
 import { startVisualizer, stopVisualizer } from "@/lib/audio-visualizer"
 import { playError, playTyping, playChime } from "@/lib/sfx"
+import { fireSuccessBurst, startCompletionFireworks, resetConfetti } from "@/lib/confetti"
 import { toast } from "sonner"
 import { trackLessonStart, trackPracticeComplete, trackPaywallShown, trackTrialClaimed } from "@/lib/analytics"
 import { InlineSpeakingBar } from "@/components/home/learn/InlineSpeakingBar"
@@ -393,6 +394,25 @@ export function DictationPractice({
    * 从 `loopCountRef` 直接推比再存一个 ref 稳妥：少一处渲染期写入。
    */
   const manualPlayCount = () => (loopCountRef.current === 0 ? 1 : loopCountRef.current)
+  /**
+   * 「答对烟花效果」（`confetti_effect`）的同步镜像。
+   *
+   * 参考站把它读成一个模块级变量 `confettiEffectEnabled`（practice.js:7436），
+   * 在 `triggerSuccessEffects()` 里**按调用时刻**判断 —— 不是渲染期依赖。
+   * 我们的答对分支分散在 4 个 `useCallback` 里（听写/片段/口语/拼图），
+   * 顺着 ref 读就与参考站同构，也省掉往 4 个依赖数组里塞 state。
+   */
+  const confettiRef = useRef(true)
+  /**
+   * 答对时的视觉奖励 —— 参考站 `triggerSuccessEffects()`（practice.js:8258-8274）。
+   *
+   * 只有「答对烟花效果」开着才炸；关掉时参考站连 `createCanvasConfettiEffect()`
+   * 都不调用，我们保持一致（该开关的 hint 正是「减少性能开销」）。
+   */
+  const triggerSuccessEffects = useCallback(() => {
+    if (!confettiRef.current) return
+    fireSuccessBurst()
+  }, [])
   const revealRef = useRef(3)
   const showChineseRef = useRef(true)
   const trackedCompleteRef = useRef(false)
@@ -447,6 +467,7 @@ export function DictationPractice({
   autoNextRef.current = autoNext
   successPlayRef.current = successPlayCount
   loopCountRef.current = loopCount
+  confettiRef.current = confetti
   revealRef.current = revealThreshold
   showChineseRef.current = showChinese
   timerRef.current = timer
@@ -1018,6 +1039,7 @@ export function DictationPractice({
 
       if (allCorrect) {
         sfxChime()
+        triggerSuccessEffects()
         const parentId = baseSentenceId(sentence?.id ?? "")
         setCompleted((prev) => new Set(prev).add(currentIndexRef.current))
         // 上报进度（fire-and-forget），与旧版走同一个接口
@@ -1126,6 +1148,7 @@ export function DictationPractice({
 
       if (allCorrect) {
         sfxChime()
+        triggerSuccessEffects()
         fragmentMistakesRef.current = 0
         // 参考站 `setTimeout(nextFragment, 800)`：给用户看「全绿」的那一下
         window.setTimeout(() => {
@@ -1154,7 +1177,7 @@ export function DictationPractice({
     } finally {
       submittingRef.current = false
     }
-  }, [fragmentIndex, fragments, fragmentSid, startFullSentencePractice])
+  }, [fragmentIndex, fragments, fragmentSid, startFullSentencePractice, triggerSuccessEffects])
 
   // 每次渲染写下最新引用；`handleKeyDown` 只会读到首渲染绑定的那个本函数，
   // 所以必须走这条路把「当前闭包」递过去。
@@ -1348,14 +1371,18 @@ export function DictationPractice({
   const handleSpeakingScore = useCallback(
     (score: number) => {
       if (score >= 80) {
-        // 参考站 `triggerSuccessEffects()` + `playSuccessSound()`。彩蛋开关
-        // （`confetti_effect`）在我们的实现里由 `playChime` 自己读取，
-        // 与听写模式答对走同一条路径 —— 两个模式的音效口径必须一致。
+        // 参考站 speaking.js 评测 ≥80 分时调 `window.triggerSuccessEffects()`
+        // + `playSuccessSound()`：烟花（`createCanvasConfettiEffect`）与音效
+        // 是**两个各自独立**的判断，只不过在这里阈值恰好相同。
+        // 「答对烟花效果」（`confetti_effect`）这个开关只 gate 烟花，
+        // 不 gate 音效 —— `playChime` 不读这个键（`src/lib/sfx.ts` 零 import），
+        // 音效与否由上面的 `score >= 80` 单独决定。
+        triggerSuccessEffects()
         sfxChime()
       }
       if (score >= 70) markSpeakingComplete()
     },
-    [markSpeakingComplete],
+    [markSpeakingComplete, triggerSuccessEffects],
   )
 
   /**
@@ -1519,6 +1546,7 @@ export function DictationPractice({
       setResultMessage("")
       if (correct) {
         sfxChime()
+        triggerSuccessEffects()
         const idx = currentIndexRef.current
         const total = sentencesRef.current.length
         setCompleted((prev) => new Set(prev).add(idx))
@@ -1574,7 +1602,7 @@ export function DictationPractice({
         void userInput
       }
     },
-    [courseId, lessonId, mode, sentence?.id],
+    [courseId, lessonId, mode, sentence?.id, triggerSuccessEffects],
   )
 
   // ── 收藏当前句（底栏星标，⌘/Ctrl+U） ────────────────────────────────────────
@@ -4207,6 +4235,30 @@ function CompletionScreen({
   onNextLesson: () => void
   onBack: () => void
 }) {
+  /**
+   * 课节完成烟花 —— 参考站 `showCompletionMessage()`（practice.js:5044-5066）。
+   *
+   * 参考站的顺序是：先 `currentAudio.pause()` + `currentAudio = null` +
+   * `stopAudioVisualizer()` + 退出答案复习模式，**然后**才
+   * `triggerCompletionFireworks()`，最后播完成音效。这里同样先掐掉语音，
+   * 免得 TTS 拖着「答案复习」的尾音把庆祝盖过去。
+   *
+   * 注意**不受「答对烟花效果」开关控制**：参考站 `triggerCompletionFireworks()`
+   * 开头只判 `typeof confetti !== 'function'`，压根不读 `confettiEffectEnabled`
+   * —— 那个开关只 gate 答对时的那一发（`createCanvasConfettiEffect`）。
+   * 所以这里不要传 `confetti` 进来。
+   */
+  useEffect(() => {
+    stopSpeaking()
+    const stop = startCompletionFireworks(6000)
+    return () => {
+      stop()
+      // 画布是模块级单例、挂在 document.body 上，离开完成屏必须回收，
+      // 否则残留的粒子会飘到下一句练习上面。
+      resetConfetti()
+    }
+  }, [])
+
   return (
     <div className="celebration-container">
       <div className="celebration-icon">🎉</div>
