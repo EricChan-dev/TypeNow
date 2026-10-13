@@ -163,7 +163,9 @@ export function CourseCard({ course, variant = "discover", stats }: CourseCardPr
 
   return (
     <Link
-      href={`/home/store/${course.id}`}
+      // mine（我的课程）进课程详情：学习/进度视角，练习页「返回」也指向这里。
+      // discover（商城）保持商城详情：挑课/获取视角。两条产品线分开。
+      href={isMine ? `/home/courses/${course.id}` : `/home/store/${course.id}`}
       className="group block w-full text-left rounded-xl border border-border bg-card overflow-hidden hover:border-accent/50 hover:shadow-lg transition-all"
     >
       {/*
