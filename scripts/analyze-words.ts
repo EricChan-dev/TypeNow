@@ -12,14 +12,14 @@ import { join, dirname } from "path"
 import { fileURLToPath } from "url"
 import { drizzle } from "drizzle-orm/mysql2"
 import mysql from "mysql2/promise"
-import { isNull, eq } from "drizzle-orm"
+import { isNull, eq, or, sql, like, and } from "drizzle-orm"
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = dirname(__filename)
 
 config({ path: join(__dirname, "..", ".env.local") })
 
-import { sentences } from "../src/lib/db/schema"
+import { sentences, lessons, courses } from "../src/lib/db/schema"
 import { llmCall } from "../src/lib/llm"
 
 const pool = mysql.createPool(process.env.DATABASE_URL!)
@@ -74,10 +74,30 @@ async function runWithConcurrency<T>(
 async function main(): Promise<void> {
   const CONCURRENCY = 10
 
-  const pending = await db
+  // 可选范围参数：argv[2] 是课程标题的 LIKE 子串（如「课本同步」）。
+  // 不传 = 全库。全库待补约 12.6 万句（words IS NULL 9,075 + 空数组 117,567），
+  // 直接跑是一整天的 LLM 调用 —— 所以补数据一律带范围跑。
+  const scope = process.argv[2]?.trim() || null
+
+  // 待补 = words IS NULL **或空数组**。空数组是课本同步批量导入留下的
+  // （导入管线没跑逐词分析），原来的 isNull 条件永远跳过它们 —— 而复习屏
+  // 正是拿这批句子在裸奔（用户反馈 m22433：练完没有词性/音标/释义）。
+  const pendingQuery = db
     .select({ id: sentences.id, english: sentences.english, chinese: sentences.chinese })
     .from(sentences)
-    .where(isNull(sentences.words))
+  const pending = scope
+    ? await pendingQuery
+        .innerJoin(lessons, eq(sentences.lessonId, lessons.id))
+        .innerJoin(courses, eq(lessons.courseId, courses.id))
+        .where(
+          and(
+            or(isNull(sentences.words), sql`JSON_LENGTH(${sentences.words}) = 0`),
+            like(courses.title, `%${scope}%`)
+          )
+        )
+    : await pendingQuery.where(
+        or(isNull(sentences.words), sql`JSON_LENGTH(${sentences.words}) = 0`)
+      )
 
   console.log(`\n📖 Analyze Words Script`)
   console.log(`   Pending (no words): ${pending.length}`)

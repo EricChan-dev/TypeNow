@@ -90,7 +90,7 @@ import { normalizeSentences, isExpandedIndexSpace, mapExpandedIndexToRawIndex } 
 import { decideResume } from "@/lib/practice-session"
 import { baseSentenceId } from "@/lib/sentence-id"
 import { findNextLesson } from "@/lib/course-nav"
-import { getCurrentAudioElement, globalSpeak, isSpeaking, stopSpeaking, subscribeSpeaking, waitForSpeechEnd } from "@/lib/hooks/useTTSSettings"
+import { getCurrentAudioElement, globalSpeak, isSpeaking, stopSpeaking, subscribeSpeaking, waitForSpeechEnd, useTTSSettings, YOUDAO_EN_VOICES } from "@/lib/hooks/useTTSSettings"
 import { startVisualizer, stopVisualizer } from "@/lib/audio-visualizer"
 import { playError, playTyping, playChime } from "@/lib/sfx"
 import { fireSuccessBurst, startCompletionFireworks, resetConfetti } from "@/lib/confetti"
@@ -248,6 +248,15 @@ export function DictationPractice({
   const [loopCount, setLoopCount] = useState(1)
   const [toolbarDensity, setToolbarDensity] = useState<ToolbarDensity>("normal")
   const [themeStyle, setThemeStyle] = useState<ThemeStyle>("dark")
+  /* TTS 音色设置（voiceCard）。此前这卡是死的：value 硬编码「美式男声」、
+     onClick 空操作，YOUDAO_EN_VOICES 全仓零引用 —— 用户反馈 m22433
+     「切换不了」。现在接上 useTTSSettings：有道音色 + 系统英文语音，
+     选中即写 localStorage（typenow_tts_settings）并试听一次。 */
+  const { settings: ttsSettings, updateSettings: updateTtsSettings, enVoices: ttsBrowserVoices } = useTTSSettings()
+  const ttsVoiceShort =
+    ttsSettings.source === "youdao"
+      ? (YOUDAO_EN_VOICES.find((v) => v.name === ttsSettings.youdaoVoice)?.label ?? ttsSettings.youdaoVoice).split(" ")[0]
+      : ttsSettings.voice || "系统默认"
   // 极简沉浸模式。参考站默认关闭，键名 cyber_immersive_mode。
   const [immersive, setImmersive] = useState(false)
   // 全屏状态跟随浏览器（参考站 practice.js:7869 用 fullscreenchange 同步图标）
@@ -2381,13 +2390,16 @@ export function DictationPractice({
                       />
                       <InfoCard
                         id="voiceCard"
-                        title="选择系统的TTS发音风格"
+                        title="选择发音来源与音色（有道 TTS / 系统语音）"
                         label="发音偏好"
-                        value="美式男声"
+                        value={ttsVoiceShort}
                         valueId="voiceDisplayShort"
-                        status="plain"
+                        status={ttsSettings.source === "youdao" ? "ok" : "plain"}
                         icon={<IconMic />}
-                        onClick={() => { /* 单一发音偏好，无下拉可切换 */ }}
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          setOpenDropdown((v) => (v === "voice" ? null : "voice"))
+                        }}
                       />
                       <InfoCard
                         id="soundCard"
@@ -2575,9 +2587,58 @@ export function DictationPractice({
                       </div>
 
                       <div className={`card-dropdown custom-scrollbar${openDropdown === "voice" ? " active" : ""}`} id="voiceCardDropdown">
-                        <button type="button" className="card-opt-btn voice-opt selected" data-name="美式男声">
-                          美式男声
-                        </button>
+                        {/* 有道 TTS 音色（默认来源）。选中即持久化并试听 ——
+                            globalSpeak 的 overrides 支持「试听非当前来源」，见 hook 注释。 */}
+                        {YOUDAO_EN_VOICES.map((v) => (
+                          <button
+                            key={v.name}
+                            type="button"
+                            className={`card-opt-btn voice-opt${ttsSettings.source === "youdao" && ttsSettings.youdaoVoice === v.name ? " active" : ""}`}
+                            data-youdao={v.name}
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              updateTtsSettings({ source: "youdao", youdaoVoice: v.name })
+                              setOpenDropdown(null)
+                              void globalSpeak("Hello", { source: "youdao", youdaoVoice: v.name })
+                            }}
+                          >
+                            有道 · {v.label}
+                          </button>
+                        ))}
+                        {/* 系统语音（兜底来源）：enVoices 是白名单过滤后的英文语音 */}
+                        {ttsBrowserVoices.length > 0 && (
+                          <>
+                            <button
+                              type="button"
+                              className={`card-opt-btn voice-opt${ttsSettings.source === "browser" && !ttsSettings.voice ? " active" : ""}`}
+                              data-voice=""
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                updateTtsSettings({ source: "browser", voice: "" })
+                                setOpenDropdown(null)
+                                void globalSpeak("Hello", { source: "browser", voice: "" })
+                              }}
+                            >
+                              系统 · 默认英文
+                            </button>
+                            {ttsBrowserVoices.map((v) => (
+                              <button
+                                key={v.name}
+                                type="button"
+                                className={`card-opt-btn voice-opt${ttsSettings.source === "browser" && ttsSettings.voice === v.name ? " active" : ""}`}
+                                data-voice={v.name}
+                                onClick={(e) => {
+                                  e.stopPropagation()
+                                  updateTtsSettings({ source: "browser", voice: v.name })
+                                  setOpenDropdown(null)
+                                  void globalSpeak("Hello", { source: "browser", voice: v.name })
+                                }}
+                              >
+                                系统 · {v.name}
+                              </button>
+                            ))}
+                          </>
+                        )}
                       </div>
 
                       <div className={`card-dropdown${openDropdown === "loop" ? " active" : ""}`} id="loopCardDropdown">

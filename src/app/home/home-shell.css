@@ -53,8 +53,9 @@
     "Hiragino Sans GB", "Microsoft YaHei", "Helvetica Neue", Arial, sans-serif;
 
   /* 参考页 .container-fuild 的 padding-left：给固定定位的侧边栏让位。
-     176 / 79 = 换算后的侧边栏外宽（见文件头第 2 条）。 */
-  padding-left: 176px;
+     200 / 79 = 换算后的侧边栏外宽。m00826：参考站是 176px，应用户
+     「logo 再大点」的要求加宽到 200px 给 72px 大 logo 留位。 */
+  padding-left: 200px;
 }
 
 .home-ref-shell.is-collapsed {
@@ -75,7 +76,7 @@
   left: 0;
   top: 0;
   z-index: 30;
-  width: 176px;
+  width: 200px;
   height: 100dvh;
   padding: 0 16px 16px;
   display: flex;
@@ -99,19 +100,34 @@
 /* ── Logo ── */
 .home-ref-shell .ref-logo {
   flex: 0 0 auto;
+  /* m00699：flex 列布局里 cross-axis 理论上会 stretch 撑满，但显式 width:100%
+     才能保证 justify-content:center 一定有可居中的空间（用户反馈仍未居中）。 */
+  width: 100%;
   margin: 4px 0 0;
   line-height: 44px;
+  /* m00630：桌面侧栏 logo 水平居中 —— 此前只有移动端抽屉（下方媒体查询）居中，
+     桌面一直顶左，用户反馈"logo 没有居中"。写法与移动端规则同款；
+     line-height 与 img top:-5px 的竖向调校保持不动。 */
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .home-ref-shell .ref-logo img,
 .home-ref-shell .ref-logo svg {
-  height: 40px;
+  /* m00858：源图已紧裁（512×343，猫标占满画面，旧方形图上下 39% 是空白）。
+     盒高 60px = 猫实际高 60px（旧 72px 盒里猫只有 ~44px），观感更大且无空白；
+     宽随源图比 1.494 自适应（JSX 属性 90×60）。折叠态 47px 内容宽由
+     max-width:100% + object-fit:contain 兜底缩放；字标保持 22px（m00784）。 */
+  height: 60px;
   max-width: 100%;
   object-fit: contain;
   display: inline-block;
   vertical-align: middle;
   position: relative;
-  top: -5px;
+  /* m00699：-5px 是旧 inline 布局时代的竖向调校；改 flex + align-items:center
+     后由对齐接管，残留偏移会让图标偏离水平中线。 */
+  top: 0;
 }
 
 /* ── 导航主体 ── */
@@ -139,8 +155,8 @@
   display: block;
   width: 100%;
   position: relative;
-  margin: 4px 0;
-  padding-bottom: 4px;
+  margin: 6px 0;
+  padding-bottom: 6px;
   list-style: none;
 }
 
@@ -185,7 +201,7 @@
   position: absolute;
   left: -15px;
   top: 2px;
-  height: 30px;
+  height: 34px;
   background: transparent;
 }
 
@@ -200,14 +216,15 @@
   width: 100%;
   /* 显式高度而不是只给 line-height：flex 容器的高度由子项撑出，
      `line-height` 只影响行盒、不决定容器高度。折叠态文字标签被隐藏后
-     （只剩 16px 的图标）整项会塌成 18px，导航节奏全乱 —— 所以钉死 32px。
+     （只剩 18px 的图标）整项会塌成 18px，导航节奏全乱 —— 所以钉死 38px。
      参考页没这个问题是因为它的文字是 `a` 里的裸文本节点，
-     而我们把它包进了 <span class="ref-nav-label">。 */
-  height: 32px;
+     而我们把它包进了 <span class="ref-nav-label">。
+     （用户反馈 m22433：整体字号偏小、行距偏密 → 32/14 放大到 38/15。） */
+  height: 38px;
   padding-left: 13px;
   padding-right: 8px;
-  line-height: 32px;
-  font-size: 14px;
+  line-height: 38px;
+  font-size: 15px;
   color: var(--ref-asideText);
   cursor: pointer;
   white-space: nowrap;
@@ -215,7 +232,7 @@
   text-align: left;
   border-radius: 12px;
   border: 1px solid transparent;
-  margin-bottom: 6px;
+  margin-bottom: 8px;
   transition: all 0.1s linear;
   background: transparent;
 }
@@ -235,10 +252,10 @@
   color: var(--ref-asideItemText);
 }
 
-/* 图标：参考页字体图标 16px + 右间距 10px，这里换成 lucide 的 svg 尺寸 */
+/* 图标：参考页字体图标 16px，这里换成 lucide 的 svg 尺寸（随行高一起放大） */
 .home-ref-shell .ref-nav-icon {
-  width: 16px;
-  height: 16px;
+  width: 18px;
+  height: 18px;
   flex-shrink: 0;
   margin-right: 10px;
 }
@@ -254,7 +271,7 @@
    这里沿用同一视觉：红底白字小胶囊，压在标签尾部。 */
 .home-ref-shell .ref-nav-badge {
   flex-shrink: 0;
-  font-size: 10px;
+  font-size: 11px;
   font-weight: 700;
   line-height: 1;
   padding: 2px 5px;
@@ -315,8 +332,8 @@
 .home-ref-shell .ref-userinfo-name {
   display: block;
   font-weight: 550;
-  font-size: 13px;
-  line-height: 20px;
+  font-size: 14px;
+  line-height: 21px;
   overflow: hidden;
   white-space: nowrap;
   text-overflow: ellipsis;
@@ -326,8 +343,8 @@
 .home-ref-shell .ref-userinfo-tier {
   display: inline-block;
   vertical-align: middle;
-  font-size: 10px;
-  line-height: 16px;
+  font-size: 11px;
+  line-height: 17px;
   color: var(--ref-color97a5b8);
   border-radius: 9px;
   background: transparent;
@@ -457,10 +474,11 @@
   用 position:fixed 而不是挂在 .ref-sidebar 里：侧边栏有 overflow:hidden
   （参考页也有），负偏移的圆钮会被裁掉。参考页能显示说明它的实际挂载点不在
   侧边栏内部 —— 我们直接挂在外壳上，效果相同且不受裁剪影响。
-  left = 侧边栏外宽 − 13px（176−13=163；折叠态 79−13=66）。 */
+  left = 侧边栏外宽 − 13px（200−13=187，m00826 随侧栏加宽同步；
+  折叠态 79−13=66 不变）。 */
 .home-ref-shell .ref-display-switch {
   position: fixed;
-  left: 163px;
+  left: 187px;
   top: 80px;
   z-index: 31;
   width: 26px;
@@ -564,8 +582,9 @@
 
   .home-ref-shell .ref-logo img,
   .home-ref-shell .ref-logo svg {
-    height: 36px;
-    width: 36px;
+    height: 56px;
+    /* m00858：源图为横版（1.494），固定 width 会触发 letterbox 空白，改 auto。 */
+    width: auto;
     top: 0;
   }
 
