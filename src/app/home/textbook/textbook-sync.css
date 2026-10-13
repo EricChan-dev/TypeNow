@@ -1,0 +1,1225 @@
+/* 自动生成 —— 请勿手改。
+ * 来源：句游英语课本同步参考页（/User/TextbookSync）的 textbook-sync.css + market.css
+ * （共享 hero/搜索/卡片）+ common.css（.pages 分页器/.maxWidth）。
+ * 生成器：scripts/extract-textbook-sync-css.py（选择器已收敛到 .textbook-sync-page 下）。
+ * 重新生成：python3 scripts/extract-textbook-sync-css.py
+ *
+ * 层叠顺序 = 参考页真实加载顺序：common → market → textbook-sync，
+ * 页内覆盖（.searchInp .search-clear:hover 等）因此排在共享基样式之后。
+ * 参考页根元素 mainBox course-market sync-market-page 三合一：mainBox 底板
+ * 由 home-shell.css 复刻，course-market/sync-market-page 两个类保留在本页根节点。
+ *
+ * 其它搬运约定（与 home-ref.css / course-detail.css 同口径）：
+ *   1. 字号/行高/内边距/圆角/阴影/色值全部保留参考页原值，不做「优化」。
+ *   2. 参考页用 remixicon 字体图标（<i class="ri-*">），本仓统一用 lucide
+ *      组件；字体图标的 font-size 规则改写成 svg 的宽高（在组件里给 size）。
+ */
+
+.textbook-sync-page {
+  --bgwhite: #F8FAFE;
+  --bodyT: #333;
+  --color64748b: #64748b;
+  --color94a3b8: #94a3b8;
+  --f1f5f9: #f1f4f7;
+}
+
+/* ── 外壳件：.pages 分页器 + .maxWidth（来自 common.css，最先加载）── */
+.textbook-sync-page .maxWidth {
+    max-width: 1140px;
+    margin: 0 auto;
+    min-width: 1140px;
+}
+.textbook-sync-page .pages {
+    text-align: center;
+    margin-top: 40px;
+    margin-bottom: 40px;
+    display: flex;
+    justify-content: center;
+    gap: 8px;
+}
+.textbook-sync-page .pages a {
+    width: 40px;
+    height: 40px;
+    line-height: 40px;
+    border-radius: 8px;
+    background: #fff;
+    border: 1px solid #e5e7eb;
+    color: #6b7280;
+    transition: all 0.2s;
+    font-size: 14px;
+    box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+}
+.textbook-sync-page .pages a:hover {
+    border-color: #2563eb;
+    color: #2563eb;
+    background: #eff6ff;
+    transform: translateY(-1px);
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+}
+.textbook-sync-page .pages a.on {
+    background: #2563eb;
+    border-color: #2563eb;
+    color: #fff;
+    font-weight: 600;
+    box-shadow: 0 4px 6px -1px rgba(37, 99, 235, 0.3);
+}
+.textbook-sync-page .pages a i {
+    font-size: 18px;
+    line-height: 40px;
+    
+}
+.textbook-sync-page .pages a[style*="cursor:not-allowed"] {
+    background: #f9fafb;
+    border-color: #e5e7eb;
+    color: #d1d5db;
+    box-shadow: none;
+    transform: none;
+}
+.textbook-sync-page .pages a[style*="cursor:not-allowed"]:hover {
+    border-color: #e5e7eb;
+    color: #d1d5db;
+    background: #f9fafb;
+}
+
+/* ── 共享基样式：hero/搜索框/课程卡（来自 market.css）── */
+.textbook-sync-page .market-hero-section {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 24px 0 20px;
+}
+.textbook-sync-page .market-hero-section .hero-left h2 {
+    font-size: 28px;
+    font-weight: 800;
+    color: var(--bodyT);
+    margin-bottom: 8px;
+    letter-spacing: 0.5px;
+}
+.textbook-sync-page .market-hero-section .hero-left .hero-subtitle {
+    font-size: 14px;
+    color: var(--color94a3b8);
+    display: block;
+    font-weight: 400;
+}
+.textbook-sync-page .market-hero-section .modern-search p {
+    position: relative;
+    border: 2px solid transparent;
+    background: var(--bgwhite);
+    border-radius: 12px;
+    padding: 0;
+    margin: 0;
+    display: flex;
+    align-items: center;
+    width: 380px;
+    height: 48px;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.03);
+    transition: all 0.3s ease;
+}
+.textbook-sync-page .market-hero-section .modern-search p:focus-within {
+    border-color: rgba(59, 130, 246, 0.4);
+    box-shadow: 0 4px 20px rgba(59, 130, 246, 0.1);
+    transform: translateY(-1px);
+}
+.textbook-sync-page .market-hero-section .modern-search .search-icon-main {
+    position: absolute;
+    left: 16px;
+    font-size: 20px;
+    color: var(--color64748b);
+    transition: color 0.3s ease;
+    cursor: pointer;
+    z-index: 2;
+}
+.textbook-sync-page .market-hero-section .modern-search p:focus-within .search-icon-main {
+    color: #3b82f6;
+}
+.textbook-sync-page .market-hero-section .modern-search input {
+    width: 100%;
+    height: 100%;
+    background: transparent;
+    border: none;
+    padding-left: 46px;
+    padding-right: 40px;
+    font-size: 15px;
+    color: var(--bodyT);
+    outline: none;
+}
+.textbook-sync-page .market-hero-section .modern-search .search-clear {
+    position: absolute;
+    right: 14px;
+    left: auto !important;
+    font-size: 18px !important;
+    color: #cbd5e1;
+    cursor: pointer;
+    opacity: 0;
+    visibility: hidden;
+    transition: all 0.2s ease;
+    z-index: 3;
+}
+.textbook-sync-page .market-hero-section .modern-search .search-clear.on {
+    opacity: 1;
+    visibility: visible;
+}
+.textbook-sync-page .market-hero-section .modern-search .search-clear:hover {
+    color: #94a3b8;
+}
+@media screen and (max-width: 900px) {
+.textbook-sync-page .market-hero-section {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 16px;
+    }
+.textbook-sync-page .market-hero-section .modern-search p {
+        width: 100%;
+        max-width: 100%;
+    }}
+
+.textbook-sync-page .TypeList {
+    
+    margin-bottom: 8px;
+    margin-top: 10px;
+}
+.textbook-sync-page .TypeList ul {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(270px, 1fr));
+        gap: 16px;
+        padding: 0;
+        
+    }
+.textbook-sync-page .TypeList li {
+        background: var(--bgwhite);
+        
+        border-radius: 12px;
+        transition: all .2s linear;
+        overflow: hidden;
+        cursor: pointer;
+        position: relative;
+        
+    }
+.textbook-sync-page .TypeList li .add {
+            width: 100%;
+            height: 100%;
+            background: #F1F4FD;
+            border: 2px dashed #9aa8bb3b;
+            box-sizing: border-box;
+            border-radius: 12px;
+        }
+.textbook-sync-page .TypeList li .add p {
+                
+                
+                font-size: 14px;
+                text-align: center;
+                line-height: 42px;
+                color: #9aa8bb;
+            }
+.textbook-sync-page .TypeList li .add p i {
+                    font-size: 30px;
+                    background: #fff;
+                    width: 64px;
+                    height: 64px;
+                    border-radius: 50%;
+                    display: block;
+                    margin: 140px auto 0;
+                    text-align: center;
+                    line-height: 64px;
+                    color: #9aa8bb;
+                    box-shadow: 0px 2px 5px 0px rgb(0 0 0 / 6%);
+                }
+.textbook-sync-page .TypeList li:hover {
+            transform: translateY(-5px);
+            box-shadow: 0px 2px 5px 0px rgba(0, 0, 0, .1)
+        }
+.textbook-sync-page .TypeList li.last-child:hover {
+            transform: translateY(0px);
+            box-shadow: 0px 0px 5px 0px rgba(0, 0, 0, .0)
+        }
+.textbook-sync-page .TypeList li.last-child:hover .add {
+                background: #f1f4fd9c;
+            }
+.textbook-sync-page .TypeList li .img {
+    position: relative;
+    aspect-ratio: 16/9;
+}
+.textbook-sync-page .TypeList li .img .skeleton {
+        width: 100%;
+        height: 100%;
+        position: absolute;
+        top: 0;
+        left: 0;
+        background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
+        background-size: 200% 100%;
+        animation: skeleton-loading 1.5s infinite;
+    }
+@keyframes skeleton-loading {
+        0% {
+            background-position: 200% 0;
+        }
+        100% {
+            background-position: -200% 0;
+        }
+    }
+.textbook-sync-page .TypeList li .img img.lazy {
+        opacity: 0;
+        transition: opacity .3s ease-in;
+    }
+.textbook-sync-page .TypeList li .img img.lazy.loaded {
+        opacity: 1;
+    }
+.textbook-sync-page .TypeList li .img .TypeName {
+        height: 160px;
+        position: relative;
+        padding: 20px 24px;
+        overflow: hidden;
+    }
+.textbook-sync-page .TypeList li .img .TypeName i {
+            font-size: 120px;
+            color: #ffffff2b;
+            position: absolute;
+            right: -16px;
+            bottom: -20px;
+            transform: rotate(-15deg);
+            font-weight: bold;
+        }
+.textbook-sync-page .TypeList li .img .TypeName.Grammar i {
+            transform: rotate(0deg);
+        }
+.textbook-sync-page .TypeList li .img .TypeName.Zero i, .textbook-sync-page .TypeList li .img .TypeName.Speaking i, .textbook-sync-page .TypeList li .img .TypeName.Pronunciation i {
+            transform: rotate(15deg);
+        }
+.textbook-sync-page .TypeList li .img .TypeName.Zero {
+            background: linear-gradient(-45deg, #26baa5, #3dd29c);
+        }
+.textbook-sync-page .TypeList li .img .TypeName.Elite {
+            background: linear-gradient(-45deg, #5546e2, #7a3ce8);
+        }
+.textbook-sync-page .TypeList li .img .TypeName.Speaking {
+            background: linear-gradient(-45deg, #eb4b92, #f98e4a);
+        }
+.textbook-sync-page .TypeList li .img .TypeName.Fun {
+            background: linear-gradient(-45deg, #2d67e8, #62a4f7);
+        }
+.textbook-sync-page .TypeList li .img .TypeName.Grammar {
+            background: linear-gradient(-45deg, #db2230, #f13b5e);
+        }
+.textbook-sync-page .TypeList li .img .TypeName.Pronunciation {
+            background: linear-gradient(-45deg, #21a7e6, #32d2ec);
+        }
+.textbook-sync-page .TypeList li .img .TypeName h3 {
+            color: #fff;
+            font-size: 26px;
+            margin-top: 20px;
+            
+            line-height: 50px;
+        }
+.textbook-sync-page .TypeList li .img .TypeName span {
+            background: rgba(255, 255, 255, .2);
+            border: 1px solid rgba(255, 255, 255, .3);
+            font-size: 14px;
+            color: #fff;
+            padding: 0 11px;
+            line-height: 31px;
+            display: inline-block;
+            border-radius: 10px;
+        }
+.textbook-sync-page .TypeList li .img em {
+        position: absolute;
+        top: 8px;
+        right: 8px;
+        background: rgba(0, 0, 0, .5);
+        color: #fff;
+        font-size: 12px;
+        font-style: normal;
+        padding: 0 8px;
+        line-height: 24px;
+        height: 26px;
+        border-radius: 12px;
+    }
+.textbook-sync-page .TypeList li .img em.free {
+            background: rgb(38 186 133);
+        }
+.textbook-sync-page .TypeList li .img em i {
+            color: #fbd359;
+            font-size: 12px;
+            margin-right: 2px;
+            position: relative;
+            top: 0px;
+        }
+.textbook-sync-page .TypeList li .img img {
+        width: 100%;
+        
+        height: 100%;
+        object-fit: cover;
+    }
+.textbook-sync-page .TypeList li .info h6 label {
+    position: absolute;
+    right: 0;
+    bottom: 0;
+    color: #666666;
+    
+    font-size: 12px;
+    padding: 0 10px;
+    font-weight: normal;
+}
+.textbook-sync-page .TypeList li .info h6 i {
+    font-size: 16px;
+    position: relative;
+    top: -2px;
+    margin-right: 2px;
+    display: inline-block;
+    vertical-align: middle;
+}
+.textbook-sync-page .TypeList li .info em {
+    position: absolute;
+    right: 12px;
+    top: 12px;
+    font-size: 12px;
+    font-style: normal;
+    line-height: 20px;
+    height: 22px;
+    padding: 0 10px;
+    border-radius: 5px;
+    border: 1px solid transparent;
+}
+.textbook-sync-page .TypeList li .info .desc label.cj {
+    background: #ecfef6;
+    border-color: #378f7238;
+    color: #378f72;
+}
+.textbook-sync-page .TypeList li .info .desc label.zj {
+    background: #eff6ff;
+    border-color: #dbeafd;
+    color: #3c65da;
+}
+.textbook-sync-page .TypeList li .info .desc label.gj {
+    background: #fbf5ff;
+    border-color: #f4e8fe;
+    color: #842dcd;
+}
+.textbook-sync-page .TypeList li .info {
+    padding: 13px 16px 24px;
+    position: relative;
+}
+.textbook-sync-page .TypeList li .info h6 {
+        font-size: 16px;
+        display: block;
+        
+        position: relative;
+        line-height: 30px;
+    }
+.textbook-sync-page .TypeList li .info span {
+        color: #798699;
+        font-size: 14px;
+        margin-top: 7px;
+        display: block;
+    }
+.textbook-sync-page .TypeList li .info .desc {
+        padding: 16px 0 0px;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+    }
+.textbook-sync-page .TypeList li .info .desc label {
+            white-space: nowrap;
+            display: inline-block;
+            font-weight: normal;
+            background: #f1f5f9;
+            
+            font-size: 11px;
+            color: #666666;
+            
+            vertical-align: middle;
+            letter-spacing: 1px;
+            
+            padding: 0 7px;
+            line-height: 21px;
+            border: 1px solid transparent;
+            border-radius: 6px;
+        }
+.textbook-sync-page .TypeList li .info .desc label:first-child {
+            }
+.textbook-sync-page .TypeList li .info .desc label img {
+                width: 20px;
+                position: relative;
+                top: -2px;
+                display: inline-block;
+                vertical-align: middle;
+            }
+.textbook-sync-page .TypeList li .info .desc label i.ri-group-line {
+                font-size: 14px;
+                top: -2px;
+            }
+.textbook-sync-page .TypeList li .info .desc label i.ri-star-fill {
+                color: #fdc62d;
+                top: -2px;
+                font-size: 16px;
+            }
+.textbook-sync-page .TypeList li .info .time {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        
+        border-top: 1px solid #f7f8fa;
+        margin-top: 23px;
+        padding-top: 16px;
+    }
+.textbook-sync-page .TypeList li .info .time label {
+            font-size: 12px;
+            color: #FF8503;
+            display: inline-block;
+            
+            line-height: 20px;
+        }
+.textbook-sync-page .TypeList li .info .time label.t {
+                color: #b6bfcd;
+            }
+.textbook-sync-page .TypeList li .info .time label.t b {
+                    display: block;
+                    color: #000;
+                    font-size: 16px;
+                    margin-top: 4px;
+                }
+.textbook-sync-page .TypeList li .info .time label.t b.free {
+                        color: #22b983;
+                    }
+.textbook-sync-page .TypeList li .info .time label.t b i {
+                        color: #f39d29;
+                        padding-right: 5px;
+                        font-size: 16px;
+                    }
+.textbook-sync-page .TypeList li .info .time button {
+            width: 95px;
+            line-height: 35px;
+            border-radius: 10px;
+            color: #fff;
+            cursor: pointer;
+            
+            font-size: 14px;
+            
+        }
+.textbook-sync-page .TypeList li .info .time button.join {
+                background: #2a64e7;
+            }
+.textbook-sync-page .TypeList li .info button.kt {
+        background: #000;
+    }
+.textbook-sync-page .TypeList li .info .time button:hover {
+        opacity: 0.9;
+    }
+.textbook-sync-page .market-course-card .market-card-info {
+    padding: 8px 12px 9px;
+    text-align: left;
+}
+.textbook-sync-page .TypeList li.market-course-card .market-card-info h6 {
+    font-size: 15px;
+    font-weight: 700;
+    line-height: 20px;
+    margin: 6px 0 0;
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    overflow: hidden;
+    white-space: normal;
+}
+.textbook-sync-page .market-course-card .market-card-footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    border-top: 0;
+    padding: 0 0 4px;
+    line-height: 1;
+    gap: 10px;
+}
+.textbook-sync-page .TypeList li.market-course-card .market-card-footer .count, .textbook-sync-page .TypeList li.market-course-card .market-card-footer .level-badge {
+    margin: 0;
+    margin-top: 0;
+    display: inline-flex;
+    align-items: center;
+    white-space: nowrap;
+}
+.textbook-sync-page .TypeList li.market-course-card .market-card-footer .count {
+    font-size: 11px;
+    color: #64748b;
+    gap: 3px;
+    line-height: 1;
+}
+.textbook-sync-page .TypeList li.market-course-card .market-card-footer .count i {
+    font-size: 12px;
+}
+.textbook-sync-page .TypeList li.market-course-card .market-card-footer .level-badge {
+    font-size: 9px;
+    line-height: 15px;
+    height: 16px;
+    padding: 0 5px;
+    border-radius: 8px;
+    border: 1px solid transparent;
+    justify-content: center;
+}
+.textbook-sync-page .market-course-card .level-badge.cj {
+    background: #ecfef6;
+    border-color: #378f7238;
+    color: #378f72;
+}
+.textbook-sync-page .market-course-card .level-badge.zj {
+    background: #eff6ff;
+    border-color: #dbeafd;
+    color: #3c65da;
+}
+.textbook-sync-page .market-course-card .level-badge.gj {
+    background: #fbf5ff;
+    border-color: #f4e8fe;
+    color: #842dcd;
+}
+.textbook-sync-page .TypeList li .img {
+    background: var(--f1f5f9);
+}
+.textbook-sync-page .TypeList li .img .img-placeholder {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--f1f5f9);
+    z-index: 1;
+}
+.textbook-sync-page .TypeList li .img .img-placeholder i {
+    font-size: 32px;
+    color: #cbd5e1;
+    animation: pulse 1.5s ease-in-out infinite;
+}
+.textbook-sync-page .TypeList li .img img {
+    opacity: 0;
+    transition: opacity 0.3s ease;
+}
+.textbook-sync-page .TypeList li .img img.loaded {
+    opacity: 1;
+}
+.textbook-sync-page .TypeList li .img .img-placeholder.hidden {
+    display: none;
+}
+@keyframes pulse {
+    0%, 100% { opacity: 0.4; }
+    50% { opacity: 1; }
+}
+.textbook-sync-page .course-market .maxWidth {
+    max-width: 1400px;
+    min-width: unset;
+    width: 100%;
+    box-sizing: border-box;
+    padding: 0 20px;
+}
+@media screen and (max-width: 640px) {
+.textbook-sync-page .course-market .maxWidth {
+        padding: 0 12px;
+    }}
+
+.textbook-sync-page .TypeList ul {
+    grid-template-columns: repeat(auto-fill, minmax(min(270px, 100%), 1fr));
+    gap: 16px;
+}
+@media screen and (max-width: 640px) {
+.textbook-sync-page .TypeList ul {
+        gap: 12px;
+    }}
+
+.textbook-sync-page .TypeList ul li .info .time button {
+    padding: 6px 16px;
+    border-radius: 6px;
+    font-size: 13px;
+    cursor: pointer;
+    height: auto;
+    line-height: normal;
+}
+.textbook-sync-page .TypeList ul li .info .time button.join {
+    background: transparent;
+    color: #2563eb;
+    border: 1px solid #2563eb;
+    transition: all 0.3s ease;
+}
+.textbook-sync-page .TypeList ul li:hover .info .time button.join {
+    background: #2563eb;
+    color: #fff;
+}
+.textbook-sync-page .TypeList ul li .info .time button.joined {
+    background: #10b981;
+    color: white;
+    border: none;
+}
+
+/* ── 页面专属：筛选卡/状态工具条/空态（来自 textbook-sync.css，最后加载覆盖前者）── */
+.textbook-sync-page .TypeList li .img {
+    position: relative;
+    background: var(--f1f5f9);
+}
+.textbook-sync-page .TypeList li .img .img-placeholder {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--f1f5f9);
+    z-index: 1;
+}
+.textbook-sync-page .TypeList li .img .img-placeholder i {
+    font-size: 32px;
+    color: #cbd5e1;
+    animation: pulse 1.5s ease-in-out infinite;
+}
+.textbook-sync-page .TypeList li .img img {
+    opacity: 0;
+    transition: opacity 0.3s ease;
+}
+.textbook-sync-page .TypeList li .img img.loaded {
+    opacity: 1;
+}
+.textbook-sync-page .TypeList li .img .img-placeholder.hidden {
+    display: none;
+}
+@keyframes pulse {
+    0%, 100% { opacity: 0.4; }
+    50% { opacity: 1; }
+}
+.textbook-sync-page .searchInp .search-clear {
+    font-size: 18px !important;
+    left: 268px !important;
+    transition: color 0.2s ease;
+    flex-shrink: 0;
+    display:none;
+}
+.textbook-sync-page .searchInp .search-clear.on {
+        display:block;
+    }
+.textbook-sync-page .searchInp .search-clear:hover {
+        color: #ef4444 !important;
+    }
+.textbook-sync-page .sync-market-page .market-hero-section.sync-hero {
+    padding: 20px 0 16px;
+}
+.textbook-sync-page .sync-hero .hero-title-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 6px;
+}
+.textbook-sync-page .sync-hero .hero-title-row h2 {
+    font-size: 26px;
+    font-weight: 800;
+    color: var(--bodyT, #0f172a);
+    margin: 0;
+    line-height: 1.2;
+}
+.textbook-sync-page .sync-hero .hero-sync-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 4px 10px;
+    background: #eff6ff;
+    color: #2563eb;
+    border: 1px solid #dbeafe;
+    border-radius: 20px;
+    font-size: 12px;
+    font-weight: 600;
+    line-height: 1;
+}
+.textbook-sync-page .sync-hero .hero-subtitle {
+    font-size: 13px;
+    color: #64748b;
+    display: block;
+}
+.textbook-sync-page .sync-filter-wrapper {
+    padding: 4px 0 10px;
+}
+.textbook-sync-page .sync-filter-card {
+    background: var(--bgwhite, #ffffff);
+    border: 1px solid #e2e8f0;
+    border-radius: 16px;
+    box-shadow: 0 4px 16px rgba(15, 23, 42, 0.03);
+    padding: 18px 24px;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+}
+.textbook-sync-page .sync-filter-card .filter-row {
+    display: flex;
+    align-items: flex-start;
+    gap: 16px;
+}
+.textbook-sync-page .sync-filter-card .filter-label {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    width: 68px;
+    flex-shrink: 0;
+    font-size: 13px;
+    font-weight: 700;
+    color: #334155;
+    padding-top: 6px;
+}
+.textbook-sync-page .sync-filter-card .filter-label i {
+    font-size: 16px;
+    color: #2563eb;
+}
+.textbook-sync-page .sync-filter-card .filter-body {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+.textbook-sync-page .sync-filter-card .filter-row-divider {
+    height: 1px;
+    background: #f1f5f9;
+    margin: 0;
+}
+.textbook-sync-page .sync-filter-card .textbook-grades-tab {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin: 0;
+    line-height: normal;
+}
+.textbook-sync-page .sync-filter-card .textbook-grades-tab label {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    height: 32px;
+    padding: 0 14px;
+    margin: 0 !important;
+    font-size: 13px;
+    color: #475569 !important;
+    background: #ffffff !important;
+    border: 1px solid #e2e8f0 !important;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+    box-shadow: none !important;
+    line-height: normal;
+    user-select: none;
+}
+.textbook-sync-page .sync-filter-card .textbook-grades-tab label:after {
+    display: none !important;
+}
+.textbook-sync-page .sync-filter-card .textbook-grades-tab label:hover {
+    background: #eff6ff !important;
+    border-color: #93c5fd !important;
+    color: #1d4ed8 !important;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(37, 99, 235, 0.16) !important;
+}
+.textbook-sync-page .sync-filter-card .textbook-grades-tab label:active {
+    transform: translateY(0);
+    box-shadow: 0 1px 3px rgba(37, 99, 235, 0.1) !important;
+}
+.textbook-sync-page .sync-filter-card .textbook-grades-tab label.on {
+    background: #2563eb !important;
+    border-color: #2563eb !important;
+    color: #ffffff !important;
+    font-weight: 600;
+    box-shadow: 0 2px 8px rgba(37, 99, 235, 0.25) !important;
+}
+.textbook-sync-page .sync-filter-card .textbook-grades-tab label.on:hover {
+    background: #1d4ed8 !important;
+    border-color: #1d4ed8 !important;
+    color: #ffffff !important;
+    transform: translateY(-2px);
+    box-shadow: 0 6px 16px rgba(37, 99, 235, 0.35) !important;
+}
+.textbook-sync-page .sync-filter-card .publisher-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    align-items: center;
+}
+.textbook-sync-page .sync-filter-card .publisher-tags em {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    height: 32px;
+    padding: 0 14px;
+    font-style: normal;
+    font-size: 13px;
+    color: #475569;
+    background: #ffffff;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+    user-select: none;
+}
+.textbook-sync-page .sync-filter-card .publisher-tags em:hover {
+    background: #eff6ff;
+    border-color: #93c5fd;
+    color: #1d4ed8;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(37, 99, 235, 0.16);
+}
+.textbook-sync-page .sync-filter-card .publisher-tags em:active {
+    transform: translateY(0);
+    box-shadow: 0 1px 3px rgba(37, 99, 235, 0.1);
+}
+.textbook-sync-page .sync-filter-card .publisher-tags em.on {
+    background: #2563eb;
+    border-color: #2563eb;
+    color: #ffffff;
+    font-weight: 600;
+    box-shadow: 0 2px 8px rgba(37, 99, 235, 0.25);
+}
+.textbook-sync-page .sync-filter-card .publisher-tags em.on:hover {
+    background: #1d4ed8;
+    border-color: #1d4ed8;
+    color: #ffffff;
+    transform: translateY(-2px);
+    box-shadow: 0 6px 16px rgba(37, 99, 235, 0.35);
+}
+.textbook-sync-page .sync-status-toolbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-top: 14px;
+    padding: 0 4px;
+}
+.textbook-sync-page .sync-status-toolbar .status-left {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    font-size: 13px;
+    color: #64748b;
+    flex-wrap: wrap;
+}
+.textbook-sync-page .sync-status-toolbar .result-count i {
+    font-size: 14px;
+    vertical-align: -1px;
+    margin-right: 2px;
+    color: #94a3b8;
+}
+.textbook-sync-page .sync-status-toolbar .result-count b {
+    color: #2563eb;
+    font-size: 16px;
+    font-weight: 700;
+    margin: 0 2px;
+}
+.textbook-sync-page .sync-status-toolbar .active-filter-chips {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+}
+.textbook-sync-page .sync-status-toolbar .chip-divider {
+    color: #cbd5e1;
+}
+.textbook-sync-page .sync-status-toolbar .chip-label {
+    color: #94a3b8;
+    font-size: 12px;
+}
+.textbook-sync-page .sync-status-toolbar .filter-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    background: #eff6ff;
+    border: 1px solid #bfdbfe;
+    color: #1e40af;
+    font-size: 12px;
+    font-weight: 600;
+    padding: 2px 8px;
+    border-radius: 6px;
+}
+.textbook-sync-page .sync-status-toolbar .filter-chip i {
+    cursor: pointer;
+    font-size: 13px;
+    color: #60a5fa;
+    border-radius: 50%;
+    transition: all 0.2s ease;
+}
+.textbook-sync-page .sync-status-toolbar .filter-chip i:hover {
+    color: #ef4444;
+    background: #fee2e2;
+}
+.textbook-sync-page .sync-status-toolbar .status-right {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+}
+.textbook-sync-page .sync-status-toolbar .btn-restore-last {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 5px 12px;
+    font-size: 12px;
+    font-weight: 600;
+    color: #2563eb;
+    background: #eff6ff;
+    border: 1px solid #bfdbfe;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    white-space: nowrap;
+}
+.textbook-sync-page .sync-status-toolbar .btn-restore-last:hover {
+    background: #2563eb;
+    color: #ffffff;
+    border-color: #2563eb;
+    box-shadow: 0 2px 8px rgba(37, 99, 235, 0.25);
+    transform: translateY(-1px);
+}
+.textbook-sync-page .sync-status-toolbar .btn-restore-last:active {
+    transform: translateY(0);
+}
+.textbook-sync-page .sync-status-toolbar .btn-restore-last i {
+    font-size: 13px;
+}
+.textbook-sync-page .sync-status-toolbar .btn-clear-all {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 6px 14px;
+    font-size: 12px;
+    font-weight: 600;
+    color: #64748b;
+    background: #ffffff;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+.textbook-sync-page .sync-status-toolbar .btn-clear-all:hover {
+    color: #ef4444;
+    border-color: #fca5a5;
+    background: #fff5f5;
+}
+.textbook-sync-page .sync-empty-state {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    padding: 56px 20px 68px;
+    background: var(--bgwhite, #ffffff);
+    border: 1px dashed #cbd5e1;
+    border-radius: 16px;
+    margin: 16px 0 28px;
+    box-shadow: 0 4px 20px rgba(15, 23, 42, 0.02);
+}
+.textbook-sync-page .sync-empty-state .empty-icon-box {
+    width: 68px;
+    height: 68px;
+    border-radius: 20px;
+    background: #f0f7ff;
+    border: 1px solid #dbeafe;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: 16px;
+    color: #3b82f6;
+    font-size: 34px;
+    box-shadow: 0 4px 14px rgba(59, 130, 246, 0.12);
+}
+.textbook-sync-page .sync-empty-state .empty-title {
+    font-size: 16px;
+    font-weight: 700;
+    color: #1e293b;
+    margin: 0 0 8px;
+}
+.textbook-sync-page .sync-empty-state .empty-desc {
+    font-size: 13px;
+    color: #64748b;
+    max-width: 420px;
+    line-height: 1.6;
+    margin: 0 0 20px;
+}
+.textbook-sync-page .sync-empty-state .empty-actions {
+    display: flex;
+    gap: 12px;
+    align-items: center;
+}
+.textbook-sync-page .sync-empty-state .btn-empty-reset {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 20px;
+    font-size: 13px;
+    font-weight: 600;
+    color: #ffffff;
+    background: #2563eb;
+    border: 1px solid #2563eb;
+    border-radius: 10px;
+    cursor: pointer;
+    transition: all 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+    box-shadow: 0 2px 8px rgba(37, 99, 235, 0.25);
+}
+.textbook-sync-page .sync-empty-state .btn-empty-reset:hover {
+    background: #1d4ed8;
+    border-color: #1d4ed8;
+    transform: translateY(-2px);
+    box-shadow: 0 6px 16px rgba(37, 99, 235, 0.35);
+}
+.textbook-sync-page .sync-empty-state .btn-empty-reset:active {
+    transform: translateY(0);
+    box-shadow: 0 1px 3px rgba(37, 99, 235, 0.15);
+}
+@media screen and (max-width: 768px) {
+.textbook-sync-page .sync-filter-card {
+        padding: 14px 16px;
+        gap: 12px;
+    }
+.textbook-sync-page .sync-filter-card .filter-row {
+        flex-direction: column;
+        gap: 8px;
+    }
+.textbook-sync-page .sync-filter-card .filter-label {
+        padding-top: 0;
+        width: auto;
+    }
+.textbook-sync-page .sync-status-toolbar {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 10px;
+    }
+.textbook-sync-page .sync-status-toolbar .status-right {
+        align-self: flex-end;
+    }}
+
+.textbook-sync-page .TypeList li.sync-textbook-card {
+    display: flex;
+    flex-direction: column;
+    background: var(--bgwhite, #ffffff);
+    border: 1px solid #e2e8f0;
+    border-radius: 14px;
+    overflow: hidden;
+    box-shadow: 0 2px 8px rgba(15, 23, 42, 0.04);
+    transition: transform 0.28s cubic-bezier(0.34, 1.56, 0.64, 1), 
+                box-shadow 0.28s ease, 
+                border-color 0.28s ease;
+    cursor: pointer;
+    position: relative;
+}
+.textbook-sync-page .TypeList li.sync-textbook-card:hover {
+    transform: translateY(-6px);
+    border-color: #cbd5e1;
+    box-shadow: 0 12px 24px -4px rgba(15, 23, 42, 0.08), 
+                0 4px 10px -2px rgba(15, 23, 42, 0.04);
+}
+.textbook-sync-page .TypeList li.sync-textbook-card .img.img-wrap {
+    position: relative;
+    width: 100%;
+    aspect-ratio: 16 / 9;
+    background: #f8fafc;
+    overflow: hidden;
+    border-bottom: 1px solid #f1f5f9;
+}
+.textbook-sync-page .TypeList li.sync-textbook-card .img img.course-cover-img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    transition: opacity 0.3s ease, transform 0.35s cubic-bezier(0.2, 0, 0.2, 1);
+}
+.textbook-sync-page .TypeList li.sync-textbook-card:hover .img img.course-cover-img {
+    transform: scale(1.05);
+}
+.textbook-sync-page .sync-textbook-card .card-corner-badge {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    padding: 4px 9px;
+    border-radius: 6px;
+    font-size: 11px;
+    font-weight: 600;
+    line-height: 1;
+    z-index: 2;
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    letter-spacing: 0.3px;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.12);
+}
+.textbook-sync-page .sync-textbook-card .card-corner-badge.badge-sync {
+    background: rgba(37, 99, 235, 0.9);
+    color: #ffffff;
+    box-shadow: 0 2px 6px rgba(37, 99, 235, 0.35);
+}
+.textbook-sync-page .sync-textbook-card .card-corner-badge.badge-free {
+    background: rgba(16, 185, 129, 0.92);
+    color: #ffffff;
+    box-shadow: 0 2px 6px rgba(16, 185, 129, 0.35);
+}
+.textbook-sync-page .sync-textbook-card .card-main-content {
+    padding: 10px 14px 12px;
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    justify-content: space-between;
+}
+.textbook-sync-page .TypeList li.sync-textbook-card .book-title {
+    font-size: 15px;
+    font-weight: 700;
+    color: var(--bodyT, #0f172a);
+    line-height: 1.4;
+    margin: 0 0 8px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    transition: color 0.2s ease;
+}
+.textbook-sync-page .TypeList li.sync-textbook-card:hover .book-title {
+    color: #2563eb;
+}
+.textbook-sync-page .sync-textbook-card .card-meta-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding-top: 7px;
+    border-top: 1px dashed #f1f5f9;
+    margin-top: auto;
+}
+.textbook-sync-page .sync-textbook-card .card-meta-row .meta-left {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 12px;
+    color: #64748b;
+}
+.textbook-sync-page .sync-textbook-card .meta-item {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    white-space: nowrap;
+}
+.textbook-sync-page .sync-textbook-card .meta-item i {
+    font-size: 13px;
+    color: #94a3b8;
+}
+.textbook-sync-page .sync-textbook-card .meta-dot {
+    color: #cbd5e1;
+    font-weight: bold;
+}
+.textbook-sync-page .sync-textbook-card .btn-enter-study {
+    display: inline-flex;
+    align-items: center;
+    gap: 2px;
+    font-size: 12px;
+    font-weight: 600;
+    color: #2563eb;
+    opacity: 0.85;
+    white-space: nowrap;
+    transition: all 0.2s ease;
+}
+.textbook-sync-page .sync-textbook-card .btn-enter-study i {
+    font-size: 13px;
+    transition: transform 0.2s ease;
+}
+.textbook-sync-page .TypeList li.sync-textbook-card:hover .btn-enter-study {
+    opacity: 1;
+    color: #1d4ed8;
+}
+.textbook-sync-page .TypeList li.sync-textbook-card:hover .btn-enter-study i {
+    transform: translateX(3px);
+}
+@media screen and (max-width: 640px) {
+.textbook-sync-page .TypeList li.sync-textbook-card .card-main-content {
+        padding: 8px 10px 10px;
+    }
+.textbook-sync-page .TypeList li.sync-textbook-card .book-title {
+        font-size: 13.5px;
+        margin: 0 0 6px;
+    }}
+

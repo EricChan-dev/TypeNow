@@ -14,6 +14,8 @@ export interface Course {
   subCategoryKey: string | null
   createdAt: string
   usageCount: number
+  /** 课时数：列表接口附带的相关子查询统计（课本同步卡片「N课时」用），其余消费方可不读。 */
+  lessonCount?: number
   description: string | null
   isPublished: number
 }

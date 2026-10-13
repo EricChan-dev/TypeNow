@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server"
 import { db } from "@/lib/db"
-import { courses } from "@/lib/db/schema"
+import { courses, lessons } from "@/lib/db/schema"
 import { aliveCourse } from "@/lib/soft-delete"
-import { eq, and, like, sql, desc, inArray, isNull } from "drizzle-orm"
+import { eq, and, like, sql, desc, inArray, isNull, getTableColumns } from "drizzle-orm"
 import type { SortMode } from "@/types/course"
 import { gradesOfStage, isUngradedStage } from "@/lib/textbook-taxonomy"
 
@@ -78,7 +78,18 @@ export async function GET(request: Request) {
     }
 
     const [rows, [{ total }]] = await Promise.all([
-      db.select().from(courses).where(where).limit(pageSize).offset(offset).orderBy(orderBy),
+      db
+        .select({
+          ...getTableColumns(courses),
+          // 课本同步卡片要显示「N课时」：相关子查询数该课未删除的课节。
+          // 放共享列表接口而不是单独开端点 —— 广场页多拿一个字段没有副作用。
+          lessonCount: sql<number>`(select count(*) from ${lessons} where ${lessons.courseId} = ${courses.id} and ${lessons.deletedAt} is null)`,
+        })
+        .from(courses)
+        .where(where)
+        .limit(pageSize)
+        .offset(offset)
+        .orderBy(orderBy),
       db.select({ total: sql<number>`count(*)` }).from(courses).where(where),
     ])
 
