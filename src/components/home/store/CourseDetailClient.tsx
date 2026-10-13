@@ -1,298 +1,685 @@
 "use client"
 
-import { useState, useEffect } from "react"
+/**
+ * 课程市场详情页（/home/store/[courseId]）—— 复刻句游英语参考站。
+ *
+ * ── 参考页 ──────────────────────────────────────────────────────────────────
+ *
+ * `~/Downloads/课本同步详情 - 句游英语.html`（juyouenglish.com 的课程市场
+ * /User/TextbookSync 点进某门课的详情页）。页面级样式由
+ * `scripts/extract-market-course-css.py` 从 `marketCourseDetail.css` + `common.css`
+ * 生成到 `src/app/home/store/market-course-detail.css`，选择器全部收敛在
+ * `.course-market-detail` 下；本组件按参考 DOM 结构输出同名类。
+ *
+ * ── 适配裁定（与我的课程详情页同口径，逐条有因）──────────────────────────────
+ *
+ * 1. **单 fetch 复用 /api/courses/[id]/detail**：该接口已带每课节句数
+ *    （sentenceCount）与 viewer.acquired，正好是本页「N 句」列与按钮态的
+ *    两个数据源；总句数 = 各课节句数求和（参考站页头 319 也是 9 课节之和，
+ *    同口径）。因此旧的 /api/courses/[id] + /[id]/lessons 两次请求不再使用。
+ * 2. **难度标签不渲染**：参考站有 初级/中级/高级 label.level；我们 courses 表
+ *    没有难度字段，派生不出真实难度（no-fake-data）。
+ * 3. **语法点 / 句子复杂度两节整节省略**：参考站按「有无 AI 分析数据」条件渲染
+ *    这两节，没有数据就不出节；我们永无该数据，照参考站的「无数据不出节」
+ *    行为省略（不同于我的课程详情页的「暂未生成」占位——那边参考样例本来就渲染）。
+ *    核心词汇/核心短语照旧现场派生（/api/lessons/[id]/insight，懒加载）。
+ * 4. **paid-course-notice 不搬**：参考站该提示只对付费课程出现；本库没有
+ *    「付费课程」概念（所有课都能加入、非会员每课前 5 句试学），无中生有的
+ *    付费提示是虚假信息。
+ * 5. **needUpgrade 上限弹窗不搬**：参考站免费用户有「可加入课程数上限」，加满
+ *    返回 needUpgrade；我们模型里没有这个上限。
+ * 6. **移除确认用 window.confirm**：参考站是自制确认弹窗
+ *    （customConfirmAsync，「确定要移除此课程吗?」）；本仓没有全局确认组件，
+ *    与我的课程详情页同用原生 confirm。
+ * 7. **「立即学习」跳 /home/courses/{id}**：参考站跳它自己的「我的课程详情」
+ *    （/User/CourseDetail/{id}）；我们的对应页是 /home/courses/[courseId]。
+ * 8. **加载更多 = 客户端切片 20/页**：参考站 GetLessonList 服务端分页
+ *    pagesize=20；我们 detail 接口一次返回全部课节，前端切片模拟同款
+ *    交互（.load-more/.btn-load-more，数据少于等于 20 时不渲染按钮）。
+ * 9. **remixicon → lucide**：course-market-detail.css 里的 font-size 规则落在
+ *    `i` 元素上，所以 lucide 组件外包一层 `<i style={iconWrap}>`，装饰交给
+ *    CSS、图形尺寸由 size 给。字号映射（CSS 原值）：返回箭头 17、面包屑分隔
+ *    16、统计图标 18、加入按钮 16、移除按钮 14、目录标题 22、detail-label 14、
+ *    展开箭头 18、加载更多 18、toast 图标 36。
+ *
+ * ── 按钮态的数据源 ──────────────────────────────────────────────────────────
+ *
+ * 已加入/未加入用 detail 接口的 viewer.acquired（服务端权威行）做初值，加入/
+ * 移除成功后就地翻转。**刻意不用 useAcquiredCourses hook**：它的 isAcquired 是
+ * 「服务端 ∪ 本地 ∪ 练习过」三源并集，为「我的课程」列表一致性设计——
+ * 练过但已移除的课在那里也算「我的」。市场页的加入/移除按钮必须反映服务端
+ * 真值，否则会出现「已移除的课仍显示已加入、点移除无效」的死锁。
+ * 展开箭头的有无对应参考站 hasEnhancement 门控：参考站有 AI 分析数据才出
+ * 箭头，我们词汇/短语总能现场派生，只有 0 句的课节派生不出任何东西，才隐藏。
+ */
+
+import { useState, useEffect, type CSSProperties, type ReactNode } from "react"
 import Link from "next/link"
 import Image from "next/image"
 import { useRouter } from "next/navigation"
-import { ChevronLeft, BookOpen, Users, Play, Check } from "lucide-react"
-import type { Course } from "@/types/course"
-import { useAcquiredCourses } from "@/lib/hooks/useAcquiredCourses"
-import { trackCourseOpen } from "@/lib/analytics"
-import { cn } from "@/lib/utils"
-// 配色与分类标签原先在本文件里复制了一份（与 CourseCard 各约 40 行），
-// 且这里只看 cover_url 决定用图还是色块 —— 在主题图上线的语境下，那会让同一门课
-// 在列表里有图、点进详情却是色块。现在两处走同一个解析函数。
+import {
+  BookMarked,
+  BookOpen,
+  CheckCircle2,
+  ChevronDown,
+  ChevronLeft,
+  ChevronRight,
+  FileText,
+  ListOrdered,
+  PlayCircle,
+  Plus,
+  Quote,
+  Users,
+  X,
+} from "lucide-react"
 import { getCategoryLabel, resolveCourseCover } from "@/lib/course-cover"
+import { trackCourseOpen } from "@/lib/analytics"
 
-interface LessonRow {
+/** 参考站 GetLessonList 的 pagesize=20，客户端切片沿用同值。 */
+const PAGE_SIZE = 20
+
+interface LessonInfo {
   id: string
-  courseId: string
   title: string
   summary: string | null
   sortOrder: number
+  sentenceCount: number
+  state: "completed" | "current" | "none"
+  lastPracticedAt: string | null
 }
 
-function formatLearnerCount(n: number): string {
-  if (n >= 10000) return `${(n / 10000).toFixed(1)}万`
-  if (n >= 1000) return `${(n / 1000).toFixed(1)}k`
-  return String(n)
+interface DetailData {
+  course: {
+    id: string
+    title: string
+    description: string | null
+    coverUrl: string | null
+    learnerCount: number | null
+    categoryKey: string | null
+    subCategoryKey: string | null
+    textbookVersion: string | null
+  }
+  stats: {
+    practiceCount: number
+    completedSentences: number
+    mistakeCount: number
+    elapsedSeconds: number
+  }
+  progress: { completedLessons: number; totalLessons: number; percent: number }
+  viewer: { isPro: boolean; trialAvailable: boolean; acquired: boolean }
+  lessons: LessonInfo[]
 }
 
-interface CourseDetailClientProps {
-  courseId: string
+interface InsightData {
+  vocab: { word: string; pos: string; count: number }[]
+  phrases: { phrase: string; count: number }[]
+  grammar: null
+  complexity: null
 }
 
-export function CourseDetailClient({ courseId }: CourseDetailClientProps) {
+type InsightSlot = InsightData | "loading" | "error"
+
+/** 图标包一层 <i>：CSS 的 `i` 规则（颜色/字号）落在包装上，svg 尺寸由 size 给。 */
+const iconWrap: CSSProperties = {
+  display: "inline-flex",
+  alignItems: "center",
+  justifyContent: "center",
+  textIndent: 0,
+}
+
+function Icon({ children }: { children: ReactNode }) {
+  return <i style={iconWrap}>{children}</i>
+}
+
+/** 参考站 tag-vocab 标签流：只有词面。词汇已按 word 聚合，可作 key。 */
+function renderVocab(d: InsightData): ReactNode | null {
+  if (!d.vocab.length) return null
+  return (
+    <>
+      {d.vocab.map((v) => (
+        <span key={v.word} className="tag-vocab">
+          {v.word}
+        </span>
+      ))}
+    </>
+  )
+}
+
+function renderPhrases(d: InsightData): ReactNode | null {
+  if (!d.phrases.length) return null
+  return (
+    <>
+      {d.phrases.map((p) => (
+        <span key={p.phrase} className="tag-phrase">
+          {p.phrase}
+        </span>
+      ))}
+    </>
+  )
+}
+
+/**
+ * 词汇/短语共用的展开区块：加载中 / 失败 / 空数据 / 有数据四态。
+ * 与我的课程详情页同款：空数据文案必须与「加载失败」区分开——
+ * words 覆盖率 72.5%、chunks 只有 5%，「真的没有可派生数据」是常态不是错误。
+ */
+function DetailSection({
+  icon,
+  label,
+  insight,
+  emptyText,
+  render,
+}: {
+  icon: ReactNode
+  label: string
+  insight: InsightSlot | undefined
+  emptyText: string
+  render: (d: InsightData) => ReactNode | null
+}) {
+  let body: ReactNode
+  if (!insight || insight === "loading") {
+    body = <span className="complexity-reason">正在分析课节内容…</span>
+  } else if (insight === "error") {
+    body = <span className="complexity-reason">分析数据加载失败，收起后重新展开可重试</span>
+  } else {
+    body = render(insight) ?? <span className="complexity-reason">{emptyText}</span>
+  }
+  return (
+    <div className="detail-section">
+      <div className="detail-label">
+        <Icon>{icon}</Icon>
+        {label}
+      </div>
+      <div className="detail-tags">{body}</div>
+    </div>
+  )
+}
+
+export function CourseDetailClient({ courseId }: { courseId: string }) {
   const router = useRouter()
-  const [course, setCourse] = useState<Course | null>(null)
-  const [lessons, setLessons] = useState<LessonRow[]>([])
+  const [data, setData] = useState<DetailData | null>(null)
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState(false)
-  /**
-   * 图片加载失败时退回渐变色块。
-   * 第 2 层（主题变体表）只根据 slug 是否在 44 个合法槽位里就拼出路径，
-   * 无法知道文件此刻是否真在磁盘上；没有这个兜底，文件缺失的表现是破图 +
-   * alt 文本溢出，比色块难看得多。与 CourseCard 里同一处兜底对应。
-   *
-   * 必须和其它 useState 放在一起、且在下面三个提前 return **之前** ——
-   * 放到 return 之后会违反 hooks 规则：loading 由 true 变 false 时
-   * 组件会多调用一个 hook，React 直接抛「Rendered more hooks than …」。
-   */
+  const [notFound, setNotFound] = useState(false)
+  // 封面兜底：coverUrl 可能是外链或 base64，加载失败退回分类渐变色卡
   const [coverFailed, setCoverFailed] = useState(false)
-  const { isAcquired, acquire } = useAcquiredCourses()
+  // 展开的课节（参考站允许多个同时展开）
+  const [expandedIds, setExpandedIds] = useState<ReadonlySet<string>>(new Set())
+  // 课节学习要点缓存：展开时才拉，拉过就不再拉
+  const [insights, setInsights] = useState<Record<string, InsightSlot>>({})
+  // 加入态 + 在学人数：初值来自 detail 接口，加入/移除成功后就地翻转
+  const [acquired, setAcquired] = useState(false)
+  const [learnerCount, setLearnerCount] = useState(0)
+  // 加入成功的大 toast 遮罩（参考站 #toastOverlay，不自动消失）
+  const [showToast, setShowToast] = useState(false)
+  // 加入/移除失败的小 toast（参考站 showToast，3s 自动消失）
+  const [notice, setNotice] = useState<string | null>(null)
+  // 加载更多的已显示条数
+  const [visibleCount, setVisibleCount] = useState(PAGE_SIZE)
+  // 加入/移除请求进行中：防连点导致 toast 重复弹出、人数重复 ±1
+  const [busy, setBusy] = useState(false)
 
   useEffect(() => {
-    setLoading(true)
-    // 课程详情是「注册了但一直没开始学」的分界点：漏斗里注册之后的第一步。
-    // 放在这里而不是 store 列表页，因为点进具体课程才代表真的有学习意图。
+    let cancelled = false
+    // loading 的初值就是 true，不在这里同步 setLoading(true)——
+    // react-hooks/set-state-in-effect 禁止 effect 体内同步 setState；
+    // 本页面也不存在「同组件内换 courseId」的路径（课→课必经列表页）。
+    // 与我的课程详情同一支漏斗事件：点进具体课程代表真实学习意图
     trackCourseOpen(courseId)
-    Promise.all([
-      fetch(`/api/courses/${courseId}`).then((r) => r.json()),
-      fetch(`/api/courses/${courseId}/lessons`).then((r) => r.json()),
-    ]).then(([courseJson, lessonsJson]) => {
-      if (courseJson.data) setCourse(courseJson.data as Course)
-      if (lessonsJson.data) setLessons(lessonsJson.data as LessonRow[])
-    }).catch(() => setLoadError(true)).finally(() => setLoading(false))
+    fetch(`/api/courses/${courseId}/detail`)
+      .then(async (r) => {
+        if (r.status === 404) {
+          if (!cancelled) setNotFound(true)
+          return null
+        }
+        if (!r.ok) throw new Error(`HTTP ${r.status}`)
+        return (await r.json()) as DetailData
+      })
+      .then((json) => {
+        if (cancelled) return
+        if (json) {
+          setData(json)
+          setAcquired(json.viewer.acquired)
+          setLearnerCount(json.course.learnerCount ?? 0)
+        } else if (!notFound) {
+          setLoadError(true)
+        }
+      })
+      .catch(() => {
+        if (!cancelled) setLoadError(true)
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false)
+      })
+    return () => {
+      cancelled = true
+    }
+    // notFound 只读一次做兜底判断，进依赖会让 404 分支自我循环
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [courseId])
+
+  useEffect(() => {
+    if (!notice) return
+    const t = setTimeout(() => setNotice(null), 3000)
+    return () => clearTimeout(t)
+  }, [notice])
+
+  const toggleLesson = (lessonId: string) => {
+    const isExpanding = !expandedIds.has(lessonId)
+
+    setExpandedIds((prev) => {
+      const next = new Set(prev)
+      if (next.has(lessonId)) next.delete(lessonId)
+      else next.add(lessonId)
+      return next
+    })
+
+    // 首次展开才请求学习要点。fetch 必须放在 updater 外面——setState 的
+    // updater 必须是纯函数，StrictMode 下 updater 会跑两遍，请求就发两次了。
+    const slot = insights[lessonId]
+    if (isExpanding && (!slot || slot === "error")) {
+      setInsights((cur) => ({ ...cur, [lessonId]: "loading" }))
+      fetch(`/api/lessons/${lessonId}/insight`)
+        .then(async (r) => {
+          if (!r.ok) throw new Error(`HTTP ${r.status}`)
+          return (await r.json()) as InsightData
+        })
+        .then((json) => {
+          setInsights((c) => ({ ...c, [lessonId]: json }))
+        })
+        .catch(() => {
+          setInsights((c) => ({ ...c, [lessonId]: "error" }))
+        })
+    }
+  }
+
+  // 参考站 enrollCourse：成功 → toast 遮罩 + 人数 +1 + 按钮翻成「已加入课程库/移除」
+  const enroll = async () => {
+    if (busy) return
+    setBusy(true)
+    try {
+      const res = await fetch("/api/user/acquired-courses", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ courseId }),
+      })
+      if (res.ok) {
+        setAcquired(true)
+        setLearnerCount((c) => c + 1)
+        setShowToast(true)
+      } else {
+        setNotice("加入失败，请稍后重试")
+      }
+    } catch {
+      setNotice("网络异常，请稍后重试")
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  // 参考站 unenrollCourse：确认 → DELETE → 按钮翻回「加入我的课程库」+ 人数 -1，
+  // 停留在本页（与参考站一致；「我的课程」列表页才会在移除后跳走）
+  const unenroll = async () => {
+    // 参考站 customConfirmAsync 的对应物；本仓没有全局确认弹窗组件，用原生 confirm
+    if (!window.confirm("确定要移除此课程吗？")) return
+    if (busy) return
+    setBusy(true)
+    try {
+      const res = await fetch("/api/user/acquired-courses", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ courseId }),
+      })
+      if (res.ok) {
+        setAcquired(false)
+        setLearnerCount((c) => Math.max(0, c - 1))
+      } else {
+        window.alert("移除失败，请稍后重试")
+      }
+    } catch {
+      window.alert("操作失败，请稍后重试")
+    } finally {
+      setBusy(false)
+    }
+  }
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center py-32">
-        <div className="h-6 w-6 rounded-full border-2 border-accent border-t-transparent animate-spin" />
+      <div className="course-market-detail">
+        <div className="maxWidth">
+          <p style={{ padding: "80px 0", textAlign: "center", color: "#94a3b8", fontSize: 14 }}>
+            正在加载课程…
+          </p>
+        </div>
       </div>
     )
   }
 
-  if (loadError) {
+  if (notFound || (!data && loadError)) {
     return (
-      <div className="flex flex-col items-center justify-center py-24 px-6 text-center">
-        <p className="text-sm text-muted-foreground mb-3">加载失败</p>
-        <button onClick={() => window.location.reload()} className="text-sm text-accent font-medium hover:underline">点击重试</button>
-      </div>
-    )
-  }
-
-  if (!course) {
-    return (
-      <div className="flex flex-col items-center justify-center py-24 px-6 text-center">
-        <BookOpen className="h-12 w-12 text-muted-foreground/40 mb-4" />
-        <p className="text-sm font-medium text-muted-foreground">课程未找到</p>
-        <Link
-          href="/home/store"
-          className="mt-4 inline-flex items-center gap-1.5 text-sm text-accent hover:text-accent/80 transition-colors"
-        >
-          <ChevronLeft className="h-4 w-4" />
-          返回课程列表
-        </Link>
-      </div>
-    )
-  }
-
-  const acquired = isAcquired(courseId)
-  const firstLessonId = lessons[0]?.id
-  const cover = resolveCourseCover(course)
-  const categoryLabel = getCategoryLabel(course.categoryKey, course.subCategoryKey)
-
-  return (
-    <div className="px-6 lg:px-10 xl:px-14 py-6">
-      {/* Back button */}
-      <Link
-        href="/home/store"
-        className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors mb-5"
-      >
-        <ChevronLeft className="h-4 w-4" />
-        返回课程列表
-      </Link>
-
-      {/* Header Card */}
-      <div className="rounded-2xl border border-border bg-card overflow-hidden mb-6 flex flex-col sm:flex-row">
-        {/* Cover */}
-        {cover.kind === "image" && !coverFailed ? (
-          <div className="relative sm:w-[280px] lg:w-[320px] shrink-0 aspect-[16/10] sm:aspect-auto overflow-hidden">
-            {/* 本地图片走 next/image；外链与后台传的 base64 dataURL 走裸 img
-                （next/image 对未登记 remotePatterns 的域名会直接抛错）。
-                alt 用空串：标题就在紧邻的右侧，重复朗读对读屏用户是噪音。 */}
-            {cover.src.startsWith("/") ? (
-              <Image
-                src={cover.src}
-                alt=""
-                fill
-                sizes="320px"
-                className="object-cover"
-                onError={() => setCoverFailed(true)}
-              />
-            ) : (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img
-                src={cover.src}
-                alt=""
-                onError={() => setCoverFailed(true)}
-                className="absolute inset-0 h-full w-full object-cover"
-              />
-            )}
-            {course.source === "official" && (
-              <span className="absolute top-3 left-3 rounded-full bg-foreground/15 backdrop-blur-sm px-2.5 py-0.5 text-[10px] font-medium text-foreground/90">
-                官方
-              </span>
-            )}
-          </div>
-        ) : (
-          <div
-            className="relative sm:w-[280px] lg:w-[320px] shrink-0 aspect-[16/10] sm:aspect-auto flex flex-col justify-between p-5 overflow-hidden select-none"
-            style={{ background: cover.gradient }}
-          >
-            {/* Subtle texture dots */}
-            <div
-              className="absolute inset-0 opacity-[0.05]"
-              style={{
-                backgroundImage: `radial-gradient(circle, ${cover.theme.accent} 1px, transparent 1px)`,
-                backgroundSize: "14px 14px",
-              }}
-            />
-
-            {/* Top row: category + source badges */}
-            <div className="relative z-10 flex items-center gap-2">
-              <span
-                className="rounded-md px-2.5 py-1 text-xs font-semibold tracking-wide"
-                style={{ background: cover.theme.badge, color: cover.theme.accent }}
-              >
-                {categoryLabel}
-              </span>
-              {course.source === "official" && (
-                <span className="rounded-full bg-white/10 backdrop-blur-sm px-2.5 py-1 text-xs font-medium text-white/70">
-                  官方
-                </span>
-              )}
-            </div>
-
-            {/* Middle: title */}
-            <div className="relative z-10 flex-1 flex items-center">
-              <h2
-                className="text-base font-bold leading-snug line-clamp-3"
-                style={{ color: cover.theme.text }}
-              >
-                {course.title}
-              </h2>
-            </div>
-
-            {/* Bottom: creator */}
-            <div className="relative z-10 flex items-center gap-2">
-              <span className="text-xs font-medium opacity-50" style={{ color: cover.theme.text }}>
-                {course.sourceName}
-              </span>
-              <div className="flex-1 h-px opacity-10" style={{ background: cover.theme.text }} />
-            </div>
-          </div>
-        )}
-
-        {/* Info */}
-        <div className="p-5 sm:p-6 flex-1 flex flex-col justify-center min-w-0">
-          <h1 className="text-lg sm:text-xl font-bold text-foreground">{course.title}</h1>
-          {course.description && (
-            <p className="mt-2 text-sm text-muted-foreground leading-relaxed line-clamp-3">
-              {course.description}
-            </p>
-          )}
-
-          <div className="mt-3 flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
-            <div className="flex items-center gap-1.5">
-              <div className={cn(
-                "flex items-center justify-center h-5 w-5 rounded-full shrink-0 text-[10px] font-bold",
-                course.source === "official" ? "bg-accent text-white" : "bg-muted text-muted-foreground"
-              )}>
-                {course.source === "official" ? "官" : (course.sourceName || "U")[0]}
-              </div>
-              {course.sourceName}
-            </div>
-            <div className="flex items-center gap-1.5">
-              <BookOpen className="h-3.5 w-3.5" />
-              {lessons.length} 课
-            </div>
-            <div className="flex items-center gap-1.5">
-              <Users className="h-3.5 w-3.5" />
-              {formatLearnerCount(course.learnerCount)} 人学习
-            </div>
-          </div>
-
-          <div className="mt-4 flex items-center gap-3">
-            {acquired ? (
-              <>
-                <span className="inline-flex items-center gap-1.5 rounded-lg bg-muted px-5 py-2.5 text-sm font-medium text-muted-foreground cursor-not-allowed">
-                  <Check className="h-4 w-4" />
-                  已获取
-                </span>
-                <button
-                  onClick={() => firstLessonId && router.push(`/home/learn/${courseId}?lesson=${firstLessonId}`)}
-                  disabled={!firstLessonId}
-                  title={!firstLessonId ? "暂无可用章节" : undefined}
-                  className="inline-flex items-center gap-1.5 rounded-lg bg-accent px-5 py-2.5 text-sm font-semibold text-white hover:bg-accent/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  <Play className="h-4 w-4" />
-                  开始学习
-                </button>
-              </>
+      <div className="course-market-detail">
+        <div className="maxWidth">
+          <div style={{ padding: "80px 0", textAlign: "center", color: "#94a3b8", fontSize: 14 }}>
+            <p>{notFound ? "课程不存在或已下架" : "加载失败"}</p>
+            {notFound ? (
+              <Link href="/home/store" style={{ color: "#2C5AF4" }}>
+                返回课程广场
+              </Link>
             ) : (
               <button
-                onClick={() => acquire(courseId)}
-                className="inline-flex items-center gap-1.5 rounded-lg bg-primary px-5 py-2.5 text-sm font-semibold text-primary-foreground hover:bg-primary/90 transition-colors"
+                type="button"
+                onClick={() => window.location.reload()}
+                style={{ color: "#2C5AF4" }}
               >
-                <BookOpen className="h-4 w-4" />
-                获取课程
+                点击重试
               </button>
             )}
           </div>
         </div>
       </div>
+    )
+  }
 
-      {/* Tabs */}
-      <div className="border-b border-border mb-5">
-        <div className="flex items-center gap-0">
-          <span className="relative px-4 py-3 text-sm font-medium text-accent after:absolute after:bottom-0 after:left-0 after:right-0 after:h-[2px] after:bg-accent after:rounded-full">
-            大纲 ({lessons.length})
-          </span>
+  // 实际不可达（loading 期间上面两个视图已接管）；仅为 tsc 收窄 data
+  if (!data) return null
+
+  const course = data.course
+  const lessons = data.lessons
+  // 总句数 = 各课节句数求和（参考站页头口径：319 = 9 课节之和）
+  const totalSentences = lessons.reduce((sum, l) => sum + l.sentenceCount, 0)
+  const visibleLessons = lessons.slice(0, visibleCount)
+  const hasMore = lessons.length > visibleCount
+  const cover = resolveCourseCover(course)
+  const categoryLabel = getCategoryLabel(course.categoryKey, course.subCategoryKey)
+
+  return (
+    <div className="course-market-detail">
+      {notice && (
+        // 参考站 showToast 的顶部落位与红/绿配色；本页只有失败分支，固定红色
+        <div
+          style={{
+            position: "fixed",
+            top: 20,
+            left: "50%",
+            transform: "translateX(-50%)",
+            zIndex: 10000,
+            background: "#ef4444",
+            color: "#fff",
+            fontSize: 14,
+            lineHeight: 1.5,
+            padding: "10px 18px",
+            borderRadius: 8,
+            boxShadow: "0 4px 12px rgba(0,0,0,0.15)",
+          }}
+        >
+          {notice}
+        </div>
+      )}
+
+      <div className="maxWidth">
+        {/* 返回条 + 面包屑：参考站返回箭头与首层面包屑都指向课程市场列表 */}
+        <div className="location">
+          <Link href="/home/store" className="back" aria-label="返回课程广场">
+            <Icon>
+              <ChevronLeft size={17} />
+            </Icon>
+          </Link>
+          <nav className="breadcrumb">
+            <Link href="/home/store" className="breadcrumb-item">
+              课程广场
+            </Link>
+            <span className="breadcrumb-separator">
+              <Icon>
+                <ChevronRight size={16} />
+              </Icon>
+            </span>
+            <span className="breadcrumb-current">{course.title}</span>
+          </nav>
+        </div>
+
+        {/* 课程头：封面 + 标题/统计/简介/加入按钮 */}
+        <div className="market-course-header">
+          <div className="course-cover">
+            {cover.kind === "image" && !coverFailed ? (
+              // 本地图片走 next/image；外链与后台传的 base64 dataURL 走裸 img
+              //（next/image 对未登记 remotePatterns 的域名会直接抛错）。
+              // alt 用空串：标题就在紧邻的右侧，重复朗读对读屏用户是噪音。
+              cover.src.startsWith("/") ? (
+                <Image
+                  src={cover.src}
+                  alt=""
+                  fill
+                  sizes="400px"
+                  className="object-cover"
+                  onError={() => setCoverFailed(true)}
+                />
+              ) : (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={cover.src} alt="" onError={() => setCoverFailed(true)} />
+              )
+            ) : (
+              <div
+                style={{
+                  position: "absolute",
+                  inset: 0,
+                  display: "flex",
+                  flexDirection: "column",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  gap: 8,
+                  padding: 24,
+                  textAlign: "center",
+                  background: cover.gradient,
+                }}
+              >
+                <span
+                  style={{
+                    fontSize: 12,
+                    color: "rgba(255,255,255,0.85)",
+                    background: "rgba(0,0,0,0.18)",
+                    borderRadius: 999,
+                    padding: "2px 10px",
+                  }}
+                >
+                  {categoryLabel}
+                </span>
+                <span style={{ fontSize: 16, fontWeight: 600, color: "#fff" }}>{course.title}</span>
+              </div>
+            )}
+          </div>
+
+          <div className="course-info">
+            <h1 className="course-title">{course.title}</h1>
+
+            {/* 统计行：参考站 4 项（难度/在学/课节/句子），难度无数据不渲染。
+                图标配色由 CSS 的 .stat-item:nth-child 规则给，元素顺序变了
+                配色随之前移——这是 CSS 原样，不是 bug。 */}
+            <div className="course-stats">
+              <div className="stat-item">
+                <Icon>
+                  <Users size={18} />
+                </Icon>
+                <span className="stat-value">{learnerCount}</span>
+                <span className="stat-label">人在学</span>
+              </div>
+              <div className="stat-item">
+                <Icon>
+                  <BookOpen size={18} />
+                </Icon>
+                <span className="stat-value">{lessons.length}</span>
+                <span className="stat-label">课节</span>
+              </div>
+              <div className="stat-item">
+                <Icon>
+                  <FileText size={18} />
+                </Icon>
+                <span className="stat-value">{totalSentences}</span>
+                <span className="stat-label">句子</span>
+              </div>
+            </div>
+
+            {course.description && <p className="course-subtitle">{course.description}</p>}
+
+            {/* paid-course-notice 不搬：本库没有「付费课程」概念（头注释裁定 4） */}
+
+            <div className="course-actions">
+              {!acquired ? (
+                <button type="button" className="btn-add-course" onClick={enroll} disabled={busy}>
+                  <Icon>
+                    <Plus size={16} />
+                  </Icon>
+                  加入我的课程库
+                </button>
+              ) : (
+                <>
+                  <button type="button" className="btn-add-course added">
+                    <Icon>
+                      <CheckCircle2 size={16} />
+                    </Icon>
+                    已加入课程库
+                  </button>
+                  <button
+                    type="button"
+                    className="btn-add-course remove"
+                    onClick={unenroll}
+                    disabled={busy}
+                  >
+                    <Icon>
+                      <X size={14} />
+                    </Icon>
+                    移除
+                  </button>
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* 课程目录 */}
+        <div className="lesson-list-section">
+          <div className="section-header">
+            <h3>
+              <Icon>
+                <ListOrdered size={22} />
+              </Icon>
+              课程目录
+            </h3>
+            <span className="lesson-count">
+              共 {lessons.length} 课节 · {totalSentences} 句子
+            </span>
+          </div>
+
+          {lessons.length === 0 ? (
+            <p style={{ padding: "40px 0", textAlign: "center", color: "#94a3b8", fontSize: 14 }}>
+              该课程暂无课节
+            </p>
+          ) : (
+            <ul className="lesson-list">
+              {visibleLessons.map((lesson) => {
+                const expanded = expandedIds.has(lesson.id)
+                return (
+                  <li key={lesson.id} className={`lesson-item-wrapper${expanded ? " expanded" : ""}`}>
+                    <div className="lesson-item" onClick={() => toggleLesson(lesson.id)}>
+                      {/* 参考站 renderLessons 的 padStart(2,'0')；用 sortOrder 而不是
+                          可见序号，加载更多翻页后编号不跳变 */}
+                      <div className="lesson-number">{String(lesson.sortOrder).padStart(2, "0")}</div>
+                      <div className="lesson-content">
+                        <span className="lesson-title">{lesson.title}</span>
+                        {/* 参考站只在描述非空时渲染 p.lesson-description */}
+                        {lesson.summary && <p className="lesson-description">{lesson.summary}</p>}
+                      </div>
+                      <div className="lesson-right">
+                        <span className="sentence-count">{lesson.sentenceCount} 句</span>
+                        {/* 参考站 hasEnhancement 门控的对应物：0 句的课节派生不出
+                            任何要点，没有可展开的内容就不给箭头（头注释裁定说明） */}
+                        {lesson.sentenceCount > 0 && (
+                          <span className={`lesson-toggle-icon${expanded ? " rotated" : ""}`}>
+                            <Icon>
+                              <ChevronDown size={18} />
+                            </Icon>
+                          </span>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* 参考站语法点/句子复杂度两节按数据有无渲染，我们永无数据，
+                        照参考站行为整节省略（头注释裁定 3） */}
+                    {expanded && (
+                      <div className="lesson-detail">
+                        <DetailSection
+                          icon={<BookMarked size={14} />}
+                          label="核心词汇"
+                          insight={insights[lesson.id]}
+                          emptyText="本课暂无可提取的核心词汇"
+                          render={renderVocab}
+                        />
+                        <DetailSection
+                          icon={<Quote size={14} />}
+                          label="核心短语"
+                          insight={insights[lesson.id]}
+                          emptyText="本课暂无可提取的核心短语"
+                          render={renderPhrases}
+                        />
+                      </div>
+                    )}
+                  </li>
+                )
+              })}
+            </ul>
+          )}
+
+          {/* 参考站 GetLessonList 分页 20/页；我们前端切片，不足一页不出按钮 */}
+          {hasMore && (
+            <div className="load-more">
+              <button
+                type="button"
+                className="btn-load-more"
+                onClick={() => setVisibleCount((c) => c + PAGE_SIZE)}
+              >
+                <Icon>
+                  <ChevronDown size={18} />
+                </Icon>
+                加载更多
+              </button>
+            </div>
+          )}
         </div>
       </div>
 
-      {/* Tab Content */}
-      {lessons.length > 0 ? (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
-            {lessons.map((lesson, i) => (
-              <Link
-                key={lesson.id}
-                href={`/home/learn/${courseId}?lesson=${lesson.id}`}
-                className="flex items-start gap-3 rounded-xl border border-border bg-card p-4 hover:border-accent/30 transition-colors"
+      {/* 加入成功 toast 遮罩：点遮罩自身关闭，点内容区不关（参考站行为） */}
+      {showToast && (
+        <div
+          className="toast-overlay show"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setShowToast(false)
+          }}
+        >
+          <div className="toast-content">
+            <div className="toast-icon success">
+              <Icon>
+                <CheckCircle2 size={36} />
+              </Icon>
+            </div>
+            <h4>加入成功！</h4>
+            <p>课程已添加到您的学习课程库</p>
+            <div className="toast-actions">
+              <button
+                type="button"
+                className="btn-go-study"
+                onClick={() => router.push(`/home/courses/${courseId}`)}
               >
-                <div className="flex items-center justify-center h-7 w-7 rounded-full bg-accent/10 text-accent text-xs font-bold shrink-0">
-                  {i + 1}
-                </div>
-                <div className="min-w-0">
-                  <h3 className="text-sm font-medium text-foreground truncate">
-                    {lesson.title}
-                  </h3>
-                  {lesson.summary && (
-                    <p className="mt-1 text-xs text-muted-foreground leading-relaxed line-clamp-2">
-                      {lesson.summary}
-                    </p>
-                  )}
-                </div>
-              </Link>
-            ))}
+                <Icon>
+                  <PlayCircle size={18} />
+                </Icon>
+                立即学习
+              </button>
+              <button type="button" className="btn-stay" onClick={() => setShowToast(false)}>
+                继续浏览
+              </button>
+            </div>
           </div>
-        ) : (
-          <div className="flex flex-col items-center justify-center py-20 text-center">
-            <p className="text-sm font-medium text-muted-foreground">暂无章节</p>
-          </div>
-        )}
+        </div>
+      )}
     </div>
   )
 }

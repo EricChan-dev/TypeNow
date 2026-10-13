@@ -1,0 +1,715 @@
+/* 自动生成 —— 请勿手改。
+ * 来源：句游英语参考站 marketCourseDetail.css（课程市场详情页）+ common.css（.location / .maxWidth）。
+ * 生成器：scripts/extract-market-course-css.py（选择器已收敛到 .course-market-detail 下）。
+ * 重新生成：python3 scripts/extract-market-course-css.py
+ *
+ * 三条搬运约定（与 home-ref.css / course-detail.css 同口径）：
+ *   1. 字号/行高/内边距/圆角/阴影/色值全部保留参考页原值，不做「优化」。
+ *   2. 参考页用 remixicon 字体图标（<i class="ri-*">），本仓统一用 lucide
+ *      组件；字体图标的 font-size 规则改写成 svg 的宽高（在组件里给 size）。
+ *   3. `:root[themes="dark"]` 深色分支一律不搬 —— 本仓 2026-10 已删掉整套暗色令牌。
+ *
+ * 文件顶部的令牌块同样是生成物：参考页的变量定义在 reset.css 的 :root 上，
+ * 全局声明会溢出到其它页面，所以只把**本文件引用到的**那些挂在 .course-market-detail 上。
+ */
+
+.course-market-detail {
+  --bgf8fafc: #f8fafc;
+  --bgfafbfc: #fafbfc;
+  --bgwhite: #F8FAFE;
+  --bodyBg: #fff;
+  --bodyT: #333;
+  --color475569: #475569;
+  --color64748b: #64748b;
+  --color728095: #728095;
+  --color898989: #898989;
+  --color94a3b8: #94a3b8;
+  --e2e8f0: #e2e8f0;
+  --f1f5f9: #f1f4f7;
+  --locationBack: #ffffff66;
+}
+
+/* ── 外壳件（来自 common.css，参考页 <head> 中先加载）── */
+.course-market-detail .location {
+    margin-bottom: 24px;
+    position: relative;
+    line-height: 20px;
+    height: 20px;
+}
+.course-market-detail .location .back {
+    display: inline-block;
+    vertical-align: middle;
+    margin-right: 8px;
+    width: 28px;
+    height: 28px;
+    text-align: center;
+    border-radius: 5px;
+    line-height: 27px;
+    cursor: pointer;
+}
+.course-market-detail .location .back:hover {
+    background: var(--locationBack);
+}
+.course-market-detail .location a i {
+    font-size: 17px;
+    color: var(--color728095);
+}
+.course-market-detail .location h2 {
+    font-size: 18px;
+    display: inline-block;
+    vertical-align: middle;
+}
+.course-market-detail .location h2 span {
+    display: block;
+    font-weight: normal;
+    color: var(--color898989);
+    font-size: 14px;
+    padding-top: 3px;
+}
+.course-market-detail .maxWidth {
+    max-width: 1140px;
+    margin: 0 auto;
+    min-width: 1140px;
+}
+
+/* ── 页面样式（来自 marketCourseDetail.css，参考页中后加载、覆盖前者）── */
+.course-market-detail .location {
+    display: flex;
+    align-items: center;
+    margin-bottom: 24px;
+    height: auto;
+    line-height: 1.5;
+}
+.course-market-detail .location .breadcrumb {
+        display: flex;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 4px;
+    }
+.course-market-detail .location .breadcrumb-item {
+        color: #64748b;
+        font-size: 14px;
+        text-decoration: none;
+        transition: color 0.2s ease;
+    }
+.course-market-detail .location .breadcrumb-item:hover {
+            color: #2C5AF4;
+        }
+.course-market-detail .location .breadcrumb-separator {
+        color: #cbd5e1;
+        font-size: 16px;
+        display: flex;
+        align-items: center;
+    }
+.course-market-detail .location .breadcrumb-separator i {
+            font-size: 16px;
+        }
+.course-market-detail .location .breadcrumb-current {
+        color: var(--color1e293b);
+        font-size: 14px;
+        font-weight: 500;
+        max-width: 300px;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+.course-market-detail .market-course-header {
+    background: var(--bodyBg);
+    padding: 30px;
+    border-radius: 16px;
+    display: flex;
+    gap: 30px;
+    box-shadow: 0 2px 12px rgba(0, 0, 0, 0.06);
+    margin-bottom: 24px;
+}
+.course-market-detail .course-cover {
+    position: relative;
+    flex-shrink: 0;
+    width: 400px;
+    height: 225px;
+    
+    border-radius: 12px;
+    overflow: hidden;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+}
+.course-market-detail .course-cover img {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        display: block;
+        transition: transform 0.3s ease;
+    }
+.course-market-detail .course-cover:hover img {
+        transform: scale(1.02);
+    }
+.course-market-detail .course-info {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+}
+.course-market-detail .course-title {
+    font-size: 24px;
+    font-weight: 700;
+    color: var(--bodyT);
+    margin-bottom: 12px;
+    line-height: 1.3;
+}
+.course-market-detail .course-subtitle {
+    font-size: 14px;
+    color: var(--color64748b);
+    line-height: 1.5;
+    margin-bottom: 20px;
+}
+.course-market-detail .course-stats {
+    display: flex;
+    gap: 20px;
+    padding: 10px 16px;
+    background: var(--bgf8fafc);
+    border-radius: 10px;
+    margin-bottom: 12px;
+}
+.course-market-detail .stat-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+.course-market-detail .stat-item i {
+        font-size: 18px;
+    }
+.course-market-detail .stat-item:nth-child(1) i {
+        color: #f59e0b;
+    }
+.course-market-detail .stat-item:nth-child(2) i {
+        color: #8b5cf6;
+    }
+.course-market-detail .stat-item:nth-child(3) i {
+        color: #3b82f6;
+    }
+.course-market-detail .stat-item:nth-child(4) i {
+        color: #10b981;
+    }
+.course-market-detail .stat-value {
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--bodyT);
+}
+.course-market-detail .stat-label {
+    font-size: 12px;
+    color: var(--color94a3b8);
+}
+.course-market-detail .course-actions {
+    display: flex;
+    gap: 12px;
+    margin-top: auto;
+}
+.course-market-detail .btn-go-study {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    padding: 10px 24px;
+    background: linear-gradient(135deg, #f59e0b 0%, #f97316 100%);
+    color: #fff;
+    border: none;
+    border-radius: 8px;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    text-decoration: none;
+    box-shadow: 0 4px 12px rgba(245, 158, 11, 0.3);
+}
+.course-market-detail .btn-go-study:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 6px 16px rgba(245, 158, 11, 0.4);
+}
+.course-market-detail .btn-go-study i {
+    font-size: 18px;
+}
+.course-market-detail .btn-add-course {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    padding: 10px 20px;
+    background: #2C5AF4;
+    color: #fff;
+    border: none;
+    border-radius: 8px;
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+.course-market-detail .btn-add-course:hover {
+        background: #1e4fd6;
+    }
+.course-market-detail .btn-add-course i {
+        font-size: 16px;
+    }
+.course-market-detail .btn-add-course.added {
+        background: #10b981;
+        cursor: default;
+    }
+.course-market-detail .lesson-list-section {
+    background: var(--bodyBg);
+    border-radius: 16px;
+    padding: 24px;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.04);
+}
+.course-market-detail .section-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 20px;
+    padding-bottom: 16px;
+    border-bottom: 1px solid var(--f1f5f9);
+}
+.course-market-detail .section-header h3 {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        font-size: 18px;
+        font-weight: 600;
+        color: var(--bodyT);
+    }
+.course-market-detail .section-header h3 i {
+            color: #2C5AF4;
+            font-size: 22px;
+        }
+.course-market-detail .lesson-count {
+    font-size: 13px;
+    color: var(--color94a3b8);
+    background: var(--bgf8fafc);
+    padding: 6px 14px;
+    border-radius: 20px;
+}
+.course-market-detail .lesson-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+.course-market-detail .lesson-item {
+    display: flex;
+    align-items: center;
+    padding: 12px 16px;
+    background: var(--bgfafbfc);
+    border-radius: 10px;
+    transition: all 0.2s ease;
+    cursor: pointer;
+    border: 1px solid transparent;
+}
+.course-market-detail .lesson-item:hover {
+        background: var(--bgwhite);
+        border-color: var(--e2e8f0);
+    }
+.course-market-detail .lesson-number {
+    width: 36px;
+    height: 36px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: #2C5AF4;
+    color: #fff;
+    font-size: 13px;
+    font-weight: 600;
+    border-radius: 8px;
+    margin-right: 14px;
+    flex-shrink: 0;
+}
+.course-market-detail .lesson-content {
+    flex: 1;
+    min-width: 0;
+}
+.course-market-detail .lesson-title {
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--bodyT);
+    line-height: 1.4;
+}
+.course-market-detail .lesson-description {
+    font-size: 12px;
+    color: var(--color94a3b8);
+    margin-top: 4px;
+    line-height: 1.5;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+}
+.course-market-detail .sentence-count {
+    font-size: 13px;
+    color: var(--color64748b);
+    flex-shrink: 0;
+    margin-left: 16px;
+}
+.course-market-detail .load-more {
+    text-align: center;
+    margin-top: 24px;
+    padding-top: 20px;
+    border-top: 1px dashed var(--e2e8f0);
+}
+.course-market-detail .btn-load-more {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 12px 28px;
+    background: var(--bgf8fafc);
+    border: 1px solid var( --e2e8f0);
+    border-radius: 24px;
+    font-size: 14px;
+    color: var(--color64748b);
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+.course-market-detail .btn-load-more:hover {
+        background: var(--bgwhite);
+        border-color: #2C5AF4;
+        color: #2C5AF4;
+        box-shadow: 0 4px 12px rgba(44, 90, 244, 0.1);
+    }
+.course-market-detail .btn-load-more i {
+        font-size: 18px;
+        transition: transform 0.2s ease;
+    }
+.course-market-detail .btn-load-more:hover i {
+        transform: translateY(2px);
+    }
+.course-market-detail .lesson-item-wrapper {
+    display: flex;
+    flex-direction: column;
+    background: var(--bgfafbfc);
+    border-radius: 10px;
+    transition: all 0.2s ease;
+    border: 1px solid transparent;
+}
+.course-market-detail .lesson-item-wrapper:hover {
+    background: var(--bgwhite);
+    border-color: var(--e2e8f0);
+}
+.course-market-detail .lesson-item-wrapper.expanded {
+    background: var(--bgwhite);
+    border-color: #2C5AF4;
+    box-shadow: 0 4px 12px rgba(44, 90, 244, 0.08);
+}
+.course-market-detail .lesson-item-wrapper .lesson-item {
+    display: flex;
+    align-items: center;
+    padding: 12px 16px;
+    cursor: pointer;
+    background: transparent;
+    border: none;
+    border-radius: 10px;
+}
+.course-market-detail .lesson-item-wrapper .lesson-item:hover {
+    background: transparent;
+    border: none;
+}
+.course-market-detail .lesson-right {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-shrink: 0;
+    margin-left: 16px;
+}
+.course-market-detail .lesson-toggle-icon {
+    font-size: 18px;
+    color: var(--color94a3b8);
+    transition: transform 0.2s ease;
+}
+.course-market-detail .lesson-toggle-icon.rotated {
+    transform: rotate(180deg);
+}
+.course-market-detail .lesson-detail {
+    padding: 0 16px 16px 66px;
+    border-top: 1px dashed var(--e2e8f0);
+    margin-top: 4px;
+}
+.course-market-detail .detail-section {
+    margin-top: 12px;
+}
+.course-market-detail .detail-section:first-child {
+    margin-top: 16px;
+}
+.course-market-detail .detail-label {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--color64748b);
+    margin-bottom: 8px;
+}
+.course-market-detail .detail-label i {
+    font-size: 14px;
+}
+.course-market-detail .detail-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+.course-market-detail .tag-vocab {
+    display: inline-block;
+    padding: 4px 10px;
+    background: rgba(59, 130, 246, 0.1);
+    color: #3b82f6;
+    font-size: 12px;
+    border-radius: 14px;
+    font-weight: 500;
+}
+.course-market-detail .tag-phrase {
+    display: inline-block;
+    padding: 4px 10px;
+    background: rgba(16, 185, 129, 0.1);
+    color: #10b981;
+    font-size: 12px;
+    border-radius: 14px;
+    font-weight: 500;
+}
+.course-market-detail .detail-complexity {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+.course-market-detail .complexity-badge {
+    display: inline-block;
+    padding: 4px 10px;
+    font-size: 12px;
+    border-radius: 14px;
+    font-weight: 500;
+}
+.course-market-detail .complexity-badge.complex {
+    background: rgba(139, 92, 246, 0.1);
+    color: #8b5cf6;
+}
+.course-market-detail .complexity-badge.simple {
+    background: rgba(107, 114, 128, 0.1);
+    color: #6b7280;
+}
+.course-market-detail .complexity-reason {
+    font-size: 12px;
+    color: var(--color64748b);
+}
+.course-market-detail .toast-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.5);
+    backdrop-filter: blur(4px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 9999;
+    opacity: 0;
+    visibility: hidden;
+    transition: all 0.3s ease;
+}
+.course-market-detail .toast-overlay.show {
+        opacity: 1;
+        visibility: visible;
+    }
+.course-market-detail .toast-content {
+    background: var(--bodyBg);
+    padding: 40px 48px;
+    border-radius: 20px;
+    text-align: center;
+    max-width: 380px;
+    transform: scale(0.9) translateY(20px);
+    transition: transform 0.3s ease;
+    box-shadow: 0 25px 50px rgba(0, 0, 0, 0.15);
+}
+.course-market-detail .toast-overlay.show .toast-content {
+    transform: scale(1) translateY(0);
+}
+.course-market-detail .toast-icon {
+    width: 72px;
+    height: 72px;
+    margin: 0 auto 20px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+.course-market-detail .toast-icon.success {
+        background: #10b981;
+    }
+.course-market-detail .toast-icon i {
+        font-size: 36px;
+        color: #fff;
+    }
+.course-market-detail .toast-content h4 {
+    font-size: 22px;
+    font-weight: 600;
+    color: var(--bodyT);
+    margin-bottom: 10px;
+}
+.course-market-detail .toast-content p {
+    font-size: 14px;
+    color: var(--color64748b);
+    margin-bottom: 28px;
+}
+.course-market-detail .toast-actions {
+    display: flex;
+    gap: 12px;
+    justify-content: center;
+}
+.course-market-detail .btn-go-study {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 12px 24px;
+    background: #2C5AF4;
+    color: #fff;
+    border: none;
+    border-radius: 10px;
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+.course-market-detail .btn-go-study:hover {
+        background: #1e4fd6;
+    }
+.course-market-detail .btn-stay {
+    padding: 12px 24px;
+    background: var(--f1f5f9);
+    color: var( --color64748b);
+    border: none;
+    border-radius: 10px;
+    font-size: 14px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+.course-market-detail .btn-stay:hover {
+        background: var(--e2e8f0);
+        color: var(--color475569);
+    }
+@media screen and (max-width: 1200px) {
+.course-market-detail .market-course-header {
+        flex-direction: column;
+    }
+.course-market-detail .course-cover {
+        width: 100%;
+        max-width: 480px;
+        height: auto;
+        aspect-ratio: 16 / 9;
+    }
+.course-market-detail .course-stats {
+        justify-content: space-around;
+    }}
+
+@media screen and (max-width: 768px) {
+.course-market-detail .market-course-header {
+        padding: 20px;
+    }
+.course-market-detail .course-title {
+        font-size: 20px;
+    }
+.course-market-detail .course-actions {
+        flex-direction: column;
+    }
+.course-market-detail .btn-add-course, .course-market-detail .btn-favorite {
+        width: 100%;
+    }
+.course-market-detail .btn-go-study {
+        width: 100%;
+    }
+.course-market-detail .course-stats {
+        flex-wrap: wrap;
+        gap: 10px 14px;
+        justify-content: flex-start;
+        padding: 12px 14px;
+    }
+.course-market-detail .stat-item {
+        flex: 1 1 45%;
+        min-width: 0;
+    }
+.course-market-detail .lesson-item {
+        flex-wrap: wrap;
+        gap: 12px;
+    }}
+
+.course-market-detail .maxWidth {
+    max-width: 1400px;
+    min-width: unset;
+    width: 100%;
+    box-sizing: border-box;
+    padding: 0 20px;
+}
+@media screen and (max-width: 640px) {
+.course-market-detail .maxWidth {
+        padding: 0 12px;
+    }
+.course-market-detail .location {
+        margin-bottom: 14px;
+    }
+.course-market-detail .location .breadcrumb-current {
+        max-width: 180px;
+    }
+.course-market-detail .market-course-header {
+        padding: 16px;
+        border-radius: 14px;
+        gap: 14px;
+    }
+.course-market-detail .course-cover {
+        max-width: 100%;
+        border-radius: 12px;
+    }
+.course-market-detail .course-title {
+        font-size: 18px;
+    }
+.course-market-detail .course-subtitle {
+        font-size: 13px;
+        margin-bottom: 14px;
+        overflow: hidden;
+        display: -webkit-box;
+        -webkit-line-clamp: 3;
+        -webkit-box-orient: vertical;
+    }
+.course-market-detail .course-actions {
+        gap: 10px;
+    }
+.course-market-detail .btn-go-study, .course-market-detail .btn-add-course {
+        padding: 10px 16px;
+        border-radius: 10px;
+    }
+.course-market-detail .lesson-list-section {
+        padding: 16px;
+        border-radius: 14px;
+    }
+.course-market-detail .section-header {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 10px;
+    }
+.course-market-detail .lesson-count {
+        padding: 5px 12px;
+    }
+.course-market-detail .lesson-item {
+        padding: 12px 14px;
+    }
+.course-market-detail .sentence-count {
+        margin-left: 0;
+        width: 100%;
+        text-align: right;
+        color: var(--color94a3b8);
+    }
+.course-market-detail .load-more {
+        margin-top: 16px;
+        padding-top: 14px;
+    }}
+
+
+/* ── 参考页内联 <style> 补充（原样搬运，仅移除按钮）── */
+.course-market-detail .btn-add-course.remove {
+    background: #fee2e2;
+    color: #dc2626;
+}
+
+.course-market-detail .btn-add-course.remove i {
+    font-size: 14px;
+}
