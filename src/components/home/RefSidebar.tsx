@@ -39,7 +39,7 @@ const NAV_GROUPS: NavItem[][] = [
   ],
   [
     { key: "/home/wordbook", label: "单词本", icon: BookText },
-    { key: "/home/review", label: "复习本", icon: BookMarked },
+    { key: "/home/review", label: "错题本", icon: BookMarked },
     { key: "/home/notes", label: "笔记本", icon: FileText },
   ],
   [
@@ -131,19 +131,27 @@ export function RefSidebar({
         aria-label="主导航"
       >
       {/* Logo —— 参考页在 `.on` 折叠态会切成 small 图形，但那只是同一个 mark 的
-          两个尺寸；我们直接让 /logo.svg 随侧边栏宽度缩放即可，不必准备两张图。
+          两个尺寸；我们直接让 /brand/icon.png 随侧边栏宽度缩放即可，不必准备两张图。
           字标在折叠态隐藏（文字会被 is-collapsed 规则连同导航标签一起收起）。 */}
       <div className="ref-logo">
-        <Link href="/home" style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
+        {/* 与落地页同款结构（m00699）：icon.png 原比例 + font-brand 字标。
+            gap 10px；侧栏 200px（m00826）内容宽 168px，90+10+64≈164 放得下。 */}
+        <Link href="/home" style={{ display: "inline-flex", alignItems: "center", gap: 10 }}>
           {/* 侧边栏 logo 在首屏内，且是 Next 判定出的 LCP 元素。默认 lazy
               会让它晚一步才请求，既拖慢 LCP 也会触发
               「Image ... detected as the Largest Contentful Paint (LCP)」警告，
-              故显式 eager。尺寸只有 36×36 的 SVG，提前加载代价近乎为零。 */}
-          <Image src="/logo.svg" alt={BRAND.nameZh} width={36} height={36} loading="eager" />
+              故显式 eager。m00858：源图换成紧裁版（同
+              brand/web-logo/png/icon-tight.png，512×343）——旧方形图上下 39%
+              是空白，72px 盒里猫只有 ~44px 高；现在 60px 盒高即 60px 猫高，
+              宽 90 = 60×1.494 跟随源图宽高比（属性比≈实际比，防拉伸）。 */}
+          <Image src="/brand/icon.png" alt={BRAND.nameZh} width={90} height={60} loading="eager" />
+          {/* 字标与落地页同款排版：leading-none + tracking-tight（站酷快乐体）。
+              字号固定在 22px 落地页档 —— m00784 用户纠正：连着两轮「大点」
+              只该放大图标，字标不跟着涨。颜色沿用侧栏主题变量，不硬编码。 */}
           {!collapsed && (
             <span
-              className="font-brand"
-              style={{ fontSize: 15, letterSpacing: 1, color: "var(--ref-bodyT)", lineHeight: 1 }}
+              className="whitespace-nowrap font-brand text-[22px] leading-none tracking-tight"
+              style={{ color: "var(--ref-bodyT)" }}
             >
               {BRAND.lockup}
             </span>
