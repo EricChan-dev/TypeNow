@@ -14,7 +14,7 @@ export interface Word {
   english: string
   chinese: string | null
   phonetic: string | Phonetic | null // 兼容旧格式(string)和新格式({uk,us})
-  definition?: string | null         // 详细中文释义（来自句乐部导入）
+  definition?: string | null         // 详细中文释义（来自参考站导入）
   pos: string                         // 词性：VERB/NOUN/PRON... 或中文：动词/名词/代词...
 }
 

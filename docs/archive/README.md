@@ -19,9 +19,6 @@
 | [PRD-V2.md](PRD-V2.md) | 仓库根目录 | 产品主文档已被 [PRD_V3.md](../../PRD_V3.md) 取代 |
 | [dev-plan.md](dev-plan.md) | `docs/` | 2026-05 制定的 30 天排期，早已走完 |
 | [typenow-improvement-plan.md](typenow-improvement-plan.md) | `docs/` | 与数据导入方案、练习页对标矩阵重叠，结论已合并 |
-| [julebu-import-plan.md](julebu-import-plan.md) | `docs/` | 句乐部数据导入已执行完毕；日常操作见 [julebu-import-guide.md](../julebu-import-guide.md) |
-| [julebu-research.md](julebu-research.md) | `docs/` | 一次性竞品调研（147 个 JS chunk 逆向）；结论已沉淀进 [practice-page-alignment-matrix.md](../practice-page-alignment-matrix.md) |
-
 ---
 
 ## 归档时已经过时的关键结论

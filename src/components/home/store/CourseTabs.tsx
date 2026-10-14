@@ -1,7 +1,6 @@
 "use client"
 
 import { useRef } from "react"
-import { cn } from "@/lib/utils"
 import { COURSE_CATEGORIES } from "@/types/course"
 import type { StoreFacets } from "@/lib/store-facets"
 
@@ -24,21 +23,45 @@ interface CourseTabsProps {
  *
  * 刻意比标签小一号、颜色更淡：用户扫这一行是在找「我要哪一类」，
  * 数字只用来判断这类值不值得点进去，不该和标签抢注意力。
+ * 用 `currentColor` 的透明度而不是写死颜色 —— 选中态是黑底/蓝底，
+ * 写死的灰在黑底上会糊成一片。
  */
-function CountBadge({ count, active }: { count: number | undefined; active: boolean }) {
+function CountBadge({ count }: { count: number | undefined }) {
   if (count === undefined) return null
   return (
-    <span
-      className={cn(
-        "ml-1.5 tabular-nums text-[10px] font-normal",
-        active ? "text-accent/70" : "text-muted-foreground/60"
-      )}
-    >
+    <span className="relative -top-px ml-1 text-[10px] font-normal tabular-nums opacity-60">
       {count}
     </span>
   )
 }
 
+/**
+ * 点击 + 键盘的回调。参考站这两排标签是 `label`/`em` 加 onclick，本身不可聚焦；
+ * 这里补上 `role="button"` + `tabIndex` + Enter/Space，键盘用户才点得到。
+ */
+function tapHandlers(onActivate: () => void) {
+  return {
+    role: "button" as const,
+    tabIndex: 0,
+    onClick: onActivate,
+    onKeyDown: (e: React.KeyboardEvent) => {
+      if (e.key === "Enter" || e.key === " ") {
+        e.preventDefault()
+        onActivate()
+      }
+    },
+  }
+}
+
+/**
+ * 两级筛选标签 —— 复刻句游课程市场的 `.courseTab`。
+ *
+ * 元素名必须与参考站一致（主标签 `<label>`、子标签 `<em>`）：生成器把
+ * market.css 的选择器逐字收进本页作用域，`.courseTab p label.on`（黑底白字）
+ * 与 `.courseTab span em.on`（#2C5AF4 蓝底白字）都是**按元素名**匹配的 ——
+ * 换成 `<button>` 会让这套样式整块失效，那就不是复刻了。
+ * 与 TextbookSyncClient 对 `textbook-grades-tab label` 的处理同口径。
+ */
 export function CourseTabs({
   activeMainTab,
   activeSubTab,
@@ -46,8 +69,8 @@ export function CourseTabs({
   onSubTabChange,
   facets,
 }: CourseTabsProps) {
-  const mainTabsRef = useRef<HTMLDivElement>(null)
-  const subTabsRef = useRef<HTMLDivElement>(null)
+  const mainTabsRef = useRef<HTMLParagraphElement>(null)
+  const subTabsRef = useRef<HTMLSpanElement>(null)
 
   const activeCategory = COURSE_CATEGORIES.find((c) => c.key === activeMainTab)
   const showSubTabs = activeCategory && activeCategory.subCategories.length > 0
@@ -72,70 +95,47 @@ export function CourseTabs({
   }
 
   return (
-    <div className="mb-6">
-      {/* Main tabs */}
-      <div
-        ref={mainTabsRef}
-        className="flex items-center gap-1 overflow-x-auto pb-2 scrollbar-none"
-      >
-        {COURSE_CATEGORIES.map((cat) => (
-          <button
-            key={cat.key}
-            onClick={() => handleMainTabChange(cat.key)}
-            className={cn(
-              "shrink-0 rounded-lg px-3.5 py-2 text-sm font-medium transition-colors",
-              activeMainTab === cat.key
-                ? "bg-accent/15 text-accent"
-                : "text-muted-foreground hover:text-foreground hover:bg-muted"
-            )}
-          >
-            {cat.label}
-            <CountBadge count={countOf(mainCounts, cat.key)} active={activeMainTab === cat.key} />
-          </button>
-        ))}
-      </div>
+    <div className="fixedTab">
+      <div className="courseTab">
+        <div className="Tab">
+          {/* 主标签：参考站是 <p> 里一排 <label> */}
+          <p ref={mainTabsRef} className="scrollbar-none overflow-x-auto">
+            {COURSE_CATEGORIES.map((cat) => (
+              <label
+                key={cat.key}
+                {...tapHandlers(() => handleMainTabChange(cat.key))}
+                className={activeMainTab === cat.key ? "on" : undefined}
+              >
+                {cat.label}
+                <CountBadge count={countOf(mainCounts, cat.key)} />
+              </label>
+            ))}
+          </p>
 
-      {/* Sub tabs */}
-      {showSubTabs && (
-        <div
-          ref={subTabsRef}
-          className="flex items-center gap-1 overflow-x-auto pt-3 mt-1 border-t border-border/50 scrollbar-none"
-        >
-          <button
-            onClick={() => onSubTabChange(null)}
-            className={cn(
-              "shrink-0 rounded-md px-2.5 py-1 text-xs font-medium transition-colors",
-              activeSubTab === null
-                ? "bg-accent/15 text-accent"
-                : "text-muted-foreground hover:text-foreground hover:bg-muted"
-            )}
-          >
-            全部
-            <CountBadge
-              count={countOf(mainCounts, activeCategory!.key)}
-              active={activeSubTab === null}
-            />
-          </button>
-          {activeCategory!.subCategories.map((sub) => (
-            <button
-              key={sub.key}
-              onClick={() => onSubTabChange(sub.key)}
-              className={cn(
-                "shrink-0 rounded-md px-2.5 py-1 text-xs font-medium transition-colors",
-                activeSubTab === sub.key
-                  ? "bg-accent/15 text-accent"
-                  : "text-muted-foreground hover:text-foreground hover:bg-muted"
-              )}
-            >
-              {sub.label}
-              <CountBadge
-                count={countOf(subCounts, `${activeCategory!.key}/${sub.key}`)}
-                active={activeSubTab === sub.key}
-              />
-            </button>
-          ))}
+          {/* 子标签：参考站是 <span> 里一排小胶囊 <em> */}
+          {showSubTabs && (
+            <span ref={subTabsRef} className="scrollbar-none overflow-x-auto">
+              <em
+                {...tapHandlers(() => onSubTabChange(null))}
+                className={activeSubTab === null ? "on" : undefined}
+              >
+                全部
+                <CountBadge count={countOf(mainCounts, activeCategory!.key)} />
+              </em>
+              {activeCategory!.subCategories.map((sub) => (
+                <em
+                  key={sub.key}
+                  {...tapHandlers(() => onSubTabChange(sub.key))}
+                  className={activeSubTab === sub.key ? "on" : undefined}
+                >
+                  {sub.label}
+                  <CountBadge count={countOf(subCounts, `${activeCategory!.key}/${sub.key}`)} />
+                </em>
+              ))}
+            </span>
+          )}
         </div>
-      )}
+      </div>
     </div>
   )
 }

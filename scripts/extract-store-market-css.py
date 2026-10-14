@@ -70,6 +70,7 @@ EXCLUDE_SEL_RE = re.compile(
             r"\.TypeList li \.info",    # 旧版信息块 —— 新卡片用 .market-card-info/.market-card-footer
             r"\.TypeList li \.img em",  # 免费/价格角标 —— courses 表无价格字段
             r"\.add\b",                 # 虚线「添加课程」占位卡 —— 广场页没有
+            r"\.level-badge",           # 难度徽章（cj/zj/gj）—— courses 表无难度字段，不渲染
             r"button\.kt",              # 旧版按钮
             r"cardlist",                # 统计卡 —— 课程市场页没有这两块
             r"drawer-open",             # 参考站移动端抽屉 —— 本仓外壳不实现该抽屉
@@ -185,6 +186,14 @@ def included(sel: str):
     return None
 
 
+def filter_parts(sel: str):
+    """按逗号拆开后逐条过滤，返回保留的部分。
+    必须逐条：`.count, .level-badge` 这种并集里，.level-badge 是刻意不搬的
+    （courses 表无难度字段），但 .count 还要 —— 整条丢掉会连课时数样式一起丢。"""
+    kept = [p for p in split_commas(sel) if included(p) is not None]
+    return kept
+
+
 def process(s: str, collected_vars: list, stats: dict, light_selectors: set):
     """主题变换 + INCLUDE 过滤 + 收敛作用域。返回 (css, kept)。"""
     out, kept = [], 0
@@ -210,10 +219,11 @@ def process(s: str, collected_vars: list, stats: dict, light_selectors: set):
             continue
         light_hit = bool(re.search(r'\[themes="(?:white|light)"\]', pl))
         sels = [strip_light_prefix(p) for p in split_commas(pl)]
-        sel_text = ", ".join(sels)
-        if included(sel_text) is None:
+        sels = filter_parts(", ".join(sels))
+        if not sels:
             stats["excluded"] += 1
             continue
+        sel_text = ", ".join(sels)
         if light_hit:
             stats["light_stripped"] += 1
             for p in sels:

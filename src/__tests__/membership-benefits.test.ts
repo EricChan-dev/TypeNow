@@ -57,8 +57,8 @@ describe("额度常量", () => {
     expect(PRO_AI_ANALYZE_PER_DAY).toBeGreaterThan(FREE_AI_ANALYZE_PER_DAY)
   })
 
-  it("免费用户的 AI 助手额度必须 > 0（2026-09-29 修正：原为 0，是误抄句乐部）", () => {
-    // 句乐部的「每日 2 次免费提问」是给所有人的；我们把 2 抄到了 PRO 上、
+  it("免费用户的 AI 助手额度必须 > 0（2026-09-29 修正：原为 0，是误抄参考站）", () => {
+    // 参考站的「每日 2 次免费提问」是给所有人的；我们把 2 抄到了 PRO 上、
     // 把免费设成 0，导致免费用户一次都用不了。这条看住它不许回退。
     expect(FREE_AI_CHAT_PER_DAY).toBeGreaterThan(0)
   })

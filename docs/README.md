@@ -13,11 +13,10 @@
 |---------|--------|
 | 产品全貌、功能规划、路线图 | [../PRD_V3.md](../PRD_V3.md) |
 | 技术架构、数据模型、AI 与部署 | [architecture.md](architecture.md) |
-| 练习页与句乐部的差距、阶段规划、**已拍板决策** | [practice-page-alignment-matrix.md](practice-page-alignment-matrix.md) |
+| 练习页与参考站的差距、阶段规划、**已拍板决策** | [practice-page-alignment-matrix.md](practice-page-alignment-matrix.md) |
 | 市场、用户、定价、获客、风险 | [strategy.md](strategy.md) |
 | 各页面详细需求（15 篇） | [pages/](pages/) |
 | 页面设计稿与交付规格 | [../specs/practice-page.md](../specs/practice-page.md) |
-| 句乐部数据导入的**日常操作** | [julebu-import-guide.md](julebu-import-guide.md) |
 | 会员赠送、邀请、推广体系的设计与已拍板决策 | [membership-growth-plan.md](membership-growth-plan.md) |
 | **分销/邀请机制的法律红线与自查**（改分销机制前必读） | [distribution-compliance.md](distribution-compliance.md) |
 | 竞品（句游英语）模式拆解：能借鉴什么、不能抄什么 | [juyou-english-teardown.md](juyou-english-teardown.md) |
@@ -37,8 +36,7 @@ TypeNow/
 │   ├── README.md                   # 你在这里
 │   ├── architecture.md             # 技术架构（当前真实系统）
 │   ├── strategy.md                 # 市场与定价策略
-│   ├── practice-page-alignment-matrix.md  # 练习页对标句乐部：差距 / 阶段 / 决策
-│   ├── julebu-import-guide.md      # 内容导入操作手册
+│   ├── practice-page-alignment-matrix.md  # 练习页对标参考站：差距 / 阶段 / 决策
 │   ├── membership-growth-plan.md   # 会员赠送 / 邀请 / 推广体系（含已拍板决策）
 │   ├── distribution-compliance.md  # 分销机制的合规边界与自查
 │   ├── juyou-english-teardown.md   # 竞品（句游英语）拆解与借鉴清单
@@ -82,12 +80,12 @@ TypeNow/
 → `specs/practice-page.md` → `src/components/home/learn/DictationPractice.tsx`
 （四种模式共用这一个外壳；旧 `LearnClient` 已随 B4 删除，历史与理由见 `PracticeModeGate.tsx` 顶部注释）
 
-**要动数据/内容**：`docs/architecture.md` §四 → `docs/julebu-import-guide.md`
+**要动数据/内容**：`docs/architecture.md` §四
 → `pnpm audit:content` 先看现状再动手
 
 ---
 
 ## 历史文档
 
-已归档：PRD-V2、30 天开发计划、句乐部竞品调研、数据导入方案、早前的改进计划。
+已归档：PRD-V2、30 天开发计划、参考站竞品调研、数据导入方案、早前的改进计划。
 清单与「归档时已过时的结论」对照表见 [archive/README.md](archive/README.md)。

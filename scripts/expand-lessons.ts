@@ -38,21 +38,27 @@ const scopeArg = args.find((a) => a.startsWith("--scope="))
 const scope = scopeArg ? scopeArg.split("=")[1] : null
 const TARGET = Number(args.find((a) => a.startsWith("--target="))?.split("=")[1] ?? 30)
 const MAXNEW = Number(args.find((a) => a.startsWith("--maxnew="))?.split("=")[1] ?? 30)
+/** 布局模式（用户 m23939）：每门课 30% 节随机补到 100-230 句、再 20% 节随机补到 50-99 句，其余不动。 */
+const DIST = args.includes("--dist")
 const LIMIT = Number(args.find((a) => a.startsWith("--limit="))?.split("=")[1] ?? 0)
 const CONC = Number(args.find((a) => a.startsWith("--conc="))?.split("=")[1] ?? 6)
 /** 单轮 LLM 生成上限：一次要太多句模型会长 JSON 出错，分轮补齐更稳。 */
 const BATCH = Number(args.find((a) => a.startsWith("--batch="))?.split("=")[1] ?? 8)
 
 const UD_POS = new Set(["ADJ", "ADP", "ADV", "AUX", "CCONJ", "DET", "INTJ", "NOUN", "NUM", "PART", "PRON", "PROPN", "PUNCT", "SCONJ", "VERB", "X"])
+/** 实词词性：质量门要求每句 ≥2 个实词，挡住 "Hello, my sister!" 这类低信息句。 */
+const CONTENT_POS = new Set(["NOUN", "VERB", "ADJ", "ADV", "NUM", "PROPN"])
 
 const norm = (s: string): string => s.toLowerCase().replace(/[^a-z0-9' ]+/g, " ").replace(/\s+/g, " ").trim()
 
 const SYSTEM = `你是小学/初中英语教材的练习内容编辑。给定一节课的主题和现有例句，生成与其主题一致、难度相当、词汇相近的补充练习句。
 
 要求：
-1. 句子为 4-12 个词的英文陈述句/疑问句，难度与现有例句一致，优先复用本课词汇。
-2. 中文翻译为自然简体中文。
-3. **每句必须带 words 数组**：逐词给出 english（原样）、chinese（词义）、phonetic（{"uk":音标,"us":音标}，IPA 不带斜杠；无法确定时给 null）、pos（UD 词性标签，只能取 ADJ ADP ADV AUX CCONJ DET INTJ NOUN NUM PART PRON PROPN PUNCT SCONJ VERB 之一）。标点也作为一项，pos 用 PUNCT、chinese/phonetic 用 null。
+1. 句子为 4-14 个词的英文完整句，难度与现有例句一致，优先复用本课与本教材已出现的词汇，不引入超纲生僻词。
+2. 句式要多样：陈述句、一般/特殊疑问句、祈使句、感叹句搭配出现，避免连续几句同一开头（如清一色 This is...）。
+3. 中文翻译为自然、地道的简体中文，按中文习惯表达，不要逐词直译。
+4. 句子必须是语法完整、便于后续逐词/逐短语切分练习的常规句。
+5. **每句必须带 words 数组**：逐词给出 english（原样）、chinese（词义）、phonetic（{"uk":音标,"us":音标}，IPA 不带斜杠；无法确定时给 null）、pos（UD 词性标签，只能取 ADJ ADP ADV AUX CCONJ DET INTJ NOUN NUM PART PRON PROPN PUNCT SCONJ VERB 之一）。标点也作为一项，pos 用 PUNCT、chinese/phonetic 用 null。
 
 必须严格按下面的结构输出（顶层是数组，不是对象；words 必须是数组）：
 [
@@ -171,7 +177,7 @@ function parseSentences(raw: string, lessonTitle: string, need: number): GenSent
       const we = String(wr.english ?? "").trim()
       const pos = String(wr.pos ?? "").toUpperCase()
       if (!we || !UD_POS.has(pos)) continue
-      if (pos !== "PUNCT") realWords++
+      if (CONTENT_POS.has(pos)) realWords++
       const ph = (wr.phonetic ?? null) as { uk?: unknown; us?: unknown } | null
       const phonetic =
         ph && typeof ph.uk === "string" && typeof ph.us === "string" && (ph.uk || ph.us)
@@ -227,9 +233,21 @@ async function main(): Promise<void> {
       .from(lessons)
       .where(and(eq(lessons.courseId, course.id), isNull(lessons.deletedAt)))
       .orderBy(asc(lessons.sortOrder))
+    // 布局模式：按现有句数降序排名——前 30% 节随机补到 100-230 句，接下来 20% 补到 50-99 句，
+    // 其余不动（用户要求比例达标且数字自然随机，如 150/109/88/231）。高目标给句多的节，增量成本最低。
+    const ranked = [...ls].sort((a, b) => (countMap.get(b.id) ?? 0) - (countMap.get(a.id) ?? 0))
+    const rankOf = new Map(ranked.map((l, i) => [l.id, i]))
+    const n100 = Math.ceil(ls.length * 0.3)
+    const n50 = n100 + Math.ceil(ls.length * 0.2)
     for (const l of ls) {
       const have = countMap.get(l.id) ?? 0
-      const need = Math.min(TARGET - have, MAXNEW)
+      let target = TARGET
+      if (DIST) {
+        const rank = rankOf.get(l.id)!
+        const want = rank < n100 ? 100 + Math.floor(Math.random() * 131) : rank < n50 ? 50 + Math.floor(Math.random() * 50) : 0
+        target = Math.max(want, have)
+      }
+      const need = DIST ? target - have : Math.min(TARGET - have, MAXNEW)
       if (need <= 0) continue
       const [maxRow] = await db
         .select({ m: sql<number>`COALESCE(MAX(${sentences.sortOrder}), -1)` })
@@ -242,7 +260,7 @@ async function main(): Promise<void> {
   const lessons2 = LIMIT > 0 ? todo.slice(0, LIMIT) : todo
   const willAdd = lessons2.reduce((a, t) => a + t.need, 0)
   console.log(`\n📚 课时扩句 ${APPLY ? "(APPLY)" : "(DRY 预览)"}`)
-  console.log(`   待补课时 ${todo.length} 个（${LIMIT > 0 ? `本次处理 ${lessons2.length}` : "全部"}），将生成约 ${willAdd} 句，目标每节 ≥${TARGET}，LLM ${activeProvider()}\n`)
+  console.log(`   待补课时 ${todo.length} 个（${LIMIT > 0 ? `本次处理 ${lessons2.length}` : "全部"}），将生成约 ${willAdd} 句，${DIST ? "布局模式（30% 节 100-230 句 / 50% 节 50-99 句，随机值）" : `目标每节 ≥${TARGET}`}，LLM ${activeProvider()}\n`)
 
   // 全局去重集：范围内现有英文句
   const seen = new Set<string>()
@@ -273,7 +291,8 @@ async function main(): Promise<void> {
     const accepted: GenSentence[] = []
     const seenLocal = new Set<string>()
     const sampleLines = sample.map((s) => `- ${s.english} — ${s.chinese}`)
-    const maxRounds = 6
+    // 轮数随缺口伸缩：布局模式单节最多要 +100~150 句，固定 6 轮不够。
+    const maxRounds = Math.ceil(task.need / BATCH) + 4
     for (let round = 0; round < maxRounds && accepted.length < task.need; round++) {
       const want = Math.min(task.need - accepted.length + 4, BATCH)
       const avoid = [...sampleLines, ...accepted.map((g) => `- ${g.english} — ${g.chinese}`)]

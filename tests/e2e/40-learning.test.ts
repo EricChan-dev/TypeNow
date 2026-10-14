@@ -199,7 +199,7 @@ describe("句子列表 /api/courses/sentences", () => {
 
   it("非会员只拿到每课前 N 句试学，而不是 403", async () => {
     // 原先非会员在这里被直接 403，用户还没体验到核心价值就先撞收费墙。
-    // 现在放行每课前 FREE_TRIAL_SENTENCES 句（对齐句乐部「每课程包可试学前几节」），
+    // 现在放行每课前 FREE_TRIAL_SENTENCES 句（对齐参考站「每课程包可试学前几节」），
     // 该常量 2026-09-29 由 3 提到 5 —— 断言一律引用它，避免再次漂移。
     const res = await ApiClient.asUser(FIXTURE.userFree).get<{
       sentences: Array<{ id: string }>

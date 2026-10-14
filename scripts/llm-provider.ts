@@ -1,14 +1,17 @@
 #!/usr/bin/env tsx
 /**
- * 脚本侧统一 LLM 调用层（DeepSeek / 智谱 GLM 自动降级）。
+ * 脚本侧统一 LLM 调用层（自定义端点 / DeepSeek / 智谱 GLM 自动降级）。
  *
  * 背景：src/lib/llm.ts 是应用运行时用的，写死 DeepSeek。数据回填脚本量大，
  * DeepSeek 欠费（402 Insufficient Balance）时整条管线就停摆；本文件让脚本可以
  * 用 .env.local 里已有的 ZHIPU_API_KEY 跑，充值后一条 env 就能切回。
+ * 另支持任意 OpenAI 兼容端点：配 CUSTOM_LLM_BASE_URL/CUSTOM_LLM_API_KEY/CUSTOM_LLM_MODEL
+ * 即自动优先使用（见下方 custom provider）。
  *
  * 选择规则（env LLM_PROVIDER）：
- *   "deepseek" 只用 DeepSeek；"glm" 只用 GLM；默认 "auto" = DeepSeek 优先，
- *   遇到 402/401（余额或鉴权失效）自动切 GLM，并在进程内记住该 provider 已死，
+ *   "deepseek" 只用 DeepSeek；"glm" 只用 GLM；"custom" 只用自定义端点；
+ *   默认 "auto" = custom > deepseek > glm 依次尝试（ready() 为真的才参与），
+ *   遇到 402/401（余额或鉴权失效）自动切下一个，并在进程内记住该 provider 已死，
  *   后续调用直接走备选，不再重复撞墙。
  *
  * 429/5xx：指数退避重试 3 次（与其他脚本一致），不切换 provider（避免重复生成）。
@@ -34,6 +37,18 @@ export interface ChatOptions {
 /** 模型名可用 env 覆盖，方便临时换更贵/更便宜的档位。 */
 const DEEPSEEK_MODEL = process.env.DEEPSEEK_MODEL || "deepseek-flash"
 const GLM_MODEL = process.env.GLM_MODEL || "glm-4.5-flash"
+/**
+ * 自定义 provider：任何 OpenAI 兼容端点（/v1/chat/completions）。
+ * .env.local 里配 CUSTOM_LLM_BASE_URL / CUSTOM_LLM_API_KEY / CUSTOM_LLM_MODEL 即启用，
+ * 且默认排在最前（配置了就用它）。BASE_URL 填到 /v1 这一级即可。
+ */
+const CUSTOM_BASE_URL = (process.env.CUSTOM_LLM_BASE_URL || "").replace(/\/+$/, "")
+const CUSTOM_MODEL = process.env.CUSTOM_LLM_MODEL || ""
+const CUSTOM_URL = CUSTOM_BASE_URL
+  ? CUSTOM_BASE_URL.endsWith("/chat/completions")
+    ? CUSTOM_BASE_URL
+    : `${CUSTOM_BASE_URL}/chat/completions`
+  : ""
 
 /** provider 失效（余额/鉴权）——触发降级到下一个 provider。 */
 class ProviderExhausted extends Error {}
@@ -57,6 +72,26 @@ interface Provider {
 }
 
 const providers: Provider[] = [
+  {
+    name: "custom",
+    model: CUSTOM_MODEL,
+    ready: () => Boolean(CUSTOM_URL && CUSTOM_MODEL && process.env.CUSTOM_LLM_API_KEY),
+    url: CUSTOM_URL,
+    headers: () => ({ "Content-Type": "application/json", Authorization: `Bearer ${process.env.CUSTOM_LLM_API_KEY}` }),
+    body: (messages, opts) => ({
+      model: CUSTOM_MODEL,
+      messages,
+      temperature: opts.temperature ?? 0.7,
+      // 有的自定义端点 max_tokens 上限更低，可用 CUSTOM_LLM_MAX_TOKENS 夹一下。
+      max_tokens: process.env.CUSTOM_LLM_MAX_TOKENS
+        ? Math.min(opts.maxTokens ?? Number.POSITIVE_INFINITY, Number(process.env.CUSTOM_LLM_MAX_TOKENS))
+        : opts.maxTokens,
+      // 关闭思考模式（实测 routers.opays.ai 的 vLLM 部署：4.9s/193 reasoning tokens → 1.1s/0）。
+      // reasoning_effort 是 OpenAI 风格；chat_template_kwargs.enable_thinking 是 vLLM Jinja 模板风格，双保险。
+      reasoning_effort: "none",
+      chat_template_kwargs: { enable_thinking: false },
+    }),
+  },
   {
     name: "deepseek",
     model: DEEPSEEK_MODEL,
@@ -90,12 +125,12 @@ const providers: Provider[] = [
 ]
 
 const preferred = (process.env.LLM_PROVIDER || "auto").toLowerCase()
-const ordered =
-  preferred === "glm"
-    ? [...providers].sort((a) => (a.name === "glm" ? -1 : 1))
-    : preferred === "deepseek"
-      ? [...providers].sort((a) => (a.name === "deepseek" ? -1 : 1))
-      : providers
+/** 默认 custom 优先（配了就用自定义端点），其次 deepseek，最后 glm。 */
+const DEFAULT_ORDER = ["custom", "deepseek", "glm"]
+const ordered = DEFAULT_ORDER
+  .map((name) => providers.find((p) => p.name === name)!)
+  .concat(providers.filter((p) => !DEFAULT_ORDER.includes(p.name)))
+  .sort((a, b) => (a.name === preferred ? -1 : b.name === preferred ? 1 : 0))
 
 /** 进程内已确认失效的 provider（余额/鉴权），后续直接跳过。 */
 const dead = new Set<string>()
@@ -107,6 +142,12 @@ let loggedChoice = false
  * DeepSeek 官方限速宽松，保持 8。都可用 env 覆盖。
  */
 function limits(p: Provider): { concurrency: number; minIntervalMs: number } {
+  if (p.name === "custom") {
+    return {
+      concurrency: Number(process.env.CUSTOM_LLM_CONCURRENCY ?? 4),
+      minIntervalMs: Number(process.env.CUSTOM_LLM_MIN_INTERVAL_MS ?? 200),
+    }
+  }
   if (p.name === "glm") {
     return {
       concurrency: Number(process.env.GLM_CONCURRENCY ?? 2),
@@ -231,5 +272,5 @@ export async function chat(messages: ChatMessage[], opts: ChatOptions = {}): Pro
     }
   }
   if (tries.length) throw new Error(`所有 LLM provider 均不可用：\n  - ${tries.join("\n  - ")}`)
-  throw new Error("没有可用的 LLM provider（缺 DEEPSEEK_API_KEY / ZHIPU_API_KEY）")
+  throw new Error("没有可用的 LLM provider（缺 CUSTOM_LLM_* / DEEPSEEK_API_KEY / ZHIPU_API_KEY 配置）")
 }

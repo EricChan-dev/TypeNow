@@ -315,9 +315,6 @@
             transform: translateY(0px);
             box-shadow: 0px 0px 5px 0px rgba(0, 0, 0, .0)
         }
-.store-market-page .TypeList li.last-child:hover .add {
-                background: #f1f4fd9c;
-            }
 .store-market-page .TypeList li .img {
     position: relative;
     aspect-ratio: 16/9;
@@ -377,7 +374,7 @@
     line-height: 1;
     gap: 10px;
 }
-.store-market-page .TypeList li.market-course-card .market-card-footer .count, .store-market-page .TypeList li.market-course-card .market-card-footer .level-badge {
+.store-market-page .TypeList li.market-course-card .market-card-footer .count {
     margin: 0;
     margin-top: 0;
     display: inline-flex;
@@ -392,30 +389,6 @@
 }
 .store-market-page .TypeList li.market-course-card .market-card-footer .count i {
     font-size: 12px;
-}
-.store-market-page .TypeList li.market-course-card .market-card-footer .level-badge {
-    font-size: 9px;
-    line-height: 15px;
-    height: 16px;
-    padding: 0 5px;
-    border-radius: 8px;
-    border: 1px solid transparent;
-    justify-content: center;
-}
-.store-market-page .market-course-card .level-badge.cj {
-    background: #ecfef6;
-    border-color: #378f7238;
-    color: #378f72;
-}
-.store-market-page .market-course-card .level-badge.zj {
-    background: #eff6ff;
-    border-color: #dbeafd;
-    color: #3c65da;
-}
-.store-market-page .market-course-card .level-badge.gj {
-    background: #fbf5ff;
-    border-color: #f4e8fe;
-    color: #842dcd;
 }
 .store-market-page .TypeList li .img {
     background: var(--f1f5f9);
@@ -458,33 +431,5 @@
 @media screen and (max-width: 640px) {
 .store-market-page .TypeList ul {
         gap: 12px;
-    }}
-
-.store-market-page .TypeList ul li .info .time button {
-    padding: 6px 16px;
-    border-radius: 6px;
-    font-size: 13px;
-    cursor: pointer;
-    height: auto;
-    line-height: normal;
-}
-.store-market-page .TypeList ul li .info .time button.join {
-    background: transparent;
-    color: #2563eb;
-    border: 1px solid #2563eb;
-    transition: all 0.3s ease;
-}
-.store-market-page .TypeList ul li:hover .info .time button.join {
-    background: #2563eb;
-    color: #fff;
-}
-.store-market-page .TypeList ul li .info .time button.joined {
-    background: #10b981;
-    color: white;
-    border: none;
-}
-@media (max-width: 1024px) {
-.store-market-page.drawer-open .fixedTab {
-        z-index: 100;
     }}
 

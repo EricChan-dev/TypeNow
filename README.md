@@ -83,7 +83,6 @@ pnpm dev      # http://localhost:3000
 | `pnpm test:e2e` | 端到端测试（先 `pnpm e2e:db:up` 起 docker MySQL） |
 | `pnpm test:all` | 单测 + e2e |
 | `pnpm audit:content` | 课程内容只读体检（含字段覆盖率），`--json` 输出 `content-audit.json` |
-| `pnpm import-julebu` | 导入句乐部课程数据 |
 | `pnpm repair:content` | 修复课程内容缺失字段 |
 | `pnpm seed` | 灌入示例课程 |
 | `pnpm switch-role` | 切换账号角色（本地调试后台用） |
@@ -134,7 +133,7 @@ scripts/           内容审计 / 导入 / 运维脚本
 |------|------|
 | [PRD_V3.md](PRD_V3.md) | 产品全貌、功能规划、路线图 |
 | [docs/architecture.md](docs/architecture.md) | 技术架构、数据模型、AI 与部署 |
-| [docs/practice-page-alignment-matrix.md](docs/practice-page-alignment-matrix.md) | 练习页对标句乐部：差距、阶段规划、已拍板决策 |
+| [docs/practice-page-alignment-matrix.md](docs/practice-page-alignment-matrix.md) | 练习页对标参考站：差距、阶段规划、已拍板决策 |
 | [docs/strategy.md](docs/strategy.md) | 市场、用户、定价、获客 |
 | [docs/pages/](docs/pages/) | 15 篇页面级需求文档 |
 | [specs/practice-page.md](specs/practice-page.md) | 练习页交付规格（含交互时序） |

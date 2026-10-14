@@ -5,6 +5,7 @@ import Link from "next/link"
 import { ShoppingBag } from "lucide-react"
 import type { Course } from "@/types/course"
 import { CourseCard, type CourseCardStats } from "./CourseCard"
+import "@/app/home/store/store-market.css"
 
 /**
  * `/api/courses/mine` 返回的形状：课程行 + 卡片所需的规模/进度 + 上次练习时间。
@@ -31,6 +32,14 @@ function relativeTime(iso: string): string {
   return `${Math.max(1, months)}个月前`
 }
 
+/**
+ * 我的课程。
+ *
+ * 卡片与课程广场统一为句游式 `.market-course-card`（用户要求：广场和我的课程一起改）——
+ * 差异只在 variant="mine" 多一条学习进度，以及封面右上角的「N天前学过」。
+ * 网格与卡片样式复用同一份生成的 store-market.css（scoped 到 `.store-market-page`，
+ * 所以这里根节点也必须带上这个类名）。
+ */
 export function MyCoursesClient() {
   const [myCourses, setMyCourses] = useState<MyCourse[]>([])
   const [loading, setLoading] = useState(true)
@@ -50,60 +59,75 @@ export function MyCoursesClient() {
   }, [])
 
   return (
-    <div className="px-6 lg:px-10 xl:px-14 py-6">
-      <div className="flex items-center justify-between mb-6">
-        <div>
-          <h1 className="text-xl font-bold text-foreground">我的课程</h1>
-          <p className="text-xs text-muted-foreground mt-1">
-            共 {myCourses.length} 门课程
-          </p>
+    <div className="store-market-page">
+      <div className="maxWidth">
+        <div className="market-hero-section">
+          <div className="hero-left">
+            <h2>我的课程</h2>
+            <span className="hero-subtitle">共 {myCourses.length} 门课程，继续上次的进度</span>
+          </div>
         </div>
       </div>
 
-      {loadError ? (
-        <div className="flex flex-col items-center justify-center py-24 text-center">
-          <p className="text-sm text-muted-foreground mb-3">加载失败</p>
-          <button onClick={() => window.location.reload()} className="text-sm text-accent font-medium hover:underline">点击重试</button>
-        </div>
-      ) : loading ? (
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
-          {Array.from({ length: 6 }).map((_, i) => (
-            <div key={i} className="rounded-2xl border border-border bg-card animate-pulse">
-              <div className="aspect-[16/10] bg-foreground/[0.04]" />
-              <div className="p-3 space-y-2">
-                <div className="h-4 bg-foreground/[0.06] rounded w-3/4" />
-                <div className="h-3 bg-foreground/[0.04] rounded w-1/2" />
-              </div>
+      <div className="maxWidth">
+        <div className="TypeList">
+          {loadError ? (
+            <div className="flex flex-col items-center justify-center py-24 text-center">
+              <p className="mb-3 text-sm text-muted-foreground">加载失败</p>
+              <button
+                type="button"
+                onClick={() => window.location.reload()}
+                className="text-sm font-medium text-accent hover:underline"
+              >
+                点击重试
+              </button>
             </div>
-          ))}
-        </div>
-      ) : myCourses.length > 0 ? (
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
-          {myCourses.map((course) => (
-            <div key={course.id} className="relative">
-              <CourseCard course={course} variant="mine" stats={course.stats} />
-              {course.lastStudiedAt && (
-                <div className="absolute top-2 right-2 z-10 pointer-events-none">
-                  <span className="inline-block rounded-full bg-background/80 backdrop-blur-sm border border-border px-2 py-0.5 text-[10px] text-foreground/60 leading-relaxed">
-                    {relativeTime(course.lastStudiedAt)}学过
-                  </span>
-                </div>
-              )}
+          ) : loading ? (
+            <ul>
+              {Array.from({ length: 6 }).map((_, i) => (
+                <li key={i} className="market-course-card">
+                  <div className="img">
+                    <div className="skeleton" />
+                  </div>
+                  <div className="market-card-info animate-pulse">
+                    <div className="mt-1.5 h-4 w-3/4 rounded bg-foreground/[0.06]" />
+                    <div className="mt-2 h-3 w-1/2 rounded bg-foreground/[0.04]" />
+                  </div>
+                </li>
+              ))}
+            </ul>
+          ) : myCourses.length > 0 ? (
+            <ul>
+              {myCourses.map((course) => (
+                <CourseCard
+                  key={course.id}
+                  course={course}
+                  variant="mine"
+                  stats={course.stats}
+                  cornerBadge={
+                    course.lastStudiedAt ? (
+                      <span className="inline-block rounded-full border border-border bg-background/80 px-2 py-0.5 text-[10px] leading-relaxed text-foreground/60 backdrop-blur-sm">
+                        {relativeTime(course.lastStudiedAt)}学过
+                      </span>
+                    ) : null
+                  }
+                />
+              ))}
+            </ul>
+          ) : (
+            <div className="flex flex-col items-center justify-center py-24 text-center">
+              <ShoppingBag className="mb-4 h-12 w-12 text-muted-foreground/40" />
+              <p className="text-sm font-medium text-muted-foreground">还没有学习任何课程</p>
+              <Link
+                href="/home/store"
+                className="mt-3 inline-flex items-center gap-1.5 text-sm text-accent transition-colors hover:text-accent/80"
+              >
+                去课程广场浏览
+              </Link>
             </div>
-          ))}
+          )}
         </div>
-      ) : (
-        <div className="flex flex-col items-center justify-center py-24 text-center">
-          <ShoppingBag className="h-12 w-12 text-muted-foreground/40 mb-4" />
-          <p className="text-sm font-medium text-muted-foreground">还没有学习任何课程</p>
-          <Link
-            href="/home/store"
-            className="mt-3 inline-flex items-center gap-1.5 text-sm text-accent hover:text-accent/80 transition-colors"
-          >
-            去课程广场浏览
-          </Link>
-        </div>
-      )}
+      </div>
     </div>
   )
 }

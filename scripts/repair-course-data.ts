@@ -14,7 +14,7 @@
  *   words[*].english 逐字节一致。
  *
  * 批次 2：音标回填
- *   crawl-all-julebu.cjs 用 String(w.phonetic) 把 {uk,us} 对象写成了字面量
+ *   早期导入脚本用 String(w.phonetic) 把 {uk,us} 对象写成了字面量
  *   "[object Object]"。改用同一份语料里的正常音标建「词 → 音标」映射回填，
  *   回填不到的置 null（前端对空值渲染空白）。
  *   本批次需要重写 JSON，只取回 id + words 两列以压低传输量。

@@ -3,7 +3,7 @@
 - 日期：2026-10-13
 - 状态：已批准
 - 范围：`graded_reading` 分类下 49 门在架课程的封面图
-- 前置：`docs/julebu-cover-prompt-pack.md`（school_sync 194 门 glm-image 管线，已完成）
+- 前置：school_sync 194 门 glm-image 管线（已完成）
 
 ---
 

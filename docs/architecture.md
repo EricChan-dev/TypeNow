@@ -252,7 +252,7 @@ pnpm audit:content   # 课程内容只读体检（含各字段覆盖率），--j
   因此只有 node 纯逻辑可单测；React 组件与 hooks **无法**单测，需要浏览器验证时用
   puppeteer 脚本
 - e2e 配置 `vitest.e2e.config.ts`，配套 `scripts/e2e/db-up.sh` 起 docker MySQL
-- 其他运维脚本：`repair:content`、`import-julebu`、`rescue:orphans`、`cleanup:residual`、
+- 其他运维脚本：`repair:content`、`rescue:orphans`、`cleanup:residual`、
   `seed`、`switch-role`、`selfcheck:new-user`（见 `package.json`）
 
 `pnpm lint` 在 HEAD 上本就有大量既有报错。**评估自己引入的增量时按文件对比**：
@@ -298,7 +298,7 @@ git show HEAD:<file> | npx eslint --stdin --stdin-filename <file>
 | 主题 | 文档 |
 |------|------|
 | 产品全貌与规划 | [../PRD_V3.md](../PRD_V3.md) |
-| 练习页与句乐部差距、阶段规划、已拍板决策 | [practice-page-alignment-matrix.md](practice-page-alignment-matrix.md) |
+| 练习页与参考站差距、阶段规划、已拍板决策 | [practice-page-alignment-matrix.md](practice-page-alignment-matrix.md) |
 | 页面级设计稿 | [pages/](pages/)、[../specs/](../specs/) |
 | 市场与定价 | [strategy.md](strategy.md) |
 | 本地开发踩坑清单 | [../CLAUDE.md](../CLAUDE.md) |

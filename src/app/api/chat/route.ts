@@ -135,7 +135,7 @@ export async function POST(request: Request) {
   // 免费用户与会员**都有**每日免费额度，只是额度不同（2026-09-29 修正）。
   //
   // 此前这里是 `isPro && checkRateLimit(..., PRO_AI_CHAT_PER_DAY, ...)`，
-  // 而 FREE_AI_CHAT_PER_DAY 是 0 —— 那是一次误抄：句乐部的「每日 2 次免费提问」
+  // 而 FREE_AI_CHAT_PER_DAY 是 0 —— 那是一次误抄：参考站的「每日 2 次免费提问」
   // 本来是全用户共享的，我们把那个 2 抄到了 PRO 上、把免费设成了 0，
   // 结果是免费用户一次都用不了、会员也只有 2 次。
   //
