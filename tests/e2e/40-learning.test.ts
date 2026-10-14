@@ -87,6 +87,61 @@ describe("课程广场 /api/courses/list", () => {
   })
 })
 
+/**
+ * 课程广场的分类计数（/api/courses/counts）。
+ *
+ * 这里守的是「标签上的数字」和「点进去看到的列表」口径一致：
+ * 计数接口多看一门未发布/已软删除的课，用户就会看到数字比列表多一个 ——
+ * 这正是最难自查的一类 bug（数字看起来总是"差不多对"）。
+ */
+describe("课程广场 /api/courses/counts", () => {
+  it("未登录可访问，且与列表接口的总数口径一致", async () => {
+    const counts = await ApiClient.anonymous().get<{ total: number }>("/api/courses/counts")
+    expect(counts.status).toBe(200)
+
+    const list = await ApiClient.anonymous().get<{ total: number }>("/api/courses/list")
+    expect(counts.body.total).toBe(list.body.total)
+    expect(counts.body.total).toBe(1)
+  })
+
+  it("未发布课程不计入任何数字（否则标签会比列表多）", async () => {
+    const res = await ApiClient.anonymous().get<{
+      total: number
+      categorized: number
+      uncategorized: number
+      categories: { key: string; count: number; subCategories: { key: string; count: number }[] }[]
+    }>("/api/courses/counts")
+
+    // 夹具里两门课：一门已发布、一门未发布。只有已发布那门该被算进来。
+    expect(res.body.total).toBe(1)
+    // 夹具课程没有 category_key，所以它只能落在「未分类」里
+    expect(res.body.categorized).toBe(0)
+    expect(res.body.uncategorized).toBe(1)
+
+    const sum = res.body.categories.reduce((s, c) => s + c.count, 0)
+    expect(sum).toBe(res.body.categorized)
+    expect(sum + res.body.uncategorized).toBe(res.body.total)
+  })
+
+  it("始终返回全部分类与子分类（含 count=0 的），标签行不会随数据跳动", async () => {
+    const res = await ApiClient.anonymous().get<{
+      categories: { key: string; count: number; subCategories: { key: string; count: number }[] }[]
+    }>("/api/courses/counts")
+
+    expect(res.body.categories.map((c) => c.key)).toEqual([
+      "graded_reading",
+      "school_sync",
+      "exam_prep",
+      "practical",
+    ])
+    expect(res.body.categories.every((c) => c.subCategories.length > 0)).toBe(true)
+    // 夹具数据下每个数都是 0，但标签本身一个都不能少
+    expect(
+      res.body.categories.every((c) => c.count === 0 && c.subCategories.every((s) => s.count === 0))
+    ).toBe(true)
+  })
+})
+
 describe("课程详情 /api/courses/[id]", () => {
   it("已发布 → 200；未发布 → 404；不存在 → 404", async () => {
     const ok = await ApiClient.anonymous().get<{ data: { id: string } }>(

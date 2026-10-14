@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef, useCallback } from "react"
 import { SearchX, Loader2 } from "lucide-react"
 import type { Course, SortMode } from "@/types/course"
+import type { StoreFacets } from "@/lib/store-facets"
 import { ErrorBoundary } from "@/components/shared/ErrorBoundary"
 import { SearchAndSortBar } from "./SearchAndSortBar"
 import { CourseTabs } from "./CourseTabs"
@@ -18,6 +19,9 @@ export function StoreClient() {
 
   const [courses, setCourses] = useState<Course[]>([])
   const [totalCount, setTotalCount] = useState(0)
+  // 各分类 / 子分类的课程数。与列表分开取：它**不随筛选变化**（理由见 lib/store-facets），
+  // 所以只在挂载时请求一次，翻页与切换分类都不会重新拉。
+  const [facets, setFacets] = useState<StoreFacets | null>(null)
   const [page, setPage] = useState(1)
   const [loading, setLoading] = useState(true)
   const [loadingMore, setLoadingMore] = useState(false)
@@ -105,6 +109,26 @@ export function StoreClient() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeMainTab, activeSubTab, searchQuery, sortMode])
 
+  /**
+   * 取各分类的课程数，只跑一次。
+   *
+   * 用 AbortController 而不是忽略卸载后 setState：Strict Mode 下这个 effect 会跑两次，
+   * 第一次的响应在组件重建后落地会把 facets 写进已废弃的实例（数字还是对的，
+   * 但会在 React 里留下一次无意义的更新）。取消失败比事后判断更干净。
+   */
+  useEffect(() => {
+    const controller = new AbortController()
+    fetch("/api/courses/counts", { signal: controller.signal, cache: "no-store" })
+      .then((res) => (res.ok ? res.json() : null))
+      .then((json: StoreFacets | null) => {
+        if (!controller.signal.aborted && json) setFacets(json)
+      })
+      // 计数取失败就不显示角标。不要设 loadError —— 课程列表好好的，
+      // 一个装饰性数字不该把整页变成「加载失败」。
+      .catch(() => {})
+    return () => controller.abort()
+  }, [])
+
   // Load next page (infinite scroll)
   const loadMore = useCallback(() => {
     if (loadingMoreRef.current) return
@@ -149,6 +173,7 @@ export function StoreClient() {
         activeSubTab={activeSubTab}
         onMainTabChange={setActiveMainTab}
         onSubTabChange={setActiveSubTab}
+        facets={facets}
       />
 
       {loadError ? (

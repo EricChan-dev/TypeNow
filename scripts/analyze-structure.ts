@@ -25,7 +25,7 @@ const __dirname = dirname(__filename)
 config({ path: join(__dirname, "..", ".env.local") })
 
 import { sentences, lessons, courses } from "../src/lib/db/schema"
-import { llmCall } from "../src/lib/llm"
+import { chat, isProviderDown, activeProvider } from "./llm-provider"
 import { dictationTokens } from "../src/lib/dictation-tokens"
 
 const pool = mysql.createPool(process.env.DATABASE_URL!)
@@ -133,11 +133,13 @@ function validateComponents(raw: string, english: string): Component[] {
 async function analyzeStructure(english: string, chinese: string): Promise<Component[]> {
   const tokens = dictationTokens(english)
   const numbered = tokens.map((t, i) => `${i}:${t}`).join(" ")
-  const raw = await llmCall({
-    systemPrompt: SYSTEM_PROMPT,
-    userMessage: `句子：${english}\n中文：${chinese}\n分词表：${numbered}`,
-    temperature: 0.2,
-  })
+  const raw = await chat(
+    [
+      { role: "system", content: SYSTEM_PROMPT },
+      { role: "user", content: `句子：${english}\n中文：${chinese}\n分词表：${numbered}` },
+    ],
+    { temperature: 0.2 }
+  )
   return validateComponents(raw, english)
 }
 
@@ -195,6 +197,7 @@ async function main(): Promise<void> {
   console.log(`   Scope: ${scope ?? "全库"}`)
   console.log(`   Pending (no structure): ${pending.length}`)
   console.log(`   Concurrency: ${CONCURRENCY}`)
+  console.log(`   LLM: ${activeProvider()}`)
   console.log(`   Estimated time: ~${Math.ceil((pending.length / CONCURRENCY) * 10 / 60)} minutes\n`)
 
   if (pending.length === 0) {
@@ -235,6 +238,13 @@ async function main(): Promise<void> {
         console.log(`  [${done}/${pending.length}] ✓ ~${Math.ceil(remaining / 60)}min left`)
       }
     } catch (err) {
+      // 所有 provider 都失效（余额/鉴权）时立刻中断，不把剩余句子全刷成失败
+      if (isProviderDown(err)) {
+        console.error(`\n❌ 中断: ${err instanceof Error ? err.message : err}`)
+        console.error(`   已成功 ${done}/${pending.length}（失败 ${failed}）。待补条件天然续跑，恢复后重跑即可。`)
+        await pool.end()
+        process.exit(1)
+      }
       failed++
       if (failed <= 20) {
         console.error(`  FAIL [${i}] ${s.english?.slice(0, 50)}: ${err instanceof Error ? err.message : err}`)

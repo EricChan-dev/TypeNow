@@ -2,8 +2,9 @@
 
 import { useEffect, useRef, useState } from "react"
 import { usePathname } from "next/navigation"
-import { X, Send, Bot, Loader2, Gem } from "lucide-react"
+import { X, Send, Loader2, Gem } from "lucide-react"
 import { cn } from "@/lib/utils"
+import { MimiCat } from "./MimiCat"
 import { isImmersivePracticeRoute } from "@/lib/immersive-route"
 import { subscribeOpenAiChat } from "@/lib/ai-chat"
 import { FREE_AI_CHAT_PER_DAY, MEMBER_DAILY_DIAMONDS } from "@/lib/membership-benefits"
@@ -73,13 +74,13 @@ export function AiChatWidget() {
     setOpen(false)
   }, [pathname])
 
-  // 练习页里的「问小码」通过这条通道请求打开面板
+  // 练习页里的「问小咪」通过这条通道请求打开面板
   useEffect(() => subscribeOpenAiChat(() => setOpen(true)), [])
 
   /**
    * 沉浸式练习页（练习 / 复习作答）不放浮窗按钮：
    * 那是 fixed inset-0 的全屏界面，右下角的按钮正好压在题目区和快捷键提示上。
-   * 但仍然允许**通过请求把它打开**（Ctrl+/ → 讲解面板 → 问小码），
+   * 但仍然允许**通过请求把它打开**（Ctrl+/ → 讲解面板 → 问小咪），
    * 因为练习页恰恰是最需要这个老师的地方。
    *
    * 用 isImmersivePracticeRoute 而不是原来的 `pathname.startsWith("/home/learn/")`：
@@ -87,7 +88,7 @@ export function AiChatWidget() {
    */
   const immersive = isImmersivePracticeRoute(pathname)
   /**
-   * 后台也不显示。`/admin` 是内部工具，而小码是对学员的助手（提问还会消耗钻石），
+   * 后台也不显示。`/admin` 是内部工具，而AI小咪是对学员的助手（提问还会消耗钻石），
    * 在后台既没用又碍事；管理员恰好是登录状态，所以在原来的判断下它一定会冒出来。
    */
   const isAdminRoute = pathname?.startsWith("/admin") ?? false
@@ -149,18 +150,18 @@ export function AiChatWidget() {
     <>
       {/* Floating button */}
       {!open && (
-        <div className="fixed bottom-6 right-6 z-40 flex flex-col items-end gap-2">
+        <div className="fixed bottom-8 right-0 z-40 flex flex-col items-end gap-2">
           {/* Toast bubble — above the button */}
           {showToast && (
             <div
-              className="relative rounded-2xl px-4 py-2.5 shadow-lg"
+              className="pointer-events-none relative rounded-2xl px-4 py-2.5 shadow-lg"
               style={{
                 background: "var(--foreground)",
                 color: "var(--background)",
                 animation: "toast-float 2.5s ease-in-out infinite",
               }}
             >
-              <p className="text-sm whitespace-nowrap">有问题就找我吧 💬</p>
+              <p className="text-sm whitespace-nowrap">有问题就找AI小咪吧</p>
               {/* Triangle pointer — pointing down */}
               <div
                 className="absolute -bottom-1.5 right-6 w-3 h-3 rotate-45"
@@ -168,14 +169,8 @@ export function AiChatWidget() {
               />
             </div>
           )}
-          <button
-            onClick={() => setOpen(true)}
-            className="flex items-center gap-2 rounded-full px-4 py-3 text-sm font-semibold text-white shadow-2xl transition-all hover:scale-105 active:scale-95"
-            style={{ background: "linear-gradient(135deg, #7c3aed, #a855f7)", boxShadow: "0 4px 24px rgba(124,58,237,0.5)" }}
-          >
-            <Bot className="h-5 w-5" />
-            <span className="hidden sm:inline">小码 AI</span>
-          </button>
+          {/* 三态猫入口：常态趴在屏幕边缘睡觉，移入醒来，点击坐起后打开面板 */}
+          <MimiCat onActivate={() => setOpen(true)} />
         </div>
       )}
 
@@ -188,8 +183,8 @@ export function AiChatWidget() {
             style={{ background: "linear-gradient(135deg, #7c3aed, #a855f7)" }}
           >
             <div className="flex items-center gap-2">
-              <Bot className="h-5 w-5 text-white" />
-              <span className="text-sm font-semibold text-white">小码 AI</span>
+              <img src="/mimi/mimi-sleep-static.png" alt="" className="h-6 w-auto" />
+              <span className="text-sm font-semibold text-white">AI小咪</span>
               <span className="text-[11px] text-white/70 ml-1">· 5💎/条</span>
             </div>
             <div className="flex items-center gap-3">
@@ -209,8 +204,8 @@ export function AiChatWidget() {
           <div className="flex-1 overflow-y-auto p-3 space-y-3">
             {messages.length === 0 && (
               <div className="flex flex-col items-center justify-center h-full text-center text-muted-foreground/50 text-sm gap-2">
-                <Bot className="h-8 w-8 text-violet-400/40" />
-                <p>你好！我是小码，{BRAND.nameZh}英语学习助手</p>
+                <img src="/mimi/mimi-sleep-static.png" alt="" className="h-14 w-auto opacity-70" />
+                <p>你好！我是AI小咪，{BRAND.nameZh}英语学习助手</p>
                 <p className="text-xs">问我任何英语学习问题吧 😊</p>
               </div>
             )}

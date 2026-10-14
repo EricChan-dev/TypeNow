@@ -27,6 +27,7 @@ config({ path: join(__dirname, "..", ".env.local") })
 
 import { sentences, lessons, courses } from "../src/lib/db/schema"
 import { normalizeSentenceForComparison } from "../src/lib/structured-answer"
+import { chat, isProviderDown, activeProvider } from "./llm-provider"
 
 const pool = mysql.createPool(process.env.DATABASE_URL!)
 const db = drizzle(pool, { mode: "default" })
@@ -37,7 +38,6 @@ const scopeArg = args.find((a) => !a.startsWith("--"))
 const scope = scopeArg ?? null
 const LIMIT = Number(args.find((a) => a.startsWith("--limit="))?.split("=")[1] ?? 0)
 const CONC = Number(args.find((a) => a.startsWith("--conc="))?.split("=")[1] ?? 10)
-const MODEL = process.env.DEEPSEEK_MODEL || "deepseek-chat"
 
 const SYSTEM = `你是英语教学句法分析员。把给定的英文句子切分成 2-6 个连续的短语片段：按原句顺序、无重叠、拼接后恰好等于原句（含标点）。
 输出 JSON 对象（不要代码围栏、不要解释）：
@@ -49,29 +49,8 @@ const SYSTEM = `你是英语教学句法分析员。把给定的英文句子切�
 
 interface ChunkPart { text: string; chinese: string }
 
-async function llm(messages: Array<{ role: string; content: string }>, retries = 3): Promise<string> {
-  for (let attempt = 0; attempt <= retries; attempt++) {
-    try {
-      const r = await fetch("https://api.deepseek.com/chat/completions", {
-        method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${process.env.DEEPSEEK_API_KEY}` },
-        body: JSON.stringify({ model: MODEL, messages, temperature: 0.3, max_tokens: 1500 }),
-      })
-      if (r.status === 402) throw new Error("LLM 账户余额不足（402）——请充值后重跑")
-      if (r.status === 429 || r.status >= 500) {
-        if (attempt === retries) throw new Error(`LLM HTTP ${r.status}（重试 ${retries} 次后仍失败）`)
-        await new Promise((res) => setTimeout(res, 2000 * 2 ** attempt))
-        continue
-      }
-      if (!r.ok) throw new Error(`LLM HTTP ${r.status}: ${(await r.text()).slice(0, 200)}`)
-      const j = (await r.json()) as { choices: Array<{ message: { content: string } }> }
-      return j.choices[0]?.message?.content ?? ""
-    } catch (err) {
-      if (err instanceof Error && (err.message.includes("402") || attempt === retries)) throw err
-      await new Promise((res) => setTimeout(res, 2000 * 2 ** attempt))
-    }
-  }
-  throw new Error("unreachable")
+async function llm(messages: Array<{ role: string; content: string }>): Promise<string> {
+  return chat(messages, { temperature: 0.3, maxTokens: 1500 })
 }
 
 function normJoin(parts: string[]): string {
@@ -138,7 +117,7 @@ async function main(): Promise<void> {
 
   const list = LIMIT > 0 ? targets.slice(0, LIMIT) : targets
   console.log(`\n🧩 chunks 回填 ${APPLY ? "(APPLY)" : "(DRY 预览)"}`)
-  console.log(`   缺 chunks 句子共 ${Number(total)}；本次处理 ${list.length}，并发 ${CONC}\n`)
+  console.log(`   缺 chunks 句子共 ${Number(total)}；本次处理 ${list.length}，并发 ${CONC}，LLM ${activeProvider()}\n`)
 
   let done = 0
   let ok = 0
@@ -176,7 +155,7 @@ async function main(): Promise<void> {
     } catch (err) {
       failed++
       console.error(`  ✗ [${index + 1}] ${s.english.slice(0, 40)}: ${(err as Error).message}`)
-      if ((err as Error).message.includes("402")) throw err
+      if (isProviderDown(err)) throw err
       return
     } finally {
       done++

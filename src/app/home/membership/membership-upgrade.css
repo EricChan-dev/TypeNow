@@ -62,7 +62,7 @@
   color: var(--ref-bodyT);
 }
 
-/* 「句学社」四个字用渐变字（参考页 .brand-text-gradient）。
+/* 「喵学社」三个字用渐变字（参考页 .brand-text-gradient）。
    注意 -webkit-text-fill-color 必须写在渐变之后，且不能被子元素继承出问题。 */
 .home-ref-shell .brand-text-gradient {
   background: -webkit-linear-gradient(left, #2d63e7, #5047e1);

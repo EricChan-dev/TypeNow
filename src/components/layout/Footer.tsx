@@ -41,9 +41,12 @@ export function Footer() {
         <div className="grid grid-cols-2 lg:grid-cols-12 gap-10 lg:gap-8">
           {/* Brand */}
           <div className="col-span-2 lg:col-span-3 flex flex-col gap-4">
-            <Link href="/" className="flex items-center gap-2">
-              <Image src="/logo.svg" alt={BRAND.nameZh} width={24} height={24} />
-              <span className="font-brand text-lg text-foreground">
+            <Link href="/" className="flex items-center gap-2.5">
+              {/* 尺寸与落地页页脚同层级（m00559 比例 + m00630 整体放大）——
+                  高 48px（宽 72 = 48×1.494 跟随源图比，m00858 紧裁横版）
+                  vs 26px 文字，公开页页脚保持同一套品牌比例。 */}
+              <Image src="/brand/icon.png" alt={BRAND.nameZh} width={72} height={48} />
+              <span className="font-brand text-[26px] text-foreground">
                 {BRAND.lockup}
               </span>
             </Link>

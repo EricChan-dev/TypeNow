@@ -1,0 +1,490 @@
+/* 自动生成 —— 请勿手改。
+ * 来源：句游英语参考站 market.css（课程市场 / 课本同步共享样式）+ reset.css（变量表）。
+ * 生成器：scripts/extract-store-market-css.py（选择器已收敛到 .store-market-page 下）。
+ * 重新生成：python3 scripts/extract-store-market-css.py
+ *
+ * 为什么用 market.css：归档里**没有保存课程市场页本身**（只有导航链接），
+ * 但课程市场与课本同步共用这份样式表，课本同步页已完整存档 —— 于是按
+ * market.css 中「课程市场独有」的类族复刻版式（hero/搜索、两级标签、卡片网格、提示条）。
+ *
+ * 其它搬运约定（与 home-ref.css / textbook-sync.css 同口径）：
+ *   1. 字号/行高/内边距/圆角/阴影/色值全部保留参考页原值，不做「优化」。
+ *   2. 参考页用 remixicon 字体图标（<i class="ri-*">），本仓统一用 lucide
+ *      组件；字体图标的 font-size 规则改写成 svg 的宽高（在组件里给 size）。
+ *   3. 卡片难度徽章（.level-badge cj/zj/gj）与 TypeName 渐变封面刻意不搬：
+ *      本库 courses 表无难度字段（no-fake-data），封面另有 course-cover.ts 三层降级。
+ */
+
+.store-market-page {
+  --bgwhite: #F8FAFE;
+  --bodyT: #333;
+  --calendarP: #fff;
+  --color64748b: #64748b;
+  --color66758c: #66758c;
+  --color94a3b8: #94a3b8;
+  --f1f5f9: #f1f4f7;
+  --mainBox: #F1F4FD;
+}
+
+/* ── 页面外壳（手工维护，逐字取自参考站）── */
+/* 参考站 .course-market .maxWidth（market.css:938）把课程市场放宽到 1400px；
+   水平居中来自 common.css 里 .maxWidth 的 margin: 0 auto。 */
+.store-market-page .maxWidth {
+  max-width: 1400px;
+  min-width: unset;
+  width: 100%;
+  box-sizing: border-box;
+  padding: 0 20px;
+  margin: 0 auto;
+}
+
+
+/* ── 共享基样式：hero/搜索框/两级标签/卡片/提示条（来自 market.css）── */
+.store-market-page .market-hero-section {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 24px 0 20px;
+}
+.store-market-page .market-hero-section .hero-left h2 {
+    font-size: 28px;
+    font-weight: 800;
+    color: var(--bodyT);
+    margin-bottom: 8px;
+    letter-spacing: 0.5px;
+}
+.store-market-page .market-hero-section .hero-left .hero-subtitle {
+    font-size: 14px;
+    color: var(--color94a3b8);
+    display: block;
+    font-weight: 400;
+}
+.store-market-page .market-hero-section .modern-search p {
+    position: relative;
+    border: 2px solid transparent;
+    background: var(--bgwhite);
+    border-radius: 12px;
+    padding: 0;
+    margin: 0;
+    display: flex;
+    align-items: center;
+    width: 380px;
+    height: 48px;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.03);
+    transition: all 0.3s ease;
+}
+.store-market-page .market-hero-section .modern-search p:focus-within {
+    border-color: rgba(59, 130, 246, 0.4);
+    box-shadow: 0 4px 20px rgba(59, 130, 246, 0.1);
+    transform: translateY(-1px);
+}
+.store-market-page .market-hero-section .modern-search .search-icon-main {
+    position: absolute;
+    left: 16px;
+    font-size: 20px;
+    color: var(--color64748b);
+    transition: color 0.3s ease;
+    cursor: pointer;
+    z-index: 2;
+}
+.store-market-page .market-hero-section .modern-search p:focus-within .search-icon-main {
+    color: #3b82f6;
+}
+.store-market-page .market-hero-section .modern-search input {
+    width: 100%;
+    height: 100%;
+    background: transparent;
+    border: none;
+    padding-left: 46px;
+    padding-right: 40px;
+    font-size: 15px;
+    color: var(--bodyT);
+    outline: none;
+}
+.store-market-page .market-hero-section .modern-search .search-clear {
+    position: absolute;
+    right: 14px;
+    left: auto !important;
+    font-size: 18px !important;
+    color: #cbd5e1;
+    cursor: pointer;
+    opacity: 0;
+    visibility: hidden;
+    transition: all 0.2s ease;
+    z-index: 3;
+}
+.store-market-page .market-hero-section .modern-search .search-clear.on {
+    opacity: 1;
+    visibility: visible;
+}
+.store-market-page .market-hero-section .modern-search .search-clear:hover {
+    color: #94a3b8;
+}
+.store-market-page .modern-tip-card {
+    background: linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%);
+    border-radius: 10px;
+    padding: 8px 14px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 12px;
+}
+.store-market-page .modern-tip-card .tip-left {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+.store-market-page .modern-tip-card .tip-left i {
+    font-size: 16px;
+    color: #3b82f6;
+    background: white;
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 4px 10px rgba(59, 130, 246, 0.15);
+    flex-shrink: 0;
+}
+.store-market-page .modern-tip-card .tip-left span {
+    font-size: 14px;
+    color: #1e3a8a;
+    font-weight: 500;
+    line-height: 1.35;
+}
+.store-market-page .modern-tip-card .tip-right .kefu-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: #ffffff;
+    color: #2563eb;
+    padding: 10px 20px;
+    border-radius: 20px;
+    font-size: 14px;
+    font-weight: 600;
+    text-decoration: none;
+    box-shadow: 0 4px 12px rgba(37, 99, 235, 0.1);
+    transition: all 0.3s ease;
+    white-space: nowrap;
+}
+.store-market-page .modern-tip-card .tip-right .kefu-btn i {
+    font-size: 16px;
+    font-weight: normal;
+}
+.store-market-page .modern-tip-card .tip-right .kefu-btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 16px rgba(37, 99, 235, 0.2);
+    color: #1d4ed8;
+}
+@media screen and (max-width: 900px) {
+.store-market-page .market-hero-section {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 16px;
+    }
+.store-market-page .market-hero-section .modern-search p {
+        width: 100%;
+        max-width: 100%;
+    }
+.store-market-page .modern-tip-card {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 8px;
+    }}
+
+.store-market-page .fixedTab {
+    padding: 8px 0 14px;
+    position: relative;
+    top: 0;
+    width: 100%;
+    left: 0;
+    background: var(--mainBox);
+    z-index: 111;
+}
+.store-market-page .courseTab {
+    display: block;
+    vertical-align: top;
+    
+}
+.store-market-page .courseTab .Tab {
+        display: block;
+        
+        
+    }
+.store-market-page .courseTab h3 {
+        display: inline-block;
+        vertical-align: top;
+        font-size: 20px;
+    }
+.store-market-page .courseTab p {
+        line-height: 30px;
+        display: block;
+        
+    }
+.store-market-page .courseTab p label {
+            margin-right: 6px;
+            font-size: 14px;
+            color: var(--color66758c);
+            background: var(--calendarP);
+            display: inline-block;
+            position: relative;
+            cursor: pointer;
+            padding: 0 18px;
+            line-height: 37px;
+            height: 39px;
+            border-radius: 10px;
+            box-shadow: 0px 0px 2px 0px rgba(0, 0, 0, .1);
+        }
+.store-market-page .courseTab p label:hover {
+                color: #000;
+            }
+.store-market-page .courseTab p label:after {
+                display: block;
+                content: '';
+                clear: both;
+                width: 100%;
+                height: 2px;
+                background: transparent;
+                position: absolute;
+                bottom: -9px;
+                left: 0;
+            }
+.store-market-page .courseTab p label.on {
+                background: #000;
+                color: #fff;
+            }
+.store-market-page .courseTab p label.on:after {
+                    
+                }
+.store-market-page .courseTab span {
+        display: block;
+        margin: 16px 0 0;
+    }
+.store-market-page .courseTab span em {
+            padding: 0 15px;
+            font-style: normal;
+            
+            line-height: 30px;
+            display: inline-block;
+            font-size: 13px;
+            margin-right: 5px;
+            border-radius: 20px;
+            color: var(--bodyT);
+            background: var(--calendarP);
+            cursor: pointer;
+            box-shadow: 0px 0px 2px 0px rgba(0, 0, 0, .1);
+        }
+.store-market-page .courseTab span em:hover {
+                background: #e5f0fb;
+                color: #2C5AF4;
+            }
+.store-market-page .courseTab span em.on {
+                
+                background: #2C5AF4;
+                color: #fff;
+                
+            }
+.store-market-page .TypeList {
+    
+    margin-bottom: 8px;
+    margin-top: 10px;
+}
+.store-market-page .TypeList ul {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(270px, 1fr));
+        gap: 16px;
+        padding: 0;
+        
+    }
+.store-market-page .TypeList li {
+        background: var(--bgwhite);
+        
+        border-radius: 12px;
+        transition: all .2s linear;
+        overflow: hidden;
+        cursor: pointer;
+        position: relative;
+        
+    }
+.store-market-page .TypeList li:hover {
+            transform: translateY(-5px);
+            box-shadow: 0px 2px 5px 0px rgba(0, 0, 0, .1)
+        }
+.store-market-page .TypeList li.last-child:hover {
+            transform: translateY(0px);
+            box-shadow: 0px 0px 5px 0px rgba(0, 0, 0, .0)
+        }
+.store-market-page .TypeList li.last-child:hover .add {
+                background: #f1f4fd9c;
+            }
+.store-market-page .TypeList li .img {
+    position: relative;
+    aspect-ratio: 16/9;
+}
+.store-market-page .TypeList li .img .skeleton {
+        width: 100%;
+        height: 100%;
+        position: absolute;
+        top: 0;
+        left: 0;
+        background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
+        background-size: 200% 100%;
+        animation: skeleton-loading 1.5s infinite;
+    }
+@keyframes skeleton-loading {
+        0% {
+            background-position: 200% 0;
+        }
+        100% {
+            background-position: -200% 0;
+        }
+    }
+.store-market-page .TypeList li .img img.lazy {
+        opacity: 0;
+        transition: opacity .3s ease-in;
+    }
+.store-market-page .TypeList li .img img.lazy.loaded {
+        opacity: 1;
+    }
+.store-market-page .TypeList li .img img {
+        width: 100%;
+        
+        height: 100%;
+        object-fit: cover;
+    }
+.store-market-page .market-course-card .market-card-info {
+    padding: 8px 12px 9px;
+    text-align: left;
+}
+.store-market-page .TypeList li.market-course-card .market-card-info h6 {
+    font-size: 15px;
+    font-weight: 700;
+    line-height: 20px;
+    margin: 6px 0 0;
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    overflow: hidden;
+    white-space: normal;
+}
+.store-market-page .market-course-card .market-card-footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    border-top: 0;
+    padding: 0 0 4px;
+    line-height: 1;
+    gap: 10px;
+}
+.store-market-page .TypeList li.market-course-card .market-card-footer .count, .store-market-page .TypeList li.market-course-card .market-card-footer .level-badge {
+    margin: 0;
+    margin-top: 0;
+    display: inline-flex;
+    align-items: center;
+    white-space: nowrap;
+}
+.store-market-page .TypeList li.market-course-card .market-card-footer .count {
+    font-size: 11px;
+    color: #64748b;
+    gap: 3px;
+    line-height: 1;
+}
+.store-market-page .TypeList li.market-course-card .market-card-footer .count i {
+    font-size: 12px;
+}
+.store-market-page .TypeList li.market-course-card .market-card-footer .level-badge {
+    font-size: 9px;
+    line-height: 15px;
+    height: 16px;
+    padding: 0 5px;
+    border-radius: 8px;
+    border: 1px solid transparent;
+    justify-content: center;
+}
+.store-market-page .market-course-card .level-badge.cj {
+    background: #ecfef6;
+    border-color: #378f7238;
+    color: #378f72;
+}
+.store-market-page .market-course-card .level-badge.zj {
+    background: #eff6ff;
+    border-color: #dbeafd;
+    color: #3c65da;
+}
+.store-market-page .market-course-card .level-badge.gj {
+    background: #fbf5ff;
+    border-color: #f4e8fe;
+    color: #842dcd;
+}
+.store-market-page .TypeList li .img {
+    background: var(--f1f5f9);
+}
+.store-market-page .TypeList li .img .img-placeholder {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--f1f5f9);
+    z-index: 1;
+}
+.store-market-page .TypeList li .img .img-placeholder i {
+    font-size: 32px;
+    color: #cbd5e1;
+    animation: pulse 1.5s ease-in-out infinite;
+}
+.store-market-page .TypeList li .img img {
+    opacity: 0;
+    transition: opacity 0.3s ease;
+}
+.store-market-page .TypeList li .img img.loaded {
+    opacity: 1;
+}
+.store-market-page .TypeList li .img .img-placeholder.hidden {
+    display: none;
+}
+@keyframes pulse {
+    0%, 100% { opacity: 0.4; }
+    50% { opacity: 1; }
+}
+.store-market-page .TypeList ul {
+    grid-template-columns: repeat(auto-fill, minmax(min(270px, 100%), 1fr));
+    gap: 16px;
+}
+@media screen and (max-width: 640px) {
+.store-market-page .TypeList ul {
+        gap: 12px;
+    }}
+
+.store-market-page .TypeList ul li .info .time button {
+    padding: 6px 16px;
+    border-radius: 6px;
+    font-size: 13px;
+    cursor: pointer;
+    height: auto;
+    line-height: normal;
+}
+.store-market-page .TypeList ul li .info .time button.join {
+    background: transparent;
+    color: #2563eb;
+    border: 1px solid #2563eb;
+    transition: all 0.3s ease;
+}
+.store-market-page .TypeList ul li:hover .info .time button.join {
+    background: #2563eb;
+    color: #fff;
+}
+.store-market-page .TypeList ul li .info .time button.joined {
+    background: #10b981;
+    color: white;
+    border: none;
+}
+@media (max-width: 1024px) {
+.store-market-page.drawer-open .fixedTab {
+        z-index: 100;
+    }}
+

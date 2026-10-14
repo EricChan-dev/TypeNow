@@ -69,10 +69,13 @@ export function Navbar() {
       <div className="flex h-[72px] items-center justify-between px-5 xl:px-20">
         {/* Logo */}
         <Link href="/" className="flex items-center gap-2 shrink-0">
-          {/* 图标仍是旧版 logo，等新矢量图定稿后替换 public/logo.svg 即可，这里不需要改。
-              深色主题已移除，不再需要 logo_w.svg 的深色变体。 */}
-          <Image src="/logo.svg" alt={BRAND.nameZh} width={26} height={26} />
-          <span className="font-brand text-xl text-accent">{BRAND.lockup}</span>
+          {/* 图标：AI 生成的彩色徽标（猫 + 书）去水印抠图版 public/brand/icon.png
+              （源图 512×343 紧裁版，显示 44px 高时 DPR 余量充足）。生成与核验过程见
+              brand/web-logo/README.md。深色主题已移除，不再需要深色变体。
+              尺寸：高 44px（m00630 档），宽 66 = 44×1.494 跟随源图宽高比
+              （m00858 紧裁后为横版图，属性比与实际一致防拉伸）。 */}
+          <Image src="/brand/icon.png" alt={BRAND.nameZh} width={66} height={44} />
+          <span className="font-brand text-[28px] text-accent">{BRAND.lockup}</span>
         </Link>
 
         {/* Desktop nav */}

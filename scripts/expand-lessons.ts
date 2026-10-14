@@ -27,6 +27,7 @@ const __dirname = dirname(__filename)
 config({ path: join(__dirname, "..", ".env.local") })
 
 import { sentences, lessons, courses } from "../src/lib/db/schema"
+import { chat, isProviderDown, activeProvider } from "./llm-provider"
 
 const pool = mysql.createPool(process.env.DATABASE_URL!)
 const db = drizzle(pool, { mode: "default" })
@@ -39,44 +40,102 @@ const TARGET = Number(args.find((a) => a.startsWith("--target="))?.split("=")[1]
 const MAXNEW = Number(args.find((a) => a.startsWith("--maxnew="))?.split("=")[1] ?? 30)
 const LIMIT = Number(args.find((a) => a.startsWith("--limit="))?.split("=")[1] ?? 0)
 const CONC = Number(args.find((a) => a.startsWith("--conc="))?.split("=")[1] ?? 6)
-const MODEL = process.env.DEEPSEEK_MODEL || "deepseek-chat"
+/** 单轮 LLM 生成上限：一次要太多句模型会长 JSON 出错，分轮补齐更稳。 */
+const BATCH = Number(args.find((a) => a.startsWith("--batch="))?.split("=")[1] ?? 8)
 
 const UD_POS = new Set(["ADJ", "ADP", "ADV", "AUX", "CCONJ", "DET", "INTJ", "NOUN", "NUM", "PART", "PRON", "PROPN", "PUNCT", "SCONJ", "VERB", "X"])
 
 const norm = (s: string): string => s.toLowerCase().replace(/[^a-z0-9' ]+/g, " ").replace(/\s+/g, " ").trim()
 
-const SYSTEM = `你是小学/初中英语教材的练习内容编辑。给定一节课的主题和现有例句，生成与其主题一致、难度相当、词汇相近的补充练习句。要求：
-1. 句子为 4-12 个词的英文陈述句/疑问句，难度与现有例句一致，优先复用本课词汇，可少量引入已学常用词。
+const SYSTEM = `你是小学/初中英语教材的练习内容编辑。给定一节课的主题和现有例句，生成与其主题一致、难度相当、词汇相近的补充练习句。
+
+要求：
+1. 句子为 4-12 个词的英文陈述句/疑问句，难度与现有例句一致，优先复用本课词汇。
 2. 中文翻译为自然简体中文。
-3. 每句给出逐词标注：english（原形或原样）、chinese（词义）、phonetic（{uk,us} IPA 音标，不带斜杠；缩写/数字可给 null）、pos（UD 词性标签：ADJ ADP ADV AUX CCONJ DET INTJ NOUN NUM PART PRON PROPN PUNCT SCONJ VERB 之一；标点可省略整项）。
-只输出 JSON 数组，不要任何解释或代码围栏。`
+3. **每句必须带 words 数组**：逐词给出 english（原样）、chinese（词义）、phonetic（{"uk":音标,"us":音标}，IPA 不带斜杠；无法确定时给 null）、pos（UD 词性标签，只能取 ADJ ADP ADV AUX CCONJ DET INTJ NOUN NUM PART PRON PROPN PUNCT SCONJ VERB 之一）。标点也作为一项，pos 用 PUNCT、chinese/phonetic 用 null。
+
+必须严格按下面的结构输出（顶层是数组，不是对象；words 必须是数组）：
+[
+  {
+    "english": "I read books.",
+    "chinese": "我读书。",
+    "difficulty": 1,
+    "words": [
+      {"english": "I", "chinese": "我", "phonetic": {"uk": "aɪ", "us": "aɪ"}, "pos": "PRON"},
+      {"english": "read", "chinese": "读", "phonetic": {"uk": "riːd", "us": "riːd"}, "pos": "VERB"},
+      {"english": "books", "chinese": "书", "phonetic": {"uk": "bʊks", "us": "bʊks"}, "pos": "NOUN"},
+      {"english": ".", "chinese": null, "phonetic": null, "pos": "PUNCT"}
+    ]
+  }
+]
+
+只输出这个 JSON 数组，不要任何解释、不要代码围栏、不要在句子上直接放 pos 数组。`
 
 interface GenWord { english: string; chinese: string | null; phonetic: { uk: string; us: string } | null; pos: string }
 interface GenSentence { english: string; chinese: string; difficulty: number; words: GenWord[] }
 
-async function llm(messages: Array<{ role: string; content: string }>, retries = 3): Promise<string> {
-  for (let attempt = 0; attempt <= retries; attempt++) {
+async function llm(messages: Array<{ role: string; content: string }>): Promise<string> {
+  return chat(messages, { temperature: 1.1, maxTokens: 8000 })
+}
+
+/** 远程库长跑偶发连接瞬断（试跑 17/20 时撞过一次）：insert 失败退避重试，不中断整批。 */
+async function insertWithRetry(values: typeof sentences.$inferInsert, retries = 3): Promise<void> {
+  for (let attempt = 0; ; attempt++) {
     try {
-      const r = await fetch("https://api.deepseek.com/chat/completions", {
-        method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${process.env.DEEPSEEK_API_KEY}` },
-        body: JSON.stringify({ model: MODEL, messages, temperature: 1.1, max_tokens: 8000 }),
-      })
-      if (r.status === 402) throw new Error("LLM 账户余额不足（402）——请充值后重跑")
-      if (r.status === 429 || r.status >= 500) {
-        if (attempt === retries) throw new Error(`LLM HTTP ${r.status}（重试 ${retries} 次后仍失败）`)
-        await new Promise((res) => setTimeout(res, 2000 * 2 ** attempt))
-        continue
-      }
-      if (!r.ok) throw new Error(`LLM HTTP ${r.status}: ${(await r.text()).slice(0, 200)}`)
-      const j = (await r.json()) as { choices: Array<{ message: { content: string } }> }
-      return j.choices[0]?.message?.content ?? ""
+      await db.insert(sentences).values(values)
+      return
     } catch (err) {
-      if (err instanceof Error && (err.message.includes("402") || attempt === retries)) throw err
-      await new Promise((res) => setTimeout(res, 2000 * 2 ** attempt))
+      if (attempt >= retries) throw err
+      await new Promise((r) => setTimeout(r, 2000 * 2 ** attempt))
     }
   }
-  throw new Error("unreachable")
+}
+
+/**
+ * 从可能破损的数组文本里逐个抢救对象。
+ *
+ * 背景：一次要 30+ 句时 GLM 会吐 ~6.5K token / 18KB JSON，中途偶发语法错误
+ * （实测 position 12338 "Expected ':' after property name"）——整体 JSON.parse
+ * 直接归零，白跑一次调用。这里按花括号配平逐对象提取，坏的丢掉、好的留下。
+ */
+function salvageObjects(text: string): unknown[] {
+  const out: unknown[] = []
+  let depth = 0
+  let start = -1
+  let inStr = false
+  let escaped = false
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i]
+    if (inStr) {
+      if (escaped) escaped = false
+      else if (ch === "\\") escaped = true
+      else if (ch === '"') inStr = false
+      continue
+    }
+    if (ch === '"') {
+      inStr = true
+      continue
+    }
+    if (ch === "{") {
+      if (depth === 0) start = i
+      depth++
+      continue
+    }
+    if (ch === "}") {
+      if (depth > 0) {
+        depth--
+        if (depth === 0 && start !== -1) {
+          try {
+            out.push(JSON.parse(text.slice(start, i + 1)))
+          } catch {
+            /* 单个对象坏了就丢，继续下一个 */
+          }
+          start = -1
+        }
+      }
+    }
+  }
+  return out
 }
 
 function parseSentences(raw: string, lessonTitle: string, need: number): GenSentence[] {
@@ -85,12 +144,15 @@ function parseSentences(raw: string, lessonTitle: string, need: number): GenSent
   if (fence) text = fence[1].trim()
   const start = text.indexOf("[")
   const end = text.lastIndexOf("]")
-  if (start === -1 || end === -1 || end <= start) return []
-  let arr: unknown
-  try {
-    arr = JSON.parse(text.slice(start, end + 1))
-  } catch {
-    return []
+  let arr: unknown = null
+  if (start !== -1 && end > start) {
+    try {
+      arr = JSON.parse(text.slice(start, end + 1))
+    } catch {
+      arr = salvageObjects(text.slice(start, end + 1))
+    }
+  } else {
+    arr = salvageObjects(text)
   }
   if (!Array.isArray(arr)) return []
   const out: GenSentence[] = []
@@ -180,7 +242,7 @@ async function main(): Promise<void> {
   const lessons2 = LIMIT > 0 ? todo.slice(0, LIMIT) : todo
   const willAdd = lessons2.reduce((a, t) => a + t.need, 0)
   console.log(`\n📚 课时扩句 ${APPLY ? "(APPLY)" : "(DRY 预览)"}`)
-  console.log(`   待补课时 ${todo.length} 个（${LIMIT > 0 ? `本次处理 ${lessons2.length}` : "全部"}），将生成约 ${willAdd} 句，目标每节 ≥${TARGET}\n`)
+  console.log(`   待补课时 ${todo.length} 个（${LIMIT > 0 ? `本次处理 ${lessons2.length}` : "全部"}），将生成约 ${willAdd} 句，目标每节 ≥${TARGET}，LLM ${activeProvider()}\n`)
 
   // 全局去重集：范围内现有英文句
   const seen = new Set<string>()
@@ -205,44 +267,52 @@ async function main(): Promise<void> {
       .where(and(eq(sentences.lessonId, task.lessonId), isNull(sentences.deletedAt)))
       .orderBy(asc(sentences.sortOrder))
       .limit(8)
-    const user = [
-      `课时标题：${task.lessonTitle}`,
-      `所属课程：${task.courseTitle}`,
-      `现有例句（english — chinese）：`,
-      ...sample.map((s) => `- ${s.english} — ${s.chinese}`),
-      ``,
-      `请生成 ${Math.min(task.need + 8, 40)} 句新的补充练习句（宁多勿少，无效句会被自动过滤）。`,
-    ].join("\n")
 
-    let gens: GenSentence[] = []
-    try {
-      const raw = await llm([
-        { role: "system", content: SYSTEM },
-        { role: "user", content: user },
-      ])
-      gens = parseSentences(raw, task.lessonTitle, task.need)
-    } catch (err) {
-      failed++
-      console.error(`  ✗ [${index + 1}/${lessons2.length}] ${task.courseTitle} / ${task.lessonTitle}: ${(err as Error).message}`)
-      if ((err as Error).message.includes("402")) throw err
-      return
-    }
-
+    // 分轮生成：一次要 30+ 句 GLM 会吐 ~6.5K token 的长 JSON，偶发中途语法错误。
+    // 每轮只要 BATCH 句（默认 12），轮内失败不影响其它轮，也便于去重后继续补齐。
     const accepted: GenSentence[] = []
     const seenLocal = new Set<string>()
-    for (const g of gens) {
-      const key = norm(g.english)
-      if (!key || seen.has(key) || seenLocal.has(key)) continue
-      seenLocal.add(key)
-      accepted.push(g)
-      if (accepted.length >= task.need) break
+    const sampleLines = sample.map((s) => `- ${s.english} — ${s.chinese}`)
+    const maxRounds = 6
+    for (let round = 0; round < maxRounds && accepted.length < task.need; round++) {
+      const want = Math.min(task.need - accepted.length + 4, BATCH)
+      const avoid = [...sampleLines, ...accepted.map((g) => `- ${g.english} — ${g.chinese}`)]
+      const user = [
+        `课时标题：${task.lessonTitle}`,
+        `所属课程：${task.courseTitle}`,
+        `参考例句（english — chinese，不要重复这些句子）：`,
+        ...avoid,
+        ``,
+        `请生成 ${want} 句新的补充练习句（宁多勿少，无效句会被自动过滤）。`,
+      ].join("\n")
+      let gens: GenSentence[] = []
+      try {
+        const raw = await llm([
+          { role: "system", content: SYSTEM },
+          { role: "user", content: user },
+        ])
+        gens = parseSentences(raw, task.lessonTitle, want)
+      } catch (err) {
+        failed++
+        console.error(`  ✗ [${index + 1}/${lessons2.length}] ${task.courseTitle} / ${task.lessonTitle}: ${(err as Error).message}`)
+        if (isProviderDown(err)) throw err
+        return
+      }
+      if (index < 2) console.log(`      · 第 ${round + 1} 轮要 ${want} 句 → 解析 ${gens.length}`)
+      for (const g of gens) {
+        const key = norm(g.english)
+        if (!key || seen.has(key) || seenLocal.has(key)) continue
+        seenLocal.add(key)
+        accepted.push(g)
+        if (accepted.length >= task.need) break
+      }
     }
     for (const g of accepted) seen.add(norm(g.english))
 
     if (APPLY && accepted.length > 0) {
       let order = task.maxOrder + 1
       for (const g of accepted) {
-        await db.insert(sentences).values({
+        await insertWithRetry({
           chinese: g.chinese,
           english: g.english,
           wordsCount: g.words.length,
@@ -261,7 +331,7 @@ async function main(): Promise<void> {
       console.log(`  [${done}/${lessons2.length}] 已生成 ${inserted} 句${APPLY ? "" : "（dry）"} ~${etaMin}min left`)
     }
     if (index < 2) {
-      console.log(`  ◇ ${task.courseTitle} / ${task.lessonTitle}（现有 ${task.have} → 补 ${accepted.length}）`)
+      console.log(`  ◇ ${task.courseTitle} / ${task.lessonTitle}（现有 ${task.have} → 需 ${task.need}，采纳 ${accepted.length}）`)
       for (const g of accepted.slice(0, 3)) {
         console.log(`      ${g.english}`)
         console.log(`        ${g.chinese} | ${g.words.slice(0, 4).map((w) => `${w.english}/${w.pos}${w.phonetic ? "/" + w.phonetic.us : ""}`).join(" ")}`)

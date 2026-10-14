@@ -4,7 +4,7 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-# TypeNow · 码上英语
+# TypeNow · 喵学社
 
 AI 驱动的中译英打字练习平台。Next.js 16 + React 19 + Tailwind CSS v4 + **MySQL (Drizzle ORM)**。
 

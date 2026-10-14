@@ -16,7 +16,7 @@ function planOf(key: string) {
 }
 
 // 此前价格页没有页面级 metadata，搜索结果里只能落到根 layout 的泛化标题，
-// 而这正是最需要被搜到的一页（"句学社 多少钱"这类查询的落点）。
+// 而这正是最需要被搜到的一页（"喵学社 多少钱"这类查询的落点）。
 // 价格串从 lib/pricing 推导 —— 否则改了价却忘了改 SEO 描述，是一处静默漂移。
 const priceSummary = PLANS.map((p) => {
   const unit = p.lifetime ? " 终身" : p.months === 1 ? "/月" : p.months === 3 ? "/季" : "/年"

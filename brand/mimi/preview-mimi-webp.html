@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>AI 小咪 · 视频转透明 WebP 检查页</title>
+<style>
+  :root { --navy:#103050; --ink:#1b2a3a; --line:#e3e0da; }
+  body { margin:0; padding:28px 32px 60px; background:#faf9f7; color:var(--ink);
+         font:15px/1.6 -apple-system,"PingFang SC","Hiragino Sans GB",sans-serif; }
+  h1 { font-size:21px; margin:0 0 6px; }
+  h2 { font-size:16px; margin:34px 0 10px; padding-bottom:6px; border-bottom:1px solid var(--line); }
+  .sub { color:#7a7469; font-size:13px; margin-bottom:4px; }
+  .meta { font:12px/1.7 ui-monospace,Menlo,monospace; color:#6d675e; }
+  .grid { display:flex; gap:18px; flex-wrap:wrap; align-items:flex-start; margin-top:12px; }
+  .cell { border:1px solid var(--line); border-radius:12px; padding:10px; background:#fff; }
+  .cell .tag { font-size:12px; color:#7a7469; margin-bottom:8px; }
+  .stage { display:grid; place-items:center; }
+  .light { background:#f7f5f2; }
+  .dark  { background:var(--navy); }
+  .checker { background-color:#fff;
+    background-image:
+      linear-gradient(45deg,#dcdcdc 25%,transparent 25%),
+      linear-gradient(-45deg,#dcdcdc 25%,transparent 25%),
+      linear-gradient(45deg,transparent 75%,#dcdcdc 75%),
+      linear-gradient(-45deg,transparent 75%,#dcdcdc 75%);
+    background-size:16px 16px;
+    background-position:0 0,0 8px,8px -8px,-8px 0; }
+  .big { width:330px; height:186px; }
+  .mid { width:150px; height:85px; }
+  .sml { width:64px; height:36px; }
+  img { display:block; image-rendering:auto; }
+  .row { display:flex; gap:16px; align-items:flex-end; flex-wrap:wrap; }
+  .note { background:#fff; border:1px solid var(--line); border-radius:12px; padding:14px 16px;
+          font-size:13.5px; color:#4a453d; margin-top:14px; }
+  code { background:#f1efeb; padding:1px 5px; border-radius:5px; font-size:12.5px; }
+</style>
+</head>
+<body>
+  <h1>AI 小咪 · 视频转透明 WebP 检查页</h1>
+  <div class="sub">三支「生成透明背景猫咪静态图」MP4 转出来的透明背景动画 WebP（各 97 帧 / 640×360 / 24fps 循环）。
+    同一张图分别放在浅色、深色、棋盘格上——棋盘格能直接看出哪些像素是真透明。</div>
+
+  <div class="note">
+    <b>看什么：</b>① 猫轮廓外沿有没有深色"黑影"（上一版的问题）；② 有没有残留水印；③ 毛边是否发灰发脏。
+    如果还有黑影，多半是源视频里本身就烘了一层投影——告诉我是哪一支、在什么位置，我按区域处理掉。
+  </div>
+
+  <h2>(1) mimi-ai-1.webp <span class="meta" data-file="webp/mimi-ai-1.webp"></span></h2>
+  <div class="grid">
+    <div class="cell"><div class="tag">浅色 #F7F5F2</div><div class="stage light big"><img class="big" src="webp/mimi-ai-1.webp" alt="ai-1 light"></div></div>
+    <div class="cell"><div class="tag">深色 #103050</div><div class="stage dark big"><img class="big" src="webp/mimi-ai-1.webp" alt="ai-1 dark"></div></div>
+    <div class="cell"><div class="tag">棋盘格（透明度）</div><div class="stage checker big"><img class="big" src="webp/mimi-ai-1.webp" alt="ai-1 checker"></div></div>
+  </div>
+  <div class="cell" style="margin-top:12px"><div class="tag">实际使用尺寸 150 / 64</div>
+    <div class="stage checker row" style="padding:10px"><img class="mid" src="webp/mimi-ai-1.webp"><img class="sml" src="webp/mimi-ai-1.webp"></div>
+  </div>
+
+  <h2>(2) mimi-ai-2.webp <span class="meta" data-file="webp/mimi-ai-2.webp"></span></h2>
+  <div class="grid">
+    <div class="cell"><div class="tag">浅色 #F7F5F2</div><div class="stage light big"><img class="big" src="webp/mimi-ai-2.webp" alt="ai-2 light"></div></div>
+    <div class="cell"><div class="tag">深色 #103050</div><div class="stage dark big"><img class="big" src="webp/mimi-ai-2.webp" alt="ai-2 dark"></div></div>
+    <div class="cell"><div class="tag">棋盘格（透明度）</div><div class="stage checker big"><img class="big" src="webp/mimi-ai-2.webp" alt="ai-2 checker"></div></div>
+  </div>
+  <div class="cell" style="margin-top:12px"><div class="tag">实际使用尺寸 150 / 64</div>
+    <div class="stage checker row" style="padding:10px"><img class="mid" src="webp/mimi-ai-2.webp"><img class="sml" src="webp/mimi-ai-2.webp"></div>
+  </div>
+
+  <h2>(3) mimi-ai-3.webp <span class="meta" data-file="webp/mimi-ai-3.webp"></span></h2>
+  <div class="grid">
+    <div class="cell"><div class="tag">浅色 #F7F5F2</div><div class="stage light big"><img class="big" src="webp/mimi-ai-3.webp" alt="ai-3 light"></div></div>
+    <div class="cell"><div class="tag">深色 #103050</div><div class="stage dark big"><img class="big" src="webp/mimi-ai-3.webp" alt="ai-3 dark"></div></div>
+    <div class="cell"><div class="tag">棋盘格（透明度）</div><div class="stage checker big"><img class="big" src="webp/mimi-ai-3.webp" alt="ai-3 checker"></div></div>
+  </div>
+  <div class="cell" style="margin-top:12px"><div class="tag">实际使用尺寸 150 / 64</div>
+    <div class="stage checker row" style="padding:10px"><img class="mid" src="webp/mimi-ai-3.webp"><img class="sml" src="webp/mimi-ai-3.webp"></div>
+  </div>
+
+  <div class="note" style="margin-top:26px">
+    源文件：<code>~/Downloads/生成透明背景猫咪静态图 (1|2|3).mp4</code>（1280×720 / 24fps / 97 帧 / 约 4.04s，
+    内含 aac 音轨已丢弃）。源视频本身没有 alpha 通道，"透明背景"是渲染出来的灰底，这里是逐帧键控出来的真 alpha。
+    转换脚本：<code>brand/mimi/tools/mp4-to-alpha-webp.py</code>
+  </div>
+</body>
+</html>

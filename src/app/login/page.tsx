@@ -27,10 +27,11 @@ export default function LoginPage() {
 
           <div className="main_box">
             {/* 品牌锁定标。参考页放的是一张 338×80 的整块位图（图标+「句游英语」
-                烘焙在同一张图里），我们的 logo.svg 是单图标，所以用「图标+真实
-                文字」，与落地页顶栏同一种处理。 */}
+                烘焙在同一张图里），我们的图标 public/brand/icon.png 是单图形，
+                所以用「图标+真实文字」，与落地页顶栏同一种处理。 */}
             <h3>
-              <Image src="/logo.svg" alt="" aria-hidden width={40} height={40} />
+              {/* m00858：源图紧裁为横版（1.494），高 40 → 宽 60，属性比=实际比。 */}
+              <Image src="/brand/icon.png" alt="" aria-hidden width={60} height={40} />
               {/* 参考页这一块是 338×80 的 logo.png —— 图标与「句游英语」烘焙在同一张
                   位图里，用的就是站酷快乐体（字形 IoU 0.907，见 globals.css 的
                   @font-face 注释）。所以这里排同一款字体，真实文字部分即与参考页同源；

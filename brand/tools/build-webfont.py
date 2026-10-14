@@ -61,15 +61,19 @@ SRC_URL = ("https://github.com/google/fonts/raw/main/ofl/zcoolkuaile/"
            "ZCOOLKuaiLe-Regular.ttf")
 OFL_URL = "https://raw.githubusercontent.com/google/fonts/main/ofl/zcoolkuaile/OFL.txt"
 
-# 站点真正需要这套字体的字符。品牌锁定标「句学社」是主角；拉丁「TypeNow」
-# 一起带上，方便把「句学社 · TypeNow」整体排成同一款字体而不掉字。
+# 站点真正需要这套字体的字符。品牌锁定标「喵学社」是主角；拉丁「TypeNow」
+# 一起带上，方便把「喵学社 · TypeNow」整体排成同一款字体而不掉字。
 #
-# 空格与间隔号是后补的：`brandLockupWithEn()` 返回「句学社 · TypeNow」，
+# 2026-10-13 二次更名「句学社」→「喵学社」：豆包生成的品牌 logo 上的字样经
+# 逐字位图考证为「喵学社」（见 brand/web-logo/README.md），用户拍板全站跟进，
+# 子集随之换字 ——「句」移出、「喵」加入。
+#
+# 空格与间隔号是后补的：`brandLockupWithEn()` 返回「喵学社 · TypeNow」，
 # 起初只子集了 10 个字，不含 U+0020 与 U+00B7 —— 于是那一行里汉字是品牌字体、
-# 空格和 · 却掉回正文字体。字宽不同会让「句学社」「·」「TypeNow」三段的
+# 空格和 · 却掉回正文字体。字宽不同会让「喵学社」「·」「TypeNow」三段的
 # 间距看起来忽紧忽松，虽然不会报错，但正是这种细节露怯。
 # 两个字符合计只多几十字节，索性一起带上。
-BRAND_CHARS = "句学社TypeNow ·"
+BRAND_CHARS = "喵学社TypeNow ·"
 
 # 子集字体的族名。OFL 没声明保留名，理论上可以沿用原名，但产物是**子集**，
 # 用一个自己的名字能避免与系统里装的完整站酷快乐体混淆。

@@ -17,7 +17,7 @@ import type { Metadata } from "next"
  *   1. 品牌名      句游英语 → {BRAND.nameZh}
  *   2. 页面标题    → BRAND.tabTitle（格式「品牌名 - 定位语」）
  *   3. 主口号      → BRAND.slogan（参考页首屏 H1 那句）
- *   4. Logo        → public/logo.svg（新矢量图定稿前先用现有图标）
+ *   4. Logo        → public/brand/icon.png（AI 彩色徽标去水印版）
  *
  * 页脚里的公司信息（备案号、协议链接、版权行）也换成本站的 —— 那些属于
  * 「公司相关」，不能照抄别人的主体。
@@ -86,23 +86,23 @@ export default function LandingPage() {
           <div className="max-w-6xl mx-auto px-4 sm:px-6 h-20 flex items-center justify-between">
             {/* 品牌锁定标：图标 + 中文名横排。
                 参考页的 logo.png 是把「图标 + 句游英语」烘焙进一张 338×80 位图，
-                所以它一行就是完整的品牌名。我们手上只有方形图标（public/logo.svg），
-                单独放进去就只剩图、没有名字，于是这里按参考页的比例用「占位图标 +
-                真实文字」拼出同样版式：
+                所以它一行就是完整的品牌名。我们的图标（public/brand/icon.png，
+                AI 彩色徽标去水印抠图版）是单图形，单独放进去就只剩图、没有名字，
+                于是这里按参考页的比例用「图标 + 真实文字」拼出同样版式：
                   · 文字墨高 ≈ 图标高的 0.6（参考页 36px 图标对应 49/80 的文字高）
                   · 图标与文字间距 ≈ 图标宽的 1/3（参考页 78→104 共 26px）
-                等 brand/ 里的新锁定标定稿，把这一整块换成单个 <img> 即可，
-                外层仍是 h-9，尺寸能直接对上参考页。 */}
+                brand/web-logo/ 里已有烘焙好的横排锁标 PNG（build-brand-lockup.py），
+                但站内保持「图标 + 真实文字」：文字是活的（跟 brand.ts 走、可选中、
+                不糊），锁标图留给印刷/OG 等需要整块位图的场合。 */}
             <a href="#" className="group flex items-center gap-3">
               <span className="flex items-center gap-3 transition-transform group-hover:scale-105">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src="/logo.svg" alt="" aria-hidden className="h-9 w-auto object-contain" />
-                {/* 字号按参考页反推：logo.png 在 h-9(36px) 下文字墨高 22px。
-                    参考站 logo 用的就是站酷快乐体（见 globals.css 的 @font-face 注释，
-                    字形 IoU 0.907），所以我们直接排同一款字体即可 1:1 对齐；
-                    font-brand 内含 400 字重锁定（该字体只有 Regular）。
-                    字形墨高 ≈ 0.88em，故 22 / 0.88 ≈ 25px —— 略小于原来的 26px。 */}
-                <span className="font-brand text-[25px] leading-none tracking-tight text-slate-900">
+                <img src="/brand/icon.png" alt="" aria-hidden className="h-14 w-auto object-contain" />
+                {/* 尺寸层级（m00559 用户要求）：文字只大一号，图标要比文字再大几个号 ——
+                    图标 h-14(56px) vs 文字 32px（m00630：m00559 的比例保持，整体再大一号）。站酷快乐体即参考站同款
+                    （见 globals.css 的 @font-face 注释，字形 IoU 0.907）；
+                    font-brand 内含 400 字重锁定（该字体只有 Regular）。 */}
+                <span className="font-brand text-[32px] leading-none tracking-tight text-slate-900">
                   {BRAND.lockup}
                 </span>
               </span>
@@ -338,10 +338,10 @@ export default function LandingPage() {
           <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[300px] bg-gradient-to-tr from-blue-200/25 to-indigo-100/25 blur-3xl rounded-full pointer-events-none z-0"></div>
 
           <div className="relative z-10 max-w-3xl mx-auto px-4 sm:px-6 text-center">
-            {/* Logo 徽章。图标仍是旧版，等新矢量图定稿后替换 */}
+            {/* Logo 徽章（public/brand/icon.png，AI 彩色徽标去水印版） */}
             <div className="inline-flex items-center justify-center w-16 h-16 rounded-3xl bg-white shadow-xl shadow-blue-500/10 border border-slate-100 mb-6 p-3 group hover:scale-105 transition-transform">
               {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src="/logo.svg" alt={BRAND.nameZh} className="w-full h-full object-contain" />
+              <img src="/brand/icon.png" alt={BRAND.nameZh} className="w-full h-full object-contain" />
             </div>
 
             {/* 核心标题 */}
@@ -388,12 +388,11 @@ export default function LandingPage() {
           <div className="max-w-6xl mx-auto px-4 sm:px-6 flex flex-col md:flex-row items-center justify-between gap-6">
             {/* 品牌名与简述 */}
             <div className="flex flex-col sm:flex-row items-center gap-4 text-center sm:text-left">
-              {/* 与顶栏同理：参考页页脚的 logo.png 也含品牌名，补上文字。
-                  h-7(28px) 对应文字墨高 ≈ 17.2px，墨高 ≈ 0.88em → em ≈ 19.5px。 */}
+              {/* 与顶栏同层级：图标 h-12(48px) vs 文字 26px（m00559 比例 + m00630 整体放大一号）。 */}
               <span className="flex items-center gap-2.5">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src="/logo.svg" alt="" aria-hidden className="h-7 w-auto object-contain" />
-                <span className="font-brand text-[19.5px] leading-none tracking-tight text-slate-900">
+                <img src="/brand/icon.png" alt="" aria-hidden className="h-12 w-auto object-contain" />
+                <span className="font-brand text-[26px] leading-none tracking-tight text-slate-900">
                   {BRAND.lockup}
                 </span>
               </span>

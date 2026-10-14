@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>AI 小咪 · 静态形象 draft ×4</title>
+<style>
+  body { font-family: "PingFang SC", "Hiragino Sans GB", sans-serif; background: #F6F4EF; margin: 0; padding: 32px; color: #103050; }
+  h1 { font-size: 22px; margin: 0 0 4px; }
+  .sub { color: #5A7A96; font-size: 13px; margin-bottom: 24px; }
+  .grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; max-width: 1100px; }
+  .card { background: #fff; border-radius: 14px; padding: 18px; box-shadow: 0 1px 4px rgba(16,48,80,.08); }
+  .card h2 { font-size: 15px; margin: 0 0 2px; }
+  .card .role { font-size: 12px; color: #5A7A96; margin-bottom: 12px; }
+  .big { display: flex; justify-content: center; padding: 8px 0; }
+  .big img { width: 220px; height: 220px; }
+  .row { display: flex; align-items: flex-end; gap: 14px; margin-top: 12px; }
+  .cell { border-radius: 10px; display: flex; align-items: center; justify-content: center; }
+  .w { background: #FFF; }
+  .n { background: #103050; }
+  .note { max-width: 1100px; margin-top: 24px; font-size: 13px; color: #5A7A96; line-height: 1.7; }
+  b { color: #103050; }
+</style>
+</head>
+<body>
+<h1>AI 小咪 · 静态形象 draft ×4</h1>
+<div class="sub">配色取自 logo 实测主色（奶白 / 藏青 / 浅蓝 / 蜜桃）· 480×480 透明底 · 纯代码矢量绘制，后续可无损改任何细节</div>
+<div class="grid">
+  <div class="card">
+    <h2>① 趴睡 <code>mimi-sleep</code></h2>
+    <div class="role">默认态：闭眼打呼，Zzz 上浮 + 尾巴偶尔摆</div>
+    <div class="big"><img src="png/mimi-sleep.png" alt="趴睡"></div>
+    <div class="row">
+      <div class="cell w" style="width:72px;height:72px"><img src="png/mimi-sleep.png" style="width:56px"></div>
+      <div class="cell w" style="width:48px;height:48px"><img src="png/mimi-sleep.png" style="width:40px"></div>
+      <div class="cell n" style="width:72px;height:72px"><img src="png/mimi-sleep.png" style="width:56px"></div>
+      <div class="cell n" style="width:48px;height:48px"><img src="png/mimi-sleep.png" style="width:40px"></div>
+    </div>
+  </div>
+  <div class="card">
+    <h2>② 趴睡·书枕 <code>mimi-sleep-book</code></h2>
+    <div class="role">变体：拿 logo 同款书当枕头（学者感）</div>
+    <div class="big"><img src="png/mimi-sleep-book.png" alt="书枕"></div>
+    <div class="row">
+      <div class="cell w" style="width:72px;height:72px"><img src="png/mimi-sleep-book.png" style="width:56px"></div>
+      <div class="cell w" style="width:48px;height:48px"><img src="png/mimi-sleep-book.png" style="width:40px"></div>
+      <div class="cell n" style="width:72px;height:72px"><img src="png/mimi-sleep-book.png" style="width:56px"></div>
+      <div class="cell n" style="width:48px;height:48px"><img src="png/mimi-sleep-book.png" style="width:40px"></div>
+    </div>
+  </div>
+  <div class="card">
+    <h2>③ 醒来 <code>mimi-awake</code></h2>
+    <div class="role">hover 态：睁眼停呼；移出缓闭眼回到 ①</div>
+    <div class="big"><img src="png/mimi-awake.png" alt="醒来"></div>
+    <div class="row">
+      <div class="cell w" style="width:72px;height:72px"><img src="png/mimi-awake.png" style="width:56px"></div>
+      <div class="cell w" style="width:48px;height:48px"><img src="png/mimi-awake.png" style="width:40px"></div>
+      <div class="cell n" style="width:72px;height:72px"><img src="png/mimi-awake.png" style="width:56px"></div>
+      <div class="cell n" style="width:48px;height:48px"><img src="png/mimi-awake.png" style="width:40px"></div>
+    </div>
+  </div>
+  <div class="card">
+    <h2>④ 坐立 <code>mimi-sit</code></h2>
+    <div class="role">click 态：Q 弹起 + 举手 + 「尽管问～」，约 2s 后回 ①</div>
+    <div class="big"><img src="png/mimi-sit.png" alt="坐立"></div>
+    <div class="row">
+      <div class="cell w" style="width:72px;height:72px"><img src="png/mimi-sit.png" style="width:56px"></div>
+      <div class="cell w" style="width:48px;height:48px"><img src="png/mimi-sit.png" style="width:40px"></div>
+      <div class="cell n" style="width:72px;height:72px"><img src="png/mimi-sit.png" style="width:56px"></div>
+      <div class="cell n" style="width:48px;height:48px"><img src="png/mimi-sit.png" style="width:40px"></div>
+    </div>
+  </div>
+</div>
+<div class="note">
+  <b>交付流程</b>：你确认形象（含 ②书枕变体取不取）→ 我做动作帧（呼噜起伏 / 竖耳睁眼 / Q 弹举手）→ 合成 3 个循环 webp（单个 &lt;100KB）→ 接入 AiChatWidget 替换「小码AI」文案与形象。<br>
+  <b>源文件</b>：brand/mimi/tools/draw-mimi.py（改一行即可重出图）；小图行为 48~72px 实际挂件尺寸的预览，深色底用于夜间模式检查。
+</div>
+</body>
+</html>
