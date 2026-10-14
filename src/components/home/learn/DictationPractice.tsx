@@ -372,8 +372,6 @@ export function DictationPractice({
   // ── 收藏当前句（底栏星标） ──────────────────────────────────────────────────
   const [favorited, setFavorited] = useState(false)
   const [favoriteBusy, setFavoriteBusy] = useState(false)
-  /** 长按 ⌘/Ctrl 时从顶部滑出的快捷键提示条是否展开 */
-  const [shortcutOverlay, setShortcutOverlay] = useState(false)
 
   /**
    * 参考站用 `PracticeConfig.isMobile`（服务端按 UA 判定的真机标记）决定移动端
@@ -1849,6 +1847,24 @@ export function DictationPractice({
         // 唯独「答案」是 no-op —— 学习模式本来就整句摊开着，没有可揭示的东西。
       }
 
+      // 听写/拼图的复习屏：裸 Enter 推进下一句。答对后输入屏已卸载，输入格的
+      // Enter 提交处理器不在了，而「下一句预览」上明确画着 ↵、底栏下一句按钮
+      // 干的也是同一件事 —— 此前裸 Enter 没人接，是个死键。焦点在按钮等可交互
+      // 元素上时必须让位原生激活：点过「下一句」后焦点会留在按钮上，原生 click
+      // 与这里的推进都跑就会一次跳两句。
+      if (
+        statusRef.current === "review" &&
+        e.key === "Enter" && !e.ctrlKey && !e.metaKey && !e.altKey && !e.shiftKey
+      ) {
+        if (e.repeat) return
+        const target = e.target as HTMLElement | null
+        if (target?.closest("button, a, input, select, textarea, [contenteditable], [role='button']")) return
+        e.preventDefault()
+        reviewEpochRef.current += 1
+        advance()
+        return
+      }
+
       if (matchShortcut(e, "answer", shortcuts)) {
         e.preventDefault()
         if (mode === "learning") return
@@ -2013,35 +2029,6 @@ export function DictationPractice({
     document.addEventListener("click", onClick)
     return () => document.removeEventListener("click", onClick)
   }, [openDropdown])
-
-  /**
-   * 长按 ⌘/Ctrl 时从顶部滑出快捷键提示条（参考站 renderShortcutOverlay）。
-   * 参考站把它挂在 `document.body` 上并靠 `position:fixed` 定位；我们用
-   * `position:fixed` 的同一套 CSS，放在 `.practice-shell` 内不影响定位
-   * （fixed 相对视口，不受祖先 overflow 影响，除非祖先有 transform）。
-   */
-  useEffect(() => {
-    const onDown = (e: KeyboardEvent) => {
-      if ((e.key !== "Control" && e.key !== "Meta") || e.repeat) return
-      if (!shortcutOverlayEnabled) return
-      // 快捷键设置弹窗打开时不弹悬浮栏（参考站 practice.js:9394 同款判断），
-      // 否则用户在里面按 ⌘ 录制时会被顶上滑出的条挡住视线。
-      if (shortcutModalOpen) return
-      setShortcutOverlay(true)
-    }
-    const onUp = (e: KeyboardEvent) => {
-      if (e.key === "Control" || e.key === "Meta") setShortcutOverlay(false)
-    }
-    const onBlur = () => setShortcutOverlay(false)
-    document.addEventListener("keydown", onDown)
-    document.addEventListener("keyup", onUp)
-    window.addEventListener("blur", onBlur)
-    return () => {
-      document.removeEventListener("keydown", onDown)
-      document.removeEventListener("keyup", onUp)
-      window.removeEventListener("blur", onBlur)
-    }
-  }, [shortcutOverlayEnabled, shortcutModalOpen])
 
   /**
    * 声音频谱条跟随真实播放状态起停。
@@ -2544,7 +2531,7 @@ export function DictationPractice({
                       />
                       <InfoCard
                         id="moreSettingsCard"
-                        title="更多个性化设置（自动弹答案次数、Ctrl 快捷键提示等）"
+                        title="更多个性化设置（自动弹答案次数、快捷键提示等）"
                         label="更多设置"
                         value="打开"
                         valueId="moreSettingsDisplay"
@@ -3370,11 +3357,12 @@ export function DictationPractice({
         </div>
 
         {/*
-          长按 ⌘/Ctrl 滑出的快捷键提示条。参考站把它挂到 `document.body` 并重建
-          整个节点；这里用条件 class 切换 `.active`，CSS 里 `.shortcut-overlay-bar`
-          是 `position:fixed`，放在壳内同样相对视口定位。
+          常驻的快捷键提示条（此前是长按 ⌘/Ctrl 才滑出，用户反馈不明显）。
+          参考站把它挂到 `document.body` 并重建整个节点；这里用条件 class 切换
+          `.active`，CSS 里 `.shortcut-overlay-bar` 是 `position:fixed`，放在壳内
+          同样相对视口定位。开关关闭或快捷键弹窗录制时回到隐藏态，不删节点。
         */}
-        <div className={`shortcut-overlay-bar${shortcutOverlay ? " active" : ""}`}>
+        <div className={`shortcut-overlay-bar${shortcutOverlayEnabled && !shortcutModalOpen ? " active" : ""}`}>
           {/*
             每一段各自包一层 <kbd>，段间用 + 连接 —— 参考站 renderShortcutOverlay
             （practice.js:9385）用的是 `getShortcutKbd`，它对每一段都返回
@@ -3866,8 +3854,8 @@ export function DictationPractice({
             />
 
             <MoreSettingsRow
-              label="Ctrl 快捷键提示"
-              hint="按住 Ctrl/⌘ 键时在页面顶部显示快捷键提示浮层"
+              label="快捷键提示"
+              hint="在页面顶部常驻显示快捷键提示浮层"
               control={
                 <MoreSettingsToggle
                   id="shortcutOverlayInModalToggle"
@@ -3877,7 +3865,7 @@ export function DictationPractice({
                     saveShortcutOverlay(next)
                     // 参考站 practice.js:7677 用的是**切换前**的 `enabled` 做文案判据：
                     // `showToast(enabled ? '已关闭…' : '已开启…')`，等价于按 next 判断。
-                    toast.info(next ? "已开启 Ctrl 快捷键提示" : "已关闭 Ctrl 快捷键提示", { duration: 2000 })
+                    toast.info(next ? "已开启快捷键提示" : "已关闭快捷键提示", { duration: 2000 })
                   }}
                 />
               }
