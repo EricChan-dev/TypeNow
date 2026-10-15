@@ -3,14 +3,14 @@
 import { useState } from "react"
 
 /**
- * 首屏右栏的「趣味拼词演示」卡片 —— 照搬参考页（句游英语官网首页）的首屏互动模块。
+ * 首屏右栏的「趣味拼词演示」卡片 —— 照搬基准实现（基准实现官网首页）的首屏互动模块。
  *
- * 交互逻辑逐条对应参考页的 `_files/app.js`，含几个容易做错的细节：
+ * 交互逻辑逐条对应基准实现的 
  *
  *   1. 点过的备选单词**不移出、不隐藏**，只在原地加 `.selected` 置灰下沉
  *      （opacity .35 + grayscale + translateY(2px) + pointer-events:none）。
  *      若把已选词从列表里删掉，剩下的卡片会回流重排，整块看起来就会「跳」，
- *      和参考页不一样。
+ * 和基准实现不一样。
  *   2. 「偷看答案」**不填入句子框**，只把按钮上的文字换成正确语序（如
  *      `AI technology helps you learn English faster`），再点一次换回「偷看答案」。
  *   3. 拼对时除了弹出成功条，还要给句子框加绿框绿底
@@ -18,13 +18,13 @@ import { useState } from "react"
  *   4. 撤销：句子槽里的卡片 hover 变红并显示 ✕，点击后回到备选区并恢复可点。
  *
  * 两点刻意为之：
- * · 乱序顺序与参考页一字不差（helps / faster / AI / you / English / learn /
+ * · 乱序顺序与基准实现一字不差（helps / faster / AI / you / English / learn /
  *   technology），不重新洗牌 —— 换顺序会让「拼对」看起来像另一道题。
  * · 这纯粹是**演示**，不接 lib/practice-score 的真实判分，也不写任何学习记录。
  *   真实练习在 /practice。
  */
 
-/** 乱序备选词，顺序与参考页的 originalWords 一致 */
+/** 乱序备选词，顺序与基准实现的 originalWords 一致 */
 const WORD_BANK = [
   "helps",
   "faster",
@@ -35,12 +35,12 @@ const WORD_BANK = [
   "technology",
 ]
 
-/** 正确语序，对应参考页的 targetSentence 与题干中文「AI 技术帮助你更快地学习英语」 */
+/** 正确语序，对应基准实现的 targetSentence 与题干中文「AI 技术帮助你更快地学习英语」 */
 const ANSWER = ["AI", "technology", "helps", "you", "learn", "English", "faster"]
 
 export function PuzzleDemoCard() {
   // placed 存的是单词在 WORD_BANK 里的**下标**而不是单词本身：
-  // 参考页每个词卡都带 data-id，用下标定位才和它一致，也不会在出现重复词时串位。
+ // 基准实现每个词卡都带 data-id，用下标定位才和它一致，也不会在出现重复词时串位。
   const [placed, setPlaced] = useState<number[]>([])
   const [peeking, setPeeking] = useState(false)
 
@@ -54,13 +54,13 @@ export function PuzzleDemoCard() {
     setPlaced((p) => [...p, i])
   }
 
-  /** 点击句子槽里的卡片 = 撤销。参考页用 splice(slotIndex,1) 按下标删。 */
+ /** 点击句子槽里的卡片 = 撤销。基准实现用 splice(slotIndex,1) 按下标删。 */
   function remove(slotIndex: number) {
     if (isCorrect) return
     setPlaced((p) => p.filter((_, k) => k !== slotIndex))
   }
 
-  /** 偷看/收起答案：只切换按钮文字，不动句子槽 —— 与参考页 renderPeek 行为一致 */
+ /** 偷看/收起答案：只切换按钮文字，不动句子槽 —— 与基准实现 renderPeek 行为一致 */
   function peek() {
     setPeeking((v) => !v)
   }
@@ -95,7 +95,7 @@ export function PuzzleDemoCard() {
         <p className="text-xs text-slate-500 mt-1">中文：AI 技术帮助你更快地学习英语</p>
       </div>
 
-      {/* 拼图放入区域。拼对时加绿框绿底，与参考页的 classList.add 一致 */}
+ {/* 拼图放入区域。拼对时加绿框绿底，与基准实现的 classList.add 一致 */}
       <div
         className={`min-h-[72px] p-3 rounded-2xl border-2 border-dashed flex flex-wrap items-center gap-2 mb-4 transition-all ${
           isCorrect

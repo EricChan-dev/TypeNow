@@ -30,26 +30,26 @@ import { FREE_TRIAL_SENTENCES } from "@/lib/free-trial"
 import type { GrammarPoint, LessonComplexity } from "@/lib/course-ai"
 
 /**
- * 我的课程 · 课程详情页（复刻参考站「我的课程-课程详情」）。
+ * 我的课程 · 课程详情页（对齐基准实现「我的课程-课程详情」）。
  *
- * ── 与参考站的三处刻意差异（都是「不造假数据」决议的落点）────────────────────
+ * ── 与基准实现的三处刻意差异（都是「不造假数据」决议的落点）────────────────────
  *
- * 1. **课节级付费墙不搬**。参考站把第 2 节起标成 pay-locked（按钮「开通解锁」
+ * 1. **课节级付费墙不搬**。基准实现把第 2 节起标成 pay-locked（按钮「开通解锁」
  *    弹升级框）；我们的真实模型是每节课都能进、非会员每课前
  *    FREE_TRIAL_SENTENCES 句试学（lib/free-trial.ts）。照搬课节锁等于按钮
  *    承诺一个不存在的限制。课程级的会员引导照做，但文案说的是真话
  *    （「开通会员，解锁全部句子」），锁定提示也只描述真实限制。
- * 2. **难度标签不渲染**。参考站有 初级/中级/高级 标签；我们 courses 表没有
+ * 2. **难度标签不渲染**。基准实现有 初级/中级/高级 标签；我们 courses 表没有
  *    difficulty 列、sentences.difficulty 全库恒为 1，派生不出真实难度。
  *    `.course-meta-line` 只保留在学人数。
- * 3. **语法点 / 句子复杂度两块是占位**（用户决议 m20696）：它们是参考站的
+ * 3. **语法点 / 句子复杂度两块是占位**（用户决议 m20696）：它们是基准实现的
  *    课节级 AI 分析产物，库里没有数据源，渲染「暂未生成」而不是编一个。
  *    核心词汇 / 核心短语从 sentences.words / chunks / dependency_analysis
  *    现场派生（/api/lessons/[id]/insight，规则在 lib/lesson-insight.ts）。
  *
  * ── 图标约定 ────────────────────────────────────────────────────────────────
  *
- * 参考页用 remixicon 字体图标（`<i class="ri-*">`），本仓统一 lucide。
+ * 基准实现用 remixicon 字体图标（`<i class="ri-*">`），本仓统一 lucide。
  * course-detail.css 里大量选择器落在 `i` 元素上（按钮里的圆形图标底、
  * 状态色、字号），所以 lucide 组件外面包一层 `<i>`：装饰由 CSS 的 `i`
  * 规则给，图形尺寸由 lucide 的 size 给（font-size 对 svg 无效）。
@@ -118,7 +118,7 @@ function Icon({ children }: { children: ReactNode }) {
   return <i style={iconWrap}>{children}</i>
 }
 
-/** 学习时长的人话格式。参考站服务端直接渲染「N秒」，几千秒时不可读。 */
+/** 学习时长的人话格式。基准实现服务端直接渲染「N秒」，几千秒时不可读。 */
 export function formatStudyDuration(seconds: number): string {
   const s = Math.max(0, Math.floor(seconds))
   if (s < 60) return `${s}秒`
@@ -150,7 +150,7 @@ export function CourseDetailClient({ courseId }: { courseId: string }) {
   // 封面兜底：cover_url 可能是外链或后台上传的 base64，加载失败退回渐变色卡
   //（与 store/CourseDetailClient、CourseCard 的同一处兜底对应）。
   const [coverFailed, setCoverFailed] = useState(false)
-  // 展开的课节（参考站允许多个同时展开，行为一致）
+ // 展开的课节（基准实现允许多个同时展开，行为一致）
   const [expandedIds, setExpandedIds] = useState<ReadonlySet<string>>(new Set())
   // 课节学习要点缓存：展开时才拉，拉过就不再拉
   const [insights, setInsights] = useState<Record<string, InsightSlot>>({})
@@ -271,7 +271,7 @@ export function CourseDetailClient({ courseId }: { courseId: string }) {
   }
 
   const unenroll = async () => {
-    // 参考站 customConfirmAsync 的对应物；本仓没有全局确认弹窗组件，用原生 confirm
+ // 基准实现 customConfirmAsync 的对应物；本仓没有全局确认弹窗组件，用原生 confirm
     if (!window.confirm("确定要移除此课程吗？移除后可在课程市场重新加入。")) return
     try {
       const res = await fetch("/api/user/acquired-courses", {
@@ -329,7 +329,7 @@ export function CourseDetailClient({ courseId }: { courseId: string }) {
   return (
     <div className="course-detail">
       <div className="maxWidth">
-        {/* ── 返回条（参考站 .location）── */}
+ {/* ── 返回条（基准实现 .location）── */}
         <div className="location">
           <div className="back">
             <Link href="/home/courses" aria-label="返回课程列表">
@@ -346,7 +346,7 @@ export function CourseDetailClient({ courseId }: { courseId: string }) {
         </div>
 
         <div>
-          {/* ── 课程头（参考站 .detailname）── */}
+ {/* ── 课程头（基准实现 .detailname）── */}
           <div className="detailname">
             <div className="img">
               {cover.kind === "image" && !coverFailed ? (
@@ -466,7 +466,7 @@ export function CourseDetailClient({ courseId }: { courseId: string }) {
             </div>
           )}
 
-          {/* ── 学习统计（参考站 .study-stats-section，4 卡）── */}
+ {/* ── 学习统计（基准实现 .study-stats-section，4 卡）── */}
           <div className="study-stats-section">
             <h5>
               <Icon>
@@ -522,7 +522,7 @@ export function CourseDetailClient({ courseId }: { courseId: string }) {
             </div>
           </div>
 
-          {/* ── 课程目录（参考站 .lesson-list-section）── */}
+ {/* ── 课程目录（基准实现 .lesson-list-section）── */}
           <div className="lesson-list-section">
             <div className="section-header">
               <h3>

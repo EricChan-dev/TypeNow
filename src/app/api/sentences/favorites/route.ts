@@ -7,12 +7,12 @@ import { and, desc, eq, inArray, sql } from "drizzle-orm"
 /**
  * 收藏句子（听写页底栏的星标，快捷键 ⌘/Ctrl+U）。
  *
- * 与参考站 `/User/Api/Favorite/Sentence` 的口径对齐：收藏的是**练习项**
+ * 与基准实现 `/User/Api/Favorite/Sentence` 的口径对齐：收藏的是**练习项**
  * （可能带 `_c<order>` 后缀），不是原句 —— 带 chunks 的句子在练习页会展开成
  * 多个分块练习项，各自可独立收藏（与 `pronunciation_scores` 一致）。
  *
  * 为什么不复用 `wordbook_items`：那是**单词**收藏的存储，一个词一行、
- * UNIQUE(user_id, word)，把句子塞进去会和单词本混在一起。参考站自己也是
+ * UNIQUE(user_id, word)，把句子塞进去会和单词本混在一起。基准实现自己也是
  * 两个独立接口。
  */
 

@@ -20,8 +20,8 @@ import {
  * 快捷键配置的行为契约。
  *
  * 这些用例锁定的都是「改了会让用户按不出来」的地方：修饰键必须完全一致、
- * Enter/空格不许绑、冲突要拦、存储里的脏数据要回退默认。参考站对应实现见
- * `句子练习 - 句游英语_files/shortcut-config.js` 与 `practice-sys-controls.js`。
+ * Enter/空格不许绑、冲突要拦、存储里的脏数据要回退默认。基准实现对应实现见
+ * `句子练习 -  与 。
  */
 
 /** 造一个 KeyboardEvent 形状的对象，够 matchShortcut 判就行。 */
@@ -58,8 +58,8 @@ describe("practice-shortcuts", () => {
     vi.unstubAllGlobals()
   })
 
-  it("默认表里 play/answer/favorite 与参考站逐字一致", () => {
-    // 参考站 shortcut-config.js:12-20。改这里等于改用户默认手感。
+ it("默认表里 play/answer/favorite 与基准实现一致", () => {
+ // 默认值取自基准实现。改这里等于改用户默认手感。
     expect(DEFAULT_SHORTCUTS.play).toMatchObject({ key: "p", ctrl: true, shift: false, alt: false })
     expect(DEFAULT_SHORTCUTS.answer).toMatchObject({ key: "a", ctrl: true, shift: false, alt: false })
     expect(DEFAULT_SHORTCUTS.favorite).toMatchObject({ key: "u", ctrl: true, shift: false, alt: false })
@@ -68,7 +68,7 @@ describe("practice-shortcuts", () => {
   })
 
   it("弹窗只渲染 5 项，slow 与 wordSpeak 被隐藏", () => {
-    // 参考站 practice-sys-controls.js:637 明确跳过这两个
+ // 基准实现 明确跳过这两个
     expect(VISIBLE_SHORTCUT_IDS).toHaveLength(5)
     expect(VISIBLE_SHORTCUT_IDS).not.toContain("slow")
     expect(VISIBLE_SHORTCUT_IDS).not.toContain("wordSpeak")
@@ -95,7 +95,7 @@ describe("practice-shortcuts", () => {
   })
 
   it("mergeShortcuts 丢弃 Enter/空格，回退到默认", () => {
-    // 参考站 shortcut-config.js:52 的 FORBIDDEN_KEYS
+ // 对标页的 FORBIDDEN_KEYS
     const merged = mergeShortcuts({ play: { key: "Enter", ctrl: true } })
     expect(merged.play.key).toBe("p")
     const merged2 = mergeShortcuts({ play: { key: " ", ctrl: true } })
@@ -120,7 +120,7 @@ describe("practice-shortcuts", () => {
     saveShortcuts(sc)
     const raw = JSON.parse(localStorage.getItem("practice_shortcuts") as string)
     expect(raw.answer.key).toBe("b")
-    // label 是展示文案，不该进存储（参考站 shortcut-config.js:97-104）
+ // label 是展示文案，不该进存储（基准实现）
     expect(raw.answer.label).toBeUndefined()
     expect(loadShortcuts().answer.key).toBe("b")
   })
@@ -144,7 +144,7 @@ describe("practice-shortcuts", () => {
   })
 
   it("isBrowserReserved 只拦「无 shift/alt 的浏览器键」", () => {
-    // 参考站 shortcut-config.js:23-40 + isBrowserReserved 的 !shift && !alt
+ // 基准实现 + isBrowserReserved 的 !shift && !alt
     expect(isBrowserReserved({ key: "c", ctrl: true, shift: false, alt: false })).toBe(true)
     expect(isBrowserReserved({ key: "c", ctrl: true, shift: true, alt: false })).toBe(false)
     expect(isBrowserReserved({ key: "k", ctrl: true, shift: false, alt: false })).toBe(false)
@@ -204,7 +204,7 @@ describe("practice-shortcuts", () => {
   it("shortcutKbdParts 按段拆分，修饰键与主键分开", () => {
     const sc = mergeShortcuts(null)
     const parts = shortcutKbdParts("play", sc)
-    // 最后一段是主键，前面是修饰键 —— 顺序与参考站 getShortcutKbd 一致
+ // 最后一段是主键，前面是修饰键 —— 顺序与基准实现 getShortcutKbd 一致
     expect(parts[parts.length - 1]).toBe("P")
     expect(parts.length).toBeGreaterThanOrEqual(2)
     // 单一事实源：把 Shift 打开后必须多出一段

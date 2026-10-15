@@ -92,7 +92,7 @@ describe("linearizeChunks — 层级累积型 chunks 的线性化", () => {
     ])
   })
 
-  it("component 硬编码为 chunk（照抄参考站 practice.js:2589）", () => {
+ it("component 硬编码为 chunk（对齐基准实现）", () => {
     const got = linearizeChunks(REAL_TILE_3.chunks, REAL_TILE_3.english)!
     for (const f of got) expect(f.component).toBe("chunk")
   })
@@ -127,7 +127,7 @@ describe("linearizeChunks — 层级累积型 chunks 的线性化", () => {
     ).toBeNull()
   })
 
-  it("只有一个片段且等于整句 → null（参考站跳过条件）", () => {
+ it("只有一个片段且等于整句 → null（基准实现跳过条件）", () => {
     expect(linearizeChunks([{ order: 1, text: GAP_SENTENCE, chinese: "整句" }], GAP_SENTENCE)).toBeNull()
   })
 
@@ -202,7 +202,7 @@ describe("linearizeChunks — 层级累积型 chunks 的线性化", () => {
     expect(got.map((f) => f.text)).toEqual(["a b", "c d"])
   })
 
-  it("全部被过滤时回退原始片段（参考站兜底）", () => {
+ it("全部被过滤时回退原始片段（基准实现兜底）", () => {
     const chunks = [
       { order: 1, text: "12", chinese: "数一" },
       { order: 2, text: "34", chinese: "数二" },
@@ -212,7 +212,7 @@ describe("linearizeChunks — 层级累积型 chunks 的线性化", () => {
   })
 })
 
-describe("filterPersonNameOnlyFragments — 参考站 practice.js:2626", () => {
+describe("filterPersonNameOnlyFragments — 基准实现", () => {
   const frags = [
     { text: "Sophie Dupont", meaning: "人名", component: "chunk" },
     { text: "Miss Sophie", meaning: "称呼", component: "chunk" },
@@ -259,7 +259,7 @@ describe("personNameTokensFromWords — 当前数据下为空集", () => {
   })
 })
 
-describe("extractCoreWords — 逐字移植参考站 practice.js:2858", () => {
+describe("extractCoreWords — 移植基准实现", () => {
   it("单个词直接返回", () => {
     expect(extractCoreWords("plants")).toEqual(["plants"])
   })

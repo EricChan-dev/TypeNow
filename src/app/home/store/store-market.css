@@ -1,5 +1,5 @@
 /* 自动生成 —— 请勿手改。
- * 来源：句游英语参考站 market.css（课程市场 / 课本同步共享样式）+ reset.css（变量表）。
+
  * 生成器：scripts/extract-store-market-css.py（选择器已收敛到 .store-market-page 下）。
  * 重新生成：python3 scripts/extract-store-market-css.py
  *
@@ -8,8 +8,8 @@
  * market.css 中「课程市场独有」的类族复刻版式（hero/搜索、两级标签、卡片网格、提示条）。
  *
  * 其它搬运约定（与 home-ref.css / textbook-sync.css 同口径）：
- *   1. 字号/行高/内边距/圆角/阴影/色值全部保留参考页原值，不做「优化」。
- *   2. 参考页用 remixicon 字体图标（<i class="ri-*">），本仓统一用 lucide
+ * 1. 字号/行高/内边距/圆角/阴影/色值全部保留基准实现原值，不做「优化」。
+ * 2. 基准实现用 remixicon 字体图标（<i class="ri-*">），本仓统一用 lucide
  *      组件；字体图标的 font-size 规则改写成 svg 的宽高（在组件里给 size）。
  *   3. 卡片难度徽章（.level-badge cj/zj/gj）与 TypeName 渐变封面刻意不搬：
  *      本库 courses 表无难度字段（no-fake-data），封面另有 course-cover.ts 三层降级。
@@ -26,8 +26,8 @@
   --mainBox: #F1F4FD;
 }
 
-/* ── 页面外壳（手工维护，逐字取自参考站）── */
-/* 参考站 .course-market .maxWidth（market.css:938）把课程市场放宽到 1400px；
+/* ── 页面外壳（手工维护，取自基准实现）── */
+/* 基准实现 .course-market .maxWidth（market.css:938）把课程市场放宽到 1400px；
    水平居中来自 common.css 里 .maxWidth 的 margin: 0 auto。 */
 .store-market-page .maxWidth {
   max-width: 1400px;
@@ -38,11 +38,11 @@
   margin: 0 auto;
 }
 
-/* 参考站的 bug 修正：归档的 market.css 里**没有 `.hero-right` 规则**（全目录 grep 无命中），
+/* 基准实现的 bug 修正：归档的 market.css 里**没有 `.hero-right` 规则**（全目录 grep 无命中），
    而 ≤900px 时 .market-hero-section 变成 column + align-items: flex-start，
    于是 .hero-right 收缩成 fit-content，里面 `.modern-search p { width: 100% }` 只能取到
    那点内容宽（实测 768px 视口下搜索框仅 257px，本该铺满）。桌面上因为是 row 布局看不出来。
-   这里补上拉伸，让参考站那条 width:100% 真正生效。仅 <=900px，桌面宽度维持原值 380px。 */
+ 这里补上拉伸，让基准实现那条 width:100% 真正生效。仅 <=900px，桌面宽度维持原值 380px。 */
 @media screen and (max-width: 900px) {
   .store-market-page .market-hero-section .hero-right {
     width: 100%;
@@ -50,7 +50,7 @@
   }
 }
 
-/* 参考站 market.css:947-949 在 <=640px 把 .maxWidth 内边距收到 12px，
+/* 基准实现 market.css:947-949 在 <=640px 把 .maxWidth 内边距收到 12px，
    此前漏搬（SHELL 里固定成 20px），窄屏白白少了一截可用宽度。 */
 @media screen and (max-width: 640px) {
   .store-market-page .maxWidth {
@@ -58,7 +58,7 @@
   }
 }
 
-/* 计数角标：参考站没有承载它的元素，样式由本文件提供。
+/* 计数角标：基准实现没有承载它的元素，样式由本文件提供。
    元素名刻意避开 span —— 提取出的 `.courseTab span`（子标签行的容器）是
    `display: block; margin: 16px 0 0`，是个后代选择器，会命中标签里的任何
    span：角标被压到文字下方独立成行，而 label 又是固定 39px 高的
@@ -474,7 +474,7 @@
 /* ── 覆盖层：必须写在 market.css 之后（同权重时后者胜出）── */
 /* 窄屏两级标签改成「各占一行、横向滑动」。
    默认 inline-block 会折行：246px 宽下 5 个主标签折 3 行、15 个子标签折 6 行，
-   首屏全被标签占满。参考站在手机上同样折行，这里按触摸端习惯改为单行滑动。 */
+ 首屏全被标签占满。基准实现在手机上同样折行，这里按触摸端习惯改为单行滑动。 */
 @media screen and (max-width: 900px) {
   .store-market-page .courseTab p,
   .store-market-page .courseTab span {
@@ -488,13 +488,13 @@
   .store-market-page .courseTab span::-webkit-scrollbar {
     display: none;
   }
-  /* 触摸目标：参考站主标签 39px、子标签 30px、排序胶囊 41px 都是按鼠标点的尺寸，
+ /* 触摸目标：基准实现主标签 39px、子标签 30px、排序胶囊 41px 都是按鼠标点的尺寸，
      低于 44px 的触摸指引（手指点偏一点就落到隔壁标签上）。窄屏统一抬到 44px。 */
   .store-market-page .courseTab p label {
     height: 44px;
     line-height: 42px;
   }
-  /* 参考站子标签行高 30px 是按鼠标点击数评估的；触摸屏抬到 44px。
+ /* 基准实现子标签行高 30px 是按鼠标点击数评估的；触摸屏抬到 44px。
      这条与 market.css 的选择器完全相同，靠写在后面取胜。 */
   .store-market-page .courseTab span em {
     line-height: 44px;
@@ -502,7 +502,7 @@
   .store-market-page .modern-tip-card .tip-right .kefu-btn {
     min-height: 44px;
   }
-  /* 清空搜索按钮：参考站是个 18px 图标（鼠标够用，手指点不中）。
+ /* 清空搜索按钮：基准实现是个 18px 图标（鼠标够用，手指点不中）。
      用伪元素撑出 44x44 的命中区，视觉尺寸与位置都不动 —— 改 padding/width
      会同时挪动图标本身。旁边的搜索图标不用改：它是 aria-hidden 的装饰件，
      点击只是把焦点交给 input，而 input 本来就铺满整个 48px 高的容器。 */

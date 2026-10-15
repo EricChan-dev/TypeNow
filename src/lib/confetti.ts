@@ -1,11 +1,11 @@
 "use client"
 
 /**
- * 极简 canvas 烟花，用来在**不新增依赖**的前提下对齐参考站的 canvas-confetti 口径。
+ * 极简 canvas 烟花，用来在**不新增依赖**的前提下对齐基准实现的 canvas-confetti 口径。
  *
- * 参考站直接 `import confetti from 'canvas-confetti'`，本仓库没有这个包，
+ * 基准实现直接 `import confetti from'canvas-confetti'`，本仓库没有这个包，
  * 而项目约束是「不加新依赖」。所以这里自己用 canvas + rAF 实现了一个
- * **参数语义与 canvas-confetti 一致**的粒子系统：调用方照抄参考站的
+ * **参数语义与 canvas-confetti 一致**的粒子系统：调用方对齐基准实现的
  * `{ particleCount, angle, spread, origin, startVelocity, gravity, ticks, colors, scalar }`
  * 即可，视觉上足够接近，行为（何时炸、炸几发、持续多久）完全一致。
  *
@@ -14,7 +14,7 @@
  *   x += cos(angle2D) * velocity + drift
  *   y += sin(angle2D) * velocity + gravity      gravity 是**每帧常量下坠**，不是加速度
  *
- * 因此参考站那两组参数才会呈现出它该有的手感：
+ * 因此基准实现那两组参数才会呈现出它该有的手感：
  *   · 答对单句   startVelocity 60 / gravity 3.5 / ticks 50   → 又快又急、立刻坠落
  *   · 课节完成   startVelocity 45 / gravity 1.2 / ticks 200  → 缓缓飘、持续很久
  *
@@ -75,7 +75,7 @@ const DEFAULT_COLORS = [
   "#fb923c",
 ]
 
-/** 参考站 `triggerCompletionFireworks` 专用的 7 色（practice.js:8304） */
+/** 基准实现 `triggerCompletionFireworks` 专用的 7 色 */
 const COMPLETION_COLORS = [
   "#ff0040",
   "#fbbf24",
@@ -109,7 +109,7 @@ function syncSize(): void {
  * 懒创建全屏画布并挂到 `document.body`。
  *
  * 挂 body 而不是某个容器，是为了避开祖先的 `transform`/`filter` ——
- * 那些属性会让 `position:fixed` 退化成本地定位。参考站的 canvas-confetti
+ * 那些属性会让 `position:fixed` 退化成本地定位。基准实现的 canvas-confetti
  * 也是挂 body（`document.body.appendChild(canvas)`）。
  */
 function ensureLayer(): CanvasRenderingContext2D | null {
@@ -240,7 +240,7 @@ export function confetti(opts: ConfettiOptions = {}): void {
 }
 
 /**
- * 答对单句的中心爆破 —— 参考站 `createCanvasConfettiEffect()`（practice.js:8280-8292）。
+ * 答对单句的中心爆破 —— 基准实现 `createCanvasConfettiEffect()`。
  *
  * `{ particleCount: 50, spread: 80, origin: { y: 0.55 }, gravity: 3.5, startVelocity: 60, ticks: 50 }`
  * （无 colors 参数，即用默认调色板。）
@@ -257,12 +257,12 @@ export function fireSuccessBurst(): void {
 }
 
 /**
- * 课节完成的双侧连发烟花，持续 `durationMs`（默认 6000ms，同参考站）。
+ * 课节完成的双侧连发烟花，持续 `durationMs`（默认 6000ms，同基准实现）。
  *
- * 参考站 `triggerCompletionFireworks()`（practice.js:8298-8334）：每 250ms
+ * 基准实现 `triggerCompletionFireworks()`：每 250ms
  * 左右两侧各来一发，共 7 色、`scalar 1.1`、`ticks 200`。
  *
- * 注意参考站**只用 `typeof confetti !== 'function'` 兜底，不受「答对烟花效果」
+ * 注意基准实现**只用 `typeof confetti !=='function'` 兜底，不受「答对烟花效果」
  * 开关约束** —— 所以调用方不要把 `confetti` 开关传进来。
  *
  * @returns 停止函数；组件卸载时必须调用，否则 interval 会一直跑到 6 秒结束。
@@ -292,7 +292,7 @@ export function startCompletionFireworks(durationMs = 6000): () => void {
     confetti({ ...common, angle: 120, origin: { x: 1, y: 0.65 } })
   }
 
-  // 与参考站的 setInterval 一致：第一发在 250ms 之后，不是立刻。
+ // 与基准实现的 setInterval 一致：第一发在 250ms 之后，不是立刻。
   timer = window.setInterval(fire, 250)
   return () => {
     if (timer) window.clearInterval(timer)

@@ -12,7 +12,7 @@ import { ContactModal } from "@/components/auth/ContactModal"
  * 点了会把正在登录的人**带离登录页** —— 而他本来就是卡住了才来找帮助的，一离开
  * 又要重走一遍登录。就地弹二维码，问题在此闭环。
  *
- * 参考页这两个位置是外链（帮助中心 → 儿童隐私政策页，关于我们 → 官网首页）。
+ * 基准实现这两个位置是外链（帮助中心 → 儿童隐私政策页，关于我们 → 官网首页）。
  * 我们不复刻它的外链：跨站跳转对「正在登录」的人没有帮助，且会丢失当前表单状态。
  *
  * 复用 `ContactModal` 而不是新写一个弹窗：站内已有这个组件（登录页「请联系客服」
@@ -32,7 +32,7 @@ export function LoginSupportLinks() {
       <p>
         {/* button 而不是 a：这里不再导航，只会就地打开弹窗。
             login.css 里 `.logincopyright p a` 已与 button 并列，
-            所以视觉上和参考页的链接完全一致。 */}
+ 所以视觉上和基准实现的链接完全一致。 */}
         <button type="button" onClick={() => setOpen(true)}>
           帮助中心
         </button>

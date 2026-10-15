@@ -168,7 +168,7 @@ export function DailyTasks({
     </div>
   )
 
-  // bare：调用方已经给了参考页白底卡和 `.ref-title h2`，这里只交列表本身。
+ // bare：调用方已经给了基准实现白底卡和 `.ref-title h2`，这里只交列表本身。
   if (bare) return <div className={className}>{body}</div>
 
   return (

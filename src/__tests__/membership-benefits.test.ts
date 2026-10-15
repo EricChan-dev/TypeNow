@@ -15,7 +15,7 @@
  * 2026-09-29 曾要求「推广权益不得回到付费档里」，理由是 `PARTNER_BENEFITS` 把
  * 「邀请链接 / 佣金 / 提现 / 看板」挂在 ¥399 商品上，命中《禁止传销条例》
  * 第七条(二) 的「变相入门费」。
- * 2026-10-10 为对齐句游英语合伙人版，该绑定被**主动恢复**（¥699 附赠推广权益）。
+ * 2026-10-10 为对齐现行版本合伙人版，该绑定被**主动恢复**（¥699 附赠推广权益）。
  * 这是已知风险下的决策，未经律师复核，见
  * docs/membership-alignment-risk-2026-10.md。
  * 最后一组测试因此改为看住越线后仍不可破的红线（单级、按销售额计酬、
@@ -57,8 +57,8 @@ describe("额度常量", () => {
     expect(PRO_AI_ANALYZE_PER_DAY).toBeGreaterThan(FREE_AI_ANALYZE_PER_DAY)
   })
 
-  it("免费用户的 AI 助手额度必须 > 0（2026-09-29 修正：原为 0，是误抄参考站）", () => {
-    // 参考站的「每日 2 次免费提问」是给所有人的；我们把 2 抄到了 PRO 上、
+ it("免费用户的 AI 助手额度必须 > 0（2026-09-29 修正：原为 0，是误抄基准实现）", () => {
+ // 基准实现的「每日 2 次免费提问」是给所有人的；我们把 2 抄到了 PRO 上、
     // 把免费设成 0，导致免费用户一次都用不了。这条看住它不许回退。
     expect(FREE_AI_CHAT_PER_DAY).toBeGreaterThan(0)
   })
@@ -354,7 +354,7 @@ describe("事实源本身", () => {
     )
     for (const p of [
       "src/components/pricing/PricingClient.tsx",
-      // 2026-10-08：落地页搬进 (landing) 路由组（参考页自带顶栏/页脚，
+ // 2026-10-08：落地页搬进 (landing) 路由组（基准实现自带顶栏/页脚，
       // 与 (public)/layout.tsx 的 Navbar+Footer 冲突）。被盯住的仍是首页本身。
       "src/app/(landing)/page.tsx",
       "src/app/(public)/pricing/page.tsx",

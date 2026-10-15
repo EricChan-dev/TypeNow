@@ -115,7 +115,7 @@ function Section({ title, children }: { title: string; children: React.ReactNode
  * - 美/英两个口音按钮直接指定有道音色（youyating / youxiaoying），不走用户
  *   TTS 设置 —— 口音按钮的意义就在于「明确的口音」，音标旁边标着美/英；
  * - 查询历史存 localStorage（RECENT_KEY），纯客户端、不上服务端；
- * - 同义词可点击继续查 —— 句游的「探索单词」我们用这条链路替代。
+ * - 同义词可点击继续查 —— 基准实现的「探索单词」我们用这条链路替代。
  */
 export function DictionaryClient() {
   const [input, setInput] = useState("")

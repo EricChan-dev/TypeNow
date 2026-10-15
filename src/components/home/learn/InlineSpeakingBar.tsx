@@ -5,26 +5,26 @@
  *
  * ── 是什么 ──────────────────────────────────────────────────────────────────
  *
- * 参考站答案回顾屏上那条「口语评估 · 点击或按空格键」的胶囊入口，以及点开后的
+ * 基准实现答案回顾屏上那条「口语评估 · 点击或按空格键」的胶囊入口，以及点开后的
  * 评测弹窗。听写模式下它**是可见的** —— 门槛是
  * `!autoNextEnabled && practiceMode !== 'speaking'`（`practice.js:4851`），
  * 而我们的 自动下一句 默认就是 off（`lib/practice-prefs.ts` 的 `loadAutoNext`
  * 读 `=== "on"`，默认 false）。
  *
- * ── 与参考站的两处**有意**分歧 ──────────────────────────────────────────────
+ * ── 与基准实现的两处**有意**分歧 ──────────────────────────────────────────────
  *
- * 1. **评测后端换成了有道。** 参考站走讯飞 ISE 的 WebSocket
+ * 1. **评测后端换成了有道。** 基准实现走讯飞 ISE 的 WebSocket
  *    （`speaking.js:1460 new RecorderManager("/js/ise")`，`ssb` 起会话、`auw`
  *    推帧）。我们没有讯飞凭据，用的是既有的 `POST /api/youdao/evaluate`
  *    （有道的语音评测，`lib/pronunciation.ts` 已把响应映射成 0–100 的
  *    总分/准确度/流畅度/完整度）。因此：
  *      · 不合成 `ssb`/`auw` 帧，直接走 HTTP；
- *      · 参考站的 `handleInlineResult` 要 `atob` 再 XML 解析，我们拿到的是
+ * · 基准实现的 `handleInlineResult` 要 `atob` 再 XML 解析，我们拿到的是
  *        已经是结构化 JSON。
- *    可见的**界面与文案**与参考站逐条对齐，这是「一模一样」的落点。
+ * 可见的**界面与文案**与基准实现逐条对齐，这是「一模一样」的落点。
  *
  * 2. **弹窗用 portal 挂到 `.practice-shell` 上，而不是就地渲染。**
- *    参考站是 `document.body.appendChild(modal)`（`speaking.js:1611`）。
+ * 基准实现是 `document.body.appendChild(modal)`。
  *    我们不能挂 body：`practice.css` 全部收敛在 `.practice-shell` 下
  *    （生成器 `scripts/extract-practice-css.py`），挂到 body 会一条 `.isp-*`
  *    都命中不了、CSS 变量（`--score-excellent` 等）也解析不到。
@@ -65,19 +65,19 @@ import {
 const TAG = "[InlineSpeaking]"
 
 /**
- * 空格键的物理去抖。与参考站同一个值（`speaking.js:1517`
+ * 空格键的物理去抖。与基准实现同一个值（
  * `if (now - _lastToggleTime < 250) return`）。
  *
  * 为什么需要：空格**按住不放**时会连续触发 keydown（`e.repeat` 只挡掉了
  * 自动重复，挡不住「松开又立刻按下」的物理抖动），而开录音要过权限与
- * 建连接，两次并发调用会让状态机自相矛盾。250ms 是参考站实测的阈值。
+ * 建连接，两次并发调用会让状态机自相矛盾。250ms 是基准实现实测的阈值。
  */
 const TOGGLE_DEBOUNCE_MS = 250
 
-/** 弹窗打开后自动开录的延迟（参考站 `speaking.js:1627` 的 300ms）。 */
+/** 弹窗打开后自动开录的延迟（对标页的 300ms）。 */
 const AUTO_START_DELAY_MS = 300
 
-/** 频谱条数量。**是 12 还是 16 取决于组件**：入口条 12、弹窗 16（参考站
+/** 频谱条数量。**是 12 还是 16 取决于组件**：入口条 12、弹窗 16（基准实现
  *  `practice.js:4823` vs `speaking.js:1604`），别把两处写成同一个常量。 */
 const BAR_VISUALIZER_BARS = 12
 const MODAL_VISUALIZER_BARS = 16
@@ -87,7 +87,7 @@ const VIS_BAR_MIN_HEIGHT = 3
 const VIS_BAR_MAX_HEIGHT = 40
 
 /**
- * 静音自动停录（参考站的 VAD，`speaking.js:2028-2030`）。
+ * 静音自动停录（基准实现的 VAD，）。
  *
  * 三个常量一起决定「什么时候认为用户读完了」：至少要录满
  * `VAD_MIN_RECORD_MS`，且距最后一次检测到人声超过 `VAD_SILENCE_MS`。
@@ -97,7 +97,7 @@ const VAD_VOICE_THRESHOLD = 15
 const VAD_MIN_RECORD_MS = 1000
 const VAD_SILENCE_MS = 1500
 
-/** 分数等级（`speaking.js:965-970`）。文案是英文，与参考站一致。 */
+/** 分数等级。文案是英文，与基准实现一致。 */
 function scoreLevel(score: number): string {
   if (score >= 90) return "Outstanding"
   if (score >= 80) return "Excellent"
@@ -109,7 +109,7 @@ function scoreLevel(score: number): string {
  * 分数→颜色。
  *
  * 这里**不用** `lib/pronunciation` 的 `scoreColor`：那个返回的是具体色值
- * （`#22c55e`…），而参考站的 `.isp-*` 弹窗用的是 CSS 变量
+ * （`#22c55e`…），而基准实现的 `.isp-*` 弹窗用的是 CSS 变量
  * （`var(--score-excellent)`，`speaking.js:972-977`），浅色主题下会自动换成
  * 另一组值。两套色表本来就该分开 —— 混用会让弹窗在浅色主题下颜色错位。
  */
@@ -132,7 +132,7 @@ function feedbackMessage(score: number): string {
 /**
  * 逐词状态。
  *
- * 参考站按讯飞的 `dp_message === 1` 判「漏读」（`speaking.js:1824`），我们的
+ * 基准实现按讯飞的 `dp_message === 1` 判「漏读」，我们的
  * 有道映射器不产出这个字段 —— 漏读信息只体现在 `integrity`（完整度）上。
  * 所以这里**不发明**漏读判定，只按分数归档，且 `null` 分数保持中性：
  * 那是「有道没给这个字段」，不是「读错了」（`lib/pronunciation.ts` 的
@@ -159,7 +159,7 @@ export function InlineSpeakingBar({
   text,
   sentenceId,
 }: {
-  /** 要朗读的句子（参考站的 `inlineSpeakingState.text`）。 */
+ /** 要朗读的句子（基准实现的 `inlineSpeakingState.text`）。 */
   text: string
   /**
    * 落库用的**练习项 id**：原句 id，或分块句展开后的 `<原句 id>_c<order>`。
@@ -197,7 +197,7 @@ export function InlineSpeakingBar({
   const autoStartRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   /** 弹窗打开时置位，空格键按下会清掉它，避免「按了空格又开始自动录」。 */
   const autoStartPendingRef = useRef(false)
-  /** 空格键物理去抖与「按住不放」标记（参考站 `_lastToggleTime` /
+ /** 空格键物理去抖与「按住不放」标记（基准实现 `_lastToggleTime` /
    *  `inlineSpeakingSpacePressed`，`speaking.js:1449`/`:1517`）。 */
   const lastToggleRef = useRef(0)
   const spaceDownRef = useRef(false)
@@ -207,7 +207,7 @@ export function InlineSpeakingBar({
   const analyserRef = useRef<AnalyserNode | null>(null)
   const rafRef = useRef<number | null>(null)
   const visBarsRef = useRef<HTMLDivElement | null>(null)
-  /** VAD 状态（参考站 `vadLastVoiceTime` / `vadHasDetectedVoice`）。 */
+ /** VAD 状态（基准实现 `vadLastVoiceTime` / `vadHasDetectedVoice`）。 */
   const vadLastVoiceRef = useRef(0)
   const vadDetectedRef = useRef(false)
   const startTimeRef = useRef(0)
@@ -496,7 +496,7 @@ export function InlineSpeakingBar({
     // `react-hooks/set-state-in-effect` 会拦，且首帧本就没必要渲染弹窗。
     // `.practice-shell` 是静态外壳，不会中途换人，查一次就够。
     setPortalHost(document.querySelector<HTMLElement>(".practice-shell"))
-    // 参考站打开弹窗后自动开录（`speaking.js:1626-1632`），但按了空格就取消
+ // 基准实现打开弹窗后自动开录，但按了空格就取消
     autoStartPendingRef.current = true
     autoStartRef.current = setTimeout(() => {
       if (autoStartPendingRef.current) {

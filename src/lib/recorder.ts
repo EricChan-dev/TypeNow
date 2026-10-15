@@ -7,7 +7,7 @@
  *
  *   1. `components/home/learn/VoicePanel.tsx` —— 侧栏里的跟读面板；
  *   2. `components/home/learn/InlineSpeakingBar.tsx` —— 听写回顾屏上的内联
- *      口语评估条（参考站 `practice.js:4813-4829` 的 `#inlineSpeakingBar`）。
+ * 口语评估条（对标页的 `#inlineSpeakingBar`）。
  *
  * 两处最初各抄一份，随后必然漂移：一处改了重采样、另一处忘了，同一句话在
  * 两个入口评出不同的分。所以音频链路的四个决定点都收在这里：

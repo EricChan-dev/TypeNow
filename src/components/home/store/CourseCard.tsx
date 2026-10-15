@@ -47,7 +47,7 @@ function formatLearnerCount(n: number): string {
  * `next/image` 对未在 `next.config.ts` 的 `remotePatterns` 里登记的域名会直接抛错，
  * 而后台的「上传封面」是把图片转成 base64 dataURL 写进 `courses.cover_url`。
  *
- * 参考站的封面是「先铺一层占位、图 onload 后加 .loaded 淡入」（market.css
+ * 基准实现的封面是「先铺一层占位、图 onload 后加 .loaded 淡入」（market.css
  * `.TypeList li .img img { opacity: 0 }` / `img.loaded { opacity: 1 }`）。
  * 组件拿到图前是客户端渲染的，onload 必定触发；但为防浏览器缓存命中时
  * React 挂上 onLoad 之前图就已 complete（那样永远停在 opacity:0 的占位态），
@@ -157,13 +157,13 @@ function GradientCover({
 }
 
 /**
- * 课程卡 —— 复刻句游课程市场/课本同步的 `.TypeList li.market-course-card`。
+ * 课程卡 —— 对齐基准实现课程市场/课本同步的 `.TypeList li.market-course-card`。
  *
- * 结构照搬参考站：`.img`（16:9 封面，占位图 + 淡入真图）+ `.market-card-info`
+ * 结构照搬基准实现：`.img`（16:9 封面，占位图 + 淡入真图）+ `.market-card-info`
  * （h6 两行截断标题 + `.market-card-footer`）。整卡可点：外层是 `<li>`（承接
  * `.TypeList li` 的圆角/悬停上浮），里面铺一层 `absolute inset-0` 的 `<Link>`，
  * 这样中键新开标签、键盘 Tab、右键「复制链接」这些锚点能力都还在 ——
- * 参考站和自己以前的 TextbookSyncClient 用的是 `li onclick`，会丢掉这些。
+ * 基准实现和自己以前的 TextbookSyncClient 用的是 `li onclick`，会丢掉这些。
  *
  * 难度徽章（`.level-badge` cj/zj/gj）刻意不渲染：本库 courses 表没有难度字段，
  * 编一个出来就是假数据。
@@ -204,11 +204,11 @@ export function CourseCard({
         className="absolute inset-0 z-10 rounded-xl focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
       />
 
-      {/* 封面：16:9（参考站 .TypeList li .img { aspect-ratio: 16/9 }） */}
+ {/* 封面：16:9（基准实现 .TypeList li .img { aspect-ratio: 16/9 }） */}
       <div className="img">
         {/*
           占位图只在「有真图、还没加载完」时渲染。
-          参考站里它一直存在、靠 onload 给 .hidden 隐藏，是因为那边每张卡都有 <img>；
+ 基准实现里它一直存在、靠 onload 给 .hidden 隐藏，是因为那边每张卡都有 <img>；
           本仓渐变封面（cover.kind !== "image"）根本没有 <img> 可触发 onload，
           而 .img-placeholder 是 z-index:1 + 不透明 #f1f4f7，会直接盖住渐变
           （实测：渐变卡右下角取色 = rgb(241,244,247)，正是这个底色）。
@@ -216,7 +216,7 @@ export function CourseCard({
         */}
         {showImage && (
           <div className={cn("img-placeholder", imgLoaded && "hidden")}>
-            {/* <i> 承接参考站的 32px 图标与 pulse 动画，lucide 继承其 currentColor */}
+ {/* <i> 承接基准实现的 32px 图标与 pulse 动画，lucide 继承其 currentColor */}
             <i><ImageIcon size={32} /></i>
           </div>
         )}

@@ -1,15 +1,15 @@
 /* 自动生成 —— 请勿手改。
- * 来源：句游英语参考站 courseDetail.css（课程详情页）+ common.css（.location / .maxWidth）。
+
  * 生成器：scripts/extract-course-detail-css.py（选择器已收敛到 .course-detail 下）。
  * 重新生成：python3 scripts/extract-course-detail-css.py
  *
  * 三条搬运约定（与 home-ref.css / membership-upgrade.css 同口径）：
- *   1. 字号/行高/内边距/圆角/阴影/色值全部保留参考页原值，不做「优化」。
- *   2. 参考页用 remixicon 字体图标（<i class="ri-*">），本仓统一用 lucide
+ * 1. 字号/行高/内边距/圆角/阴影/色值全部保留基准实现原值，不做「优化」。
+ * 2. 基准实现用 remixicon 字体图标（<i class="ri-*">），本仓统一用 lucide
  *      组件；字体图标的 font-size 规则改写成 svg 的宽高（在组件里给 size）。
  *   3. `:root[themes="dark"]` 深色分支一律不搬 —— 本仓 2026-10 已删掉整套暗色令牌。
  *
- * 文件顶部的令牌块同样是生成物：参考页的变量定义在 reset.css 的 :root 上，
+ * 文件顶部的令牌块同样是生成物：基准实现的变量定义在 reset.css 的 :root 上，
  * 全局声明会溢出到其它页面，所以只把**本文件引用到的**那些挂在 .course-detail 上。
  */
 
@@ -32,7 +32,7 @@
   --white: #fff;
 }
 
-/* ── 外壳件（来自 common.css，参考页 <head> 中先加载）── */
+/* ── 外壳件（来自 common.css，基准实现 <head> 中先加载）── */
 .course-detail .location {
     margin-bottom: 24px;
     position: relative;
@@ -75,7 +75,7 @@
     min-width: 1140px;
 }
 
-/* ── 页面样式（来自 courseDetail.css，参考页中后加载、覆盖前者）── */
+/* ── 页面样式（来自 courseDetail.css，基准实现中后加载、覆盖前者）── */
 .course-detail .detailname {
     background: var(--bgwhite);
     padding: 20px;

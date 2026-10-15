@@ -1,42 +1,42 @@
 "use client"
 
 /**
- * 口语跟读模式 —— 逐条对齐句游英语参考站 `speaking.js`。
+ * 口语跟读模式 —— 逐条对齐现行版本基准实现。
  *
  * ── 它在页面里的位置 ────────────────────────────────────────────────────────
  *
- * 参考站的练习页只有**一个**外壳：`practice.js:4421-4423` 在 `practiceMode ===
+ * 基准实现的练习页只有**一个**外壳： 在 `practiceMode ===
  * 'speaking'` 时执行 `initSpeakingMode(document.getElementById('practiceContent'),
  * currentSentence)` —— 也就是把它自己塞进 `.cyber-main#practiceContent`，顶栏、
  * 底部工具栏、进度条、计时器全部照旧。所以本组件**不重造外壳**，而是作为
  * `DictationPractice` 里 `main#practiceContent` 的内容渲染（见那边的 `mode`
  * 分支）。这一点很重要：另起一个满屏组件会让顶栏/底栏/模式切换器全部消失，
- * 与参考站完全不同。
+ * 与基准实现完全不同。
  *
- * ── 与参考站的三处**有意**分歧 ──────────────────────────────────────────────
+ * ── 与基准实现的三处**有意**分歧 ──────────────────────────────────────────────
  *
- * 1. **评测后端换成了有道。** 参考站走讯飞 ISE 的 WebSocket
+ * 1. **评测后端换成了有道。** 基准实现走讯飞 ISE 的 WebSocket
  *    （`speaking.js:608 speakingStartRecording` 里 `getSpeakingAuthUrl()` +
  *    `new WebSocket(wsUrl)`，`ssb` 起会话、`auw` 推帧），响应是带 XML 的
  *    `xml_result`。我们没有讯飞凭据，用既有的 `POST /api/youdao/evaluate`
  *    （`lib/pronunciation.ts` 已把响应映射成 0–100 的
  *    总分/准确度/流畅度/完整度 + 逐词分）。因此：
  *      · 不合成 `ssb`/`auw` 帧，直接走 HTTP，录完再评；
- *      · 参考站的 `parseSpeakingWordDetails` 要拆 XML 并把 0–5 的 `total_score`
+ * · 基准实现的 `parseSpeakingWordDetails` 要拆 XML 并把 0–5 的 `total_score`
  *        乘 20，我们拿到的是已经是百分制的结构化 JSON —— 这个差异收敛在
  *        `lib/speaking-score.ts` 的注释里。
- *    可见的**界面与文案**与参考站逐条对齐，这是「一模一样」的落点。
+ * 可见的**界面与文案**与基准实现逐条对齐，这是「一模一样」的落点。
  *
- * 2. **没有「连接」阶段。** 参考站要先拿鉴权 URL 再建 WebSocket，所以有一个
+ * 2. **没有「连接」阶段。** 基准实现要先拿鉴权 URL 再建 WebSocket，所以有一个
  *    真实的 `'connecting'` 状态（`speaking.js:643`）。我们没有连接可建，
- *    `'connecting'` 只在「查额度」的这段异步里短暂出现，文案沿用参考站的
+ * `'connecting'` 只在「查额度」的这段异步里短暂出现，文案沿用基准实现的
  *    「正在连接服务...」。绝不省略这个状态：省了的话按钮在查额度的空窗里
  *    是可点的，连点会开两次录音。
  *
- * 3. **额度来源换成了自己的只读接口。** 参考站
+ * 3. **额度来源换成了自己的只读接口。** 基准实现
  *    `speaking.js:184 refreshSpeakingLimitState` 打 `GET /Ise/Api/CheckLimit`，
  *    我们打 `GET /api/youdao/evaluate/limit`（见该路由的注释：它**只读不消费**，
- *    与 evaluate 路由共用同一个额度桶）。参考站对合伙人无条件放行
+ * 与 evaluate 路由共用同一个额度桶）。基准实现对合伙人无条件放行
  *    （`speaking.js:123`），我们**不**照抄 —— evaluate 路由只认会员身份，
  *    在这里显示「无限次」而路由照旧 429 就是界面撒谎。
  *
@@ -81,17 +81,17 @@ import { playTick } from "@/lib/sfx"
 
 const TAG = "[SpeakingPractice]"
 
-/** 参考站 `speaking.js:583` 的物理去抖（`_lastToggleTime`），单位毫秒。 */
+/** 对标页的物理去抖（`_lastToggleTime`），单位毫秒。 */
 const TOGGLE_DEBOUNCE_MS = 250
-/** 参考站 `SPEAKING_LIMIT_CACHE_TTL_MS`（`speaking.js:68`）。 */
+/** 基准实现 `SPEAKING_LIMIT_CACHE_TTL_MS`。 */
 const LIMIT_CACHE_TTL_MS = 15_000
 /** VAD 三阈值，与 `speakingState` 默认值一致（`speaking.js:36-48`）。 */
 const VAD_VOICE_THRESHOLD = 15
 const VAD_MIN_RECORD_MS = 1000
 const VAD_SILENCE_MS = 1500
-/** 声波条数量：参考站模板里是 `Array(20)`（`speaking.js:294`）。 */
+/** 声波条数量：基准实现模板里是 `Array(20)`。 */
 const VISUALIZER_BARS = 20
-/** 条高区间：参考站 `updateSpeakingVisualizerBars`（`speaking.js:1108`）是 4/60。 */
+/** 条高区间：基准实现 `updateSpeakingVisualizerBars`是 4/60。 */
 const BAR_MIN_HEIGHT = 4
 const BAR_MAX_HEIGHT = 60
 
@@ -142,9 +142,9 @@ export function SpeakingPractice({
   onResult,
   onAdvance,
 }: {
-  /** 当前句英文原文（参考站 `sentenceData.originalText`）。 */
+ /** 当前句英文原文（基准实现 `sentenceData.originalText`）。 */
   text: string
-  /** 当前句中文翻译；为空时**整块不渲染**（参考站模板里的三目）。 */
+ /** 当前句中文翻译；为空时**整块不渲染**（基准实现模板里的三目）。 */
   translation: string
   /** 练习项 id，透传给评分的落库字段。 */
   sentenceId: string
@@ -153,7 +153,7 @@ export function SpeakingPractice({
    * 那两个阈值牵动的是进度上报与用户偏好（彩蛋开关），不属于本组件的职责。
    */
   onResult: (score: number) => void
-  /** Enter 切下一句（参考站 `practice.js:5861` 的 `enter-speaking` 分支）。 */
+ /** Enter 切下一句（对标页的 `enter-speaking` 分支）。 */
   onAdvance: () => void
 }) {
   const [status, setStatus] = useState<Status>("idle")
@@ -163,7 +163,7 @@ export function SpeakingPractice({
   /**
    * 三个维度条的宽度**延迟 100ms** 才落值。
    *
-   * 参考站是 `setTimeout(() => updateSpeakingScoreBar(...), 100)`
+ * 基准实现是 `setTimeout(() => updateSpeakingScoreBar(...), 100)`
    * （`speaking.js:940`）。这不是随手写的延迟：`.progress-fill` 带
    * `transition: width 1s ease`，而卡片与它是同时从 `display:none` 变为可见的。
    * 同一帧里既显示又设宽度，浏览器会把起始宽度当成目标宽度、**不做过渡** ——
@@ -198,7 +198,7 @@ export function SpeakingPractice({
   const vadLastVoiceRef = useRef(0)
   const vadDetectedRef = useRef(false)
 
-  // 额度缓存（参考站 `speakingLimitState` + `timestamp`）
+ // 额度缓存（基准实现 `speakingLimitState` + `timestamp`）
   const limitRef = useRef<LimitState | null>(null)
   const limitAtRef = useRef(0)
 
@@ -298,7 +298,7 @@ export function SpeakingPractice({
     // 互斥：参考音必须先停。否则扬声器外放会被麦克风采进去，评出虚高的分。
     stopSpeaking()
 
-    // 查额度。用缓存（15s）—— 与参考站 ensureSpeakingLimitBeforeStart 一致。
+ // 查额度。用缓存（15s）—— 与基准实现 ensureSpeakingLimitBeforeStart 一致。
     // 「connecting」这个状态是必须的：不加的话按钮在 await 期间仍可点，
     // 连点会开出第二路录音而第一路的 onstop 没人接。
     setStatus("connecting")
@@ -342,7 +342,7 @@ export function SpeakingPractice({
     chunksRef.current = []
     discardRef.current = false
 
-    // 重新开录：清掉上一轮的结果与逐词标注（参考站 `resetSentenceDisplay()`，
+ // 重新开录：清掉上一轮的结果与逐词标注（基准实现 `resetSentenceDisplay()`，
     // `speaking.js:641`；同时把结果卡片 `display:none`）。
     setResult(null)
     setWords(null)
@@ -401,7 +401,7 @@ export function SpeakingPractice({
 
         setResult(data)
         setWords(mapEvaluateToSpeakingWords(data))
-        // 逐词分与三个维度条在参考站里是分两步落的：句子先换成带标注的版本，
+ // 逐词分与三个维度条在基准实现里是分两步落的：句子先换成带标注的版本，
         // 100ms 后进度条才涨上去（见 barScores 的注释）。
         setTimeout(() => {
           setBarScores({
@@ -435,7 +435,7 @@ export function SpeakingPractice({
     vadLastVoiceRef.current = Date.now()
     vadDetectedRef.current = false
 
-    // 开录提示音。参考站播 `/audio/beep-329314.mp3`（gain 0.5，
+ // 开录提示音。基准实现播 `/audio/beep-329314.mp3`（gain 0.5，
     // `speaking.js:1292`）—— 那个文件不存在，用 sfx 合成。
     playTick()
 
@@ -474,7 +474,7 @@ export function SpeakingPractice({
         analyserRef.current = analyser
 
         const data = new Uint8Array(analyser.frequencyBinCount)
-        // 参考站 `updateSpeakingVisualizerBars`（`speaking.js:1100`）的取点口径：
+ // 基准实现 `updateSpeakingVisualizerBars`的取点口径：
         // 只用前半段频谱（`length / 2`），等距取样。
         const usableLength = Math.floor(data.length / 2)
         const step = Math.max(1, Math.floor(usableLength / VISUALIZER_BARS))
@@ -509,7 +509,7 @@ export function SpeakingPractice({
             now - startTimeRef.current > VAD_MIN_RECORD_MS &&
             now - vadLastVoiceRef.current > VAD_SILENCE_MS
           ) {
-            // 参考站先置状态再停录音（`speaking.js:1141`），文案也一致。
+ // 基准实现先置状态再停录音，文案也一致。
             setStatus("processing")
             stopRecording()
             return
@@ -548,7 +548,7 @@ export function SpeakingPractice({
 
   // ── 键盘：Space 开关录音、Enter 切下一句 ────────────────────────────────────
   //
-  // 参考站是两个监听：`speaking.js:1387 handleSpeakingSpaceKey` 管空格，
+ // 基准实现是两个监听： handleSpeakingSpaceKey` 管空格，
   // `practice.js:5861` 管 Enter。两处都跳过输入框、都要求没有其它修饰键。
   // Enter 的守卫尤其重要 —— 录音/连接中切句会让评测结果挂到下一句上。
   useEffect(() => {
@@ -617,7 +617,7 @@ export function SpeakingPractice({
           : result
             ? "点击重新录音"
             : "点击或按空格键开始"
-  // 参考站 order：updateSpeakingStatus 先写 `speaking-hint <status>`，
+ // 基准实现 order：updateSpeakingStatus 先写 `speaking-hint <status>`，
   // 随后 updateSpeakingLimitUI 在额度耗尽时改写为 `speaking-hint limit-exhausted`。
   const hintClass = showFullLimit ? "speaking-hint limit-exhausted" : `speaking-hint ${status}`
 
@@ -631,7 +631,7 @@ export function SpeakingPractice({
 
   return (
     /*
-      `.centered-layout` 在参考站 CSS 里**零定义**（死类名），照抄是为了
+ `.centered-layout` 在基准实现 CSS 里**零定义**（死类名），对齐是为了
       DOM 对比时类名列表一致。
     */
     <div className="speaking-mode-container centered-layout">
@@ -657,7 +657,7 @@ export function SpeakingPractice({
             <span className="speaking-sentence-text">{text}</span>
           )}
         </div>
-        {/* 有翻译才渲染这一行 —— 参考站模板里是 `${translation ? … : ''}`。 */}
+ {/* 有翻译才渲染这一行 —— 基准实现模板里是 `${translation ? … :''}`。 */}
         {translation ? <div className="speaking-translation fade-in">{translation}</div> : null}
       </div>
 
@@ -666,7 +666,7 @@ export function SpeakingPractice({
         移植过来的 CSS 里 `.speaking-visualizer-container`（practice.css:3981）、
         `.speaking-feedback-card`（:4145）、`.speaking-limit-card`（:4086）
         **基础态就是 `display:flex`、且没有 `.show` 类** —— 一旦条件渲染，
-        可见/不可见的语义就与参考站反了。
+ 可见/不可见的语义就与基准实现反了。
       */}
       <div className="speaking-interaction-area">
         {/* 1. 录音中：声波 + 计时 */}
@@ -699,7 +699,7 @@ export function SpeakingPractice({
                   d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
                 />
                 {/*
-                  参考站把 `stroke-dasharray` 与 `stroke` 都写在行内
+ 基准实现把 `stroke-dasharray` 与 `stroke` 都写在行内
                   （`speaking.js:936`）。颜色走 CSS 变量，不能用
                   `lib/pronunciation.ts` 的 `scoreColor()`（那是硬编码 hex，
                   浅色主题下会是看不清的霓虹）。
@@ -806,7 +806,7 @@ export function SpeakingPractice({
             </div>
           </div>
           {/*
-            参考站指向 `/User/Upgrade`，本仓库的会员中心是 `/home/membership`。
+ 基准实现指向 `/User/Upgrade`，本仓库的会员中心是 `/home/membership`。
             照抄那个 URL 会 404 —— 文案与位置照抄，路由必须落到我们自己的页面。
           */}
           <a

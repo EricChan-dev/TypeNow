@@ -2,9 +2,9 @@
 /**
  * 新建 sentence_favorites 表：听写页底栏「收藏句子」的存储。
  *
- * 背景：参考站听写页底栏有一颗星（`#favoriteBtn`，快捷键 ⌘/Ctrl+U），调
+ * 背景：基准实现听写页底栏有一颗星（`#favoriteBtn`，快捷键 ⌘/Ctrl+U），调
  * `/User/Api/Favorite/Sentence`。我们的库里没有对应表（单词收藏走的
- * `wordbook_items` 是另一回事：参考站自己也是两个独立接口
+ * `wordbook_items` 是另一回事：基准实现自己也是两个独立接口
  * `/Favorite/Sentence` 与 `/Favorite/Word`）。
  *
  * 幂等：重复执行会把「已存在」打出来，不会报错。

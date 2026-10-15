@@ -200,7 +200,7 @@ export function UserActions({ serverUser, variant = "public" }: UserActionsProps
                 <TierBadge tier={user.member_tier} size="sm" />
               </Link>
               {/* 入口对所有用户展示，但**进入推广中心的门禁已改回 `is_partner`**
-                  （2026-10-10：为对齐句游英语合伙人版，推广资格重新绑回 ¥699 商品，
+ （2026-10-10：为对齐现行版本合伙人版，推广资格重新绑回 ¥699 商品，
                   2026-09-29 的免费开放被撤销）。非合伙人点进去会看到合伙人版开通页。
                   ⚠️ 未经律师复核，见 docs/membership-alignment-risk-2026-10.md。 */}
               <Link

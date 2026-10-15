@@ -40,12 +40,12 @@ const BIND_COPY = {
 /**
  * 协议勾选框。
  *
- * 参考页这里是一个真拦截：未勾选点「立即登录」会弹出「服务协议与隐私政策」
+ * 基准实现这里是一个真拦截：未勾选点「立即登录」会弹出「服务协议与隐私政策」
  * 弹窗阻断登录，弹窗里点「同意并登录」才继续。
  *
  * 本次改造**按用户决定只还原样式，不拦截登录**（问询答复：`只还原样式，不拦截登录`）。
  * 所以这里没有任何 service 弹窗，勾选状态是本地纯展示、可点可切换。
- * 但告知义务不能因此丢掉 —— 原先底部那行「登录即表示同意」改放在参考页
+ * 但告知义务不能因此丢掉 —— 原先底部那行「登录即表示同意」改放在基准实现
  * 本来就有的 `span small` 槽位里（login.css 里定义了该槽位的样式）：
  * 既保留隐式同意的说明，也不额外新增一行版式。
  */
@@ -415,9 +415,9 @@ export function LoginForm() {
   return (
     <>
       {/* ── Tab Bar ──
-          标签文案与顺序照搬参考页（验证码登录 / 微信登录）。
-          注意：参考页的「验证码登录」就是我们的 phone tab，默认选中项由上面的
-          设备判定逻辑决定，与参考页（恒为验证码）不同 —— 那是业务逻辑，保留我们的。 */}
+ 标签文案与顺序照搬基准实现（验证码登录 / 微信登录）。
+ 注意：基准实现的「验证码登录」就是我们的 phone tab，默认选中项由上面的
+ 设备判定逻辑决定，与基准实现（恒为验证码）不同 —— 那是业务逻辑，保留我们的。 */}
       <div className="logintab" role="tablist" aria-label="登录方式">
         <button
           type="button"
@@ -439,7 +439,7 @@ export function LoginForm() {
           aria-selected={activeTab === "wechat"}
           // 绑定模式下禁止切回微信 tab：切过去只会看到二维码，再扫一次也还是
           // 这个没手机号的账号，绕不出绑定。用 disabled 而不是隐藏，版式与
-          // 参考页保持一致。样式在 login.css 的 [disabled] 规则里。
+ // 基准实现保持一致。样式在 login.css 的 [disabled] 规则里。
           disabled={bindMode}
           title={bindMode ? "请先绑定手机号" : undefined}
           onClick={() => pickTab("wechat")}
@@ -486,16 +486,16 @@ export function LoginForm() {
           hidden={activeTab !== "phone"}
           className={activeTab === "phone" ? "content on" : "content"}
         >
-          {/* ── 与参考页的高度差已随验证码接入消失 ─────────────────────────────
-              参考页 .form 里有 5 个产生盒子的子元素：
+ {/* ── 与基准实现的高度差已随验证码接入消失 ─────────────────────────────
+ 基准实现 .form 里有 5 个产生盒子的子元素：
                 P(74) · support-tip(18，带 -4/-8 外边距→净 6) · P(74) ·
                 div#captcha-element(0 高，但 display:block，照样吃一个 18px 的 flex gap) ·
                 button.login(48)
               → 74+6+74+0+48 + 4×18(gap) = 274，实测正是 274。
 
               接入阿里云验证码之前，我们没有那个占位 div，只有 4 个子元素 → 256，
-              比参考页矮 18px（当时是有意为之：不为对齐一个并不使用的控件补假空 div）。
-              现在这个 div 是**真的**验证码挂载点，高度自然与参考页一致。
+ 比基准实现矮 18px（当时是有意为之：不为对齐一个并不使用的控件补假空 div）。
+ 现在这个 div 是**真的**验证码挂载点，高度自然与基准实现一致。
 
               它**无条件渲染**（不随校验是否启用增减）：既是 SDK 的挂载点，
               也避免脚本就绪前后多出一段布局跳动。未启用校验时它只是个 0 高度的
@@ -566,8 +566,8 @@ export function LoginForm() {
 
             {/* 人机校验挂载点（阿里云验证码 2.0）。
                 popup 模式下它只是个 0 高度占位节点，验证浮层由 SDK 插到 body 上。
-                位置与参考页一致：放在「验证码」行之后、「立即登录」之前 ——
-                参考页那个 div#captcha-element 同样占一个 flex gap，见上方注释。 */}
+ 位置与基准实现一致：放在「验证码」行之后、「立即登录」之前 ——
+ 基准实现那个 div#captcha-element 同样占一个 flex gap，见上方注释。 */}
             <div id="login-captcha-element" />
 
             <button
@@ -586,7 +586,7 @@ export function LoginForm() {
             </button>
           </div>
 
-          {/* 参考页里 .form-control 是 .content 的直接子元素、.form 的兄弟
+ {/* 基准实现里 .form-control 是 .content 的直接子元素、.form 的兄弟
               （已用 HTML 解析器核验祖先链，不是靠看缩进）。 */}
           <FormControl agreed={agreed} onToggle={() => setAgreed((v) => !v)} />
         </div>

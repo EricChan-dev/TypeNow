@@ -10,9 +10,9 @@ import {
 
 // 听写分词/判题的对齐测试。
 //
-// 依据是参考站（句游英语）practice.js:4207-4212 与 text-utils.js:35-43。
-// 这些用例的作用是**锁住与参考站的一致性**：任何一条挂了，都说明我们
-// 与参考站的听写体验出现了可见差异（多要求用户敲一个符号，或少判一个错）。
+// 依据是基准实现的实际行为。
+// 这些用例的作用是**锁住与基准实现的一致性**：任何一条挂了，都说明我们
+// 与基准实现的听写体验出现了可见差异（多要求用户敲一个符号，或少判一个错）。
 
 describe("normalizeQuotes", () => {
   it("弯撇号族归一到 ASCII 撇号", () => {
@@ -32,7 +32,7 @@ describe("normalizeQuotes", () => {
     expect(normalizeQuotes("well\u2011known")).toBe("well-known")
     expect(normalizeQuotes("well\uFE63known")).toBe("well-known")
     expect(normalizeQuotes("well\uFF0Dknown")).toBe("well-known")
-    // 参考站注释写明「不转换 en/em dash 等句间标点」
+ // 基准实现注释写明「不转换 en/em dash 等句间标点」
     expect(normalizeQuotes("a\u2013b")).toBe("a\u2013b")
     expect(normalizeQuotes("a\u2212b")).toBe("a\u2212b")
     expect(normalizeQuotes("wait\u2026")).toBe("wait\u2026")

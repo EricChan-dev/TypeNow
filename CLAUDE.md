@@ -153,7 +153,7 @@ Two type files:
 | 想了解 | 看这里 |
 |--------|--------|
 | 产品全貌与规划 | [PRD_V3.md](PRD_V3.md) |
-| 练习页与参考站的差距、阶段规划、已拍板决策 | [docs/practice-page-alignment-matrix.md](docs/practice-page-alignment-matrix.md) |
+| 练习页与基准实现的差距、阶段规划、已拍板决策 | [docs/practice-page-alignment-matrix.md](docs/practice-page-alignment-matrix.md) |
 | 页面级设计稿 | [docs/pages/](docs/pages/)、[specs/](specs/) |
 | 技术架构 | [docs/architecture.md](docs/architecture.md) |
 | 市场与定价策略 | [docs/strategy.md](docs/strategy.md) |

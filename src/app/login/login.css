@@ -1,30 +1,30 @@
-/* 登录页样式：1:1 复刻参考页 `登录 - 句游英语.html` 的 login.css。
+/* 登录页样式：对齐对标页 的 login.css。
  *
  * 用户明确要求（m01483）：登录页「尽量保持一致，主要是样式，业务逻辑保留我们的」。
  * 所以这里只搬运**表现层**，页面结构里凡是涉及登录流程的部分（发送验证码、
  * 校验、微信扫码轮询、回跳）一律沿用我们自己的实现。
  *
  * 两条搬运约定：
- * 1. 全部规则挂在 `.login-ref` 下。参考页直接把 `.login` / `.body` 铺在全局，
+ * 1. 全部规则挂在 `.login-ref` 下。基准实现直接把 `.login` / `.body` 铺在全局，
  *    照抄会污染站内其它页面（我们已有一个 `body{}` 背景）。
- * 2. 字号、行高、内边距、圆角、阴影、渐变全部保留参考页的**原值**，不做"优化"。
+ * 2. 字号、行高、内边距、圆角、阴影、渐变全部保留基准实现的**原值**，不做"优化"。
  *    这些数值共同决定了版面，改任何一个都会重新出现"排版错乱"。
  *
- * 参考页字体：reset.css 与 login.css 都没有声明 font-family（login.css 第 443 行
+ * 基准实现字体：reset.css 与 login.css 都没有声明 font-family（login.css 第 443 行
  * 那句 `'Noto Sans SC', font-family: sans-serif;` 是语法错误，被浏览器丢弃），
  * 因此它实际用的是**浏览器默认字体** —— 在 macOS 上实测为 PingFang SC。
  * 我们这里显式写出同一套系统字体栈，避免被 globals.css 的 Inter 改掉。
  *
  * 3. box-sizing 必须还原成 content-box。
- *    参考页的 reset.css / main.css / remixicon.css 里没有任何 box-sizing 声明，
+ * 基准实现的 reset.css / main.css / remixicon.css 里没有任何 box-sizing 声明，
  *    用的是浏览器默认的 content-box；而 Tailwind 的 preflight 会给全站每个元素
  *    强加 `border-box`。这个差异会实打实地改变版面：
  *      .loginMain 宽 1100，左栏 43%(=473) + 右栏 55%(=605) = 1078 < 1100，
  *      border-box 下两者都不用收缩，实测左栏 473、右栏 605；
  *      而 content-box 下两栏各自还要加上 112px 内边距（合计 1302 > 1100），
- *      flex 按比例收缩后左栏 496.4、右栏 603.6 —— 这正是参考页的实测值。
+ * flex 按比例收缩后左栏 496.4、右栏 603.6 —— 这正是基准实现的实测值。
  *    所以这一条不是"洁癖复刻"，去掉它左右两栏各会偏 23px。
- *    下面 6 处参考页**显式**写了 box-sizing:border-box 的规则（.rotate、结算圆点、
+ * 下面 6 处基准实现**显式**写了 box-sizing:border-box 的规则（.rotate、结算圆点、
  *    二维码虚线框等）特异性都高于 `.login-ref *`，仍然正常生效。
  */
 .login-ref {
@@ -35,14 +35,14 @@
   min-height: 100vh;
   font-family: -apple-system, BlinkMacSystemFont, "PingFang SC",
     "Hiragino Sans GB", "Microsoft YaHei", "Helvetica Neue", Arial, sans-serif;
-  /* 参考页写在 <body style> 上的三层渐变背景，逐字照搬 */
+ /* 基准实现写在 <body style> 上的三层渐变背景，照搬 */
   background: radial-gradient(circle at 50% 0%, #e0f2fe 0%, transparent 70%),
     radial-gradient(circle at 100% 100%, #eef2ff 0%, transparent 50%),
     linear-gradient(180deg, #f8fafc 0%, #f1f5f9 100%);
 }
 
-/* 见上方第 3 条：把 Tailwind preflight 的 border-box 还原成参考页的 content-box。
- * 注意选择器只到 `.login-ref *`（特异性 0,1,1），低于参考页里那些显式
+/* 见上方第 3 条：把 Tailwind preflight 的 border-box 还原成基准实现的 content-box。
+ * 注意选择器只到 `.login-ref *`（特异性 0,1,1），低于基准实现里那些显式
  * box-sizing:border-box 的规则，因此不会互相打架。 */
 .login-ref,
 .login-ref *,
@@ -392,7 +392,7 @@
   width: 420px;
 }
 
-/* 参考页这里放的是 338×80 的整块锁定标位图（图标+「句游英语」烘焙在同一张图里）；
+/* 基准实现这里放的是 338×80 的整块锁定标位图（图标+「基准实现」烘焙在同一张图里）；
  * 我们的 logo.svg 是单图标，所以用「图标 + 真实文字」，与落地页顶栏同一种处理。 */
 .login-ref h3 img {
   height: 40px;
@@ -403,7 +403,7 @@
 .login-ref h3 span {
   font-size: 26px;
   letter-spacing: -0.5px;
-  /* 字体族由 .font-brand 提供（站酷快乐体，同参考页 logo）。
+ /* 字体族由 .font-brand 提供（站酷快乐体，同基准实现 logo）。
      字号刻意保持 26px 未动 —— 本次需求只要求换字体，改字号会牵动已经验收过的版面。 */
 }
 .login-ref .main_box .logintab {
@@ -493,7 +493,7 @@
 
 /* 微信扫码区：承载我们自己的站内轮询二维码。
  *
- * 注意参考页里**根本没有 `code` 类**（已用 HTML 解析器核验）：它的微信 tab 是
+ * 注意基准实现里**根本没有 `code` 类**（已用 HTML 解析器核验）：它的微信 tab 是
  * 整页跳转 `/User/Login?type=wechat`，站内没有二维码，那个虚线框只是它另一套
  * 页面的遗留样式。我们保留站内扫码，于是沿用它的虚线框观感（2px dashed #e2e8f0、
  * #f8fafc 底、16px 圆角）来装真正的二维码。
@@ -681,7 +681,7 @@
 }
 
 /* 「请联系客服」现在是 <button>（点开客服二维码弹窗），不再是跳转链接。
-   参考页这里是 <a>，所以按钮必须显式还原 <a> 的外观，否则会退化成浏览器
+ 基准实现这里是 <a>，所以按钮必须显式还原 <a> 的外观，否则会退化成浏览器
    默认的灰底按钮 —— 与参考版式不符。这里把 button 与 a 并列写，两边都覆盖。 */
 .login-ref .support-tip a,
 .login-ref .support-tip button {
@@ -709,13 +709,13 @@
 
 /* 协议勾选框。
  *
- * 用户明确要求（本次问答）：**只还原样式，不拦截登录** —— 参考页未勾选时点
+ * 用户明确要求（本次问答）：**只还原样式，不拦截登录** —— 基准实现未勾选时点
  * 「立即登录」会弹服务协议弹窗阻断，我们不做这个阻断，因此这里没有 service 弹窗，
  * 勾选框纯展示（可点、可切换）。底部另有一行「登录即表示同意」承担告知。 */
-/* 参考页这里**没有** display:flex —— 它就是个普通块级元素，靠父级
+/* 基准实现这里**没有** display:flex —— 它就是个普通块级元素，靠父级
  * `.main_box`（flex column + align-items:center）给的 fit-content 宽度定尺寸。
  * 早先我在这里加了 display:flex，结果 flex 项的最大内容宽度按「各项之和」算，
- * 实测宽 457px，而参考页是 420px。改回块级后与参考页同口径。 */
+ * 实测宽 457px，而基准实现是 420px。改回块级后与基准实现同口径。 */
 .login-ref .form-control {
   margin-top: 29px;
 }
@@ -767,8 +767,8 @@
   line-height: 20px;
 }
 
-/* 非拦截式告知：参考页未勾选时会弹服务协议弹窗阻断，我们不做阻断（用户决定），
- * 因此把「登录即表示同意」的隐式同意说明放在参考页本来就有的 span small 槽位里，
+/* 非拦截式告知：基准实现未勾选时会弹服务协议弹窗阻断，我们不做阻断（用户决定），
+ * 因此把「登录即表示同意」的隐式同意说明放在基准实现本来就有的 span small 槽位里，
  * 既不新增一行版式，也不丢掉此前的告知。 */
 .login-ref .form-control span small {
   display: block;
@@ -809,7 +809,7 @@
 }
 
 /* 「帮助中心 / 关于我们」现在是 <button>（点开二维码弹窗），不再是跳转链接。
-   参考页这里是 <a>，所以必须显式抹掉 UA 的灰底/边框/内边距，否则会退化成
+ 基准实现这里是 <a>，所以必须显式抹掉 UA 的灰底/边框/内边距，否则会退化成
    浏览器默认按钮 —— 与参考版式不符。同 `.support-tip button` 的处理。 */
 .login-ref .logincopyright p button {
   background: none;
@@ -843,9 +843,9 @@
 }
 
 /* ── 响应式 ─────────────────────────────────────────────────────────
- * 参考页的宽度断点有重复且互相覆盖（两个 max-width:1200px 块、一个使
+ * 基准实现的宽度断点有重复且互相覆盖（两个 max-width:1200px 块、一个使
  * .loginBanner 再次出现的规则）。这里只保留**最终生效**的那一套，避免把
- * 参考页的历史包袱一起搬过来。 */
+ * 基准实现的历史包袱一起搬过来。 */
 @media screen and (max-width: 1200px) {
   .login-ref .loginBanner {
     display: none;
@@ -968,7 +968,7 @@
   .login-ref h3 img {
     height: 32px;
   }
-  /* 参考页的品牌名和图标烘焙在同一张 338×80 的位图里，图标缩到 32px（40 的 80%）
+ /* 基准实现的品牌名和图标烘焙在同一张 338×80 的位图里，图标缩到 32px（40 的 80%）
      时文字也跟着缩。我们是「图标 + 真实文字」两段结构，文字不会自己跟，
      所以这里按同一比例补一条：26 × 0.8 = 20.8px，保持锁定标内部比例不变。 */
   .login-ref h3 span {

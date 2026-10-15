@@ -12,7 +12,7 @@ describe("parseMistakeSource", () => {
     expect(parseMistakeSource("word")).toBe("word")
   })
 
-  it("非法值一律回落 all（与参考站 sourceType 缺省行为一致）", () => {
+ it("非法值一律回落 all（与基准实现 sourceType 缺省行为一致）", () => {
     expect(parseMistakeSource(null)).toBe("all")
     expect(parseMistakeSource(undefined)).toBe("all")
     expect(parseMistakeSource("")).toBe("all")

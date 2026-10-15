@@ -4,7 +4,7 @@ import { alignWordsWithEnglish } from "@/lib/word-align"
 /**
  * 只做 words 归一，**不摊平**分块：一句就是一条练习项，`chunks` 原样保留。
  *
- * 这是听写模式（`DictationPractice`）该走的路径。参考站没有任何「按分块练习」的概念
+ * 这是听写模式（`DictationPractice`）该走的路径。基准实现没有任何「按分块练习」的概念
  * —— 它的 `chunks` 只有一处用途，就是**分段练习**的数据源
  * （practice.js:2743/3019/4455/4746 四处都是 `Chunks || chunks || fragments`，
  * 全部落在分段练习分支里；speaking.js 里 `chunk` 出现 0 次）。

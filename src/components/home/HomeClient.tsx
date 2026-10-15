@@ -60,7 +60,7 @@ interface StatsData {
   weekly: { date: string; count: number }[]
   /** 待复习项数量（复习队列 pending），学习数据与词汇卡都要用。 */
   pendingReviews: number
-  /* 以下是本次改版为「参考句游英语版式」新增的真实聚合字段（见 api/home/stats） */
+ /* 以下是本次改版为「参考基准实现版式」新增的真实聚合字段（见 api/home/stats） */
   totalSentences?: number
   totalDurationSeconds?: number
   totalDurationHours?: number
@@ -104,15 +104,15 @@ function relativeTime(isoStr: string): string {
   return `${days}天前`
 }
 
-/** 小数保留 n 位（参考页的时长/百分比都是两位小数口径，如 0.00）。 */
+/** 小数保留 n 位（基准实现的时长/百分比都是两位小数口径，如 0.00）。 */
 function fixed(n: number, digits = 2): string {
   return n.toFixed(digits)
 }
 
-// ─── Reference section: 学习日历（复刻参考页 .calendar）────────────────────
+// ─── Reference section: 学习日历（对齐基准实现 .calendar）────────────────────
 
 /**
- * 参考页的月历是「整月 7 列网格 + 到今天为止」，用**练习记录**（heatmap）
+ * 基准实现的月历是「整月 7 列网格 + 到今天为止」，用**练习记录**（heatmap）
  * 标出已学习 / 未学习，而不是签到（签到是我方独有的概念，已改到日签卡里）。
  *
  * 与旧版 `MonthlyCheckInCalendar` 的差别：这版只用打卡日历的**几何**
@@ -173,7 +173,7 @@ function StudyCalendar({
     }
   }, [offset, heatmap, heatmapDuration])
 
-  // 首格之前的留白（参考页渲染成空 <label>，这里显式占位保持 7 列对齐）
+ // 首格之前的留白（基准实现渲染成空 <label>，这里显式占位保持 7 列对齐）
   const padCount = new Date(year, month, 1).getDay()
   const rows: (typeof cells[number] | null)[][] = []
   {
@@ -231,7 +231,7 @@ function StudyCalendar({
   )
 }
 
-// ─── Reference section: 客户服务与支持（复刻参考页 .cs-banner-compact）───────
+// ─── Reference section: 客户服务与支持（对齐基准实现 .cs-banner-compact）───────
 
 function CsBanner({ onContact }: { onContact: () => void }) {
   return (
@@ -266,13 +266,13 @@ function CsBanner({ onContact }: { onContact: () => void }) {
   )
 }
 
-// ─── Reference section: 会员状态卡片（复刻参考页 .membership-status-card）───
+// ─── Reference section: 会员状态卡片（对齐基准实现 .membership-status-card）───
 
 function MembershipCard({
   me,
   todaySentences,
   checkInGoal,
-  /** 今日 AI 口语评测次数 —— 我方额度是「调用次数」而非参考页的「分钟配额」 */
+ /** 今日 AI 口语评测次数 —— 我方额度是「调用次数」而非基准实现的「分钟配额」 */
   pronunciationToday,
 }: {
   me: MeData | null
@@ -321,7 +321,7 @@ function MembershipCard({
               <Zap />
             </div>
             <div className="benefit-info">
-              {/* 参考页这里是「今日配额(分钟) / 30」—— 我方**没有分钟配额**这个概念，
+ {/* 基准实现这里是「今日配额(分钟) / 30」—— 我方**没有分钟配额**这个概念，
                   membership-benefits 的额度单位是 AI 调用次数，练习本身不限次。
                   所以换成同源的真实指标：今日练习句数 / 签到目标。 */}
               <span className="benefit-label">今日练习(句)</span>
@@ -353,7 +353,7 @@ function MembershipCard({
           <Link href="/pricing" className="action-icon" data-tooltip="会员权益">
             <Crown />
           </Link>
-          {/* 参考页第三个是「切换主题」；我方 2026-10 已删掉暗色体系，换成学习相关入口 */}
+ {/* 基准实现第三个是「切换主题」；我方 2026-10 已删掉暗色体系，换成学习相关入口 */}
           <Link href="/home/review" className="action-icon" data-tooltip="错题复习">
             <BookMarked />
           </Link>
@@ -374,7 +374,7 @@ function MembershipCard({
   )
 }
 
-// ─── Reference section: 试用 banner（复刻参考页 .pro-trial-banner）──────────
+// ─── Reference section: 试用 banner（对齐基准实现 .pro-trial-banner）──────────
 
 function TrialBanner({ onClaim, claiming }: { onClaim: () => void; claiming: boolean }) {
   return (
@@ -403,7 +403,7 @@ function TrialBanner({ onClaim, claiming }: { onClaim: () => void; claiming: boo
   )
 }
 
-// ─── Reference section: 词汇学习（复刻参考页 .vocab-stats）──────────────────
+// ─── Reference section: 词汇学习（对齐基准实现 .vocab-stats）──────────────────
 
 function VocabCard({ wordCount, pendingReviews }: { wordCount: number; pendingReviews: number }) {
   return (
@@ -448,7 +448,7 @@ function VocabCard({ wordCount, pendingReviews }: { wordCount: number; pendingRe
   )
 }
 
-// ─── Reference section: 最近课程（复刻参考页 .progress3）────────────────────
+// ─── Reference section: 最近课程（对齐基准实现 .progress3）────────────────────
 
 function RecentCourses({
   recentPractices,
@@ -509,10 +509,10 @@ function RecentCourses({
   )
 }
 
-// ─── Reference section: 错题统计（复刻参考页 .col-3 .progress）───────────────
+// ─── Reference section: 错题统计（对齐基准实现 .col-3 .progress）───────────────
 
 /**
- * 参考页这里是「拼写错误 / 语法错误 / 词汇错误」三分类。
+ * 基准实现这里是「拼写错误 / 语法错误 / 词汇错误」三分类。
  * **我方数据库没有错题分类字段** —— `practice_records.mistakes` 只有一个总数，
  * 照抄会得到三根恒为 0 的进度条。这里换成同源的、真实存在的三个档位：
  * 已掌握 / 接近掌握 / 复习中（借 review_queue 的 FSRS 字段，
@@ -860,14 +860,14 @@ export function HomeClient() {
             <PaymentSuccessModal />
           </Suspense>
 
-          {/* ══ 以下区块顺序 / 几何 / 色值严格对齐参考页 ══ */}
+ {/* ══ 以下区块顺序 / 几何 / 色值严格对齐基准实现 ══ */}
 
           {/* 1. 客户服务与支持 */}
           <div className="anim-card">
             <CsBanner onContact={() => setContactOpen(true)} />
           </div>
 
-          {/* 2. 会员状态卡片（含日签按钮：签到是我方业务，参考页没有，折进最贴近的位置） */}
+ {/* 2. 会员状态卡片（含日签按钮：签到是我方业务，基准实现没有，折进最贴近的位置） */}
           <div className="anim-card">
             <MembershipCard
               me={me}
@@ -877,8 +877,8 @@ export function HomeClient() {
             />
           </div>
 
-          {/* 3+8. 今日打卡 + 每日任务并排（两者均为我方业务，参考页无对应区块；
-                 用参考页白底卡几何，1:1 分栏） */}
+ {/* 3+8. 今日打卡 + 每日任务并排（两者均为我方业务，基准实现无对应区块；
+ 用基准实现白底卡几何，1:1 分栏） */}
           <div className="ref-checkin-row">
           <div className="ref-bgwhite anim-card">
             <div className="ref-title">
@@ -975,7 +975,7 @@ export function HomeClient() {
             </div>
           </div>
 
-          {/* 每日任务（我方业务，参考页无对应区块）—— 与今日打卡并排 */}
+ {/* 每日任务（我方业务，基准实现无对应区块）—— 与今日打卡并排 */}
           <div className="ref-bgwhite anim-card">
             <div className="ref-title">
               <h2>每日任务</h2>
@@ -984,7 +984,7 @@ export function HomeClient() {
           </div>
           </div>
 
-          {/* 4. 试用 banner（仅未领过体验会员时出现，与参考页的条件渲染一致） */}
+ {/* 4. 试用 banner（仅未领过体验会员时出现，与基准实现的条件渲染一致） */}
           {me?.trial_available && (
             <div className="anim-card">
               <TrialBanner onClaim={handleClaimTrial} claiming={claimingTrial} />
@@ -1008,11 +1008,11 @@ export function HomeClient() {
             </div>
 
             <div className="parame">
-              {/* 四格不带图标：参考页的 `.report .parame li label { display:none }`
+ {/* 四格不带图标：基准实现的 `.report .parame li label { display:none }`
                   本来就是隐藏的（home.css:35），我们当初漏了这条规则才显出来。
                   与其补一条 CSS 再把它藏掉，不如不渲染这个 label。 */}
               <ul>
-                {/* 参考页第一格是「今日练习时长(分钟)」，数值取当日 coin_logs.duration_seconds */}
+ {/* 基准实现第一格是「今日练习时长(分钟)」，数值取当日 coin_logs.duration_seconds */}
                 <li>
                   <span>今日练习时长(分钟)</span>
                   <p><b>{fixed(todayMinutes)}<em /></b></p>

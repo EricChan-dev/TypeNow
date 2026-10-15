@@ -1,4 +1,4 @@
-/* 会员权益页样式：1:1 复刻参考页 `VIP会员权益 - 句游英语.html` 的版式。
+/* 会员权益页样式：对齐对标页 的版式。
  *
  * 沿用登录页（src/app/login/login.css）与首页内容区（src/app/home/home-ref.css）
  * 的先例：只搬运**表现层**，全部规则挂在本页根节点
@@ -9,30 +9,30 @@
  * `.home-ref` 之内（见 components/home/HomeShell.tsx）。所以这里用外壳作前缀。
  *
  * ── 搬运约定（同 home-ref.css）─────────────────────────────────────────────
- * 1. 字号/行高/内边距/圆角/阴影/色值全部保留参考页**原值**，不做「优化」。
- * 2. 参考页用 remixicon 字体图标（`<i class="ri-*">`），本项目统一用 lucide
+ * 1. 字号/行高/内边距/圆角/阴影/色值全部保留基准实现**原值**，不做「优化」。
+ * 2. 基准实现用 remixicon 字体图标（`<i class="ri-*">`），本项目统一用 lucide
  *    组件，所以字体图标的 font-size/color 规则改写成 `svg` 的宽高/颜色。
  * 3. 深色模式（`:root[themes="dark"]`）一律不搬 —— 我们 2026-10 已删掉整套
  *    `.dark` 令牌（见 globals.css）。只保留浅色值。
- * 4. 参考页 `.maxWidth` 同时有 `min-width:1140px`（强制横向滚动）。我们内容区
+ * 4. 基准实现 `.maxWidth` 同时有 `min-width:1140px`（强制横向滚动）。我们内容区
  *    更窄，保留 `max-width` 但**不保留 min-width**，否则必然溢出。
- * 5. 参考页把新版区块的样式写在 HTML 的 `<style>` 内联块里，配色/间距在
+ * 5. 基准实现把新版区块的样式写在 HTML 的 `<style>` 内联块里，配色/间距在
  *    内联 style 属性上。搬运时把这些内联值收敛到本文件，DOM 只留 class。
- * 6. 色值里的 `var(--bodyT)` / `var(--color394659)` 等参考页令牌，
+ * 6. 色值里的 `var(--bodyT)` / `var(--color394659)` 等基准实现令牌，
  *    对应本项目 home-ref.css 的 `--ref-bodyT` / `--ref-color*`。
  */
 
 .home-ref-shell .membership-upgrade-page {
   padding-top: 18px;
 
-  /* 行高复位。参考页的 reset.css **没有**给 html/body 设 line-height（实测
+ /* 行高复位。基准实现的 reset.css **没有**给 html/body 设 line-height（实测
      computed 值是 `normal`），而本项目引入 Tailwind preflight 时带进了
      `html, :host { line-height: 1.5 }` —— 1.5 × 16px = 24px 会顺着继承链
-     抬高本页所有「未显式声明行高」的元素，导致整体比参考页高一档：
+ 抬高本页所有「未显式声明行高」的元素，导致整体比基准实现高一档：
        · .plan-card-head h3 label  我们 36px → 参考 33px
        · .plan-card-head           我们 67px → 参考 64px
        · 整页                      我们 2862px → 参考 2845px
-     在页面根节点复位成 normal，等价于参考页的继承环境；已显式声明行高的
+ 在页面根节点复位成 normal，等价于基准实现的继承环境；已显式声明行高的
      规则（`p label` 38px、`label span` 1.4、服务卡 p 1.75 等）不受影响。 */
   line-height: normal;
 }
@@ -62,7 +62,7 @@
   color: var(--ref-bodyT);
 }
 
-/* 「喵学社」三个字用渐变字（参考页 .brand-text-gradient）。
+/* 「喵学社」三个字用渐变字（基准实现 .brand-text-gradient）。
    注意 -webkit-text-fill-color 必须写在渐变之后，且不能被子元素继承出问题。 */
 .home-ref-shell .brand-text-gradient {
   background: -webkit-linear-gradient(left, #2d63e7, #5047e1);
@@ -93,8 +93,8 @@
   font-weight: 600;
 }
 
-/* 当前身份摘要。参考页没有身份卡（它靠左侧栏显示会员状态），我们这边把身份
-   压成 hero 下方一行，所以这条规则是新增的，颜色沿用参考页的次级灰。 */
+/* 当前身份摘要。基准实现没有身份卡（它靠左侧栏显示会员状态），我们这边把身份
+ 压成 hero 下方一行，所以这条规则是新增的，颜色沿用基准实现的次级灰。 */
 .home-ref-shell .hero-status {
   margin: 14px auto 0;
   color: var(--ref-color64748b);
@@ -156,7 +156,7 @@
   box-shadow: 0px 3px 8px 0px rgba(0, 0, 0, 0.1);
 }
 
-/* 合伙人版：暖金渐变底 + 金边（参考页 `.partner-plan-card` 内联块） */
+/* 合伙人版：暖金渐变底 + 金边（基准实现 `.partner-plan-card` 内联块） */
 .home-ref-shell .partner-plan-card {
   background: linear-gradient(135deg, #fffcf0 0%, #ffffff 100%) !important;
   border: 2px solid rgba(245, 158, 11, 0.25) !important;
@@ -278,7 +278,7 @@
   box-shadow: 0 4px 14px rgba(37, 99, 235, 0.25);
 }
 
-/* 免费版/合伙人版没有档位，「月卡」占位条整条隐藏（参考页内联 opacity/visibility）。
+/* 免费版/合伙人版没有档位，「月卡」占位条整条隐藏（基准实现内联 opacity/visibility）。
    保留占位是为了让三张卡的价格区块从同一条水平线开始。 */
 .home-ref-shell .plan-duration-tabs.is-placeholder {
   opacity: 0;
@@ -306,10 +306,10 @@
 
 .home-ref-shell .pro-price-savings .original-price {
   font-size: 14px;
-  /* 参考页有两条 original-price 规则：
+ /* 基准实现有两条 original-price 规则：
        upgrade.css:488  `.version .basic strong del.original-price { color: rgba(57,70,89,.38) }`
        upgrade.css:664  `.version del.original-price           { color: #94a3b8 }`
-     前者要求 `strong` 祖先，而参考页 DOM 里 <del> 的父级是 `.pro-price-savings`，
+ 前者要求 `strong` 祖先，而基准实现 DOM 里 <del> 的父级是 `.pro-price-savings`，
      不是 <strong> —— 所以 488 那条**从不生效**，实测也证实两处 <del> 的计算色
      都是 rgb(148,163,184) = #94a3b8。这里改用真正生效的那条。 */
   color: #94a3b8;
@@ -402,7 +402,7 @@
 
 /* ⚠️ 这里的选择器**故意不写标签**（不能写成 `a.plan-cta` / `button.plan-cta`）。
    同一个 .plan-cta 有三种宿主：<a>（免费版去首页）、<button>（下单）、
-   <span>（「当前方案」，不可点击）。参考页「当前方案」用的是裸 <a>，本项目
+ <span>（「当前方案」，不可点击）。基准实现「当前方案」用的是裸 <a>，本项目
    搬运时套了统一的 .plan-cta 类，若用标签限定选择器，<span> 状态就一条几何
    规则都匹配不到，会塌成一行 24px 高的裸文字，且整列 CTA 对不齐。 */
 
@@ -498,7 +498,7 @@
   color: #3b82f6;
 }
 
-/* 「AI 额度」类条目：暖黄高亮（参考页 label.ai）。 */
+/* 「AI 额度」类条目：暖黄高亮（基准实现 label.ai）。 */
 .home-ref-shell .version .Pro p label.ai svg {
   color: #d97706;
 }
@@ -626,12 +626,12 @@
   margin: 30px auto 40px;
   padding: 16px 24px;
   border-radius: 12px;
-  /* ⚠️ max-width:600px 在参考页是**内容盒**宽度（该页 reset.css 不设
+ /* ⚠️ max-width:600px 在基准实现是**内容盒**宽度（该页 reset.css 不设
      border-box，元素的 content 就是 600，加上左右 padding 24×2 与
      1px 边框，实测总宽 650）。Tailwind preflight 把全局盒模型改成了
      border-box，若照抄 600 就只能得到 550 的内容宽度 —— 刚好比那句
      感谢语的 566.1px 单行宽度少 16px，文案会被迫折成两行。
-     显式声明 content-box 才能复现参考页的 600px 内容宽度。 */
+ 显式声明 content-box 才能复现基准实现的 600px 内容宽度。 */
   box-sizing: content-box;
   max-width: 600px;
   background: rgba(59, 130, 246, 0.05);
@@ -640,7 +640,7 @@
 
 .home-ref-shell .gratitude-msg-box svg {
   /* ⚠️ display 必须写。Tailwind preflight 有 `img, svg, video, ... { display: block }`
-     （node_modules/tailwindcss/preflight.css:217），参考页的 remixicon 是行内
+ （node_modules/tailwindcss/preflight.css:217），基准实现的 remixicon 是行内
      `<i>` 元素、不受影响。这里若不显式改回行内，lucide 图标会独占一行，
      把感谢语挤到第二行去。vertical-align:middle 只有在行内元素上才有意义。 */
   display: inline-block;
@@ -754,7 +754,7 @@
   font-weight: 700;
 }
 
-/* 三列配色：免费灰 / 畅学蓝 / 合伙人金（参考页用内联 style，这里收敛成 class）。 */
+/* 三列配色：免费灰 / 畅学蓝 / 合伙人金（基准实现用内联 style，这里收敛成 class）。 */
 .home-ref-shell .compact-comparison .col-free b {
   color: #475569;
   font-weight: 550;

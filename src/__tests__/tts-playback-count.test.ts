@@ -1,16 +1,16 @@
 /**
  * 朗读连播次数（`globalSpeak(text, { count })`）。
  *
- * 存在的理由：「自动播放次数」设置（`tts_playback_count`）在参考站里是靠
+ * 存在的理由：「自动播放次数」设置（`tts_playback_count`）在基准实现里是靠
  * `playTTS(text, autoPlay, overrideCount)` 内部的 `for` 循环实现的
  * （tts.js:824-846）：一遍播完 → 停 600ms → 再播一遍，共 `playbackCount` 遍。
  * 我们之前把这个设置只接到了「显示」上（指示灯、下拉框选中态、localStorage），
  * `globalSpeak` 根本不收次数参数 —— 选「3 次」和选「1 次」听到的完全一样，
  * 是个死开关。这个用例就是钉住那个循环，防止它再退化成摆设。
  *
- * 口径（与参考站逐字对齐）：
+ * 口径（与基准实现对齐）：
  *   · 不传 count ⇒ 1 次；
- *   · count = 0 ⇒ 一声不响（「手动」档）；组件层负责把 0 换成 1（参考站
+ * · count = 0 ⇒ 一声不响（「手动」档）；组件层负责把 0 换成 1（基准实现
  *     `manualCount`，practice.js:1926）；
  *   · count = N ⇒ 连播 N 次，遍间等上一遍播完再停 600ms。
  *
@@ -142,7 +142,7 @@ describe("globalSpeak — count 控制连播遍数", () => {
 
     expect(played).toBe(true)
     expect(plays.length).toBe(3)
-    // 参考站也是先取好 audioSourceData 再在循环里复用（tts.js:838-845）
+ // 基准实现也是先取好 audioSourceData 再在循环里复用
     expect(fetchCalls).toBe(1)
   })
 

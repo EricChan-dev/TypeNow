@@ -9,12 +9,12 @@ import { parseMistakeSource, type MistakeSource } from "@/lib/mistake-book"
 
 /**
  * 错题本聚合接口：一次 GET 带回客户端首屏要的全部四类数据 ——
- *   · courses  课程卡横滑列表（错题口径：参考站 GetMistakeCourses 只统计错题）
- *   · lessons  课节标签（仅当带 courseId 时返回；参考站 GetMistakeLessons）
- *   · stats    复习统计 dueToday/dueTomorrow/mastered/masteryRate（参考站 GetReviewStats）
- *   · source   三来源计数 mistake/sentence/word（参考站 GetMistakeSourceTypeStats）
+ * · courses 课程卡横滑列表（错题口径：基准实现 GetMistakeCourses 只统计错题）
+ * · lessons 课节标签（仅当带 courseId 时返回；基准实现 GetMistakeLessons）
+ * · stats 复习统计 dueToday/dueTomorrow/mastered/masteryRate（基准实现 GetReviewStats）
+ * · source 三来源计数 mistake/sentence/word（基准实现 GetMistakeSourceTypeStats）
  *
- * 参考站把这四类拆成四个接口、客户端首屏要串行拉四次；本站合并成一个，
+ * 基准实现把这四类拆成四个接口、客户端首屏要串行拉四次；本站合并成一个，
  * 初始加载与「删完刷新」各只需一个往返。课程/课节口径跟随 query 参数，
  * 与列表页当前筛选保持一致。
  */
@@ -179,9 +179,9 @@ export async function GET(request: Request) {
       dueTomorrow,
       mastered,
       total,
-      // 参考站 header 的「今日 +N」角标（参考站 JS 从不更新它，恒为 0；本站给真值）。
+ // 基准实现 header 的「今日 +N」角标（基准实现 JS 从不更新它，恒为 0；本站给真值）。
       todayNew: Number(statRow?.todayNew ?? 0),
-      // 参考站 masteryRate 是整数百分比；无数据时给 0 而不是 NaN。
+ // 基准实现 masteryRate 是整数百分比；无数据时给 0 而不是 NaN。
       masteryRate: total > 0 ? Math.round((mastered / total) * 100) : 0,
     },
     source: {
@@ -193,7 +193,7 @@ export async function GET(request: Request) {
 }
 
 /**
- * 清空记录（参考站 ClearAllMistakes?courseId&lessonId&sourceType）。
+ * 清空记录（基准实现 ClearAllMistakes?courseId&lessonId&sourceType）。
  *
  * 「清空」清的是**当前筛选范围**：sourceType 决定清哪张表（all = 三张全清），
  * courseId/lessonId 进一步收敛。范围口径与列表分支完全一致 —— 列表里能看到多少，
@@ -245,7 +245,7 @@ export async function DELETE(request: Request) {
 
   if (source === "word" || source === "all") {
     // 单词表没有课程快照列：带课程/课节范围时经原句 join 收敛（条件与列表分支一致）；
-    // 无范围时直接清空该用户全部单词（参考站 ClearAllMistakes 无筛选时的行为）。
+ // 无范围时直接清空该用户全部单词（基准实现 ClearAllMistakes 无筛选时的行为）。
     const conds: (SQL | null)[] = [
       sql`wb.user_id = ${userId}`,
       courseId ? sql`c.id = ${courseId} AND c.deleted_at IS NULL` : null,

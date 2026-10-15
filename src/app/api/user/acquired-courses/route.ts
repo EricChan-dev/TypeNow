@@ -52,13 +52,13 @@ export async function POST(request: Request) {
 }
 
 /**
- * 移除一门课程（参考站 unenrollCourse 的对应物）。
+ * 移除一门课程（基准实现 unenrollCourse 的对应物）。
  *
  * 「我的课程」= 已获取 ∪ 已练习过，所以只删 user_acquired_courses 的话，
  * 练过的课依然留在列表里，「移除」按钮等于没反应。这里把两份归属状态
  * 一起清掉；练习历史（practice_sessions / practice_records）**保留** ——
  * 用户重新获取这门课后，学习统计和课节进度还在，这与「移除后可在课程
- * 市场重新加入」的参考站文案一致（重新加入不该失忆）。
+ * 市场重新加入」的基准实现文案一致（重新加入不该失忆）。
  */
 export async function DELETE(request: Request) {
   const session = await getSession()

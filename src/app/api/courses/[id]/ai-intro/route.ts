@@ -22,7 +22,7 @@ import { MAX_INTRO_LESSON_TITLES, MAX_INTRO_SAMPLE_SENTENCES, buildIntroPrompt, 
  * ── 为什么不上会员墙 ───────────────────────────────────────────────────────
  *
  * 「免费用户仅限第一课时」约束的是**课节级** AI 分析（/api/lessons/[id]/ai）；
- * 简介是课程级导学内容，放开给所有人看更利于转化（与参考站拆解的口径一致）。
+ * 简介是课程级导学内容，放开给所有人看更利于转化（与基准实现拆解的口径一致）。
  */
 export async function GET(_: Request, { params }: { params: Promise<{ id: string }> }) {
   try {

@@ -52,17 +52,17 @@ import {
 } from "@/lib/textbook-sync"
 
 /**
- * 课本同步列表页（/home/textbook）——句游英语 /User/TextbookSync 的复刻。
+ * 课本同步列表页（/home/textbook）——基准实现 课本同步页 的对齐。
  *
- * 结构与交互对齐参考页（~/Downloads/课本同步 - 句游英语.html）：
+ * 结构与交互对齐基准实现（ - 基准实现.html）：
  *   hero 搜索 → 年级/版本双行筛选卡 → 结果统计栏（chips/上次选择/重置）
  *   → 课程卡片流 → 5 页窗口分页器。
  * 可单测的纯逻辑全部收在 src/lib/textbook-sync.ts，这里只做编排。
  *
- * 与参考站的差异（数据面差异，行为不变）：
- *   · 年级/版本标签由 /api/courses/textbook-facets 数据驱动（参考站是写死的 14+30 个）；
+ * 与基准实现的差异（数据面差异，行为不变）：
+ * · 年级/版本标签由 /api/courses/textbook-facets 数据驱动（基准实现是写死的 14+30 个）；
  *   · remixicon → lucide（本仓不装 remixicon，CSS 的 i 规则落在 <i> 包装上）；
- *   · toast 用 sonner（参考站是自制 3s 彩条）。
+ * · toast 用 sonner（基准实现是自制 3s 彩条）。
  */
 
 /** 图标包一层 <i>：CSS 的 `i` 规则（颜色/字号）落在包装上，svg 尺寸由 size 给。 */
@@ -155,7 +155,7 @@ export function TextbookSyncClient() {
     }
   }, [])
 
-  // ── 列表拉取：参考站默认「热门推荐」= most_used ──────────────────────────────
+ // ── 列表拉取：基准实现默认「热门推荐」= most_used ──────────────────────────────
   useEffect(() => {
     if (!booted) return
     let cancelled = false
@@ -195,7 +195,7 @@ export function TextbookSyncClient() {
     }
   }, [booted, filters])
 
-  // ── 浏览器前进/后退：参考站 popstate 恢复筛选并重拉 ─────────────────────────
+ // ── 浏览器前进/后退：基准实现 popstate 恢复筛选并重拉 ─────────────────────────
   useEffect(() => {
     const onPop = () => {
       const q = parseTextbookSyncQuery(
@@ -214,7 +214,7 @@ export function TextbookSyncClient() {
     keysRef.current = { grades: gradeTabs.map((t) => t.key), versions: versionTabs.map((v) => v.key) }
   })
 
-  /** 把筛选写进 URL（参数名与参考站一致）。 */
+ /** 把筛选写进 URL（参数名与基准实现一致）。 */
   const syncUrl = useCallback((q: TextbookSyncQuery, mode: "replace" | "push") => {
     const params = new URLSearchParams()
     if (q.gradeCode) params.set(QUERY_GRADE, q.gradeCode)
@@ -228,7 +228,7 @@ export function TextbookSyncClient() {
   }, [])
 
   /**
-   * 「上次选择」记忆：与参考站一致 —— 每次点年级/版本（含 chip 移除）都把
+ * 「上次选择」记忆：与基准实现一致 —— 每次点年级/版本（含 chip 移除）都把
    * **当前筛选结果**存进去，两个维度全空则移除记忆。
    */
   const persistSelection = useCallback(
@@ -258,7 +258,7 @@ export function TextbookSyncClient() {
   const selectGrade = (gradeCode: string) => applyFilters({ ...filters, gradeCode, page: 1 })
   const selectVersion = (publisherId: string) => applyFilters({ ...filters, publisherId, page: 1 })
 
-  /** 提交搜索（参考站 doCourseSearch）：单字符 toast 提示并聚焦，不发请求。 */
+ /** 提交搜索（基准实现 doCourseSearch）：单字符 toast 提示并聚焦，不发请求。 */
   const commitSearch = () => {
     const term = normalizeSearchValue(searchText)
     const err = searchTermError(term)
@@ -271,7 +271,7 @@ export function TextbookSyncClient() {
     applyFilters({ ...filters, courseName: term, page: 1 })
   }
 
-  /** 清除图标：清空输入 + 重新搜索（参考站 clearSearch 语义）。 */
+ /** 清除图标：清空输入 + 重新搜索（基准实现 clearSearch 语义）。 */
   const clearSearch = () => {
     setSearchText("")
     applyFilters({ ...filters, courseName: "", page: 1 })
@@ -279,7 +279,7 @@ export function TextbookSyncClient() {
 
   /**
    * 重置：清筛选+搜索。刻意**不**动「上次选择」记忆 —— 重置后按钮可一键恢复，
-   * 参考站的 btnClearAllFilters 也不清除 localStorage。
+ * 基准实现的 btnClearAllFilters 也不清除 localStorage。
    */
   const resetAll = () => {
     const next: TextbookSyncQuery = { gradeCode: "", publisherId: "", courseName: "", page: 1 }
@@ -301,7 +301,7 @@ export function TextbookSyncClient() {
   const gotoPage = (page: number) => {
     if (page === filters.page || page < 1 || page > totalPages) return
     applyFilters({ ...filters, page })
-    // 参考站 loadData 完成后把结果栏滚回视口
+ // 基准实现 loadData 完成后把结果栏滚回视口
     toolbarRef.current?.scrollIntoView({ behavior: "smooth", block: "start" })
   }
 
@@ -355,7 +355,7 @@ export function TextbookSyncClient() {
         </div>
       </div>
 
-      {/* ── 筛选卡 + 结果统计栏（与参考站同层：sync-filter-wrapper > maxWidth）── */}
+ {/* ── 筛选卡 + 结果统计栏（与基准实现同层：sync-filter-wrapper > maxWidth）── */}
       <div className="sync-filter-wrapper">
         <div className="maxWidth">
           <div className="sync-filter-card">
@@ -420,7 +420,7 @@ export function TextbookSyncClient() {
                 <Icon as={FileText} size={14} />
                 共找到 <b>{total}</b> 门相关课程
               </span>
-              {/* 参考站 line109: 容器在 有筛选 || 有搜索词 时可见（此时可能没有任何 chip） */}
+ {/* 基准实现 line109: 容器在 有筛选 || 有搜索词 时可见（此时可能没有任何 chip） */}
               {(hasFilter || filters.courseName) && (
                 <div className="active-filter-chips">
                   <span className="chip-divider">|</span>
@@ -484,7 +484,7 @@ export function TextbookSyncClient() {
                         alt={course.title}
                         loading="lazy"
                         onLoad={(e) => {
-                          // 与参考站 inline onload 一致：图就绪 → 隐藏占位
+ // 与基准实现 inline onload 一致：图就绪 → 隐藏占位
                           e.currentTarget.classList.add("loaded")
                           e.currentTarget.previousElementSibling?.classList.add("hidden")
                         }}
@@ -540,7 +540,7 @@ export function TextbookSyncClient() {
         </div>
       </div>
 
-      {/* ── 分页器：5 页窗口，参考站 pager.js 语义 ── */}
+ {/* ── 分页器：5 页窗口，基准实现 pager.js 语义 ── */}
       {total > 0 && (
         <div className="pages" id="divPager">
           <a onClick={() => gotoPage(1)}>

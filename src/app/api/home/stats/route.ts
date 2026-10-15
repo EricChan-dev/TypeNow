@@ -213,7 +213,7 @@ export async function GET() {
       .from(practiceRecords)
       .where(eq(practiceRecords.userId, userId)),
 
-    // 错题按掌握程度分档（借 review_queue 的 FSRS 字段，替代参考页那套
+ // 错题按掌握程度分档（借 review_queue 的 FSRS 字段，替代基准实现那套
     // 拼写/语法/词汇三分类 —— 我们库里没有分类字段，硬造会得到三个恒为 0 的死格）。
     // 分档口径与 lib/review-utils.ts 的 masteryLabel 保持一致：
     //   status='done' → 已掌握；consecutive_ok>=3 → 接近掌握；其余 → 复习中。
@@ -226,7 +226,7 @@ export async function GET() {
       .from(reviewQueue)
       .where(eq(reviewQueue.userId, userId)),
 
-    // 单词本词量 —— 首页「词汇学习」卡片用（取代参考页的词汇学习圆环）。
+ // 单词本词量 —— 首页「词汇学习」卡片用（取代基准实现的词汇学习圆环）。
     db
       .select({ cnt: count() })
       .from(wordbookItems)
@@ -234,9 +234,9 @@ export async function GET() {
 
     // 今日 AI 口语评测次数 —— 首页会员卡的第二个指标。
     //
-    // 为什么按「次数」而不是参考页的「分钟配额」：我们的额度单位本来就是 AI 调用
+ // 为什么按「次数」而不是基准实现的「分钟配额」：我们的额度单位本来就是 AI 调用
     // 次数（FREE_PRONUNCIATION_PER_DAY=3 / PRO=30，见 lib/membership-benefits.ts），
-    // 从来没有「分钟」这个概念。照抄参考页的分钟口径会得到一个无法与后端对账的数字。
+ // 从来没有「分钟」这个概念。对齐基准实现的分钟口径会得到一个无法与后端对账的数字。
     //
     // 按 sentence_id 计数而不是 COUNT(*)：这张表对 (user_id, sentence_id) 有唯一键，
     // 同一条重录是覆盖更新，所以 COUNT(*) 与 COUNT(DISTINCT) 结果相同 —— 用后者是把
@@ -330,7 +330,7 @@ export async function GET() {
     checkInDatesThisMonth,
     todaySentences,
     checkInGoal,
-    // 首页改版（参考句游英语版式）新增的真实聚合字段：
+ // 首页改版（参考基准实现版式）新增的真实聚合字段：
     totalDurationSeconds,
     totalDurationHours,
     totalMistakes,

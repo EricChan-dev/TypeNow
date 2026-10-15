@@ -1,5 +1,5 @@
 /* 自动生成 —— 请勿手改。
- * 来源：句游英语错题本参考页（/User/MistakeBook）页内联 <style> + mistake.css + common.css（.maxWidth）。
+
  * 生成器：scripts/extract-mistake-book-css.py（选择器已收敛到 .mistake-book-content 下）。
  * 重新生成：python3 scripts/extract-mistake-book-css.py
  *
@@ -9,10 +9,10 @@
  * 裸规则原样保留 —— 真站亮色用户看到的就是 基+亮色覆盖 的级联结果。
  *
  * 其它三条搬运约定（与 home-ref.css / course-detail.css 同口径）：
- *   1. 字号/行高/内边距/圆角/阴影/色值全部保留参考页原值，不做「优化」。
- *   2. 参考页用 remixicon 字体图标（<i class="ri-*">），本仓统一用 lucide
+ * 1. 字号/行高/内边距/圆角/阴影/色值全部保留基准实现原值，不做「优化」。
+ * 2. 基准实现用 remixicon 字体图标（<i class="ri-*">），本仓统一用 lucide
  *      组件；字体图标的 font-size 规则改写成 svg 的宽高（在组件里给 size）。
- *   3. 参考页有过两代设计，死掉的旧族（mistakeT 表格版 / second_tab /
+ * 3. 基准实现有过两代设计，死掉的旧族（mistakeT 表格版 / second_tab /
  *      review-card breakdown-* 等）不搬，依据见生成器头注释。
  */
 
@@ -27,14 +27,14 @@
   --mainBox: #F1F4FD;
 }
 
-/* ── 外壳件（来自 common.css，参考页根元素是 maxWidth mistake-book-content 二合一）── */
+/* ── 外壳件（来自 common.css，基准实现根元素是 maxWidth mistake-book-content 二合一）── */
 .mistake-book-content.maxWidth {
     max-width: 1140px;
     margin: 0 auto;
     min-width: 1140px;
 }
 
-/* ── 工具条/空态（来自 mistake.css，参考页 <head> 中先加载）── */
+/* ── 工具条/空态（来自 mistake.css，基准实现 <head> 中先加载）── */
 .maxWidth.mistake-book-content {
     min-width: 0;
     width: 100%;
@@ -333,7 +333,7 @@
     border-color: #fca5a5;
 }
 
-/* ── 页面样式（来自参考页内联 <style>，页内后加载、覆盖前者）── */
+/* ── 页面样式（来自基准实现内联 <style>，页内后加载、覆盖前者）── */
 .mistake-book-content .mb-modal-overlay {
         position: fixed; inset: 0; background: rgba(0,0,0,.45);
         backdrop-filter: blur(4px); z-index: 9999;

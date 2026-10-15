@@ -36,7 +36,7 @@ DEEPSEEK_API_KEY=            # 不填则 AI 解析接口返回 503（不会伪�
 ### 可选：发短信的人机校验（阿里云验证码 2.0）
 
 登录页与设置页的「获取/发送验证码」共用 `POST /api/auth/send-sms`。配置下面两项后，
-该接口会要求客户端先通过阿里云人机校验（参考站句游英语用的是同一套）：
+该接口会要求客户端先通过阿里云人机校验（基准实现基准实现用的是同一套）：
 
 ```bash
 NEXT_PUBLIC_ALIYUN_CAPTCHA_SCENE_ID=   # 控制台「场景管理」→ 场景 ID
@@ -133,7 +133,7 @@ scripts/           内容审计 / 导入 / 运维脚本
 |------|------|
 | [PRD_V3.md](PRD_V3.md) | 产品全貌、功能规划、路线图 |
 | [docs/architecture.md](docs/architecture.md) | 技术架构、数据模型、AI 与部署 |
-| [docs/practice-page-alignment-matrix.md](docs/practice-page-alignment-matrix.md) | 练习页对标参考站：差距、阶段规划、已拍板决策 |
+| [docs/practice-page-alignment-matrix.md](docs/practice-page-alignment-matrix.md) | 练习页对标基准实现：差距、阶段规划、已拍板决策 |
 | [docs/strategy.md](docs/strategy.md) | 市场、用户、定价、获客 |
 | [docs/pages/](docs/pages/) | 15 篇页面级需求文档 |
 | [specs/practice-page.md](specs/practice-page.md) | 练习页交付规格（含交互时序） |

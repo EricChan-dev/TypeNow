@@ -18,7 +18,7 @@ import { useCallback, useEffect, useRef, useState } from "react"
  *
  * ── 四条硬约束（都踩过坑，别随手改）─────────────────────────────────────────
  *   1. **必须动态加载官方 CDN 的 JS**。官方原文：拉取 JS 代码本地部署会导致验证码
- *      无法正常更新、无法保证安全能力，甚至引起误拦截。参考站把 AliyunCaptcha.js
+ * 无法正常更新、无法保证安全能力，甚至引起误拦截。基准实现把 
  *      放自己服务器上，那是官方明令禁止的做法，我们不要照抄这一点。
  *   2. `window.AliyunCaptchaConfig` 必须在主 JS **之前**设好（region + prefix）。
  *   3. `initAliyunCaptcha` **不支持重复调用**，所以用一个模块级 Set 按 buttonId
@@ -29,7 +29,7 @@ import { useCallback, useEffect, useRef, useState } from "react"
  *      又立刻发一条没有验证参数的短信，被服务端拒绝成"人机验证无效"。
  *
  * 验证形态（滑块 / 拼图 / 图像复原 / 一点即过 / 无痕）由**控制台建场景时**决定，
- * 隐含在 SceneId 里，客户端改不了 —— 所以想要参考站那种「拖动图片对齐」，
+ * 隐含在 SceneId 里，客户端改不了 —— 所以想要基准实现那种「拖动图片对齐」，
  * 是在控制台选「拼图验证」，不是改这里的代码。
  */
 
@@ -189,7 +189,7 @@ export function useAliyunCaptcha(options: {
 
         window.initAliyunCaptcha?.({
           SceneId: SCENE_ID,
-          // popup：点按钮弹出验证浮层。参考站也是 popup，且 popup 支持全部形态
+ // popup：点按钮弹出验证浮层。基准实现也是 popup，且 popup 支持全部形态
           // （embed 不支持无痕验证）。
           mode: "popup",
           element: `#${elementId}`,

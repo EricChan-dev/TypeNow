@@ -8,7 +8,7 @@
  * 后台图表才用得到的东西。首页只需要一条折线，独立注册能把首屏 JS 压到最小 ——
  * 后台是低频页面，首页是每次进站都要下载的路径，两者不该共用一个体积预算。
  *
- * 配置逐字来自参考页 `主页 - 句游英语.html` 的 ECharts 初始化脚本（用户要求 1:1）：
+ * 配置来自对标页的 ECharts 初始化脚本：
  * 橙色 #f97316 折线、smooth、symbol none、connectNulls、渐变 areaStyle、
  * 1500ms cubicOut 动画、tooltip trigger axis 且 axisPointer 关闭。
  * x 轴固定「星期一…星期日」七天，与后端 `weekly` 序列一一对应。
@@ -25,7 +25,7 @@ import { CanvasRenderer } from "echarts/renderers"
 
 echarts.use([LineChart, GridComponent, TooltipComponent, CanvasRenderer])
 
-/** 星期一…星期日，与参考页 xAxis.data 完全一致。 */
+/** 星期一…星期日，与基准实现 xAxis.data 完全一致。 */
 const WEEKDAY_LABELS = [
   "星期一",
   "星期二",
@@ -78,7 +78,7 @@ export function PracticeTrendChart({ data, height = 300 }: Props) {
     const chart = chartRef.current
     if (!chart) return
 
-    // 按参考页口径：把服务端的 7 个日期映射成「星期X」，缺的日期补 0。
+ // 按基准实现口径：把服务端的 7 个日期映射成「星期X」，缺的日期补 0。
     // 服务端 weekly 保证是连续 7 天且升序，所以这里直接按序映射即可。
     const labels = data.length === 7 ? data.map((d) => dowLabel(d.date)) : [...WEEKDAY_LABELS]
     const counts = data.length === 7 ? data.map((d) => d.count) : []

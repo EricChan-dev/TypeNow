@@ -1,49 +1,49 @@
-/* 站内外框样式：1:1 复刻参考页 `主页 - 句游英语.html` 的框架层。
+/* 站内外框样式：对齐对标页 的框架层。
  *
- * 方向裁定（m05738）：**整个 /home 下的页面**都换成参考页的外框，不只是首页。
+ * 方向裁定（m05738）：**整个 /home 下的页面**都换成基准实现的外框，不只是首页。
  * 与内容区（home-ref.css）分开两个文件，是因为两者关注点不同：
- *   · home-ref.css   —— 内容卡片（.home-ref 作用域），按区块对应参考页的 .bgwhite / .col3 等
- *   · home-shell.css —— 外框骨架（.home-ref-shell 作用域），对应参考页的
+ * · home-ref.css —— 内容卡片（.home-ref 作用域），按区块对应基准实现的 .bgwhite / .col3 等
+ * · home-shell.css —— 外框骨架（.home-ref-shell 作用域），对应基准实现的
  *                       .container-fuild / .sidebar-wrapper / .main-wrapper / .mainBox
  *
  * 设计令牌不在这里重复声明：`.home-ref-shell` 已列进 home-ref.css 顶部那个
  * `.home-ref, .home-ref-shell { … }` 令牌块，两处共用一套色值。
  *
- * ── 与参考页最重要的三处差异（都不是"优化"，是必须做的换算）──────────────
+ * ── 与基准实现最重要的三处差异（都不是"优化"，是必须做的换算）──────────────
  *
- * 1. **参考页没有顶栏，也没有内容区标题栏。** 它是「左侧固定侧边栏 + 右侧
+ * 1. **基准实现没有顶栏，也没有内容区标题栏。** 它是「左侧固定侧边栏 + 右侧
  *    main-wrapper/mainBox 直通到底」。我们原来的 64px 顶栏 + 48px 标题栏整体删除，
- *    顶栏里的用户区迁移到侧边栏底部的 .userinfo（参考页本来就在那儿）。
+ * 顶栏里的用户区迁移到侧边栏底部的 .userinfo（基准实现本来就在那儿）。
  *
- * 2. **盒模型换算。** 参考页只写了 `* { margin:0; padding:0 }`，没有全局
+ * 2. **盒模型换算。** 基准实现只写了 `* { margin:0; padding:0 }`，没有全局
  *    `box-sizing:border-box`，所以它的 `width` 是**内容宽度**。我们项目被 Tailwind
  *    preflight 设成 border-box，`width` 含 padding。直接抄数字会让侧边栏
  *    窄掉 32px（= 左右各 16px 内边距），进而让导航文字折行、图标被挤掉。
- *    换算规则：凡是参考页里「有内边距 + 写了 width」的盒子，width 都加上
+ * 换算规则：凡是基准实现里「有内边距 + 写了 width」的盒子，width 都加上
  *    水平内边距。涉及的只有下面两个：
  *      · .sidebar-wrapper     144px 内容 + 16px×2 内边距 = 176px
  *      · .sidebar-wrapper.on   47px 内容 + 16px×2 内边距 = 79px
  *    其余规则不含 width 或没有内边距，原值照搬。
- *    容器左内边距同理：参考页写 174px（比真正的侧边栏外宽 176px 少 2px，
- *    参考页自己的两组数字就对不上），这里统一取 176px / 折叠 79px，
+ * 容器左内边距同理：基准实现写 174px（比真正的侧边栏外宽 176px 少 2px，
+ * 基准实现自己的两组数字就对不上），这里统一取 176px / 折叠 79px，
  *    让「内容起点」正好等于「侧边栏外宽」，不再有那 2px 的缝。
  *
- * 3. **字体图标换成 lucide。** 参考页用 remixicon（`<span class="ri-*">` +
- *    字体图标），我们统一用 lucide 组件。所以参考页里作用于字体图标的
+ * 3. **字体图标换成 lucide。** 基准实现用 remixicon（`<span class="ri-*">` +
+ * 字体图标），我们统一用 lucide 组件。所以基准实现里作用于字体图标的
  *    font-size / line-height 规则，改写成作用于 `svg` 的宽高。
  *
- * 4. **不搬的东西**：`.display-switch`（参考页的悬浮折叠圆钮）不搬 —— 我们保留
+ * 4. **不搬的东西**：`.display-switch`（基准实现的悬浮折叠圆钮）不搬 —— 我们保留
  *    「点顶栏按钮折叠」的老交互，只是按钮移到侧边栏里；`toggleTheme()` 及
  *    `:root[themes="dark"]` 深色分支一律不搬（我们 2026-10 已删掉整套暗色令牌）。
  *
- * 参考来源：`~/Downloads/主页 - 句游英语_files/common.css` 与
- * `主页 - 句游英语.html:1611-1647`（`.sidebar ul` 那段的规则只存在于 HTML 内联样式里）。
+ * 参考来源：` -  与
+ * `主页 - 基准实现.html:1611-1647`（`.sidebar ul` 那段的规则只存在于 HTML 内联样式里）。
  */
 
 /* ══ 页面根：撑满视口、两列布局 ══════════════════════════════════════════════ */
 
 .home-ref-shell {
-  /* 参考页 body 是 overflow:hidden + 100% 高，整页不滚动，
+ /* 基准实现 body 是 overflow:hidden + 100% 高，整页不滚动，
      滚动条交给 .main-wrapper。这里把根容器做成同样的"固定外壳 + 内部滚动"。 */
   height: 100dvh;
   overflow: hidden;
@@ -52,8 +52,8 @@
   font-family: -apple-system, BlinkMacSystemFont, "PingFang SC",
     "Hiragino Sans GB", "Microsoft YaHei", "Helvetica Neue", Arial, sans-serif;
 
-  /* 参考页 .container-fuild 的 padding-left：给固定定位的侧边栏让位。
-     200 / 79 = 换算后的侧边栏外宽。m00826：参考站是 176px，应用户
+ /* 基准实现 .container-fuild 的 padding-left：给固定定位的侧边栏让位。
+ 200 / 79 = 换算后的侧边栏外宽。m00826：基准实现是 176px，应用户
      「logo 再大点」的要求加宽到 200px 给 72px 大 logo 留位。 */
   padding-left: 200px;
 }
@@ -64,8 +64,8 @@
 
 /* ══ 侧边栏 ══════════════════════════════════════════════════════════════════ */
 
-/* z-index 约定（**与参考页不同，刻意改过**）：
- * 参考页侧边栏是 z-index:999，我们项目所有弹窗却是 Tailwind 的 z-50。
+/* z-index 约定（**与基准实现不同，刻意改过**）：
+ * 基准实现侧边栏是 z-index:999，我们项目所有弹窗却是 Tailwind 的 z-50。
  * 照搬 999 会让侧边栏盖在弹窗遮罩之上 —— 从侧边栏底部点「个人设置 / 问题反馈 /
  * 金币与钻石」时，弹窗会画在侧边栏底下，看起来像"点了没反应"。
  * 所以外框内部一律用 **50 以下** 的值，把 50 以上留给弹窗：
@@ -89,8 +89,8 @@
   width: 79px;
 }
 
-/* 折叠时隐藏文字标签（参考页 `.sidebar-wrapper.on i, .on em { display:none }`）。
-   用类选择器而不是元素选择器 —— 我们这边标签是 <span>，不是参考页的 <i>。 */
+/* 折叠时隐藏文字标签（基准实现 `.sidebar-wrapper.on i, .on em { display:none }`）。
+ 用类选择器而不是元素选择器 —— 我们这边标签是 <span>，不是基准实现的 <i>。 */
 .home-ref-shell .ref-sidebar.is-collapsed .ref-nav-label,
 .home-ref-shell .ref-sidebar.is-collapsed .ref-nav-badge,
 .home-ref-shell .ref-sidebar.is-collapsed .ref-userinfo-text {
@@ -141,7 +141,7 @@
   padding-bottom: 8px;
   margin-left: -16px;
   margin-right: -8px;
-  /* 隐藏滚动条（参考页未写，但 Safari/Chrome 上 8px 滚动条会把 144px 挤掉，
+ /* 隐藏滚动条（基准实现未写，但 Safari/Chrome 上 8px 滚动条会把 144px 挤掉，
      导致折叠态图标偏移）。 */
   scrollbar-width: none;
 }
@@ -150,7 +150,7 @@
   display: none;
 }
 
-/* 分组：四条分隔线用渐变细线，最后一条不画（参考页 HTML 内联样式） */
+/* 分组：四条分隔线用渐变细线，最后一条不画（基准实现 HTML 内联样式） */
 .home-ref-shell .ref-nav ul {
   display: block;
   width: 100%;
@@ -217,7 +217,7 @@
   /* 显式高度而不是只给 line-height：flex 容器的高度由子项撑出，
      `line-height` 只影响行盒、不决定容器高度。折叠态文字标签被隐藏后
      （只剩 18px 的图标）整项会塌成 18px，导航节奏全乱 —— 所以钉死 38px。
-     参考页没这个问题是因为它的文字是 `a` 里的裸文本节点，
+ 基准实现没这个问题是因为它的文字是 `a` 里的裸文本节点，
      而我们把它包进了 <span class="ref-nav-label">。
      （用户反馈 m22433：整体字号偏小、行距偏密 → 32/14 放大到 38/15。） */
   height: 38px;
@@ -252,7 +252,7 @@
   color: var(--ref-asideItemText);
 }
 
-/* 图标：参考页字体图标 16px，这里换成 lucide 的 svg 尺寸（随行高一起放大） */
+/* 图标：基准实现字体图标 16px，这里换成 lucide 的 svg 尺寸（随行高一起放大） */
 .home-ref-shell .ref-nav-icon {
   width: 18px;
   height: 18px;
@@ -267,7 +267,7 @@
   text-overflow: ellipsis;
 }
 
-/* 徽标（待复习数量）。参考页的 `em` 是绝对定位在右上角的红字，
+/* 徽标（待复习数量）。基准实现的 `em` 是绝对定位在右上角的红字，
    这里沿用同一视觉：红底白字小胶囊，压在标签尾部。 */
 .home-ref-shell .ref-nav-badge {
   flex-shrink: 0;
@@ -436,7 +436,7 @@
   position: relative;
   overflow-y: auto;
   padding-right: 10px;
-  /* 隐藏滚动条：参考页靠 .main-wrapper 滚动，但未隐藏滚动条。
+ /* 隐藏滚动条：基准实现靠 .main-wrapper 滚动，但未隐藏滚动条。
      我们这条滚动条会给内容区挤出 10px 偏差，对齐内容几何时按 0 宽处理。 */
   scrollbar-width: none;
 }
@@ -445,7 +445,7 @@
   display: none;
 }
 
-/* 内容底板：参考页 .mainBox —— 浅蓝底 + 20px 内边距 + 10px 圆角 */
+/* 内容底板：基准实现 .mainBox —— 浅蓝底 + 20px 内边距 + 10px 圆角 */
 .home-ref-shell .ref-mainbox {
   background: var(--ref-mainBox);
   min-height: calc(100% - 40px);
@@ -454,7 +454,7 @@
 }
 
 /* 沉浸式练习页（/home/learn/*、/home/review/session）：
-   这些页面是 fixed inset-0 的全屏界面，参考页式的浅蓝底板和 20px 内边距
+ 这些页面是 fixed inset-0 的全屏界面，基准实现式的浅蓝底板和 20px 内边距
    会把题目挤歪，所以整块底板让位，由页面自己铺满。 */
 .home-ref-shell.is-immersive {
   padding-left: 0;
@@ -468,11 +468,11 @@
 }
 
 /* ── 折叠圆钮 ──
-  参考页的 `.display-switch` 是悬浮在侧边栏右缘的小圆钮（right:-13px; top:80px），
+ 基准实现的 `.display-switch` 是悬浮在侧边栏右缘的小圆钮（right:-13px; top:80px），
   但它的 DOM 元素在保存下来的 HTML 里**不存在**（只有 CSS 和 base.js 的绑定），
   所以这里按 CSS 描述自行重建。
   用 position:fixed 而不是挂在 .ref-sidebar 里：侧边栏有 overflow:hidden
-  （参考页也有），负偏移的圆钮会被裁掉。参考页能显示说明它的实际挂载点不在
+ （基准实现也有），负偏移的圆钮会被裁掉。基准实现能显示说明它的实际挂载点不在
   侧边栏内部 —— 我们直接挂在外壳上，效果相同且不受裁剪影响。
   left = 侧边栏外宽 − 13px（200−13=187，m00826 随侧栏加宽同步；
   折叠态 79−13=66 不变）。 */
@@ -617,7 +617,7 @@
     height: 22px;
   }
 
-  /* 移动端隐藏底部用户区（参考页同） */
+ /* 移动端隐藏底部用户区（基准实现同） */
   .home-ref-shell .ref-userinfo {
     display: none !important;
   }
@@ -674,7 +674,7 @@
   }
 }
 
-/* 矮屏（笔记本横屏）压缩竖向节奏，对应参考页 max-height:680px 那组 */
+/* 矮屏（笔记本横屏）压缩竖向节奏，对应基准实现 max-height:680px 那组 */
 @media (max-height: 680px) and (min-width: 769px) {
   .home-ref-shell .ref-logo {
     margin-top: 2px;

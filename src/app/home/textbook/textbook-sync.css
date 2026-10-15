@@ -1,17 +1,17 @@
 /* 自动生成 —— 请勿手改。
- * 来源：句游英语课本同步参考页（/User/TextbookSync）的 textbook-sync.css + market.css
+
  * （共享 hero/搜索/卡片）+ common.css（.pages 分页器/.maxWidth）。
  * 生成器：scripts/extract-textbook-sync-css.py（选择器已收敛到 .textbook-sync-page 下）。
  * 重新生成：python3 scripts/extract-textbook-sync-css.py
  *
- * 层叠顺序 = 参考页真实加载顺序：common → market → textbook-sync，
+ * 层叠顺序 = 基准实现真实加载顺序：common → market → textbook-sync，
  * 页内覆盖（.searchInp .search-clear:hover 等）因此排在共享基样式之后。
- * 参考页根元素 mainBox course-market sync-market-page 三合一：mainBox 底板
+ * 基准实现根元素 mainBox course-market sync-market-page 三合一：mainBox 底板
  * 由 home-shell.css 复刻，course-market/sync-market-page 两个类保留在本页根节点。
  *
  * 其它搬运约定（与 home-ref.css / course-detail.css 同口径）：
- *   1. 字号/行高/内边距/圆角/阴影/色值全部保留参考页原值，不做「优化」。
- *   2. 参考页用 remixicon 字体图标（<i class="ri-*">），本仓统一用 lucide
+ * 1. 字号/行高/内边距/圆角/阴影/色值全部保留基准实现原值，不做「优化」。
+ * 2. 基准实现用 remixicon 字体图标（<i class="ri-*">），本仓统一用 lucide
  *      组件；字体图标的 font-size 规则改写成 svg 的宽高（在组件里给 size）。
  */
 

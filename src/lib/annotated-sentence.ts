@@ -1,7 +1,7 @@
 /**
  * 听写模式「答案回顾屏」里那条带注释的句子。
  *
- * 参考站的流程是：先用纯文本 `.answer-sentence` 占位，再在
+ * 基准实现的流程是：先用纯文本 `.answer-sentence` 占位，再在
  * `requestIdleCallback` 里用 `generateAnnotatedSentence()` 的 HTML 换掉它
  * （practice.js:921 / :1133）。这里把同一套「分段 + 注音 + 词性着色」的逻辑
  * 抽成纯函数，返回结构化数据由 React 渲染（不拼 HTML 字符串 —— 句子来自用户
@@ -13,7 +13,7 @@
  *   · 音标查找 ……………………… practice.js:buildPhoneticMap / getPhoneticForWord
  *   · 可点击单词 ………………… practice.js:makeTextWordsClickable
  *
- * 与参考站的**唯一**实质差异：参考站拿 `phoneticsData` 单独查音标，我们直接
+ * 与基准实现的**唯一**实质差异：基准实现拿 `phoneticsData` 单独查音标，我们直接
  * 用已经对齐好的 `words[]`（`alignWordsWithEnglish` 保证 token 与 `words` 一一
  * 对应），所以不需要再对整句做短语搜索 —— 那样反而会把顺序错乱的脏数据
  * 匹配到别的词上。
@@ -21,7 +21,7 @@
 import type { Sentence, Word } from "@/types"
 import { PUNCT_SENTINEL, WORD_SENTINEL } from "@/lib/word-align"
 
-/** 音标口音。参考站 `selectedAccentType` 默认 0，即优先美音。 */
+/** 音标口音。基准实现 `selectedAccentType` 默认 0，即优先美音。 */
 export type Accent = "us" | "uk"
 
 // ─── 词性 ────────────────────────────────────────────────────────────────────
@@ -101,7 +101,7 @@ const POS_ALIAS_MAP: Record<string, string> = {
 
   // ── Universal Dependencies 缩写（线上 words[].pos 的真实取值） ──
   //
-  // 参考站的 `POS_ALIAS_MAP` 只登记了词典体例的缩写（n./adj./aux.v…），
+ // 基准实现的 `POS_ALIAS_MAP` 只登记了词典体例的缩写（n./adj./aux.v…），
   // 因为它的语料来自词典接口。我们的语料是 spaCy 跑出来的 UD 标签
   // （生产库分布：NOUN/VERB/PRON/DET/ADP/AUX/ADV/PART/CCONJ/SCONJ/
   // PROPN_PERSON/NUM/INTJ/PROPN/SYM/X/PUNCT）。不登记这些，复习屏就会
@@ -226,7 +226,7 @@ export function normalizePos(pos: string | null | undefined): string {
  *
  * `词` 是 `word-align.ts` 给「是词但词性未知」打的**内部哨兵**，不是词性：
  * `alignWordsWithEnglish` 用它把 token 分成「可输入的词」和「不可输入的标点」。
- * 参考站在词性缺失时输出**空**标签（`practice.js:1094` 的
+ * 基准实现在词性缺失时输出**空**标签（ 的
  * `if (assignedPos)` 守卫），所以哨兵绝不能出现在界面上 —— 线上实测
  * `analyze` 这类无词性数据的句子会渲染成一个孤零零的「词」字。
  */
@@ -241,7 +241,7 @@ export function posLabel(pos: string | null | undefined): string {
 /**
  * 词性缺失时的启发式推断（practice.js:1076-1096）。
  *
- * 参考站在 `words[].pos` 拿不到词性时，用一组固定词表 + 后缀规则兜底，
+ * 基准实现在 `words[].pos` 拿不到词性时，用一组固定词表 + 后缀规则兜底，
  * 让 `the` / `and` / `in` 这类高频功能词至少有正确的颜色和标签。
  * 顺序有语义：情态动词必须在 `be` 之前，代词/冠词/连词/介词依次短路。
  */
@@ -297,7 +297,7 @@ const MODERN_COLOR_PALETTE = [
   "#14b8a6",
 ]
 
-/** hex → rgba（pos-utils.js:198 hexToRgba）。非法输入回退蓝色，与参考站一致。 */
+/** hex → rgba（ hexToRgba）。非法输入回退蓝色，与基准实现一致。 */
 export function hexToRgba(hex: string | null | undefined, alpha = 1): string {
   if (!hex) return `rgba(59, 130, 246, ${alpha})`
   if (hex.startsWith("rgb")) {
@@ -392,7 +392,7 @@ function normalizeApostrophes(s: string): string {
 /** 单词 → 查词用的原形（`makeTextWordsClickable`）。 */
 export function wordLookupKey(match: string): string | null {
   const lower = normalizeApostrophes(match).toLowerCase()
-  // 单字母不查词，a / i 除外 —— 与参考站一致。
+ // 单字母不查词，a / i 除外 —— 与基准实现一致。
   if (lower.length < 2 && lower !== "a" && lower !== "i") return null
   if (CONTRACTION_MAP[lower]) return CONTRACTION_MAP[lower]
   if (lower.endsWith("n't")) return lower.slice(0, -3)
@@ -414,7 +414,7 @@ export interface AnnotationWord {
   /** 缩写后缀（'s / 're 等）渲染时要贴紧前一个词。 */
   contractionSuffix: boolean
   /**
-   * 内联样式变量。参考站把配色写到 `style` 上而不是 class 上
+ * 内联样式变量。基准实现把配色写到 `style` 上而不是 class 上
    * （practice.js:1104 的 `styleVars`），所以这里也必须内联。
    */
   styleVars: Record<string, string>
@@ -485,7 +485,7 @@ export function buildAnnotation(
   const english = sentence?.english ?? ""
   const rawWords = sentence?.words ?? []
   // pos === "标点" 是 `alignWordsWithEnglish` 对非字母 token 打的标记，
-  // 它们不参与注音/着色，和参考站的 plain 段落等价。
+ // 它们不参与注音/着色，和基准实现的 plain 段落等价。
   const words = rawWords.filter((w) => w.pos !== "标点")
   if (!english) return { segments: [], hasPhonetics: false, words: [] }
 
@@ -512,7 +512,7 @@ export function buildAnnotation(
 
     // 哨兵 `词`（是词但词性未知）要当作「拿不到词性」处理：先试启发式推断，
     // 推断不出就既不给标签也不给词性色，落回调色板取色 ——
-    // 这正是参考站 `if (!assignedPos) { …heuristic… }` 后
+ // 这正是基准实现 `if (!assignedPos) { …heuristic… }` 后
     // `const finalColor = color || paletteColor` 的行为（practice.js:1076/1102）。
     const rawPos = (w.pos ?? "").trim()
     const hasRealPos =

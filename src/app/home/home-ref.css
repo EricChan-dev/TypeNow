@@ -1,29 +1,29 @@
-/* 首页内容区样式：1:1 复刻参考页 `主页 - 句游英语.html` 的版式。
+/* 首页内容区样式：对齐对标页 的版式。
  *
- * 用户裁定（m04728）：改造主页内容区，参考句游英语，1:1 复刻版式但保留本项目
+ * 用户裁定（m04728）：改造主页内容区，参考基准实现，1:1 对齐版式但保留本项目
  * 业务逻辑与路由。沿用登录页的先例（m01483 + src/app/login/login.css）：
  * 只搬运**表现层**，全部规则挂在 `.home-ref` 下，不污染站内其它页面。
  *
  * 搬运约定：
- * 1. 字号、行高、内边距、圆角、阴影、色值全部保留参考页的**原值**，不做"优化"。
+ * 1. 字号、行高、内边距、圆角、阴影、色值全部保留基准实现的**原值**，不做"优化"。
  *    这些数值共同决定版面，改任何一个都会重新出现"排版错乱"。
  * 2. box-sizing 保持 Tailwind 的 border-box（不像 login.css 那样还原 content-box）。
- *    参考页里 `.col-7` / `.col-3` 本来就显式写了 `box-sizing:border-box`，
+ * 基准实现里 `.col-7` / `.col-3` 本来就显式写了 `box-sizing:border-box`，
  *    它们的 `calc(((100% - 28px)/3)*2 + 14px)` 宽度在 border-box 下才成立；
  *    唯一依赖 content-box 的是 `.parame li{width:25%}`（四格 + 60px gap），
  *    这里改用 `flex:1` 得到完全相同的视觉结果，避免动全站盒模型。
- * 3. 参考页的深色模式（`:root[themes="dark"]`）一律不搬 —— 我们 2026-10 已删掉
+ * 3. 基准实现的深色模式（`:root[themes="dark"]`）一律不搬 —— 我们 2026-10 已删掉
  *    整套 `.dark` 令牌与 `next-themes`，见 globals.css。只保留浅色值。
- * 4. 参考页用 remixicon 字体图标（`<i class="ri-*">`），我们统一用 lucide 组件，
+ * 4. 基准实现用 remixicon 字体图标（`<i class="ri-*">`），我们统一用 lucide 组件，
  *    所以字体图标的 font-size/color 规则改写成 `svg` 的宽高/颜色。
  * 5. card1~4.png / lxb.png 等是对方素材，不搬；对应的 background-image 规则丢掉。
  *
- * 令牌来源：`~/Downloads/主页 - 句游英语_files/reset.css`（浅色分支）。
+ * 令牌来源：` - 
  */
 
 .home-ref,
 .home-ref-shell {
-  /* 参考页设计令牌（reset.css 浅色分支，逐字搬运）。
+ /* 基准实现设计令牌（reset.css 浅色分支，搬运）。
    *
    * 外框（`.home-ref-shell`）与内容区（`.home-ref`）共用同一套令牌：外框是内容区
    * 的祖先，令牌在最外层声明一次即可，避免两处各写一份色值后逐渐走样。 */
@@ -64,7 +64,7 @@
   --ref-bghours: #fff;
   --ref-texthour: #94a3b7;
 
-  /* 参考页没有声明 font-family，实际用的是浏览器默认字体（macOS = PingFang SC）。
+ /* 基准实现没有声明 font-family，实际用的是浏览器默认字体（macOS = PingFang SC）。
      这里显式写出同一套系统字体栈，避免被 globals.css 的 Inter 改掉。 */
   font-family: -apple-system, BlinkMacSystemFont, "PingFang SC",
     "Hiragino Sans GB", "Microsoft YaHei", "Helvetica Neue", Arial, sans-serif;
@@ -80,8 +80,8 @@
   border-radius: 10px;
 }
 
-/* ── 今日打卡 + 每日任务并排（两者均为我方业务，参考页无对应区块）────────────
-   参考页的 .col73 是 2:1，但那是「趋势图 + 统计卡」的主次关系；这里两块信息量
+/* ── 今日打卡 + 每日任务并排（两者均为我方业务，基准实现无对应区块）────────────
+ 基准实现的 .col73 是 2:1，但那是「趋势图 + 统计卡」的主次关系；这里两块信息量
    相当，取 1:1。 */
 .home-ref .ref-checkin-row {
   display: flex;
@@ -136,7 +136,7 @@
   color: #fff;
 }
 
-/* ── 客户服务与支持（参考页 inline block 0）────────────────────────────────── */
+/* ── 客户服务与支持（基准实现 inline block 0）────────────────────────────────── */
 
 .home-ref .cs-banner-compact {
   margin-bottom: 24px;
@@ -294,7 +294,7 @@
   }
 }
 
-/* ── 会员状态卡片（参考页 home.css + inline block 2 compact 版）────────────── */
+/* ── 会员状态卡片（基准实现 home.css + inline block 2 compact 版）────────────── */
 
 .home-ref .membership-status-card {
   background: #fff;
@@ -622,7 +622,7 @@
   color: #ef4444;
 }
 
-/* ── 试用 banner（参考页 inline，逐字搬运）────────────────────────────────── */
+/* ── 试用 banner（基准实现 inline，搬运）────────────────────────────────── */
 
 .home-ref .pro-trial-banner {
   margin-bottom: 24px;
@@ -742,7 +742,7 @@
   gap: 20px;
 }
 
-/* 参考页是 width:25% + content-box；这里用 flex:1 得到同样的四等分。 */
+/* 基准实现是 width:25% + content-box；这里用 flex:1 得到同样的四等分。 */
 .home-ref .parame li {
   flex: 1;
   min-width: 0;
@@ -1357,7 +1357,7 @@
   box-shadow: 0 4px 12px rgba(44, 90, 244, 0.35);
 }
 
-/* 参考页 .progress3 列表项里的课程标题 / 元信息 / 进度条 */
+/* 基准实现 .progress3 列表项里的课程标题 / 元信息 / 进度条 */
 .home-ref .progress3 .course-title {
   display: block;
   font-size: 14px;
@@ -1625,7 +1625,7 @@
   margin-top: 6px;
 }
 
-/* ── 页脚（参考页 inline）────────────────────────────────────────────────── */
+/* ── 页脚（基准实现 inline）────────────────────────────────────────────────── */
 
 .home-ref .site-footer {
   padding: 20px 0 30px;
@@ -1660,7 +1660,7 @@
   color: #3b82f6 !important;
 }
 
-/* ── 响应式（参考页 inline block 2 的媒体查询，逐字搬运）────────────────── */
+/* ── 响应式（基准实现 inline block 2 的媒体查询，搬运）────────────────── */
 
 @media screen and (max-width: 1200px) {
   .home-ref .membership-compact-layout {

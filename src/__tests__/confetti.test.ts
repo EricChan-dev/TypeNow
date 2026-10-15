@@ -8,7 +8,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
  * 测的是**我们不能丢的那部分行为**：
  *   · 模块导入期不碰浏览器全局（SSR 安全）；
  *   · 非浏览器环境下所有导出都安静 no-op，不抛；
- *   · 各 API 的粒子数与调色板与参考站练习页逐字一致
+ * · 各 API 的粒子数与调色板与基准实现练习页一致
  *     （答对 50 粒、默认 12 色；完成 每侧 3 粒、7 色、每 250ms 一发、6 秒收工）。
  */
 
@@ -148,7 +148,7 @@ describe("confetti（打桩浏览器）", () => {
     vi.restoreAllMocks()
   })
 
-  it("fireSuccessBurst 用参考站答对参数：中心 50 粒、默认调色板", async () => {
+ it("fireSuccessBurst 用基准实现答对参数：中心 50 粒、默认调色板", async () => {
     const b = installBrowserStubs()
     const { fireSuccessBurst } = await loadModule()
 
@@ -170,7 +170,7 @@ describe("confetti（打桩浏览器）", () => {
     const { startCompletionFireworks } = await loadModule()
 
     const stop = startCompletionFireworks(1000)
-    // 与参考站 setInterval 一致：第一发在 250ms 之后，不是立刻。
+ // 与基准实现 setInterval 一致：第一发在 250ms 之后，不是立刻。
     expect(b.drawn.length).toBe(0)
 
     vi.advanceTimersByTime(250)

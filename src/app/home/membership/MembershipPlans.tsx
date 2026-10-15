@@ -31,7 +31,7 @@ import {
 import { FREE_TRIAL_SENTENCES } from "@/lib/free-trial"
 
 /**
- * 三张套餐卡（1:1 复刻参考页 `VIP会员权益 - 句游英语.html` 的 `.version` 区块）。
+ * 三张套餐卡（对齐对标页 的 `.version` 区块）。
  *
  * 为什么必须是客户端组件：畅学版卡上有**月/季/年切换 Tab**，切一次要同时改
  * 大号价格、划线原价、立省金额、每日均价和下单按钮携带的档位 —— 这些状态
@@ -39,7 +39,7 @@ import { FREE_TRIAL_SENTENCES } from "@/lib/free-trial"
  *
  * ⚠️ 所有数字都从事实源取（`lib/pricing` / `lib/membership-benefits` /
  * `lib/partner-rules`），本文件里**不出现任何写死的价格或额度**。
- * 参考页把这些数字写在 button 的 data-* 属性上，改价要同时改 3 个属性 + 2 张卡，
+ * 基准实现把这些数字写在 button 的 data-* 属性上，改价要同时改 3 个属性 + 2 张卡，
  * 那正是 `lib/membership-benefits` 文件头记录过的「4 处各写一份然后漂移」的坑。
  */
 
@@ -50,7 +50,7 @@ const RENEW_PCT = `${COMMISSION_RATE.renewal * 100}%`
 interface Feature {
   Icon: LucideIcon
   text: string
-  /** `ai` = 暖黄高亮（参考页 label.ai）；`underline` = 划线灰字（无此权限）。 */
+ /** `ai` = 暖黄高亮（基准实现 label.ai）；`underline` = 划线灰字（无此权限）。 */
   tone?: "ai" | "underline"
 }
 
@@ -319,7 +319,7 @@ export function MembershipPlans({
           <FeatureList features={PARTNER_FEATURES} />
 
           {/* 分佣微卡：比例取自 lib/partner-rules，两行都按「被推荐人买哪一档」
-              表达，与参考页的两行结构一致。 */}
+ 表达，与基准实现的两行结构一致。 */}
           <div className="partner-commission-box">
             <div className="pcb-header">
               <div className="pcb-title">

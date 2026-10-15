@@ -27,8 +27,8 @@ interface NavItem {
 
 /**
  * 侧边栏导航：**四条分组**，没有分组标题 —— 分隔靠 `ul::after` 的渐变细线。
- * 分组形状对齐参考页（参考页是 6/2/1/3 共四组），条目本身仍是我们的路由：
- * 参考页的「课程向导 / 音标语法」——音标已补上，课程向导与语法仍无对应页面，不硬凑。
+ * 分组形状对齐基准实现（基准实现是 6/2/1/3 共四组），条目本身仍是我们的路由：
+ * 基准实现的「课程向导 / 音标语法」——音标已补上，课程向导与语法仍无对应页面，不硬凑。
  */
 const NAV_GROUPS: NavItem[][] = [
   [
@@ -91,7 +91,7 @@ export function RefSidebar({
       .catch(() => {})
   }, [])
 
-  // 弹出面板由点击开合（参考页也是点击驱动，不是 hover），点外部收起
+ // 弹出面板由点击开合（基准实现也是点击驱动，不是 hover），点外部收起
   useEffect(() => {
     if (!userboxOpen) return
     function handleClickOutside(e: MouseEvent) {
@@ -133,7 +133,7 @@ export function RefSidebar({
         className={cn("ref-sidebar", collapsed && "is-collapsed", drawerOpen && "is-drawer-open")}
         aria-label="主导航"
       >
-      {/* Logo —— 参考页在 `.on` 折叠态会切成 small 图形，但那只是同一个 mark 的
+ {/* Logo —— 基准实现在 `.on` 折叠态会切成 small 图形，但那只是同一个 mark 的
           两个尺寸；我们直接让 /brand/icon.png 随侧边栏宽度缩放即可，不必准备两张图。
           字标在折叠态隐藏（文字会被 is-collapsed 规则连同导航标签一起收起）。 */}
       <div className="ref-logo">
@@ -162,7 +162,7 @@ export function RefSidebar({
         </Link>
       </div>
 
-      {/* 移动端抽屉开关：参考页没有（它靠 .display-switch 在平板态切抽屉） */}
+ {/* 移动端抽屉开关：基准实现没有（它靠 .display-switch 在平板态切抽屉） */}
       <button
         type="button"
         className="ref-mobile-toggle"
@@ -200,7 +200,7 @@ export function RefSidebar({
         ))}
       </nav>
 
-      {/* 底部用户区 —— 参考页把用户信息放在这里（我们原来放在 64px 顶栏） */}
+ {/* 底部用户区 —— 基准实现把用户信息放在这里（我们原来放在 64px 顶栏） */}
       {serverUser && (
         <div className="ref-userinfo" ref={userboxRef}>
           <button

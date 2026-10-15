@@ -94,13 +94,13 @@ export const users = mysqlTable(
      * 只能靠学习行为获得（练习 / 课时 / 课程 / 打卡 / 分享），用于兑换会员天数与道具，
      * **永远不能换 AI 调用**。产出与兑换数值见 lib/coins.ts（唯一事实源）。
      *
-     * 两种货币用途严格不交叉是刻意设计（参考站验证过的做法）：金币之所以可以敞开
+ * 两种货币用途严格不交叉是刻意设计（基准实现验证过的做法）：金币之所以可以敞开
      * 发放，正因为它不触碰任何按量计费的服务。一旦让金币能买 AI 调用，
      * 免费用户就重新获得了无上限的成本敞口。
      */
     coins: int("coins").notNull().default(0),
     /**
-     * 每日打卡目标 —— **当日练习句数**（对应参考站的「打卡目标，默认 10 个练习点」）。
+ * 每日打卡目标 —— **当日练习句数**（对应基准实现的「打卡目标，默认 10 个练习点」）。
      *
      * ⚠️ 语义在 2026-09-29 变更过：此前它被当成「当日获得的钻石数」，
      * 于是练习奖励改发金币后当日钻石恒为 0、**打卡永久失败且不报错**。
@@ -267,7 +267,7 @@ export const sentences = mysqlTable(
       english: string
       chinese: string | null
       /**
-       * 历史遗留两种形态：参考站导入的是 { uk, us } 对象，AI 解析产出的是字符串。
+ * 历史遗留两种形态：基准实现导入的是 { uk, us } 对象，AI 解析产出的是字符串。
        * 不要收窄成 string —— 曾因 String(对象) 把 17 万行写成 "[object Object]"。
        */
       phonetic: string | { uk: string; us: string } | null
@@ -913,7 +913,7 @@ export const practiceSessions = mysqlTable(
     currentIndex: int("current_index").notNull().default(0),
     // 练习模式：dictation（听写/键盘打字）| puzzle（拼图）| learning（学习）| speaking（口语）。
     //
-    // 参考站四种模式各有各的进度，恢复槽位必须是「每课时每模式一行」。
+ // 基准实现四种模式各有各的进度，恢复槽位必须是「每课时每模式一行」。
     // 若沿用旧的 (user_id, lesson_id) 唯一键，切模式会覆盖彼此的恢复位置。
     //
     // 默认 'dictation'：本列引入之前只有键盘打字一种练习方式，
@@ -1073,8 +1073,8 @@ export type LessonAiInsight = typeof lessonAiInsights.$inferSelect
 
 // ─── Sentence Favorites (收藏句子) ───────────────────────────────────────────
 //
-// 参考站练习页底栏有一颗星（`#favoriteBtn`，快捷键 ⌘/Ctrl+U），收藏的是**句子**
-// 而不是单词 —— 单词收藏走 `wordbook_items`，两者在参考站里也是两个独立接口
+// 基准实现练习页底栏有一颗星（`#favoriteBtn`，快捷键 ⌘/Ctrl+U），收藏的是**句子**
+// 而不是单词 —— 单词收藏走 `wordbook_items`，两者在基准实现里也是两个独立接口
 // (`/User/Api/Favorite/Sentence` vs `/User/Api/Favorite/Word`)。
 //
 // **一个练习项一行**：UNIQUE(user_id, sentence_id)。带 chunks 的句子在练习页会
@@ -1127,7 +1127,7 @@ export const taskLogs = mysqlTable(
      * 这条记录里 **userId（邀请人）本人** 获得的天数。
      *
      * 与历史含义保持一致（以前 invite_register 记的就是邀请人拿到的 3 天）。
-     * 因此 invite_register 恒为 0 —— 按参考站的天数制，注册档只给**被邀请人**
+ * 因此 invite_register 恒为 0 —— 按基准实现的天数制，注册档只给**被邀请人**
      * 7 天，邀请人的天数来自首购档。被邀请人拿到多少天体现在他自己的
      * users.pro_expires 上，不记在邀请人的任务流水里。
      */

@@ -1,11 +1,11 @@
 /**
  * 结构化答案视图的展示层。
  *
- * 参考站是把 `renderStructuredAnswer()` 拼好的 HTML 字符串 `innerHTML` 进
+ * 基准实现是把 `renderStructuredAnswer()` 拼好的 HTML 字符串 `innerHTML` 进
  * `#sentenceHintContent` / 复习屏容器；这里改成 React 渲染同一套 DOM，
  * 好处是题库里的句子（用户可编辑）不需要自己写转义。
  *
- * **类名与嵌套结构必须逐字对齐参考站** —— 移植过来的 `practice.css` 里
+ * **类名与嵌套结构必须对齐基准实现** —— 移植过来的 `practice.css` 里
  * `.structured-answer` / `.answer-component` / `.component-*` 那几族
  * 全靠这些类名生效：
  *
@@ -23,7 +23,7 @@
  *       <span class="clickable-word" data-word>…</span>[标点][<span class="component-phonetics">…</span>]
  *     </span>
  *
- * 注意参考站在「有标签」分支里把音标放在 `.component-text` **之后**、
+ * 注意基准实现在「有标签」分支里把音标放在 `.component-text` **之后**、
  * `.component-meaning` 之前；「无标签」分支则把音标直接接在文本后面。
  * 顺序不同是因为两套 CSS 的 flex 排列方向不同，照抄。
  */
@@ -35,7 +35,7 @@ function PartText({ part }: { part: StructuredPart }) {
     <>
       {part.tokens.map((t, i) =>
         t.query ? (
-          // `data-word` 是查词键（原形），参考站 makeTextClickable 的输出
+ // `data-word` 是查词键（原形），基准实现 makeTextClickable 的输出
           <span className="clickable-word" data-word={t.query} key={i}>
             {t.text}
           </span>
@@ -45,7 +45,7 @@ function PartText({ part }: { part: StructuredPart }) {
       )}
       {/*
         句末标点补在最后一个非空成分的文本里（不是它的外面）——
-        参考站写在 `.component-text` 内部，好让标点跟着词一起排列。
+ 基准实现写在 `.component-text` 内部，好让标点跟着词一起排列。
       */}
       {part.trailingPunctuation ? (
         <span className="answer-terminal-punctuation">{part.trailingPunctuation}</span>
@@ -59,7 +59,7 @@ function Phonetics({ part }: { part: StructuredPart }) {
     return <span className="component-phonetics">{part.phonetics.join(" ")}</span>
   }
   // 缩写后缀（'s / 're）查不到音标时插一个不可见占位，
-  // 让它下面的中文释义与相邻成分对齐（参考站原样行为）。
+ // 让它下面的中文释义与相邻成分对齐（基准实现原样行为）。
   if (part.phoneticsPlaceholder) {
     return (
       <span className="component-phonetics" style={{ visibility: "hidden" }}>
@@ -72,7 +72,7 @@ function Phonetics({ part }: { part: StructuredPart }) {
 
 function Part({ part, highlightedIndex }: { part: StructuredPart; highlightedIndex: number | null }) {
   // 禁用高亮时（整句存在撇号开头的成分）两个属性都不输出，
-  // 参考站给的是空串。React 传 undefined 即不渲染该属性。
+ // 基准实现给的是空串。React 传 undefined 即不渲染该属性。
   const highlight =
     part.wordStart === null || part.wordEnd === null
       ? {}
@@ -80,7 +80,7 @@ function Part({ part, highlightedIndex }: { part: StructuredPart; highlightedInd
 
   const contraction = part.contractionSuffix ? " contraction-suffix" : ""
 
-  // 「聚焦第 N 格 → 高亮第 N 格所属成分」。参考站是 highlightAnswerWord()
+ // 「聚焦第 N 格 → 高亮第 N 格所属成分」。基准实现是 highlightAnswerWord()
   // 直接往 DOM 加 `.answer-highlight`（practice.js:9047），判据完全相同，
   // 但那边要 querySelector 找面板；我们在 React 里直接按区间判断，
   // 结果等价且不受面板是否存在影响。
@@ -122,11 +122,11 @@ function Part({ part, highlightedIndex }: { part: StructuredPart; highlightedInd
 /**
  * 结构化答案本体（不含外层容器）。
  *
- * `structured === false` 时渲染参考站的降级形态
+ * `structured === false` 时渲染基准实现的降级形态
  * `<span class="answer-text-plain">`，调用方不用自己分支。
  *
  * @param highlightedIndex 当前聚焦的输入格下标；为 null 时不加
- *   `.answer-highlight`。参考站对应 `highlightAnswerWord(index, word)`
+ * `.answer-highlight`。基准实现对应 `highlightAnswerWord(index, word)`
  *   —— 我们只实现它的**策略 1**（按 `data-word-start/end` 区间高亮），
  *   没有实现策略 2（按单词文本兜底匹配 `.clickable-word`）：策略 2 是给
  *   「结构数据的分段与输入框对不上」时兜底的，而我们的 `start/end` 来自

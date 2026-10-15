@@ -3,7 +3,7 @@
 /**
  * 单词卡（点击可点单词时弹出的浮层）+ 它的「更多」详情弹窗。
  *
- * 参考站实现在 `practice.js`：
+ * 基准实现实现在 ：
  *   · `makeWordsClickable()` `:8994`（`:9032` 调用）在 **document** 上挂 click，
  *     命中 `.clickable-word` → `showWordDetailCard(word, el)`；
  *   · `showWordDetailCard()` `:8626` 把 `div#wordDetailCard.word-detail-card`
@@ -15,7 +15,7 @@
  *   · `favoriteCurrentWord()` `:9241` 收藏；`checkWordFavoriteStatus()` `:9328`
  *     回填收藏态；`playWordAudio()` `:8709` 朗读；ESC 关弹窗、否则关卡片。
  *
- * 三处**有意偏离**参考站，都是「同一份资源在本仓不存在」造成的，已在下方注释标明：
+ * 三处**有意偏离**基准实现，都是「同一份资源在本仓不存在」造成的，已在下方注释标明：
  *
  * 1. **挂载点是 `.practice-shell` 而不是 `document.body`。**
  *    本仓 `practice.css` 是抽取产物，选择器全部收敛在 `.practice-shell` 下
@@ -27,15 +27,15 @@
  *    `.practice-shell` 自身 `transform: none`，fixed 仍以视口为基准。
  *
  * 2. **数据源是 `/api/dict/word`，不是 `/api/searchWord/brief` + `/detail`。**
- *    参考站分的两个接口我们都没有；本方那个接口一次就返回
+ * 基准实现分的两个接口我们都没有；本方那个接口一次就返回
  *    `word/phonetic/phoneticUk/translations/pos/synonyms/examples/inWordbook`，
  *    已经覆盖小卡片**和**详情弹窗要的字段。所以：
  *      · 不做「先 brief 再 detail」的二次拉取；
- *      · 详情弹窗不出现「加载详细信息中…」那一帧（参考站只在 `!hasFullDetail`
+ * · 详情弹窗不出现「加载详细信息中…」那一帧（基准实现只在 `!hasFullDetail`
  *        时才进那个分支，我们的单接口恒有详情字段）。
  *
  * 3. **图标用 lucide 而不是 remixicon。** 本仓没装 remixicon（全仓零引用），
- *    既有约定是换成 lucide 组件。参考站靠字体图标拿尺寸的几条规则
+ * 既有约定是换成 lucide 组件。基准实现靠字体图标拿尺寸的几条规则
  *    （`.word-card-not-found i { font-size: 2rem }`、
  *    `.word-modal-section-title i { font-size: 1.1rem; margin-right: 8px; opacity: .8 }`
  *    等）在 svg 上不生效，所以这些**数值**以内联 `style` 复刻到 svg 上。
@@ -72,16 +72,16 @@ interface AnchorRect {
 }
 
 /**
- * 参考站 `positionWordCard()` `:8690` 用的两个估算值。
+ * 基准实现 `positionWordCard()` `:8690` 用的两个估算值。
  *
  * 它拿 `cardWidth = 300` 去夹取，但 CSS 里 `.word-detail-card` 的
- * `width` 是 **320px**（`practice-cyber.css:5164`）—— 参考站自己的常量就比
+ * `width` 是 **320px**（`practice-cyber.css:5164`）—— 基准实现自己的常量就比
  * 真实盒子窄 20px，贴右边缘时会露出去。我们优先用渲染后的真实尺寸量，
  * 量不到（首帧、还没提交）才回落到这两个值。
  */
 const FALLBACK_CARD_WIDTH = 300
 const FALLBACK_CARD_HEIGHT = 280
-/** 参考站用 `Math.max(10, …)` 与 `window.innerWidth - cardWidth - 10` 夹取。 */
+/** 基准实现用 `Math.max(10, …)` 与 `window.innerWidth - cardWidth - 10` 夹取。 */
 const CARD_MARGIN = 10
 /** 与锚点的垂直间距：`rect.bottom + 10`。 */
 const ANCHOR_GAP = 10
@@ -98,7 +98,7 @@ export function WordDetailCard({ sentenceId }: { sentenceId?: string }) {
   /**
    * 弹窗自己的数据槽。
    *
-   * 为什么不能复用 `card.data`：参考站 `showWordDetailModal()` `:8777` 先
+ * 为什么不能复用 `card.data`：基准实现 `showWordDetailModal()` `:8777` 先
    * `hideWordDetailCard()` 把小卡片关掉，弹窗是从 `card.dataset.wordData`
    * **先取出来**再独立渲染的。我们照做（`openModal()` 里 `setCard(null)`），
    * 于是 `card` 一空，任何从 `card` 派生的值都会跟着变 null —— 弹窗必须带一份
@@ -109,16 +109,16 @@ export function WordDetailCard({ sentenceId }: { sentenceId?: string }) {
 
   const cardRef = useRef<HTMLDivElement>(null)
   const fetchingRef = useRef(0)
-  /** 关闭动画的定时器。参考站摘 `.show` 后元素仍在，靠 CSS transition 淡出。 */
+ /** 关闭动画的定时器。基准实现摘 `.show` 后元素仍在，靠 CSS transition 淡出。 */
   const closeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const data = card?.data ?? null
 
   /**
-   * 取词。参考站是 `fetchWordBrief()`（`/api/searchWord/brief`，`:8496`），
+ * 取词。基准实现是 `fetchWordBrief()`（`/api/searchWord/brief`，`:8496`），
    * 我们走 `/api/dict/word`（见文件头第 2 条）。
    *
-   * `fetchingRef` 是「防快速切换」的守卫 —— 参考站用
+ * `fetchingRef` 是「防快速切换」的守卫 —— 基准实现用
    * `currentWordCardWord !== word` 判断（`:8668`），等价做法是给每次请求编号，
    * 只有最后一次的结果能落地。
    */
@@ -129,7 +129,7 @@ export function WordDetailCard({ sentenceId }: { sentenceId?: string }) {
       const j = (await res.json().catch(() => ({}))) as DictResult & { error?: string; inWordbook?: boolean }
       if (fetchingRef.current !== seq) return
       if (!res.ok) {
-        // 参考站没查到词时也渲染「未找到该单词」（`renderWordCard` 的兜底分支，
+ // 基准实现没查到词时也渲染「未找到该单词」（`renderWordCard` 的兜底分支，
         // `:8554`），而不是留空 —— 空卡片看起来像坏了。
         setCard({ word: w, data: { word: w, inWordbook: !!j.inWordbook } })
         return
@@ -142,11 +142,11 @@ export function WordDetailCard({ sentenceId }: { sentenceId?: string }) {
   }, [])
 
   /**
-   * 打开卡片。参考站在 `showWordDetailCard()` 里先 `hideWordDetailCard()` 再重建，
+ * 打开卡片。基准实现在 `showWordDetailCard()` 里先 `hideWordDetailCard()` 再重建，
    * 并且**每次都重放展开动画**（先无 `.show`，`requestAnimationFrame` 后才加）。
    * 这里照做：换词也重新动画。
    *
-   * 双 `requestAnimationFrame`：参考站是同步写 `innerHTML` + 单 rAF 就够，
+ * 双 `requestAnimationFrame`：基准实现是同步写 `innerHTML` + 单 rAF 就够，
    * 我们走 React 提交，首帧样式要等一次提交才能被浏览器算进 transition 起点，
    * 所以多等一帧。否则第二次点同一个词会「直接出现、没有淡入」。
    */
@@ -159,7 +159,7 @@ export function WordDetailCard({ sentenceId }: { sentenceId?: string }) {
       setCard({ word: w, data: null })
       setShown(false)
       setModalOpen(false)
-      // 先按参考站的估算值摆一次，避免首帧闪现在 (0,0)
+ // 先按基准实现的估算值摆一次，避免首帧闪现在 (0,0)
       setPos({ top: Math.max(CARD_MARGIN, r.bottom + ANCHOR_GAP), left: CARD_MARGIN })
       requestAnimationFrame(() => requestAnimationFrame(() => setShown(true)))
       void fetchWord(w)
@@ -167,7 +167,7 @@ export function WordDetailCard({ sentenceId }: { sentenceId?: string }) {
     [fetchWord],
   )
 
-  /** 参考站 `hideWordDetailCard()` `:8701`：摘 `.show`，元素不销毁。 */
+ /** 基准实现 `hideWordDetailCard()` `:8701`：摘 `.show`，元素不销毁。 */
   const closeCard = useCallback(() => {
     setShown(false)
     if (closeTimerRef.current) clearTimeout(closeTimerRef.current)
@@ -183,7 +183,7 @@ export function WordDetailCard({ sentenceId }: { sentenceId?: string }) {
 
   /**
    * 全局 click：命中 `.clickable-word` 就开卡；点卡片/弹窗内部忽略；
-   * 点别处关卡片。逐条对应参考站 `makeWordsClickable()` `:8994-9017`。
+ * 点别处关卡片。逐条对应基准实现 `makeWordsClickable()` `:8994-9017`。
    *
    * 空依赖：这个监听在挂载期只需装一次，且它只用稳定的 setter，
    * 不需要读任何会变的 state（关闭动作对已关闭状态是幂等的）。
@@ -199,7 +199,7 @@ export function WordDetailCard({ sentenceId }: { sentenceId?: string }) {
         return
       }
       // 看答案浮层/复习屏里的结构视图关闭按钮等，点在卡片外但属于
-      // 「本页别的交互」时也走这一支 —— 关掉卡片是参考站的行为。
+ // 「本页别的交互」时也走这一支 —— 关掉卡片是基准实现的行为。
       if (t.closest(".word-detail-card") || t.closest(".word-detail-modal")) return
       closeCard()
     }
@@ -208,9 +208,9 @@ export function WordDetailCard({ sentenceId }: { sentenceId?: string }) {
   }, [openCard, closeCard])
 
   /**
-   * ESC：先关详情弹窗，否则关卡片（参考站 `:9022-9029`）。
+ * ESC：先关详情弹窗，否则关卡片（基准实现 `:9022-9029`）。
    *
-   * 注意参考站这里是**独立**的一个 document keydown，和关闭答案提示浮层的
+ * 注意基准实现这里是**独立**的一个 document keydown，和关闭答案提示浮层的
    * 那个（`:5835`）并存 —— ESC 同时命中两者时，卡片与提示浮层会一起关。
    * 我们保持同样行为（`DictationPractice` 里那个 ESC effect 不动）。
    */
@@ -237,7 +237,7 @@ export function WordDetailCard({ sentenceId }: { sentenceId?: string }) {
   )
 
   /**
-   * 定位。参考站 `positionWordCard()` `:8690`：
+ * 定位。基准实现 `positionWordCard()` `:8690`：
    *   水平 —— 以锚点居中，再夹进 `[10, innerWidth - cardWidth - 10]`；
    *   垂直 —— 优先放锚点下方 `bottom + 10`，若放不下则放上方 `top - cardHeight - 10`，
    *          最后 `Math.max(10, top)`。
@@ -265,7 +265,7 @@ export function WordDetailCard({ sentenceId }: { sentenceId?: string }) {
     setPos({ top, left })
   }, [anchor, card, shown, data])
 
-  /** 朗读单词。参考站 `playWordAudio()` `:8709` 先试预生成音频再降级 TTS；
+ /** 朗读单词。基准实现 `playWordAudio()` `:8709` 先试预生成音频再降级 TTS；
    *  我们统一走全局 TTS（同 `WordDetailPopover` 的处置：它带用户的音色设置）。 */
   const speak = useCallback((w: string) => {
     if (!w) return
@@ -273,7 +273,7 @@ export function WordDetailCard({ sentenceId }: { sentenceId?: string }) {
   }, [])
 
   /**
-   * 收藏/取消收藏。参考站是 `/User/Api/Favorite/Word*`（`:9266`/`:9287`），
+ * 收藏/取消收藏。基准实现是 `/User/Api/Favorite/Word*`（`:9266`/`:9287`），
    * 我们用 `/api/wordbook`（POST/DELETE，见 `src/app/api/wordbook/route.ts`），
    * 字段对得上（`word` + `sourceSentenceId`）。
    */
@@ -303,7 +303,7 @@ export function WordDetailCard({ sentenceId }: { sentenceId?: string }) {
     }
   }, [data, busyFavorite, sentenceId])
 
-  /** 打开详情弹窗。参考站先关小卡片（`showWordDetailModal()` `:8777`）。 */
+ /** 打开详情弹窗。基准实现先关小卡片（`showWordDetailModal()` `:8777`）。 */
   const openModal = useCallback(() => {
     if (!data) return
     if (closeTimerRef.current) clearTimeout(closeTimerRef.current)
@@ -337,12 +337,12 @@ export function WordDetailCard({ sentenceId }: { sentenceId?: string }) {
           ref={cardRef}
           className={`word-detail-card${shown ? " show" : ""}`}
           style={{ top: pos.top, left: pos.left }}
-          /* 参考站的卡片是 JS 造的，点击不会冒到行内 onclick；React 里
+ /* 基准实现的卡片是 JS 造的，点击不会冒到行内 onclick；React 里
              阻止冒泡，免得点卡片里的按钮顺带触发上面的「点别处关卡片」。 */
           onClick={(e) => e.stopPropagation()}
         >
           {!data ? (
-            /* `renderWordCard` 之前的加载态（参考站 `:8642-8647`）。 */
+ /* `renderWordCard` 之前的加载态（基准实现 `:8642-8647`）。 */
             <div className="word-card-loading">
               <div className="spinner" />
               <div style={{ marginTop: 10 }}>查询中...</div>
@@ -354,9 +354,9 @@ export function WordDetailCard({ sentenceId }: { sentenceId?: string }) {
             </div>
           ) : (
             <>
-              {/* 参考站 `renderWordCard` `:8577-8581`：有图给图，没图给 `.no-image`。
+ {/* 基准实现 `renderWordCard` `:8577-8581`：有图给图，没图给 `.no-image`。
                   本库没有任何句子/单词配图数据源（39 张表无图片列），
-                  所以永远走 no-image 分支 —— 与参考站「这个词没图」时同构。 */}
+ 所以永远走 no-image 分支 —— 与基准实现「这个词没图」时同构。 */}
               <div className="word-card-image">
                 <div className="no-image">
                   <ImageOff size={32} strokeWidth={1.5} style={{ color: "rgba(255,255,255,0.3)" }} />
@@ -368,7 +368,7 @@ export function WordDetailCard({ sentenceId }: { sentenceId?: string }) {
                     <span className="word-card-word">{data.word}</span>
                     <span className="word-card-phonetic">
                       {(() => {
-                        // 参考站按 `selectedAccentType` 选音标（`:8584`），默认美式，
+ // 基准实现按 `selectedAccentType` 选音标（`:8584`），默认美式，
                         // 英式缺失时回落到美式。本仓没有这个偏好项，取同一套默认。
                         const p = wrapPhonetic(data.phonetic || data.phoneticUk)
                         return p ? p : ""
@@ -387,7 +387,7 @@ export function WordDetailCard({ sentenceId }: { sentenceId?: string }) {
                   )}
                 </div>
                 <div className="word-card-translation">
-                  {/* 参考站只展示第一条翻译，并把词性前缀在同一行（`:8590-8594`）。 */}
+ {/* 基准实现只展示第一条翻译，并把词性前缀在同一行（`:8590-8594`）。 */}
                   {posLabels[0] ? <span className="word-card-pos">{posLabels[0]}</span> : null}
                   {translations[0] ?? ""}
                 </div>
@@ -430,7 +430,7 @@ export function WordDetailCard({ sentenceId }: { sentenceId?: string }) {
         <div
           id="wordDetailModalOverlay"
           className="word-detail-modal-overlay show"
-          /* 参考站 `:8787`：只有点在遮罩**自身**（不是弹窗内部）才关。 */
+ /* 基准实现 `:8787`：只有点在遮罩**自身**（不是弹窗内部）才关。 */
           onClick={(e) => {
             if (e.target === e.currentTarget) closeModal()
           }}
@@ -459,7 +459,7 @@ export function WordDetailCard({ sentenceId }: { sentenceId?: string }) {
               <div className="word-modal-info">
                 <div className="word-modal-word">{modalData.word}</div>
                 <div className="word-modal-phonetic">
-                  {/* 参考站 `:8968-8971`：美式在上、英式不同才另起一个，可点朗读。 */}
+ {/* 基准实现 `:8968-8971`：美式在上、英式不同才另起一个，可点朗读。 */}
                   {modalData.phonetic ? (
                     <span
                       className="clickable-phonetic"
@@ -480,7 +480,7 @@ export function WordDetailCard({ sentenceId }: { sentenceId?: string }) {
                   ) : null}
                 </div>
                 <div className="word-modal-translations">
-                  {/* 参考站每个 `word-modal-trans-item` 自带 pos + transCn（`:8848-8852`）。
+ {/* 基准实现每个 `word-modal-trans-item` 自带 pos + transCn（`:8848-8852`）。
                       我们上游把「词性」与「中文释义」拆成两个平行列表，没有 1:1 配对，
                       所以按下标 zip，缺位回落到第一个词性标签。 */}
                   {modalTranslations.map((t, i) => (
@@ -492,8 +492,8 @@ export function WordDetailCard({ sentenceId }: { sentenceId?: string }) {
                     </div>
                   ))}
                 </div>
-                {/* 词形变化（`word-modal-forms`）参考站读 `data.wordForms`。
-                    我们的接口不返回词形，整块不渲染 —— 参考站在字段缺失时同样
+ {/* 词形变化（`word-modal-forms`）基准实现读 `data.wordForms`。
+ 我们的接口不返回词形，整块不渲染 —— 基准实现在字段缺失时同样
                     `formItems.length === 0` 不渲染（`:8898`）。 */}
               </div>
             </div>
