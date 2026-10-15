@@ -8,7 +8,7 @@ import {
   LayoutDashboard, BookOpen, ShoppingBag, GraduationCap,
   BookText, BookMarked, Search, FileText, Newspaper, Trophy,
   Crown, TrendingUp, Settings, LogOut, MessageSquarePlus,
-  PanelLeftClose, PanelLeft, Menu, ListChecks, AudioLines,
+  PanelLeftClose, PanelLeft, Menu, ListChecks, AudioLines, Keyboard,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { BRAND } from "@/lib/brand"
@@ -42,6 +42,7 @@ const NAV_GROUPS: NavItem[][] = [
     { key: "/home/dictionary", label: "查单词", icon: Search },
     { key: "/home/study-plan", label: "学习计划", icon: ListChecks },
     { key: "/home/phonetics", label: "音标", icon: AudioLines },
+    { key: "/home/typing", label: "指法跟打", icon: Keyboard },
     { key: "/home/review", label: "错题本", icon: BookMarked },
     { key: "/home/notes", label: "笔记本", icon: FileText },
   ],
