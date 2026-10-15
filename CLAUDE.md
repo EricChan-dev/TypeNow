@@ -153,10 +153,10 @@ Two type files:
 | 想了解 | 看这里 |
 |--------|--------|
 | 产品全貌与规划 | [PRD_V3.md](PRD_V3.md) |
-| 练习页与基准实现的差距、阶段规划、已拍板决策 | [docs/practice-page-alignment-matrix.md](docs/practice-page-alignment-matrix.md) |
-| 页面级设计稿 | [docs/pages/](docs/pages/)、[specs/](specs/) |
+| 练习页与基准实现的差距、阶段规划、已拍板决策 | [docs/practice-page-alignment-matrix.md](docs/practice-page-alignment-matrix.md)（本地留存，不入库） |
+| 页面级设计稿 | [docs/pages/](docs/pages/)、[specs/](specs/)（本地留存，不入库） |
 | 技术架构 | [docs/architecture.md](docs/architecture.md) |
-| 市场与定价策略 | [docs/strategy.md](docs/strategy.md) |
+| 市场与定价策略 | [docs/strategy.md](docs/strategy.md)（本地留存，不入库） |
 | 已执行完毕的历史方案 | [docs/archive/](docs/archive/) |
 | 还没做的事 / 需要人工介入的事 | [docs/TODO.md](docs/TODO.md) |
 

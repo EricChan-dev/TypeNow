@@ -108,3 +108,29 @@ cover-samples/
 
 # 课程质量分析产物（按课程聚合的体检输出，可随时重新生成，不入库）
 course-quality-by-course.json
+
+# ── 业务/合规敏感文档：本地保留，不入库 ──────────────────────────────────
+# 竞品拆解、逆向笔记、命名/商标策略、分销合规、增长与定价、页面设计稿等
+# 属于内部经营材料（含竞品名称与自认性表述），不随代码分发。
+# 仍入库的技术文档：docs/architecture.md、docs/TODO.md、docs/archive/{README,dev-plan}.md、
+# docs/课程数据补全计划.md、PRD_V3.md、db/README.md、tests/README.md。
+/docs/README.md
+/docs/business-model.md
+/docs/strategy.md
+/docs/membership-growth-plan.md
+/docs/membership-alignment-risk-2026-10.md
+/docs/distribution-compliance.md
+/docs/compliance-archive-audit.md
+/docs/promotion-launch-checklist.md
+/docs/naming-strategy.md
+/docs/naming-availability-checklist.md
+/docs/juyou-english-teardown.md
+/docs/waxueshe-words-reverse.md
+/docs/practice-page-alignment-matrix.md
+/docs/implementation-plan-2026-09.md
+/docs/course-cleanup-candidates.csv
+/docs/archive/PRD-V2.md
+/docs/archive/typenow-improvement-plan.md
+/docs/pages/
+/docs/superpowers/
+/specs/

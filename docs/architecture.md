@@ -298,8 +298,8 @@ git show HEAD:<file> | npx eslint --stdin --stdin-filename <file>
 | 主题 | 文档 |
 |------|------|
 | 产品全貌与规划 | [../PRD_V3.md](../PRD_V3.md) |
-| 练习页与参考站差距、阶段规划、已拍板决策 | [practice-page-alignment-matrix.md](practice-page-alignment-matrix.md) |
-| 页面级设计稿 | [pages/](pages/)、[../specs/](../specs/) |
-| 市场与定价 | [strategy.md](strategy.md) |
+| 练习页差距、阶段规划、已拍板决策 | [practice-page-alignment-matrix.md](practice-page-alignment-matrix.md)（本地留存，不入库） |
+| 页面级设计稿 | [pages/](pages/)、[../specs/](../specs/)（本地留存，不入库） |
+| 市场与定价 | [strategy.md](strategy.md)（本地留存，不入库） |
 | 本地开发踩坑清单 | [../CLAUDE.md](../CLAUDE.md) |
 | 已归档的历史方案 | [archive/](archive/README.md) |
