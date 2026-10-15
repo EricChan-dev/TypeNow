@@ -57,6 +57,22 @@ function normJoin(parts: string[]): string {
   return normalizeSentenceForComparison(parts.join(" "))
 }
 
+function repairJson(text: string): string {
+  // 模型 JSON 退化的两种典型（重扫失败样本里占绝大多数，base 内容本身是好的）：
+  //   A. 对象边界写成 `},"text":...` —— 丢了 `{"`：[{"text":..},"text":..}
+  //   B. 边界写成 `,"{"text":...}` —— 多了个引号：..},"{"text":..}
+  // 修复后再 parse，能救回绝大多数本可用的切分。
+  let out = text
+  for (let i = 0; i < 3; i++) {
+    const next = out
+      .replace(/},\s*"(text|chinese|zh|en)"/g, '},{"$1"')
+      .replace(/,\s*"\{/g, ",{")
+    if (next === out) break
+    out = next
+  }
+  return out
+}
+
 function parseChunks(raw: string, english: string): ChunkPart[] | null {
   let text = raw.trim()
   const fence = text.match(/```(?:json)?\s*([\s\S]*?)```/)
@@ -64,11 +80,16 @@ function parseChunks(raw: string, english: string): ChunkPart[] | null {
   const start = text.indexOf("{")
   const end = text.lastIndexOf("}")
   if (start === -1 || end === -1 || end <= start) return null
+  const slice = text.slice(start, end + 1)
   let obj: unknown
   try {
-    obj = JSON.parse(text.slice(start, end + 1))
+    obj = JSON.parse(slice)
   } catch {
-    return null
+    try {
+      obj = JSON.parse(repairJson(slice))
+    } catch {
+      return null
+    }
   }
   const rec = (obj ?? {}) as Record<string, unknown>
   const baseRaw = Array.isArray(rec.base) ? rec.base : Array.isArray(obj) ? obj : null
@@ -122,14 +143,15 @@ async function main(): Promise<void> {
   let done = 0
   let ok = 0
   let failed = 0
+  let fallback = 0
   const started = Date.now()
 
   async function processOne(s: { id: string; english: string; chinese: string | null }, index: number): Promise<void> {
     try {
-      // 单词句（【单词】课的词条英文，归一后无空格）：没有可切分的短语结构，
-      // 直接写整句 chunk，不烧 LLM——这类句子占 pending 相当比例，逐条打 LLM
-      // 会全部被「2-6 段」校验拒绝（LLM 只能返回 1 段）。
-      if (!normalizeSentenceForComparison(s.english).includes(" ")) {
+      // ≤4 词的句子（单词、how many 类双词短语、in the future / as soon as 类
+      // 短语词条）：没有有价值的短语切分，直接写整句 chunk，不烧 LLM——重扫
+      // 失败残留几乎全是这类（模型要么只给 1 段被拒，要么切成碎屑）。
+      if (normalizeSentenceForComparison(s.english).split(" ").filter(Boolean).length <= 4) {
         const chunks = [{ text: s.english, order: 1, chinese: s.chinese ?? "" }]
         if (APPLY) {
           await db.update(sentences).set({ chunks }).where(eq(sentences.id, s.id))
@@ -137,17 +159,28 @@ async function main(): Promise<void> {
         ok++
         return
       }
-      const raw = await llm([
+      let raw = await llm([
         { role: "system", content: SYSTEM },
         { role: "user", content: `句子：${s.english}\n中文参考：${s.chinese ?? "(无)"}` },
       ])
-      const base = parseChunks(raw, s.english)
+      let base = parseChunks(raw, s.english)
       if (!base) {
-        failed++
-        // 静默失败没法排查：把被拒的返回打出来，看是铺不满原句还是 JSON 坏
-        if (failed <= 40) {
-          console.error(`  ✗ parse [${index + 1}] ${s.english.slice(0, 60)} => ${raw.slice(0, 150).replace(/\s+/g, " ")}`)
+        // 解析失败多为模型 JSON 退化或偷懒给 1 段：重摇一次（temperature 0.3 下
+        // 结果会变），失败样本显示 base 内容本身多数是好的
+        raw = await llm([
+          { role: "system", content: SYSTEM },
+          { role: "user", content: `句子：${s.english}\n中文参考：${s.chinese ?? "(无)"}` },
+        ])
+        base = parseChunks(raw, s.english)
+      }
+      if (!base) {
+        // 兜底：无法切分（短语词条 / 字母表行 / 顽固格式错）→ 只写整句候选，
+        // 保证 pending 清零；练习侧退化 = 整句听写，与 chunks 为 NULL 时等价
+        const chunks = [{ text: s.english, order: 1, chinese: s.chinese ?? "" }]
+        if (APPLY) {
+          await db.update(sentences).set({ chunks }).where(eq(sentences.id, s.id))
         }
+        fallback++
         return
       }
       // 组合片段：相邻 base 合并（1-3 段）由 LLM 给出？——合并由脚本确定性生成，保证连续性
@@ -177,7 +210,7 @@ async function main(): Promise<void> {
       if (done % 100 === 0 || done === list.length) {
         const rate = done / ((Date.now() - started) / 60000)
         const etaMin = Math.round((list.length - done) / Math.max(rate, 1))
-        console.log(`  [${done}/${list.length}] ok ${ok} / failed ${failed} ${rate.toFixed(0)}句/min ~${etaMin}min left`)
+        console.log(`  [${done}/${list.length}] ok ${ok} / fallback ${fallback} / failed ${failed} ${rate.toFixed(0)}句/min ~${etaMin}min left`)
       }
     }
   }
@@ -199,7 +232,7 @@ async function main(): Promise<void> {
     process.exit(1)
   }
 
-  console.log(`\n${APPLY ? "✅" : "📋"} chunks 回填${APPLY ? "完成" : "预览完成"}：处理 ${done}，成功 ${ok}，失败 ${failed}`)
+  console.log(`\n${APPLY ? "✅" : "📋"} chunks 回填${APPLY ? "完成" : "预览完成"}：处理 ${done}，成功 ${ok}，兜底整句 ${fallback}，失败 ${failed}`)
   if (!APPLY) console.log("   确认后加 --apply 执行")
   await pool.end()
 }
