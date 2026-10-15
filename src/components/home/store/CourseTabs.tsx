@@ -28,11 +28,12 @@ interface CourseTabsProps {
  */
 function CountBadge({ count }: { count: number | undefined }) {
   if (count === undefined) return null
-  return (
-    <span className="relative -top-px ml-1 text-[10px] font-normal tabular-nums opacity-60">
-      {count}
-    </span>
-  )
+  // 用 <b> 而不是 <span>：生成的 `.courseTab span`（子标签行容器）是后代选择器，
+  // 会把 display:block + margin-top:16px 套到角标上，逼它换行并撑高整行。
+  // 样式统一由 .course-count 提供（见 scripts/extract-store-market-css.py 的 SHELL），
+  // 不在这里用 Tailwind 工具类 —— 生成的 CSS 是未分层的，优先级高于 @layer utilities，
+  // `ml-1` 这类简写冲突会被静默覆盖，看起来生效实则没有。
+  return <b className="course-count">{count}</b>
 }
 
 /**
@@ -98,8 +99,11 @@ export function CourseTabs({
     <div className="fixedTab">
       <div className="courseTab">
         <div className="Tab">
-          {/* 主标签：参考站是 <p> 里一排 <label> */}
-          <p ref={mainTabsRef} className="scrollbar-none overflow-x-auto">
+          {/* 主标签：参考站是 <p> 里一排 <label>。
+              横向滚动的容器属性由生成的 @media (max-width: 900px) 提供，
+              这里不放 Tailwind 工具类 —— 桌面上不该有滚动容器，而
+              `overflow-x: auto` 会把 overflow-y 也算成 auto，凭空造出裁剪上下文。 */}
+          <p ref={mainTabsRef}>
             {COURSE_CATEGORIES.map((cat) => (
               <label
                 key={cat.key}
@@ -114,7 +118,7 @@ export function CourseTabs({
 
           {/* 子标签：参考站是 <span> 里一排小胶囊 <em> */}
           {showSubTabs && (
-            <span ref={subTabsRef} className="scrollbar-none overflow-x-auto">
+            <span ref={subTabsRef}>
               <em
                 {...tapHandlers(() => onSubTabChange(null))}
                 className={activeSubTab === null ? "on" : undefined}

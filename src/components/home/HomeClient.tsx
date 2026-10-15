@@ -422,9 +422,9 @@ function VocabCard({ wordCount, pendingReviews }: { wordCount: number; pendingRe
             </div>
           </div>
           <p>开启词汇学习之旅</p>
-          {/* 「创建学习计划」按钮暂时隐藏（用户反馈 m22433）：本站还没有
-              「学习计划」功能，按钮文案名不副实。样式 .vocab-start-btn
-              保留在 home-ref.css，功能上线后恢复这行 Link 即可。 */}
+          <Link href="/home/study-plan" className="vocab-start-btn">
+            创建学习计划
+          </Link>
         </div>
       ) : (
         <>

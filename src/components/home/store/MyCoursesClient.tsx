@@ -5,7 +5,6 @@ import Link from "next/link"
 import { ShoppingBag } from "lucide-react"
 import type { Course } from "@/types/course"
 import { CourseCard, type CourseCardStats } from "./CourseCard"
-import "@/app/home/store/store-market.css"
 
 /**
  * `/api/courses/mine` 返回的形状：课程行 + 卡片所需的规模/进度 + 上次练习时间。

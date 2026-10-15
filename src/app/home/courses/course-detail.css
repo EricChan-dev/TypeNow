@@ -637,6 +637,114 @@
     font-size: 12px;
     color: var(--color64748b);
 }
+/* ── 课程简介（任务④，课程级 AI 导学，所有人可见）────────────────────────── */
+.course-detail .ai-intro-section {
+    background: var(--bgwhite);
+    padding: 20px;
+    border-radius: 10px;
+    margin-top: 20px;
+}
+.course-detail .ai-intro-section h5 {
+        font-size: 18px;
+        margin-bottom: 12px;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+.course-detail .ai-intro-section h5 i {
+            color: #8b5cf6;
+            font-size: 20px;
+        }
+.course-detail .ai-intro-section p {
+    font-size: 14px;
+    line-height: 1.8;
+    color: #334155;
+    margin-bottom: 10px;
+}
+.course-detail .ai-intro-section .ai-intro-loading {
+        font-size: 13px;
+        color: var(--color64748b);
+    }
+.course-detail .ai-intro-section .ai-intro-note {
+        font-size: 12px;
+        color: var(--color94a3b8);
+        margin-bottom: 0;
+    }
+/* ── 课节 AI 分析 · 语法点（任务④，LLM 产物落库缓存）── */
+.course-detail .ai-grammar-list {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    width: 100%;
+}
+.course-detail .ai-grammar-item {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    background: var(--f1f5f9);
+    border-radius: 10px;
+    padding: 10px 14px;
+}
+.course-detail .ai-grammar-point {
+    font-size: 13px;
+    font-weight: 600;
+    color: #f59e0b;
+}
+.course-detail .ai-grammar-explain {
+    font-size: 12px;
+    line-height: 1.7;
+    color: #334155;
+}
+.course-detail .ai-grammar-example {
+    font-size: 12px;
+    color: var(--color64748b);
+}
+/* ── 课节 AI 分析 · 句子复杂度（summary + 三段占比条 + 最难句）── */
+.course-detail .ai-complexity {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    width: 100%;
+}
+.course-detail .ai-complexity-summary {
+    font-size: 13px;
+    line-height: 1.7;
+    color: #334155;
+    margin: 0;
+}
+.course-detail .ai-complexity-bars {
+    display: flex;
+    height: 8px;
+    border-radius: 5px;
+    overflow: hidden;
+    background: #e2e8f0;
+    width: 100%;
+    max-width: 420px;
+}
+.course-detail .ai-complexity-bars .easy {
+        background: #10b981;
+    }
+.course-detail .ai-complexity-bars .medium {
+        background: #f59e0b;
+    }
+.course-detail .ai-complexity-bars .hard {
+        background: #ef4444;
+    }
+.course-detail .ai-complexity-hardest {
+    font-size: 12px;
+    line-height: 1.7;
+    color: var(--color64748b);
+    margin: 0;
+}
+/* ── 课节 AI 分析 · 会员锁（免费用户非第一课节）── */
+.course-detail .ai-locked {
+    font-size: 12px;
+    color: var(--color64748b);
+}
+.course-detail .ai-locked a {
+        color: #2C5AF4;
+        margin: 0 2px;
+    }
 @media screen and (max-width: 992px) {
 .course-detail .lesson-item {
         flex-wrap: wrap;

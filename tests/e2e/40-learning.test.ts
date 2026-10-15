@@ -140,6 +140,54 @@ describe("课程广场 /api/courses/counts", () => {
       res.body.categories.every((c) => c.count === 0 && c.subCategories.every((s) => s.count === 0))
     ).toBe(true)
   })
+
+  /**
+   * 计数跟着搜索词走 —— 标签上的数字必须等于点进去看到的课程数。
+   *
+   * 这是「数字对不上」类 bug 的核心防线：两边口径一旦分叉，用户搜完点标签
+   * 会看到数量变化，而那种错看起来总是"差不多对"，极难自查。
+   */
+  it("带 search 时，各分类计数与列表在同搜索词下逐项一致", async () => {
+    const search = "测试"
+    const counts = await ApiClient.anonymous().get<{ total: number; uncategorized: number }>(
+      `/api/courses/counts?search=${encodeURIComponent(search)}`
+    )
+    const list = await ApiClient.anonymous().get<{ total: number }>(
+      `/api/courses/list?search=${encodeURIComponent(search)}`
+    )
+
+    expect(counts.status).toBe(200)
+    // 夹具里已发布那门标题含「测试」，未发布那门也含 —— 但只有已发布的该被算进来
+    expect(counts.body.total).toBe(1)
+    expect(counts.body.total).toBe(list.body.total)
+    expect(counts.body.uncategorized).toBe(1)
+  })
+
+  it("search 不命中时计数归零（不是退化成静态总数）", async () => {
+    const counts = await ApiClient.anonymous().get<{ total: number; categories: { count: number }[] }>(
+      "/api/courses/counts?search=绝对不存在的课程名"
+    )
+
+    expect(counts.body.total).toBe(0)
+    expect(counts.body.categories.every((c) => c.count === 0)).toBe(true)
+  })
+
+  it("counts 与 list 的 LIKE 转义口径一致（% 不能变成全表）", async () => {
+    // 两边都必须把 % 当字面量：一旦有一边漏了转义，数字就会和列表分叉
+    const counts = await ApiClient.anonymous().get<{ total: number }>("/api/courses/counts?search=%25")
+    const list = await ApiClient.anonymous().get<{ total: number }>("/api/courses/list?search=%25")
+
+    expect(counts.body.total).toBe(0)
+    expect(counts.body.total).toBe(list.body.total)
+  })
+
+  it("search 只有空白时按「无搜索」处理（不该把列表清空）", async () => {
+    const blank = await ApiClient.anonymous().get<{ total: number }>("/api/courses/counts?search=%20%20")
+    const none = await ApiClient.anonymous().get<{ total: number }>("/api/courses/counts")
+
+    expect(blank.body.total).toBe(none.body.total)
+    expect(blank.body.total).toBe(1)
+  })
 })
 
 describe("课程详情 /api/courses/[id]", () => {

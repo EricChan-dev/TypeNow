@@ -126,6 +126,17 @@ async function main(): Promise<void> {
 
   async function processOne(s: { id: string; english: string; chinese: string | null }, index: number): Promise<void> {
     try {
+      // 单词句（【单词】课的词条英文，归一后无空格）：没有可切分的短语结构，
+      // 直接写整句 chunk，不烧 LLM——这类句子占 pending 相当比例，逐条打 LLM
+      // 会全部被「2-6 段」校验拒绝（LLM 只能返回 1 段）。
+      if (!normalizeSentenceForComparison(s.english).includes(" ")) {
+        const chunks = [{ text: s.english, order: 1, chinese: s.chinese ?? "" }]
+        if (APPLY) {
+          await db.update(sentences).set({ chunks }).where(eq(sentences.id, s.id))
+        }
+        ok++
+        return
+      }
       const raw = await llm([
         { role: "system", content: SYSTEM },
         { role: "user", content: `句子：${s.english}\n中文参考：${s.chinese ?? "(无)"}` },
@@ -133,6 +144,10 @@ async function main(): Promise<void> {
       const base = parseChunks(raw, s.english)
       if (!base) {
         failed++
+        // 静默失败没法排查：把被拒的返回打出来，看是铺不满原句还是 JSON 坏
+        if (failed <= 40) {
+          console.error(`  ✗ parse [${index + 1}] ${s.english.slice(0, 60)} => ${raw.slice(0, 150).replace(/\s+/g, " ")}`)
+        }
         return
       }
       // 组合片段：相邻 base 合并（1-3 段）由 LLM 给出？——合并由脚本确定性生成，保证连续性

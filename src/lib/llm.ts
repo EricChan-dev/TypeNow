@@ -20,20 +20,51 @@ interface LLMCallOptions {
   responseFormat?: "text" | "json"
 }
 
-export async function llmCall(options: LLMCallOptions): Promise<string> {
-  const apiKey = process.env.DEEPSEEK_API_KEY
-  if (!apiKey) {
-    throw new Error("DEEPSEEK_API_KEY not configured")
-  }
+export interface LlmEndpoint {
+  url: string
+  apiKey: string
+  model: string
+}
 
-  const res = await fetch("https://api.deepseek.com/v1/chat/completions", {
+/**
+ * LLM 端点解析：
+ * - 线上（NODE_ENV=production）一律走官方 api.deepseek.com + DEEPSEEK_API_KEY，
+ *   自定义路由仅供本地测试，绝不进生产路径；
+ * - 本地开发（next dev）且 CUSTOM_LLM_* 三件套齐全时优先自定义路由，
+ *   避免调试消耗官方额度；未配置则同样回落官方。
+ * 为什么必须抽出来：三个调用点（llmCall / api/chat / knowledge/analyze）曾各自
+ * 硬编码官方 URL，官方账户 402 Insufficient Balance 后全站 LLM 功能瘫死；实测
+ * 自定义路由同样支持 thinking:{type:"disabled"}（message.content 正常出文）。
+ */
+export function resolveLlmEndpoint(): LlmEndpoint {
+  if (process.env.NODE_ENV !== "production") {
+    const baseUrl = process.env.CUSTOM_LLM_BASE_URL
+    const customKey = process.env.CUSTOM_LLM_API_KEY
+    const customModel = process.env.CUSTOM_LLM_MODEL
+    if (baseUrl && customKey && customModel) {
+      return {
+        url: `${baseUrl.replace(/\/+$/, "")}/chat/completions`,
+        apiKey: customKey,
+        model: customModel,
+      }
+    }
+  }
+  const apiKey = process.env.DEEPSEEK_API_KEY
+  if (!apiKey) throw new Error("DEEPSEEK_API_KEY not configured")
+  return { url: "https://api.deepseek.com/v1/chat/completions", apiKey, model: DEEPSEEK_MODEL }
+}
+
+export async function llmCall(options: LLMCallOptions): Promise<string> {
+  const endpoint = resolveLlmEndpoint()
+
+  const res = await fetch(endpoint.url, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      Authorization: `Bearer ${apiKey}`,
+      Authorization: `Bearer ${endpoint.apiKey}`,
     },
     body: JSON.stringify({
-      model: DEEPSEEK_MODEL,
+      model: endpoint.model,
       messages: [
         { role: "system", content: options.systemPrompt },
         { role: "user", content: options.userMessage },
@@ -53,8 +84,14 @@ export async function llmCall(options: LLMCallOptions): Promise<string> {
   return data.choices[0].message.content
 }
 
-function extractJson(raw: string): string {
-  // try to extract JSON from markdown code blocks or surrounding text
+/**
+ * 从模型原文里剥出 JSON：优先 ```json 代码块，退而求其次截取首尾大括号，
+ * 都没有就原样返回（交给上层 JSON.parse 报错）。
+ *
+ * 导出版：course-ai（任务④课程简介/课节分析）复用；api/knowledge/analyze 里
+ * 还有一份逐字相同的复制品，不动它以免牵连既有行为。
+ */
+export function extractJson(raw: string): string {
   const jsonBlock = raw.match(/```(?:json)?\s*([\s\S]*?)```/)
   if (jsonBlock) return jsonBlock[1].trim()
   const firstBrace = raw.indexOf("{")

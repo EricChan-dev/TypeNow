@@ -80,6 +80,34 @@ EXCLUDE_SEL_RE = re.compile(
 
 EXCLUDE_DARK = True
 
+# Tailwind v4 内置动画名（node_modules/tailwindcss/theme.css 的 --animate-*）。
+# `@keyframes` 不能加选择器前缀（动画名引用会断），所以它们始终落在**全局**作用域；
+# 一旦与 Tailwind 内置重名，后加载的那份会覆盖先加载的，而 `animate-pulse` 这类
+# 工具类仍然按名字引用 —— 结果是本页之外的骨架屏跟着变形。
+# 实测参考站的 @keyframes pulse 是 0.4→1，Tailwind 的是 1→0.5，两者并存必有一方被静默改写。
+# 重名的统一改名为 store-<name>，连带 animation 引用一起改。
+TW_ANIM_NAMES = ("spin", "ping", "pulse", "bounce")
+
+
+def rename_colliding_keyframes(css: str):
+    """把与 Tailwind 内置重名的 @keyframes 及其 animation 引用改成 store-<name>。
+    返回 (css, 改名清单)。"""
+    renamed = []
+    for name in TW_ANIM_NAMES:
+        if not re.search(rf"@keyframes\s+{re.escape(name)}\b", css):
+            continue
+        new = f"store-{name}"
+        css = re.sub(rf"(@keyframes\s+){re.escape(name)}\b", rf"\g<1>{new}", css)
+        # 只改 animation / animation-name 声明里的名字，避免误伤别处的同名词
+        css = re.sub(
+            r"(?:^|[;{]\s*)animation(?:-name)?\s*:[^;}]*(?:;|(?=\}))",
+            lambda m: re.sub(rf"\b{re.escape(name)}\b", new, m.group(0)),
+            css,
+            flags=re.M,
+        )
+        renamed.append(name)
+    return css, renamed
+
 # 手工维护的页面外壳件。取值为参考站原值，来源逐条注明。
 SHELL = """\
 /* ── 页面外壳（手工维护，逐字取自参考站）── */
@@ -92,6 +120,95 @@ SHELL = """\
   box-sizing: border-box;
   padding: 0 20px;
   margin: 0 auto;
+}
+
+/* 参考站的 bug 修正：归档的 market.css 里**没有 `.hero-right` 规则**（全目录 grep 无命中），
+   而 ≤900px 时 .market-hero-section 变成 column + align-items: flex-start，
+   于是 .hero-right 收缩成 fit-content，里面 `.modern-search p { width: 100% }` 只能取到
+   那点内容宽（实测 768px 视口下搜索框仅 257px，本该铺满）。桌面上因为是 row 布局看不出来。
+   这里补上拉伸，让参考站那条 width:100% 真正生效。仅 <=900px，桌面宽度维持原值 380px。 */
+@media screen and (max-width: 900px) {
+  .store-market-page .market-hero-section .hero-right {
+    width: 100%;
+    align-self: stretch;
+  }
+}
+
+/* 参考站 market.css:947-949 在 <=640px 把 .maxWidth 内边距收到 12px，
+   此前漏搬（SHELL 里固定成 20px），窄屏白白少了一截可用宽度。 */
+@media screen and (max-width: 640px) {
+  .store-market-page .maxWidth {
+    padding: 0 12px;
+  }
+}
+
+/* 计数角标：参考站没有承载它的元素，样式由本文件提供。
+   元素名刻意避开 span —— 提取出的 `.courseTab span`（子标签行的容器）是
+   `display: block; margin: 16px 0 0`，是个后代选择器，会命中标签里的任何
+   span：角标被压到文字下方独立成行，而 label 又是固定 39px 高的
+   inline-block，于是溢出的角标反过来把它的基线拉低，整行被撑到 84px
+   （实测 5 个主标签折 3 行 = 252px）。换成 b 后该规则不再命中。 */
+.store-market-page .course-count {
+  display: inline;
+  margin-left: 4px;
+  font-size: 10px;
+  font-weight: 400;
+  font-style: normal;
+  line-height: inherit;
+  font-variant-numeric: tabular-nums;
+  opacity: .6;
+}
+"""
+
+# 必须在 market_css **之后**写入的覆盖层。
+# 生成文件里 SHELL 在前、提取出的 market.css 规则在后，两边选择器一模一样时
+# 后者胜出 —— 于是「覆盖参考站取值」的规则放 SHELL 里会被静默吃掉
+# （踩过：.courseTab span em 的行高 34px 不生效，probe 读回来还是 30px）。
+# 不改选择器权重去硬压，而是把覆盖放在后面，让层叠顺序本身说明意图。
+SHELL_AFTER = """\
+/* 窄屏两级标签改成「各占一行、横向滑动」。
+   默认 inline-block 会折行：246px 宽下 5 个主标签折 3 行、15 个子标签折 6 行，
+   首屏全被标签占满。参考站在手机上同样折行，这里按触摸端习惯改为单行滑动。 */
+@media screen and (max-width: 900px) {
+  .store-market-page .courseTab p,
+  .store-market-page .courseTab span {
+    overflow-x: auto;
+    overflow-y: hidden;
+    white-space: nowrap;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+  }
+  .store-market-page .courseTab p::-webkit-scrollbar,
+  .store-market-page .courseTab span::-webkit-scrollbar {
+    display: none;
+  }
+  /* 触摸目标：参考站主标签 39px、子标签 30px、排序胶囊 41px 都是按鼠标点的尺寸，
+     低于 44px 的触摸指引（手指点偏一点就落到隔壁标签上）。窄屏统一抬到 44px。 */
+  .store-market-page .courseTab p label {
+    height: 44px;
+    line-height: 42px;
+  }
+  /* 参考站子标签行高 30px 是按鼠标点击数评估的；触摸屏抬到 44px。
+     这条与 market.css 的选择器完全相同，靠写在后面取胜。 */
+  .store-market-page .courseTab span em {
+    line-height: 44px;
+  }
+  .store-market-page .modern-tip-card .tip-right .kefu-btn {
+    min-height: 44px;
+  }
+  /* 清空搜索按钮：参考站是个 18px 图标（鼠标够用，手指点不中）。
+     用伪元素撑出 44x44 的命中区，视觉尺寸与位置都不动 —— 改 padding/width
+     会同时挪动图标本身。旁边的搜索图标不用改：它是 aria-hidden 的装饰件，
+     点击只是把焦点交给 input，而 input 本来就铺满整个 48px 高的容器。 */
+  .store-market-page .market-hero-section .modern-search .search-clear::after {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 44px;
+    height: 44px;
+    transform: translate(-50%, -50%);
+  }
 }
 """
 
@@ -257,6 +374,10 @@ def main():
     process(market_raw, collected, dict(stats), light_selectors)
     market_css, kept_market = process(market_raw, collected, stats, light_selectors)
 
+    # keyframes 是全局的（不能收进页面作用域），与 Tailwind 内置重名会互相覆盖，
+    # 所以在这道关统一改名 —— 必须在下面统计 used_vars 之前做，改名后仍会扫到同样的 var()。
+    market_css, renamed_anim = rename_colliding_keyframes(market_css)
+
     # ── 变量表：只发本文件实际引用到的，取值逐字来自参考 reset.css 浅色 :root ──
     reset_raw = strip_at_statements(strip_comments(open(SRC_RESET, encoding="utf-8").read()))
     ref_vars = {}
@@ -268,7 +389,7 @@ def main():
         for m in re.finditer(r"(--[\w-]+)\s*:\s*([^;]+);", b):
             ref_vars.setdefault(m.group(1), m.group(2).strip())
 
-    used_vars = sorted(set(re.findall(r"var\((--[\w-]+)", market_css + SHELL)))
+    used_vars = sorted(set(re.findall(r"var\((--[\w-]+)", market_css + SHELL + SHELL_AFTER)))
     missing = [v for v in used_vars if v not in ref_vars]
     var_lines = [f"  {v}: {ref_vars[v]};" for v in used_vars if v in ref_vars]
     vars_css = (f"{PREFIX} {{\n" + "\n".join(var_lines) + "\n}\n") if var_lines else ""
@@ -296,12 +417,18 @@ def main():
     with open(OUT, "w", encoding="utf-8") as f:
         f.write(header + vars_css + "\n" + SHELL
                 + "\n\n/* ── 共享基样式：hero/搜索框/两级标签/卡片/提示条（来自 market.css）── */\n"
-                + market_css + "\n")
+                + market_css
+                + "\n\n/* ── 覆盖层：必须写在 market.css 之后（同权重时后者胜出）── */\n"
+                + SHELL_AFTER + "\n")
 
     text = open(OUT, encoding="utf-8").read()
     bad = re.findall(r"(?m)^\s*(?:body|html|:root)(?![\w-])[\s,{:]", text)
     unscoped = 0
-    for m in re.finditer(r"(?m)^(?!\s*(?:@|/\*))(?P<sel>[^{}\n@/][^{}\n]*)\{", text):
+    # 先剥掉注释再扫选择器。注释里出现 `{ width: 100% }` 这类片段时，
+    # 朴素的「行首到 {」匹配会把注释放进选择器位置，报出并不存在的 UNSCOPED。
+    # （之前两次都是靠改注释措辞绕开的 —— 那是把检查器的问题变成了写作约束。）
+    scan = strip_comments(text)
+    for m in re.finditer(r"(?m)^(?!\s*(?:@|/\*))(?P<sel>[^{}\n@/][^{}\n]*)\{", scan):
         sel = m.group("sel").strip()
         for part in split_commas(sel):
             # @keyframes 步进（0%/100%/from/to）随多行 body 换行后命中本检查。
@@ -316,6 +443,9 @@ def main():
           f"light-stripped {stats['light_stripped']}")
     print(f"vars emitted: {len(var_lines)}   used: {len(used_vars)}")
     print(f"lines: {text.count(chr(10))}   bytes: {os.path.getsize(OUT)}")
+    if renamed_anim:
+        print(f"renamed keyframes (与 Tailwind 内置重名): "
+              f"{', '.join('pulse→store-pulse' if n == 'pulse' else n for n in renamed_anim)}")
     print(f"UNSCOPED: {unscoped}   global selectors: {len(bad)}")
     if missing:
         print(f"vars referenced but NOT in reference reset.css: {', '.join(missing)}")

@@ -18,6 +18,9 @@ import { sql, type SQL } from "drizzle-orm"
 // 编译后不留运行时 import，不会让 schema 与 pronunciation 之间产生循环依赖
 // （pronunciation.ts 也不 import schema，两边都是纯类型关系）。
 import type { EvaluateWordScore } from "@/lib/pronunciation"
+// 同样只为 $type（lesson_ai_insights.grammar/complexity）。course-ai 是纯函数模块
+// （不 import schema），import type 编译后不留运行时 import，不会成环。
+import type { GrammarPoint, LessonComplexity } from "@/lib/course-ai"
 
 // ─── Users (replaces Supabase auth.users + profiles) ─────────────────────────
 export const users = mysqlTable(
@@ -970,6 +973,103 @@ export const wordbookItems = mysqlTable(
     index("idx_wordbook_user").on(t.userId),
   ]
 )
+
+// ─── Study Plans (学习计划第一期：单词学习计划) ──────────────────────────────
+//
+// 设计与调度口径见 db/migrations/00034_study_plans.sql 文件头。要点：
+//   · 第一期一个用户只有一份计划（UNIQUE(user_id)），删除是硬删（连词进度一起删）；
+//   · 词进度只在**首次作答**时入库，没学过的词不占行 —— 单元「词总数」随时从
+//     sentences.words 现算，不另存会漂移的词表快照；
+//   · SRS 列与 review_queue 同形（SM-2 lite），但生命周期不同：句子由判错自动
+//     入队，词由计划显式管理，所以不合表。
+
+export const studyPlans = mysqlTable(
+  "study_plans",
+  {
+    id: varchar("id", { length: 36 }).primaryKey().default(sql`(UUID())`),
+    userId: varchar("user_id", { length: 36 }).notNull(),
+    courseId: varchar("course_id", { length: 36 }).notNull(),
+    status: mysqlEnum("status", ["active", "archived"]).notNull().default("active"),
+    createdAt: datetime("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+    // ON UPDATE 必须留着：计划概览的「最近学习」用的是最近一次作答时间，
+    // 与 pronunciation_scores.updated_at 同一套理由（见 schema.ts:446 的注释）。
+    updatedAt: datetime("updated_at")
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP`),
+  },
+  (t) => [
+    uniqueIndex("uk_study_plan_user").on(t.userId),
+    index("idx_study_plan_course").on(t.courseId),
+  ]
+)
+
+export const studyPlanWords = mysqlTable(
+  "study_plan_words",
+  {
+    id: varchar("id", { length: 36 }).primaryKey().default(sql`(UUID())`),
+    planId: varchar("plan_id", { length: 36 }).notNull(),
+    word: varchar("word", { length: 128 }).notNull(),
+    // 归属单元 = 首次作答时所在的课时；复习模式跨单元作答不改归属。
+    lessonId: varchar("lesson_id", { length: 36 }).notNull(),
+    reviewCount: int("review_count").notNull().default(0),
+    consecutiveOk: int("consecutive_ok").notNull().default(0),
+    // 0 = 未形成间隔（新答对一轮是 1 天）；与 review_queue 的「默认 1」语义不同。
+    intervalDays: int("interval_days").notNull().default(0),
+    easeFactor: decimal("ease_factor", { precision: 4, scale: 2 }).notNull().default("2.50"),
+    nextReviewAt: datetime("next_review_at"),
+    correctCount: int("correct_count").notNull().default(0),
+    wrongCount: int("wrong_count").notNull().default(0),
+    lastAnsweredAt: datetime("last_answered_at"),
+    status: mysqlEnum("status", ["learning", "mastered"]).notNull().default("learning"),
+    createdAt: datetime("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+    updatedAt: datetime("updated_at")
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP`),
+  },
+  (t) => [
+    uniqueIndex("uk_study_plan_word").on(t.planId, t.word),
+    index("idx_study_plan_words_due").on(t.planId, t.nextReviewAt),
+    index("idx_study_plan_words_lesson").on(t.planId, t.lessonId),
+  ]
+)
+
+export type StudyPlan = typeof studyPlans.$inferSelect
+export type StudyPlanWord = typeof studyPlanWords.$inferSelect
+
+// ─── Course AI Meta (课程详情 AI 元数据) ─────────────────────────────────────
+//
+// 任务④：课程简介 + 课节语法点/句子复杂度，DeepSeek 生成、DB 缓存（迁移 00035）。
+// 课程简介无用户维度：一课一行（PK=course_id），全站共享；课节分析一课节一行
+// （PK=lesson_id），首次展开时生成，之后命中缓存。与派生数据（lib/lesson-insight.ts
+// 每次从 sentences JSON 现算的词汇/短语）分工：派生快而浅不入库；AI 分析慢而
+// 花 token，必须落库，否则每次展开课节都重算一次。
+export const courseAiMeta = mysqlTable("course_ai_meta", {
+  courseId: varchar("course_id", { length: 36 }).primaryKey(),
+  // AI 导学简介（中文 200-350 字），前端按换行拆段渲染
+  intro: mediumtext("intro").notNull(),
+  // 记录生成模型（如 deepseek-flash），便于审计与将来换模型后定向重生成
+  model: varchar("model", { length: 64 }).notNull(),
+  createdAt: datetime("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  updatedAt: datetime("updated_at")
+    .notNull()
+    .default(sql`CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP`),
+})
+
+// grammar/complexity 可空：LLM 输出逐块校验（lib/course-ai），合法块照存、
+// 非法块置 NULL，前端渲染「暂未生成」占位（m20696 决议：不造假数据）。
+export const lessonAiInsights = mysqlTable("lesson_ai_insights", {
+  lessonId: varchar("lesson_id", { length: 36 }).primaryKey(),
+  grammar: json("grammar").$type<GrammarPoint[]>(),
+  complexity: json("complexity").$type<LessonComplexity>(),
+  model: varchar("model", { length: 64 }).notNull(),
+  createdAt: datetime("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  updatedAt: datetime("updated_at")
+    .notNull()
+    .default(sql`CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP`),
+})
+
+export type CourseAiMeta = typeof courseAiMeta.$inferSelect
+export type LessonAiInsight = typeof lessonAiInsights.$inferSelect
 
 // ─── Sentence Favorites (收藏句子) ───────────────────────────────────────────
 //

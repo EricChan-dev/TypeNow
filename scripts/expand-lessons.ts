@@ -244,7 +244,11 @@ async function main(): Promise<void> {
       let target = TARGET
       if (DIST) {
         const rank = rankOf.get(l.id)!
-        const want = rank < n100 ? 100 + Math.floor(Math.random() * 131) : rank < n50 ? 50 + Math.floor(Math.random() * 50) : 0
+        // 已达本档下限的节不再抬高目标（重跑只补缺口，不给已 100+ 的节追加新随机目标）。
+        const want =
+          rank < n100 ? (have >= 100 ? have : 100 + Math.floor(Math.random() * 131))
+          : rank < n50 ? (have >= 50 ? have : 50 + Math.floor(Math.random() * 50))
+          : have
         target = Math.max(want, have)
       }
       const need = DIST ? target - have : Math.min(TARGET - have, MAXNEW)
@@ -291,8 +295,9 @@ async function main(): Promise<void> {
     const accepted: GenSentence[] = []
     const seenLocal = new Set<string>()
     const sampleLines = sample.map((s) => `- ${s.english} — ${s.chinese}`)
-    // 轮数随缺口伸缩：布局模式单节最多要 +100~150 句，固定 6 轮不够。
-    const maxRounds = Math.ceil(task.need / BATCH) + 4
+    // 轮数随缺口伸缩：布局模式单节最多要 +100~150 句；单词贫乏的节（如【单词】课）全局去重
+    // 拒收率高（试跑 27 轮只采纳 73%），多留余量让模型换句式继续试。
+    const maxRounds = Math.ceil(task.need / BATCH) + 8
     for (let round = 0; round < maxRounds && accepted.length < task.need; round++) {
       const want = Math.min(task.need - accepted.length + 4, BATCH)
       const avoid = [...sampleLines, ...accepted.map((g) => `- ${g.english} — ${g.chinese}`)]

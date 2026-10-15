@@ -19,6 +19,7 @@ import {
   Play,
   PlayCircle,
   Quote,
+  Sparkles,
   Trash2,
   Users,
   XCircle,
@@ -26,6 +27,7 @@ import {
 import { resolveCourseCover } from "@/lib/course-cover"
 import { trackCourseOpen } from "@/lib/analytics"
 import { FREE_TRIAL_SENTENCES } from "@/lib/free-trial"
+import type { GrammarPoint, LessonComplexity } from "@/lib/course-ai"
 
 /**
  * 我的课程 · 课程详情页（复刻参考站「我的课程-课程详情」）。
@@ -94,6 +96,15 @@ interface InsightData {
 
 type InsightSlot = InsightData | "loading" | "error"
 
+/** 课节 AI 分析（任务④）：语法点 + 句子复杂度，来自 /api/lessons/[id]/ai（落库缓存）。 */
+interface AiInsightData {
+  grammar: GrammarPoint[] | null
+  complexity: LessonComplexity | null
+}
+type AiSlot = AiInsightData | "loading" | "error"
+/** 课程简介（任务④）：课程级 AI 导学文案，来自 /api/courses/[id]/ai-intro。失败/未生成整块收起。 */
+type AiIntroState = { status: "loading" | "ready" | "hidden"; text?: string }
+
 /** 图标包一层 <i>：CSS 的 `i` 规则（圆底/颜色）落在包装上，svg 尺寸由 size 给。 */
 const iconWrap: CSSProperties = {
   display: "inline-flex",
@@ -143,6 +154,11 @@ export function CourseDetailClient({ courseId }: { courseId: string }) {
   const [expandedIds, setExpandedIds] = useState<ReadonlySet<string>>(new Set())
   // 课节学习要点缓存：展开时才拉，拉过就不再拉
   const [insights, setInsights] = useState<Record<string, InsightSlot>>({})
+  // 课节 AI 分析缓存（语法点/句子复杂度）：与 insights 同一套懒加载策略，
+  // 但免费用户只在第一课节上真正发请求，其余课节渲染锁（服务端同口径强校验）
+  const [aiSlots, setAiSlots] = useState<Record<string, AiSlot>>({})
+  // 课程简介：独立请求（路由侧落库缓存、缓存优先，详情页每次加载都调）
+  const [aiIntro, setAiIntro] = useState<AiIntroState>({ status: "loading" })
 
   useEffect(() => {
     let cancelled = false
@@ -178,6 +194,27 @@ export function CourseDetailClient({ courseId }: { courseId: string }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [courseId])
 
+  // 课程简介：课程级导学内容，所有人可见（「仅限第一课时」约束的是课节级分析）。
+  // 路由缓存优先所以通常很快；失败/未生成 → 整块收起，不占版面也不弹错。
+  // loading 的初值就是 loading，不在这里同步 setState（react-hooks/set-state-in-effect）。
+  useEffect(() => {
+    let cancelled = false
+    fetch(`/api/courses/${courseId}/ai-intro`)
+      .then(async (r) => {
+        if (!r.ok) throw new Error(`HTTP ${r.status}`)
+        return (await r.json()) as { intro: string }
+      })
+      .then((json) => {
+        if (!cancelled) setAiIntro({ status: "ready", text: json.intro })
+      })
+      .catch(() => {
+        if (!cancelled) setAiIntro({ status: "hidden" })
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [courseId])
+
   const toggleLesson = (lessonId: string) => {
     const isExpanding = !expandedIds.has(lessonId)
 
@@ -204,6 +241,27 @@ export function CourseDetailClient({ courseId }: { courseId: string }) {
         })
         .catch(() => {
           setInsights((c) => ({ ...c, [lessonId]: "error" }))
+        })
+    }
+
+    // AI 分析（语法点/句子复杂度）：免费用户仅第一课节（lessons 按 sortOrder 升序，
+    // [0] 即第一课节；服务端 /api/lessons/[id]/ai 同口径强校验，绕过 UI 直接打也 403）。
+    // 会员锁的课节前端不发请求，渲染端用 locked 分支接住。
+    const isPro = !!data?.viewer.isPro
+    const isFirstLesson = lessonId === data?.lessons[0]?.id
+    const aiSlot = aiSlots[lessonId]
+    if (isExpanding && (isPro || isFirstLesson) && (!aiSlot || aiSlot === "error")) {
+      setAiSlots((cur) => ({ ...cur, [lessonId]: "loading" }))
+      fetch(`/api/lessons/${lessonId}/ai`)
+        .then(async (r) => {
+          if (!r.ok) throw new Error(`HTTP ${r.status}`)
+          return (await r.json()) as AiInsightData
+        })
+        .then((json) => {
+          setAiSlots((c) => ({ ...c, [lessonId]: json }))
+        })
+        .catch(() => {
+          setAiSlots((c) => ({ ...c, [lessonId]: "error" }))
         })
     }
   }
@@ -382,6 +440,31 @@ export function CourseDetailClient({ courseId }: { courseId: string }) {
               )}
             </div>
           </div>
+
+          {/* ── 课程简介（任务④，课程级 AI 导学，所有人可见）── */}
+          {aiIntro.status !== "hidden" && (
+            <div className="ai-intro-section">
+              <h5>
+                <Icon>
+                  <Sparkles size={20} />
+                </Icon>
+                课程简介
+              </h5>
+              {aiIntro.status === "loading" ? (
+                <p className="ai-intro-loading">AI 正在生成课程简介…</p>
+              ) : (
+                <>
+                  {(aiIntro.text ?? "")
+                    .split("\n")
+                    .filter(Boolean)
+                    .map((para, pIdx) => (
+                      <p key={pIdx}>{para}</p>
+                    ))}
+                  <p className="ai-intro-note">内容由 AI 根据课程内容生成，仅供参考</p>
+                </>
+              )}
+            </div>
+          )}
 
           {/* ── 学习统计（参考站 .study-stats-section，4 卡）── */}
           <div className="study-stats-section">
@@ -574,33 +657,68 @@ export function CourseDetailClient({ courseId }: { courseId: string }) {
                             ) : null
                           }
                         />
-                        {/* 语法点 / 句子复杂度：占位（用户决议 m20696）。
-                            参考站这两块是课节级 AI 分析，我们没有数据源，
-                            渲染「暂未生成」而不是编造内容。 */}
-                        <div className="detail-section">
-                          <div className="detail-label">
-                            <Icon>
-                              <FileText size={14} />
-                            </Icon>
-                            语法点
-                          </div>
-                          <div className="detail-tags">
-                            <span className="complexity-reason">暂未生成 · 语法点分析尚未上线</span>
-                          </div>
-                        </div>
-                        <div className="detail-section">
-                          <div className="detail-label">
-                            <Icon>
-                              <BarChart3 size={14} />
-                            </Icon>
-                            句子复杂度
-                          </div>
-                          <div className="detail-complexity">
-                            <span className="complexity-reason">
-                              暂未生成 · 句子复杂度分析尚未上线
-                            </span>
-                          </div>
-                        </div>
+                        {/* 语法点 / 句子复杂度（任务④）：课节级 AI 分析，LLM 产物落库缓存。
+                            免费用户仅第一课节（服务端 /api/lessons/[id]/ai 同口径强校验），
+                            其余课节渲染会员锁。逐块校验放行，AI 没产出的块渲染
+                            「暂未产出」而不是编造内容（m20696 决议的延续）。 */}
+                        <AiSection
+                          icon={<FileText size={14} />}
+                          label="语法点"
+                          locked={!viewer.isPro && lesson.id !== lessons[0]?.id}
+                          slot={aiSlots[lesson.id]}
+                          render={(d) =>
+                            d.grammar && d.grammar.length > 0 ? (
+                              <div className="ai-grammar-list">
+                                {d.grammar.map((g) => (
+                                  <div className="ai-grammar-item" key={g.point}>
+                                    <span className="ai-grammar-point">{g.point}</span>
+                                    <span className="ai-grammar-explain">{g.explanation}</span>
+                                    {g.example ? (
+                                      <span className="ai-grammar-example">
+                                        {g.example}
+                                        {g.exampleZh ? `（${g.exampleZh}）` : ""}
+                                      </span>
+                                    ) : null}
+                                  </div>
+                                ))}
+                              </div>
+                            ) : null
+                          }
+                        />
+                        <AiSection
+                          icon={<BarChart3 size={14} />}
+                          label="句子复杂度"
+                          locked={!viewer.isPro && lesson.id !== lessons[0]?.id}
+                          slot={aiSlots[lesson.id]}
+                          render={(d) => {
+                            const c = d.complexity
+                            if (!c) return null
+                            const dist = c.distribution
+                            const total = dist.easy + dist.medium + dist.hard
+                            const pct = (n: number) =>
+                              total > 0 ? Math.round((n / total) * 100) : 0
+                            return (
+                              <div className="ai-complexity">
+                                <p className="ai-complexity-summary">{c.summary}</p>
+                                <div className="ai-complexity-bars">
+                                  <span className="easy" style={{ width: `${pct(dist.easy)}%` }} />
+                                  <span className="medium" style={{ width: `${pct(dist.medium)}%` }} />
+                                  <span className="hard" style={{ width: `${pct(dist.hard)}%` }} />
+                                </div>
+                                <p className="complexity-reason">
+                                  简单 {dist.easy} 句 · 中等 {dist.medium} 句 · 较难 {dist.hard} 句
+                                </p>
+                                {c.hardestExample ? (
+                                  <p className="ai-complexity-hardest">
+                                    最难句：{c.hardestExample}
+                                    {c.hardestExampleZh ? `（${c.hardestExampleZh}）` : ""}
+                                    {c.hardestReason ? ` —— ${c.hardestReason}` : ""}
+                                  </p>
+                                ) : null}
+                              </div>
+                            )
+                          }}
+                        />
                       </div>
                     )}
                   </li>
@@ -639,6 +757,50 @@ function DetailSection({
     body = <span className="complexity-reason">分析数据加载失败，收起后重新展开可重试</span>
   } else {
     body = render(insight) ?? <span className="complexity-reason">{emptyText}</span>
+  }
+  return (
+    <div className="detail-section">
+      <div className="detail-label">
+        <Icon>{icon}</Icon>
+        {label}
+      </div>
+      <div className="detail-tags">{body}</div>
+    </div>
+  )
+}
+
+/**
+ * 课节 AI 分析区块（语法点/句子复杂度共用）：锁 / 加载中 / 失败 / 数据 / 单块空 五态。
+ * locked 优先于一切——免费用户的非第一课节前端根本不发请求；「AI 没产出该块」
+ * 与「加载失败」必须区分开：逐块校验放行意味着 null 是真实结果而不是错误。
+ */
+function AiSection({
+  icon,
+  label,
+  slot,
+  locked,
+  render,
+}: {
+  icon: ReactNode
+  label: string
+  slot: AiSlot | undefined
+  locked: boolean
+  render: (d: AiInsightData) => ReactNode | null
+}) {
+  let body: ReactNode
+  if (locked) {
+    body = (
+      <span className="ai-locked">
+        免费用户仅可查看第一课节的 AI 分析，
+        <Link href="/home/membership">开通会员</Link>解锁全部课节
+      </span>
+    )
+  } else if (!slot || slot === "loading") {
+    body = <span className="complexity-reason">AI 正在分析课节内容…</span>
+  } else if (slot === "error") {
+    body = <span className="complexity-reason">AI 分析加载失败，收起后重新展开可重试</span>
+  } else {
+    body = render(slot) ?? <span className="complexity-reason">AI 暂未产出该块内容</span>
   }
   return (
     <div className="detail-section">

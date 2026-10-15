@@ -142,13 +142,21 @@ function parseDictionary(raw: RawResponse) {
 
 async function fetchFreeDictionary(word: string) {
   const url = `https://freedictionaryapi.com/api/v1/entries/en/${encodeURIComponent(word)}?translations=true`
-  const res = await fetch(url, {
-    headers: { Accept: "application/json" },
-    next: { revalidate: 0 },
-  })
-  if (!res.ok) return { ok: false as const, status: res.status }
-  const data = (await res.json()) as RawResponse
-  return { ok: true as const, data }
+  try {
+    const res = await fetch(url, {
+      headers: { Accept: "application/json" },
+      // 上游挂了/被墙时不能让用户对着转圈干等：8s 封顶，超时按 lookup_failed 走
+      signal: AbortSignal.timeout(8000),
+      next: { revalidate: 0 },
+    })
+    if (!res.ok) return { ok: false as const, status: res.status }
+    const data = (await res.json()) as RawResponse
+    return { ok: true as const, data }
+  } catch (e) {
+    // TimeoutError = 8s 超时；其余（网络不通 / 非 JSON 响应）一律按 502 归入 lookup_failed
+    const status = e instanceof Error && e.name === "TimeoutError" ? 504 : 502
+    return { ok: false as const, status }
+  }
 }
 
 export async function GET(request: NextRequest) {

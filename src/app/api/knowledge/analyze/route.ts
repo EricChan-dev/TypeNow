@@ -13,7 +13,7 @@ import {
   PRO_AI_ANALYZE_PER_DAY,
 } from "@/lib/membership-benefits"
 import { KNOWLEDGE_UNCONFIGURED_CODE } from "@/lib/knowledge-failure"
-import { DEEPSEEK_MODEL, DEEPSEEK_THINKING } from "@/lib/llm"
+import { DEEPSEEK_THINKING, resolveLlmEndpoint } from "@/lib/llm"
 
 // 每次 LLM 调用都是真金白银，必须给单用户额度上限：
 //   5 次/分钟  —— 防突发（连点、脚本）
@@ -54,17 +54,16 @@ function extractJson(raw: string): string {
 }
 
 async function callDeepSeek(english: string) {
-  const apiKey = process.env.DEEPSEEK_API_KEY
-  if (!apiKey) throw new Error("DEEPSEEK_API_KEY not configured")
+  const endpoint = resolveLlmEndpoint()
 
-  const res = await fetch("https://api.deepseek.com/v1/chat/completions", {
+  const res = await fetch(endpoint.url, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      Authorization: `Bearer ${apiKey}`,
+      Authorization: `Bearer ${endpoint.apiKey}`,
     },
     body: JSON.stringify({
-      model: DEEPSEEK_MODEL,
+      model: endpoint.model,
       messages: [
         { role: "system", content: SYSTEM_PROMPT },
         { role: "user", content: english },

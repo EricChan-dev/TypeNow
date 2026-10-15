@@ -159,7 +159,9 @@ async function runWithConcurrency<T>(
 }
 
 async function main(): Promise<void> {
-  const CONCURRENCY = 10
+  // 外层 worker 池：实际并发还会被 llm-provider 的 Limiter 再夹一层（CUSTOM_LLM_CONCURRENCY），
+  // 大跑提速时两者要一起调大才生效。
+  const CONCURRENCY = Number(process.env.STRUCTURE_CONCURRENCY ?? 10)
   const args = process.argv.slice(2)
   const dry = args.includes("--dry")
   const limitArg = args.find((a) => a.startsWith("--limit="))

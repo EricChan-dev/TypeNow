@@ -38,6 +38,43 @@
   margin: 0 auto;
 }
 
+/* 参考站的 bug 修正：归档的 market.css 里**没有 `.hero-right` 规则**（全目录 grep 无命中），
+   而 ≤900px 时 .market-hero-section 变成 column + align-items: flex-start，
+   于是 .hero-right 收缩成 fit-content，里面 `.modern-search p { width: 100% }` 只能取到
+   那点内容宽（实测 768px 视口下搜索框仅 257px，本该铺满）。桌面上因为是 row 布局看不出来。
+   这里补上拉伸，让参考站那条 width:100% 真正生效。仅 <=900px，桌面宽度维持原值 380px。 */
+@media screen and (max-width: 900px) {
+  .store-market-page .market-hero-section .hero-right {
+    width: 100%;
+    align-self: stretch;
+  }
+}
+
+/* 参考站 market.css:947-949 在 <=640px 把 .maxWidth 内边距收到 12px，
+   此前漏搬（SHELL 里固定成 20px），窄屏白白少了一截可用宽度。 */
+@media screen and (max-width: 640px) {
+  .store-market-page .maxWidth {
+    padding: 0 12px;
+  }
+}
+
+/* 计数角标：参考站没有承载它的元素，样式由本文件提供。
+   元素名刻意避开 span —— 提取出的 `.courseTab span`（子标签行的容器）是
+   `display: block; margin: 16px 0 0`，是个后代选择器，会命中标签里的任何
+   span：角标被压到文字下方独立成行，而 label 又是固定 39px 高的
+   inline-block，于是溢出的角标反过来把它的基线拉低，整行被撑到 84px
+   （实测 5 个主标签折 3 行 = 252px）。换成 b 后该规则不再命中。 */
+.store-market-page .course-count {
+  display: inline;
+  margin-left: 4px;
+  font-size: 10px;
+  font-weight: 400;
+  font-style: normal;
+  line-height: inherit;
+  font-variant-numeric: tabular-nums;
+  opacity: .6;
+}
+
 
 /* ── 共享基样式：hero/搜索框/两级标签/卡片/提示条（来自 market.css）── */
 .store-market-page .market-hero-section {
@@ -408,7 +445,7 @@
 .store-market-page .TypeList li .img .img-placeholder i {
     font-size: 32px;
     color: #cbd5e1;
-    animation: pulse 1.5s ease-in-out infinite;
+    animation: store-pulse 1.5s ease-in-out infinite;
 }
 .store-market-page .TypeList li .img img {
     opacity: 0;
@@ -420,7 +457,7 @@
 .store-market-page .TypeList li .img .img-placeholder.hidden {
     display: none;
 }
-@keyframes pulse {
+@keyframes store-pulse {
     0%, 100% { opacity: 0.4; }
     50% { opacity: 1; }
 }
@@ -432,4 +469,51 @@
 .store-market-page .TypeList ul {
         gap: 12px;
     }}
+
+
+/* ── 覆盖层：必须写在 market.css 之后（同权重时后者胜出）── */
+/* 窄屏两级标签改成「各占一行、横向滑动」。
+   默认 inline-block 会折行：246px 宽下 5 个主标签折 3 行、15 个子标签折 6 行，
+   首屏全被标签占满。参考站在手机上同样折行，这里按触摸端习惯改为单行滑动。 */
+@media screen and (max-width: 900px) {
+  .store-market-page .courseTab p,
+  .store-market-page .courseTab span {
+    overflow-x: auto;
+    overflow-y: hidden;
+    white-space: nowrap;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+  }
+  .store-market-page .courseTab p::-webkit-scrollbar,
+  .store-market-page .courseTab span::-webkit-scrollbar {
+    display: none;
+  }
+  /* 触摸目标：参考站主标签 39px、子标签 30px、排序胶囊 41px 都是按鼠标点的尺寸，
+     低于 44px 的触摸指引（手指点偏一点就落到隔壁标签上）。窄屏统一抬到 44px。 */
+  .store-market-page .courseTab p label {
+    height: 44px;
+    line-height: 42px;
+  }
+  /* 参考站子标签行高 30px 是按鼠标点击数评估的；触摸屏抬到 44px。
+     这条与 market.css 的选择器完全相同，靠写在后面取胜。 */
+  .store-market-page .courseTab span em {
+    line-height: 44px;
+  }
+  .store-market-page .modern-tip-card .tip-right .kefu-btn {
+    min-height: 44px;
+  }
+  /* 清空搜索按钮：参考站是个 18px 图标（鼠标够用，手指点不中）。
+     用伪元素撑出 44x44 的命中区，视觉尺寸与位置都不动 —— 改 padding/width
+     会同时挪动图标本身。旁边的搜索图标不用改：它是 aria-hidden 的装饰件，
+     点击只是把焦点交给 input，而 input 本来就铺满整个 48px 高的容器。 */
+  .store-market-page .market-hero-section .modern-search .search-clear::after {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 44px;
+    height: 44px;
+    transform: translate(-50%, -50%);
+  }
+}
 

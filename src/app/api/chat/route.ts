@@ -4,7 +4,7 @@ import { db } from "@/lib/db"
 import { aiChatLogs, diamondLogs, users } from "@/lib/db/schema"
 import { eq, and, gte, sql } from "drizzle-orm"
 import { affectedRows } from "@/lib/db/affected-rows"
-import { DEEPSEEK_MODEL, DEEPSEEK_THINKING } from "@/lib/llm"
+import { DEEPSEEK_MODEL, DEEPSEEK_THINKING, resolveLlmEndpoint, type LlmEndpoint } from "@/lib/llm"
 import { checkRateLimit } from "@/lib/rate-limit"
 import { isProActive } from "@/lib/subscription"
 import { ensureDailyMemberGrant } from "@/lib/member-grant"
@@ -42,6 +42,8 @@ async function logChat(entry: {
   userId: string
   question: string
   answer: string | null
+  /** 实际应答的模型名；缺省回落 DEEPSEEK_MODEL（老日志兼容）。 */
+  model?: string
   historyCount: number
   diamondsCost: number
   usedFreeQuota: boolean
@@ -56,7 +58,7 @@ async function logChat(entry: {
       userId: entry.userId,
       question: entry.question.slice(0, MAX_LOG_QUESTION),
       answer: entry.answer === null ? null : entry.answer.slice(0, MAX_LOG_ANSWER),
-      model: DEEPSEEK_MODEL,
+      model: entry.model ?? DEEPSEEK_MODEL,
       historyCount: entry.historyCount,
       diamondsCost: entry.diamondsCost,
       usedFreeQuota: entry.usedFreeQuota ? 1 : 0,
@@ -120,8 +122,14 @@ export async function POST(request: Request) {
     history.push({ role, content })
   }
 
-  const apiKey = process.env.DEEPSEEK_API_KEY
-  if (!apiKey) return NextResponse.json({ error: "AI 服务未配置" }, { status: 500 })
+  // 端点解析：CUSTOM_LLM_* 三件套齐全走自定义路由，否则官方 DeepSeek
+  // （官方账户 402 没额度时全靠前者，见 lib/llm.ts 的 resolveLlmEndpoint）。
+  let endpoint: LlmEndpoint
+  try {
+    endpoint = resolveLlmEndpoint()
+  } catch {
+    return NextResponse.json({ error: "AI 服务未配置" }, { status: 500 })
+  }
 
   // 会员每天 N 次免费提问（数值与价格页文案同源，见 lib/membership-benefits）。
   // 必须在扣费**之前**判断：命中免费额度就不扣钻石。key 带上海日历日 → 跨天重置，
@@ -185,11 +193,11 @@ export async function POST(request: Request) {
   const llmStartedAt = Date.now()
   let reply: string
   try {
-    const aiRes = await fetch("https://api.deepseek.com/v1/chat/completions", {
+    const aiRes = await fetch(endpoint.url, {
       method: "POST",
-      headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${endpoint.apiKey}` },
       body: JSON.stringify({
-        model: DEEPSEEK_MODEL,
+        model: endpoint.model,
         messages: [
           { role: "system", content: SYSTEM_PROMPT },
           ...history,
@@ -211,6 +219,7 @@ export async function POST(request: Request) {
       historyCount: history.length,
       diamondsCost: usedFreeQuota ? 0 : COST,
       usedFreeQuota,
+      model: endpoint.model,
       status: "ok",
       latencyMs: Date.now() - llmStartedAt,
     })
@@ -225,6 +234,7 @@ export async function POST(request: Request) {
       historyCount: history.length,
       diamondsCost: 0,
       usedFreeQuota,
+      model: endpoint.model,
       status: "error",
       errorMessage: err instanceof Error ? err.message : String(err),
       latencyMs: Date.now() - llmStartedAt,

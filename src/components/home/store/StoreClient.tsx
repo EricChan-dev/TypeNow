@@ -77,7 +77,8 @@ function SortMenu({
                 setOpen(false)
               }}
               className={cn(
-                "flex w-full items-center justify-between px-4 py-2 text-sm transition-colors",
+                // min-h-11（44px）：默认的 py-2 + text-sm 只有 36px，触摸端点不准
+                "flex min-h-11 w-full items-center justify-between px-4 text-sm transition-colors",
                 option.key === sortMode
                   ? "bg-accent/5 text-accent"
                   : "text-foreground hover:bg-muted"
@@ -101,8 +102,8 @@ export function StoreClient() {
 
   const [courses, setCourses] = useState<Course[]>([])
   const [totalCount, setTotalCount] = useState(0)
-  // 各分类 / 子分类的课程数。与列表分开取：它**不随筛选变化**（理由见 lib/store-facets），
-  // 所以只在挂载时请求一次，翻页与切换分类都不会重新拉。
+  // 各分类 / 子分类的课程数。与列表分开取：它随**搜索词**变化（与列表同口径），
+  // 但切分类/排序/翻页都不重取 —— 那些是在同一个搜索面里做选择，分类规模没变。
   const [facets, setFacets] = useState<StoreFacets | null>(null)
   const [page, setPage] = useState(1)
   const [loading, setLoading] = useState(true)
@@ -192,24 +193,44 @@ export function StoreClient() {
   }, [activeMainTab, activeSubTab, searchQuery, sortMode])
 
   /**
-   * 取各分类的课程数，只跑一次。
+   * 取各分类的课程数。**跟着搜索词走**：标签上的数字就是「当前搜索词下各分类命中多少」，
+   * 与点进去看到的列表同一个口径。
    *
-   * 用 AbortController 而不是忽略卸载后 setState：Strict Mode 下这个 effect 会跑两次，
-   * 第一次的响应在组件重建后落地会把 facets 写进已废弃的实例（数字还是对的，
-   * 但会在 React 里留下一次无意义的更新）。取消失败比事后判断更干净。
+   * 只在 searchQuery 变化时重取 —— 切分类、切排序、翻页都不需要，因为那些是
+   * 在同一个搜索面里做选择，各分类的规模没有变。
+   *
+   * 防抖 300ms：不然每敲一个字符就发一次请求，「雅思」两个字会打两次，
+   * 而用户真正想要的只是停下来那一刻的分布。
+   *
+   * 用 AbortController 取消上一次：快速连续输入时，先发的请求可能后返回，
+   * 不取消就会用旧搜索词的结果覆盖新的。
    */
   useEffect(() => {
     const controller = new AbortController()
-    fetch("/api/courses/counts", { signal: controller.signal, cache: "no-store" })
-      .then((res) => (res.ok ? res.json() : null))
-      .then((json: StoreFacets | null) => {
-        if (!controller.signal.aborted && json) setFacets(json)
+    const timer = setTimeout(() => {
+      const params = new URLSearchParams()
+      const q = searchQuery.trim()
+      if (q) params.set("search", q)
+      // 无搜索词时不要拼出尾随的 `?`（服务端解析无差别，但日志里很刺眼）
+      const qs = params.toString()
+      fetch(`/api/courses/counts${qs ? `?${qs}` : ""}`, {
+        signal: controller.signal,
+        cache: "no-store",
       })
-      // 计数取失败就不显示角标。不要设 loadError —— 课程列表好好的，
-      // 一个装饰性数字不该把整页变成「加载失败」。
-      .catch(() => {})
-    return () => controller.abort()
-  }, [])
+        .then((res) => (res.ok ? res.json() : null))
+        .then((json: StoreFacets | null) => {
+          if (!controller.signal.aborted && json) setFacets(json)
+        })
+        // 计数取失败就不显示角标。不要设 loadError —— 课程列表好好的，
+        // 一个装饰性数字不该把整页变成「加载失败」。
+        .catch(() => {})
+    }, 300)
+
+    return () => {
+      clearTimeout(timer)
+      controller.abort()
+    }
+  }, [searchQuery])
 
   // Load next page (infinite scroll)
   const loadMore = useCallback(() => {

@@ -2,23 +2,17 @@ import { NextResponse } from "next/server"
 import { db } from "@/lib/db"
 import { courses, lessons } from "@/lib/db/schema"
 import { aliveCourse } from "@/lib/soft-delete"
-import { eq, and, like, sql, desc, inArray, isNull, getTableColumns } from "drizzle-orm"
+import { eq, and, sql, desc, inArray, isNull, getTableColumns } from "drizzle-orm"
 import type { SortMode } from "@/types/course"
 import { gradesOfStage, isUngradedStage } from "@/lib/textbook-taxonomy"
+// 搜索条件与 /api/courses/counts 共用唯一实现 —— 两边必须逐字一致，
+// 否则标签上的数字会和点进去看到的列表对不上（见 lib/course-query.ts）。
+import { courseSearchCondition } from "@/lib/course-query"
 
 /** 把查询串转成整数；解析失败或非有限值一律回退默认，避免 NaN 进 SQL。 */
 function toInt(raw: string | null, fallback: number): number {
   const n = Number(raw)
   return Number.isFinite(n) ? Math.trunc(n) : fallback
-}
-
-/**
- * 转义 LIKE 通配符。
- * 此前 `?search=%` 会被当成「匹配任意标题」，等于把搜索框变成全表返回；
- * 用户输入里的 % 和 _ 必须按字面量处理。
- */
-function escapeLike(value: string): string {
-  return value.replace(/[\\%_]/g, (m) => `\\${m}`)
 }
 
 export async function GET(request: Request) {
@@ -64,9 +58,8 @@ export async function GET(request: Request) {
     if (textbookVersion) {
       conditions.push(eq(courses.textbookVersion, textbookVersion))
     }
-    if (search) {
-      conditions.push(like(courses.title, `%${escapeLike(search)}%`))
-    }
+    const searchCondition = courseSearchCondition(search)
+    if (searchCondition) conditions.push(searchCondition)
     const where = and(...conditions)
 
     let orderBy

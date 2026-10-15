@@ -1271,12 +1271,10 @@
 .home-ref .vocab-stats .vocab-empty p {
   font-size: 14px;
   color: #999;
-  /* 「创建学习计划」按钮暂时隐藏（HomeClient VocabCard 空态）后，
-     p 是末元素 —— 留 16px 下边距会让空态下半部发空。 */
-  margin-bottom: 0;
+  margin-bottom: 16px;
 }
 
-/* 暂未使用：随「创建学习计划」按钮一起冻结（恢复 JSX 即恢复使用） */
+/* 「创建学习计划」入口（/home/study-plan，VocabCard 空态） */
 .home-ref .vocab-stats .vocab-start-btn {
   display: inline-flex;
   align-items: center;

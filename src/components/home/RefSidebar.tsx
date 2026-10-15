@@ -6,9 +6,9 @@ import Image from "next/image"
 import { usePathname, useRouter } from "next/navigation"
 import {
   LayoutDashboard, BookOpen, ShoppingBag, GraduationCap,
-  BookText, BookMarked, FileText, Newspaper, Trophy,
+  BookText, BookMarked, Search, FileText, Newspaper, Trophy,
   Crown, TrendingUp, Settings, LogOut, MessageSquarePlus,
-  PanelLeftClose, PanelLeft, Menu,
+  PanelLeftClose, PanelLeft, Menu, ListChecks, AudioLines,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { BRAND } from "@/lib/brand"
@@ -28,7 +28,7 @@ interface NavItem {
 /**
  * 侧边栏导航：**四条分组**，没有分组标题 —— 分隔靠 `ul::after` 的渐变细线。
  * 分组形状对齐参考页（参考页是 6/2/1/3 共四组），条目本身仍是我们的路由：
- * 参考页的「课程向导 / 查单词 / 音标语法」我们没有对应页面，不硬凑。
+ * 参考页的「课程向导 / 音标语法」——音标已补上，课程向导与语法仍无对应页面，不硬凑。
  */
 const NAV_GROUPS: NavItem[][] = [
   [
@@ -39,6 +39,9 @@ const NAV_GROUPS: NavItem[][] = [
   ],
   [
     { key: "/home/wordbook", label: "单词本", icon: BookText },
+    { key: "/home/dictionary", label: "查单词", icon: Search },
+    { key: "/home/study-plan", label: "学习计划", icon: ListChecks },
+    { key: "/home/phonetics", label: "音标", icon: AudioLines },
     { key: "/home/review", label: "错题本", icon: BookMarked },
     { key: "/home/notes", label: "笔记本", icon: FileText },
   ],

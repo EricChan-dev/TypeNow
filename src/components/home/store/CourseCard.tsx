@@ -3,7 +3,7 @@
 import { useCallback, useState } from "react"
 import Link from "next/link"
 import Image from "next/image"
-import { Users, ListVideo, ImageIcon, ImageOff } from "lucide-react"
+import { Users, ListVideo, ImageIcon } from "lucide-react"
 import { cn } from "@/lib/utils"
 import type { Course } from "@/types/course"
 import {
@@ -206,10 +206,20 @@ export function CourseCard({
 
       {/* 封面：16:9（参考站 .TypeList li .img { aspect-ratio: 16/9 }） */}
       <div className="img">
-        <div className={cn("img-placeholder", showImage && imgLoaded && "hidden")}>
-          {/* <i> 承接参考站的 32px 图标与 pulse 动画，lucide 继承其 currentColor */}
-          <i>{showImage ? <ImageIcon size={32} /> : <ImageOff size={32} />}</i>
-        </div>
+        {/*
+          占位图只在「有真图、还没加载完」时渲染。
+          参考站里它一直存在、靠 onload 给 .hidden 隐藏，是因为那边每张卡都有 <img>；
+          本仓渐变封面（cover.kind !== "image"）根本没有 <img> 可触发 onload，
+          而 .img-placeholder 是 z-index:1 + 不透明 #f1f4f7，会直接盖住渐变
+          （实测：渐变卡右下角取色 = rgb(241,244,247)，正是这个底色）。
+          所以这里按条件渲染，而不是靠 .hidden 兜。
+        */}
+        {showImage && (
+          <div className={cn("img-placeholder", imgLoaded && "hidden")}>
+            {/* <i> 承接参考站的 32px 图标与 pulse 动画，lucide 继承其 currentColor */}
+            <i><ImageIcon size={32} /></i>
+          </div>
+        )}
         {showImage && cover.kind === "image" ? (
           <CoverImage
             src={cover.src}
