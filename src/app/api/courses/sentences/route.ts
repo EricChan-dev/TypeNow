@@ -8,6 +8,7 @@ import { checkAndExpirePro } from "@/lib/subscription"
 import { typeableAnswerSql, usableSentenceSql } from "@/lib/sentence-quality"
 import { alignWordsWithEnglish } from "@/lib/word-align"
 import { sliceForTrial } from "@/lib/free-trial"
+import { practiceOrderSeed, shuffledBySeed } from "@/lib/shuffle"
 
 export async function GET(request: Request) {
   try {
@@ -90,6 +91,17 @@ export async function GET(request: Request) {
     if (data.length === 0) {
       data = await forLesson(typeableAnswerSql(sentences.english))
     }
+
+    // 课时内混排：题序不再等于课本顺序。对着课本背「下一句是什么」是无效记忆，
+    // 重练同一课也该换换顺序。三个刻意的设计决定（机制见 lib/shuffle.ts）：
+    //   · 种子固定为 user×lesson —— current_index 是「下一句的下标」，题目顺序
+    //     必须跨请求稳定，恢复下标才不会指到另一句；practice_sessions 的行按
+    //     (user, lesson, mode) upsert 复用，重练不换行 id，没有可靠的会话熵源。
+    //   · 洗牌放在试学截断**之前** —— 非会员看到的 5 句从「课本前 5 句」变成
+    //     「全课的稳定随机 5 句」，抽样更有代表性；升级会员后全序列种子不变，
+    //     已练位置依旧有效。
+    //   · 只动这一个练习队列接口 —— 查单词/洞察等其他读句子的路径不受影响。
+    data = shuffledBySeed(data, practiceOrderSeed(session.userId, lessonId))
 
     // 非会员只下发前 N 句试学（N = FREE_TRIAL_SENTENCES）。截断时把 limit/truncated
     // 一并告知前端，由前端在练完这几句后展示付费引导，而不是让用户以为「本课就这 3 句」。
