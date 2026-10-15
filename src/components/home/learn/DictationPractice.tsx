@@ -115,7 +115,7 @@ import { PuzzlePractice } from "@/components/home/learn/PuzzlePractice"
 import { WordDetailCard } from "@/components/home/learn/WordDetailCard"
 import { StructuredAnswerView } from "@/components/home/learn/StructuredAnswerView"
 import { buildStructuredAnswer } from "@/lib/structured-answer"
-import { fragmentsForSentence } from "@/lib/fragment-practice"
+import { fragmentsForSentence, mergedFragmentGroups } from "@/lib/fragment-practice"
 import { BRAND } from "@/lib/brand"
 import { TRIAL_DAYS } from "@/lib/trial-days"
 import type { TrialInfo } from "@/lib/free-trial"
@@ -232,7 +232,14 @@ export function DictationPractice({
  * `sid` 对不上就自动回到 0。基准实现靠 `resetFragmentPracticeState()`
    * （practice.js:2768）在十几个调用点手工重置，我们改成派生，杜绝漏调。
    */
-  const [fragmentPos, setFragmentPos] = useState<{ sid: string; index: number } | null>(null)
+  // `phase`：分段练习阶梯内的档位 —— "single" 逐段听写，"merged" 相邻 3 段
+  // 合并档（mergedFragmentGroups 的产物）。塞进 fragmentPos 而不是独立 state，
+  // 是为了「切句后 sid 对不上 → 自动回单段第 0 段」这条既有兜底同时覆盖档位。
+  const [fragmentPos, setFragmentPos] = useState<{
+    sid: string
+    index: number
+    phase: "single" | "merged"
+  } | null>(null)
   /**
    * 本句的分段练习是否已「跳过」或「已结束」。
    *
@@ -580,12 +587,24 @@ export function DictationPractice({
     fragmentSid !== "" &&
     fragmentDoneFor !== fragmentSid
 
-  const currentFragment = inFragmentPractice
-    ? (fragments?.[fragmentPos?.sid === fragmentSid ? fragmentPos.index : 0] ?? null)
-    : null
+  /** 相邻 3 段合并档（单段全过后、整句之前的过渡阶梯）；不足 4 段时为 null。 */
+  const mergedGroups = useMemo(
+    () => (fragments ? mergedFragmentGroups(fragments) : null),
+    [fragments],
+  )
+
+  /** 当前档位。切句后 `fragmentPos.sid` 对不上即视作单段档的 0。 */
+  const fragmentPhase = fragmentPos?.sid === fragmentSid ? fragmentPos.phase : "single"
+  /** 本档的练习列表：单段档用线性化片段，合并档用 3 段合并组。 */
+  const activeFragmentList =
+    fragmentPhase === "merged" && mergedGroups !== null ? mergedGroups : fragments
 
   /** 当前片段下标（0 基）。切句后 `fragmentPos.sid` 对不上即视作 0。 */
   const fragmentIndex = fragmentPos?.sid === fragmentSid ? fragmentPos.index : 0
+
+  const currentFragment = inFragmentPractice
+    ? (activeFragmentList?.[fragmentIndex] ?? null)
+    : null
 
   /** 片段的分词（与整句同口径，标点已被抹掉，用户不需要敲标点）。 */
   const fragmentTokens = useMemo(
@@ -1208,8 +1227,17 @@ export function DictationPractice({
         window.setTimeout(() => {
           setShowHint(false)
           setFragmentResult("")
-          if (fragmentIndex < fragments.length - 1) {
-            setFragmentPos({ sid: fragmentSid, index: fragmentIndex + 1 })
+          if (fragmentPhase === "single") {
+            if (fragmentIndex < fragments.length - 1) {
+              setFragmentPos({ sid: fragmentSid, index: fragmentIndex + 1, phase: "single" })
+            } else if (mergedGroups !== null) {
+              // 单段全过 → 相邻 3 段合并档（更接近整句语流的过渡阶梯）
+              setFragmentPos({ sid: fragmentSid, index: 0, phase: "merged" })
+            } else {
+              startFullSentencePractice()
+            }
+          } else if (mergedGroups !== null && fragmentIndex < mergedGroups.length - 1) {
+            setFragmentPos({ sid: fragmentSid, index: fragmentIndex + 1, phase: "merged" })
           } else {
             startFullSentencePractice()
           }
@@ -1231,7 +1259,7 @@ export function DictationPractice({
     } finally {
       submittingRef.current = false
     }
-  }, [fragmentIndex, fragments, fragmentSid, startFullSentencePractice, triggerSuccessEffects])
+  }, [fragmentIndex, fragments, fragmentPhase, fragmentSid, mergedGroups, startFullSentencePractice, triggerSuccessEffects])
 
   // 每次渲染写下最新引用；`handleKeyDown` 只会读到首渲染绑定的那个本函数，
   // 所以必须走这条路把「当前闭包」递过去。
@@ -2425,7 +2453,7 @@ export function DictationPractice({
                       />
                       <InfoCard
                         id="fragmentCard"
-                        title="开启后，先练习句子成分拼接，再练习整句拼写（仅听写模式）"
+                        title="开启后，先逐段练习句子成分，再按相邻 3 段一组合并练习，最后整句拼写（仅听写模式）"
                         label="分段练习"
                         value={fragmentMode ? "ON" : "OFF"}
                         valueId="fragmentModeDisplay"
@@ -3161,7 +3189,7 @@ export function DictationPractice({
                   <span className="fragment-badge">分段练习</span>
                   <span className="fragment-step" id="fragmentStep">
                     {inFragmentPractice
-                      ? `${fragmentIndex + 1}/${fragments?.length ?? 0}`
+                      ? `${fragmentIndex + 1}/${activeFragmentList?.length ?? 0}`
                       : ""}
                   </span>
                   <button

@@ -229,6 +229,36 @@ export function linearizeChunks(
   return finalizeFragments(picked, personNameTokens)
 }
 
+/**
+ * 「相邻 3 段合并档」：把线性化后的片段按**顺序**每 3 段拼成一组
+ * （余数并入最后一组），作为单段练习与整句练习之间的过渡档。
+ *
+ * 练习阶梯：逐段听写全部通过 → 按合并档再听写一遍（更大的语块、更接近
+ * 真实语流）→ 回整句。合并是纯计算（文本拼接），零 DB / 零 LLM。
+ *
+ * @returns 合并后的片段数组；片段数不足以组成**两**组（<4 段）时返回 null
+ *          —— 只有一组时该组拼接恰好等于整句，会与紧随其后的整句练习重复。
+ */
+export function mergedFragmentGroups(
+  fragments: PracticeFragment[],
+  groupSize = 3,
+): PracticeFragment[] | null {
+  const n = fragments.length
+  if (n < groupSize + 1) return null
+  const groups: Array<[string, string]> = []
+  for (let i = 0; i < n; i += groupSize) {
+    const slice = fragments.slice(i, i + groupSize)
+    groups.push([
+      slice.map((f) => f.text).join(" "),
+      slice
+        .map((f) => f.meaning.trim())
+        .filter(Boolean)
+        .join("；"),
+    ])
+  }
+  return groups.map(([text, meaning]) => ({ text, meaning, component: "chunk" }))
+}
+
 /** `Sentence` 上的便捷封装：一次拿到候选片段（含人名 token 收集）。 */
 export function fragmentsForSentence(sentence: Sentence | null): PracticeFragment[] | null {
   if (!sentence) return null

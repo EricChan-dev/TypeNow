@@ -5,6 +5,7 @@ import {
   filterPersonNameOnlyFragments,
   fragmentsForSentence,
   linearizeChunks,
+  mergedFragmentGroups,
   personNameTokensFromWords,
 } from "@/lib/fragment-practice"
 import type { Sentence, Word } from "@/types"
@@ -323,5 +324,95 @@ describe("fragmentsForSentence — Sentence 封装", () => {
       chunks: CUMULATIVE_GAP,
     })
     expect(got).toBeNull()
+  })
+})
+
+describe("mergedFragmentGroups — 相邻 3 段合并档", () => {
+  const frags = (texts: string[], meanings?: string[]) =>
+    texts.map((text, i) => ({
+      text,
+      meaning: meanings?.[i] ?? "",
+      component: "chunk",
+    }))
+
+  it("少于 4 段（1/2/3 段）返回 null —— 只有一组时拼接即整句，与整句档重复", () => {
+    expect(mergedFragmentGroups([])).toBeNull()
+    expect(mergedFragmentGroups(frags(["a"]))).toBeNull()
+    expect(mergedFragmentGroups(frags(["a", "b"]))).toBeNull()
+    expect(mergedFragmentGroups(frags(["a", "b", "c"]))).toBeNull()
+  })
+
+  it("4 段 → [f1f2f3, f4]（余数并入最后一组）", () => {
+    const got = mergedFragmentGroups(frags(["a", "b", "c", "d"]))!
+    expect(got.map((f) => f.text)).toEqual(["a b c", "d"])
+  })
+
+  it("5 段 → [f1f2f3, f4f5]", () => {
+    const got = mergedFragmentGroups(frags(["a", "b", "c", "d", "e"]))!
+    expect(got.map((f) => f.text)).toEqual(["a b c", "d e"])
+  })
+
+  it("6 段 → 两组恰好各 3 段", () => {
+    const got = mergedFragmentGroups(frags(["a", "b", "c", "d", "e", "f"]))!
+    expect(got.map((f) => f.text)).toEqual(["a b c", "d e f"])
+  })
+
+  it("7 段 → [3, 3, 1]", () => {
+    const got = mergedFragmentGroups(frags(["a", "b", "c", "d", "e", "f", "g"]))!
+    expect(got.map((f) => f.text)).toEqual(["a b c", "d e f", "g"])
+  })
+
+  it("meaning 用「；」连接，空翻译被跳过；component 仍为 chunk", () => {
+    const got = mergedFragmentGroups(
+      frags(["a", "b", "c", "d"], ["甲", "", "丙", "丁"]),
+    )!
+    expect(got).toEqual([
+      { text: "a b c", meaning: "甲；丙", component: "chunk" },
+      { text: "d", meaning: "丁", component: "chunk" },
+    ])
+  })
+
+  it("全部 meaning 为空 → meaning 为空串（不产生 undefined 文案）", () => {
+    const got = mergedFragmentGroups(frags(["a", "b", "c", "d"]))!
+    expect(got.every((f) => f.meaning === "")).toBe(true)
+  })
+
+  it("自定义 groupSize=2：5 段 → [f1f2, f3f4, f5]", () => {
+    const got = mergedFragmentGroups(frags(["a", "b", "c", "d", "e"]), 2)!
+    expect(got.map((f) => f.text)).toEqual(["a b", "c d", "e"])
+  })
+
+  it("不改动入参（纯函数）", () => {
+    const input = frags(["a", "b", "c", "d"])
+    const snapshot = input.map((f) => ({ ...f }))
+    mergedFragmentGroups(input)
+    expect(input).toEqual(snapshot)
+  })
+
+  it("与 linearizeChunks 串起来：4 段线性化结果能生成合并档", () => {
+    const linear = linearizeChunks(
+      [
+        { order: 1, text: "I would like to request", chinese: "我想请求" },
+        { order: 2, text: "a quotation", chinese: "一份报价" },
+        { order: 3, text: "for your standard packaging service", chinese: "关于贵公司的标准包装服务" },
+        { order: 4, text: "as soon as possible", chinese: "尽快" },
+      ],
+      "I would like to request a quotation for your standard packaging service as soon as possible.",
+    )!
+    expect(linear.map((f) => f.text)).toEqual([
+      "I would like to request",
+      "a quotation",
+      "for your standard packaging service",
+      "as soon as possible",
+    ])
+    const merged = mergedFragmentGroups(linear)!
+    expect(merged.map((f) => f.text)).toEqual([
+      "I would like to request a quotation for your standard packaging service",
+      "as soon as possible",
+    ])
+    expect(merged.map((f) => f.meaning)).toEqual([
+      "我想请求；一份报价；关于贵公司的标准包装服务",
+      "尽快",
+    ])
   })
 })
