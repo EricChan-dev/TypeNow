@@ -18,12 +18,6 @@
  */
 
 /**
- * 开发态兜底手机号。e2e 与本地开发靠它拿到后台权限，生产不生效。
- * 与 tests 里的夹具手机号段（139xxxxxxx）刻意错开，避免某个测试用户被意外提权。
- */
-const DEV_ADMIN_PHONE = "16634482010"
-
-/**
  * 允许的后台手机号白名单（逗号分隔）。
  *
  * dev 兜底放在这里、而不是各调用点自己写，是因为它曾经就是不一致的来源：
@@ -31,6 +25,11 @@ const DEV_ADMIN_PHONE = "16634482010"
  * 而 proxy.ts 与 requireAdmin 完全没有兜底 —— 于是开发态出现
  * "前端说你是管理员、后台接口全 401"，两边各说各话。
  * 现在四处共用这一份：配了 ADMIN_PHONES 就用它，没配才回落到 dev 兜底。
+ *
+ * 兜底手机号一律来自环境变量（.env.local 配 DEV_ADMIN_PHONES，逗号分隔），
+ * 仓库里不硬编码任何真实手机号；e2e 与本地开发靠 DEV_ADMIN_PHONES 拿后台
+ * 权限，生产不生效。与 tests 里的夹具手机号段（139xxxxxxx）刻意错开，
+ * 避免某个测试用户被意外提权。
  */
 export function getAdminPhones(): string[] {
   const raw = process.env.ADMIN_PHONES
@@ -38,7 +37,10 @@ export function getAdminPhones(): string[] {
     ? raw.split(",").map((s) => s.trim()).filter(Boolean)
     : []
   if (configured.length > 0) return configured
-  if (process.env.NODE_ENV === "development") return [DEV_ADMIN_PHONE]
+  if (process.env.NODE_ENV === "development") {
+    const devRaw = process.env.DEV_ADMIN_PHONES
+    return devRaw ? devRaw.split(",").map((s) => s.trim()).filter(Boolean) : []
+  }
   return []
 }
 

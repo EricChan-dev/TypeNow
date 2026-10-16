@@ -112,7 +112,7 @@ course-quality-by-course.json
 # ── 业务/合规敏感文档：本地保留，不入库 ──────────────────────────────────
 # 竞品拆解、逆向笔记、命名/商标策略、分销合规、增长与定价、页面设计稿等
 # 属于内部经营材料（含竞品名称与自认性表述），不随代码分发。
-# 仍入库的技术文档：docs/architecture.md、docs/TODO.md、docs/archive/{README,dev-plan}.md、
+# 仍入库的技术文档：docs/architecture.md、docs/archive/{README,dev-plan}.md、
 # docs/课程数据补全计划.md、PRD_V3.md、db/README.md、tests/README.md。
 /docs/README.md
 /docs/business-model.md
@@ -134,3 +134,6 @@ course-quality-by-course.json
 /docs/pages/
 /docs/superpowers/
 /specs/
+
+# 内部待办与运维清单（含账号构成等内部信息），本地留存，不入库
+docs/TODO.md

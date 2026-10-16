@@ -10,7 +10,7 @@
  *   1. `wechat_openid` 以 `dev` 开头 —— 开发旁路建的号（本地连生产库调试留下的）
  *      → channel = dev。这类号必须能被摘出去，否则会污染来源报表。
  *   2. 没有 openid 但有手机号 → channel = phone。
- *   3. openid 是公众号维度（`oSZ4m3*`）且**没有** access_token
+ *   3. openid 是公众号维度（`oXxxx*`（公众号 openid 前缀，示意））且**没有** access_token
  *      → channel = wechat_oa_qr。依据：能无 token 建号的微信链路只有
  *        「关注/扫码事件建号 + oa-check 兜底」这一条（OAuth 回调建号必定写
  *        wechat_access_token，见 callback 的 upsertWeChatUser）。

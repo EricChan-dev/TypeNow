@@ -144,7 +144,7 @@ describe("decideBindCollision", () => {
   it("dev 假 openid 的判定只看 dev_ 前缀，真 openid 不受影响", () => {
     expect(isDevWechatOpenid("dev_wechat_user")).toBe(true)
     expect(isDevWechatOpenid("dev_oa_user")).toBe(true)
-    expect(isDevWechatOpenid("oSZ4m3Zq87o0CXJz8aAGgxLljjVo")).toBe(false)
+    expect(isDevWechatOpenid("oQxWvUtRpOnMlKjIgFeDcBa9876")).toBe(false)
     expect(isDevWechatOpenid(null)).toBe(false)
     expect(isDevWechatOpenid(undefined)).toBe(false)
   })

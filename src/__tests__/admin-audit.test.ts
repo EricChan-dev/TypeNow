@@ -152,12 +152,12 @@ describe("diffAuditFields", () => {
 
 describe("describeAuditActor", () => {
   it("姓名 + 脱敏手机号", () => {
-    expect(describeAuditActor({ name: "张三", phone: "16634482010" }, "uid-1")).toBe("张三(166****2010)")
+    expect(describeAuditActor({ name: "张三", phone: "16600002010" }, "uid-1")).toBe("张三(166****2010)")
   })
 
   it("只有姓名 / 只有手机号都能降级", () => {
     expect(describeAuditActor({ name: "张三", phone: null }, "uid-1")).toBe("张三")
-    expect(describeAuditActor({ name: null, phone: "16634482010" }, "uid-1")).toBe("166****2010")
+    expect(describeAuditActor({ name: null, phone: "16600002010" }, "uid-1")).toBe("166****2010")
   })
 
   it("查不到用户时用 id 兜底；dev 旁路单独标注", () => {
@@ -166,7 +166,7 @@ describe("describeAuditActor", () => {
   })
 
   it("空白姓名不算姓名", () => {
-    expect(describeAuditActor({ name: "   ", phone: "16634482010" }, "uid-1")).toBe("166****2010")
+    expect(describeAuditActor({ name: "   ", phone: "16600002010" }, "uid-1")).toBe("166****2010")
   })
 })
 

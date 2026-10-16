@@ -68,24 +68,32 @@ describe("getAdminPhones 的 dev 兜底", () => {
     expect(getAdminPhones()).toEqual(["13800000000"])
   })
 
-  it("development 且未配置时回落到兜底手机号（e2e / 本地开发靠它拿后台权限）", () => {
+  it("development 未配 ADMIN_PHONES 时回落到 DEV_ADMIN_PHONES（e2e / 本地开发靠它拿后台权限）", () => {
     vi.stubEnv("NODE_ENV", "development")
     vi.stubEnv("ADMIN_PHONES", "")
-    expect(getAdminPhones()).toHaveLength(1)
+    vi.stubEnv("DEV_ADMIN_PHONES", "13800138000")
+    expect(getAdminPhones()).toEqual(["13800138000"])
+  })
+
+  it("development 且 DEV_ADMIN_PHONES 也未配置时返回空数组 —— 仓库不内置任何真实号码", () => {
+    vi.stubEnv("NODE_ENV", "development")
+    vi.stubEnv("ADMIN_PHONES", "")
+    vi.stubEnv("DEV_ADMIN_PHONES", "")
+    expect(getAdminPhones()).toEqual([])
   })
 
   it("**production 未配置时返回空数组** —— 兜底绝不能在生产生效", () => {
     vi.stubEnv("NODE_ENV", "production")
     vi.stubEnv("ADMIN_PHONES", "")
+    vi.stubEnv("DEV_ADMIN_PHONES", "13800138000")
     expect(getAdminPhones()).toEqual([])
   })
 
-  it("兜底手机号与测试夹具的号段（139xxxxxxxx）错开，避免测试用户被意外提权", () => {
+  it("DEV_ADMIN_PHONES 与 ADMIN_PHONES 一样按逗号拆分并 trim", () => {
     vi.stubEnv("NODE_ENV", "development")
     vi.stubEnv("ADMIN_PHONES", "")
-    for (const p of getAdminPhones()) {
-      expect(p.startsWith("139")).toBe(false)
-    }
+    vi.stubEnv("DEV_ADMIN_PHONES", " 13800138000 , 13911111111 ")
+    expect(getAdminPhones()).toEqual(["13800138000", "13911111111"])
   })
 })
 
