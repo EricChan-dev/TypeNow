@@ -171,6 +171,26 @@ export const verificationCodes = mysqlTable(
   ]
 )
 
+// ─── 图形滑块验证码（发短信防刷） ────────────────────────────────────────────
+// 服务端出题：背景/拼图由 /api/auth/captcha 生成并返回，答案（拼图 x 坐标）只存
+// 在这里，不落客户端 —— 客户端自出题自校验等于没有验证码。语义对齐
+// verification_codes：一次性（used）、有过期；而且无论成败，验一次就作废，
+// 防止拿同一题反复试 x 坐标。
+export const captchaChallenges = mysqlTable(
+  "captcha_challenges",
+  {
+    id: varchar("id", { length: 36 }).primaryKey().default(sql`(UUID())`),
+    // 拼图缺口的正确 x（像素，背景坐标系）。容差判断在 lib/slider-captcha。
+    answerX: int("answer_x").notNull(),
+    // 申请方 IP，便于排查盗刷来源
+    ip: varchar("ip", { length: 50 }).notNull().default(""),
+    expiresAt: datetime("expires_at").notNull(),
+    used: tinyint("used").notNull().default(0),
+    createdAt: datetime("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  },
+  (t) => [index("idx_captcha_challenges_expires").on(t.expiresAt)]
+)
+
 // ─── Courses ─────────────────────────────────────────────────────────────────
 export const courses = mysqlTable("courses", {
   id: varchar("id", { length: 36 }).primaryKey().default(sql`(UUID())`),

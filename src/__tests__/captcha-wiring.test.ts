@@ -3,16 +3,16 @@ import fs from "node:fs"
 import path from "node:path"
 
 /**
- * 人机校验（阿里云验证码 2.0）的**接线约束**。
+ * 人机校验（自建滑块拼图）的**接线约束**。
  *
- * 单元测试覆盖不到两个 UI 入口：Vitest 是 node 环境、没有 jsdom，React 组件跑不起来，
+ * 单元测试覆盖不到 UI 入口：Vitest 是 node 环境、没有 jsdom，React 组件跑不起来，
  * 浏览器验证又要真起服务。所以这里退一步，用源码文本断言锁住**最容易在后续改动中
  * 被悄悄破坏的接线点** —— 这些点一旦断了，类型检查仍然通过，但人机会静默失效：
  *
- *   · 两个入口都必须把 `captchaVerifyParam` 传给 `/api/auth/send-sms`；
- *   · 校验就绪后按钮 onClick 必须直接返回（否则 SDK 接管点击的同时我们也发请求，
- *     会发出没有验证参数的短信，被服务端拒成"人机验证无效"）；
- *   · 服务端缺参必须拦（fail-closed），异常必须放行（fail-open）——两者写反都致命。
+ *   · 两个入口（登录页、设置页）都必须渲染 SmsSlider（滑块即发送触发器）；
+ *   · SmsSlider 必须把 { id, x, duration, trail } 发给 /api/auth/send-sms；
+ *   · 服务端必须先原子认领（used 0→1）再判分，且全部失败分支 fail-closed；
+ *   · 阿里云旧链路（hook / lib / 旧按钮 id）必须清零，防止半新半旧的双发短信。
  *
  * 这类"文本断言"在本仓库有先例（见 security-hardening.test.ts）。
  */
@@ -25,120 +25,130 @@ function stripComments(src: string): string {
 
 const LOGIN = "src/components/auth/LoginForm.tsx"
 const SETTINGS = "src/components/home/SettingsClient.tsx"
-const ROUTE = "src/app/api/auth/send-sms/route.ts"
-const HOOK = "src/lib/hooks/useAliyunCaptcha.ts"
+const SLIDER = "src/components/auth/SmsSlider.tsx"
+const SEND_ROUTE = "src/app/api/auth/send-sms/route.ts"
+const ISSUE_ROUTE = "src/app/api/auth/captcha/route.ts"
 
-describe("两个发短信入口都接了人机校验", () => {
-  for (const [name, file, buttonId, elementId] of [
-    ["登录页", LOGIN, "login-send-code", "login-captcha-element"],
-    ["设置页", SETTINGS, "settings-send-code", "settings-captcha-element"],
+describe("两个发短信入口都接了滑块校验", () => {
+  for (const [name, file, sliderId] of [
+    ["登录页", LOGIN, "login-sms-slider"],
+    ["设置页", SETTINGS, "settings-sms-slider"],
   ] as const) {
-    it(`${name}：调用 useAliyunCaptcha 并声明按钮/挂载点 id`, () => {
+    it(`${name}：渲染 SmsSlider 并声明 id 锚点`, () => {
       const src = stripComments(read(file))
-      expect(src).toContain("useAliyunCaptcha(")
-      // id 必须同时出现在 hook 配置与 JSX 元素上，否则 SDK 找不到目标
-      expect(src).toContain(`buttonId: "${buttonId}"`)
-      expect(src).toContain(`elementId: "${elementId}"`)
-      expect(src).toContain(`id="${buttonId}"`)
-      expect(src).toContain(`id="${elementId}"`)
+      expect(src).toContain("<SmsSlider")
+      expect(src).toContain(`id="${sliderId}"`)
     })
 
-    it(`${name}：把 captchaVerifyParam 传给 /api/auth/send-sms`, () => {
+    it(`${name}：手机号传给滑块（发信目标由组件内部校验）`, () => {
       const src = stripComments(read(file))
-      expect(src).toContain("captchaVerifyParam")
-      // 必须带上请求体字段名，不能只是本地变量
-      expect(src).toContain("captchaVerifyParam }")
+      // 登录页用 phone state，设置页用 phoneValue —— 只要 SmsSlider 的 phone prop 有实参
+      expect(src).toMatch(/<SmsSlider\s+phone=\{/)
     })
 
-    it(`${name}：校验就绪时 onClick 直接返回（不重复发送）`, () => {
+    it(`${name}：阿里云旧链路清零（hook / 库 / 旧按钮与挂载点 id）`, () => {
       const src = stripComments(read(file))
-      // 只在 ready 时 return —— SDK 已接管点击。failed 时给提示、disabled 兜底。
-      expect(src).toMatch(/captcha\.status === "ready"\)\s*return/)
-      expect(src).toMatch(/captcha\.status === "failed"/)
-    })
-
-    it(`${name}：加载中 / 失败时按钮禁用（避免点了个没反应的死按钮）`, () => {
-      const src = stripComments(read(file))
-      expect(src).toContain('captcha.status === "loading"')
-      expect(src).toContain('captcha.status === "failed"')
+      expect(src).not.toContain("useAliyunCaptcha")
+      expect(src).not.toContain("aliyun-captcha")
+      expect(src).not.toContain("captchaVerifyParam")
+      for (const legacyId of [
+        "login-send-code",
+        "login-captcha-element",
+        "settings-send-code",
+        "settings-captcha-element",
+      ]) {
+        expect(src).not.toContain(legacyId)
+      }
     })
   }
 })
 
-describe("服务端闸门", () => {
-  const src = stripComments(read(ROUTE))
+describe("SmsSlider 组件的关键接线", () => {
+  const src = stripComments(read(SLIDER))
 
-  it("接收 captchaVerifyParam 并调用 verifyCaptcha", () => {
-    expect(src).toContain("captchaVerifyParam")
-    expect(src).toContain("verifyCaptcha(")
+  it("从 /api/auth/captcha 取题，challengeId 随题走", () => {
+    expect(src).toContain('"/api/auth/captcha"')
+    expect(src).toContain("challengeIdRef")
   })
 
-  it("缺参是 fail-closed：拦，且不调用校验实现", () => {
-    // 与官方 FAQ Q17 相关：脚本初始化失败时回调参数为空，
-    // 若这里放行，屏蔽 o.alicdn.com 即可完全绕过人机校验。
-    expect(src).toMatch(/if \(!captchaVerifyParam\.trim\(\)\)\s*\{[\s\S]*?status: 400/)
-    expect(src).toContain("captchaFailed: true")
+  it("onVerify 把 {id, x, duration, trail} 发给 /api/auth/send-sms", () => {
+    expect(src).toContain("/api/auth/send-sms")
+    expect(src).toContain("id: challengeIdRef.current")
+    expect(src).toContain("x: data.x")
+    expect(src).toContain("duration: data.duration")
+    expect(src).toContain("trail:")
   })
 
-  it("校验 fail → 400，且带 captchaFailed 标记", () => {
-    expect(src).toMatch(/verdict\.result === "fail"[\s\S]*?status: 400/)
+  it("服务端 captchaFailed（人机没过）→ 抛错让控件换题重拖", () => {
+    expect(src).toMatch(/captchaFailed === true/)
+    expect(src).toMatch(/throw new Error\(result\.error/)
   })
 
-  it("unavailable 不拦截（fail-open，官方口径：不应成为可用性单点）", () => {
-    // 代码里不能出现把 unavailable 也拦掉的分支
-    expect(src).not.toMatch(/verdict\.result === "unavailable"[\s\S]{0,200}?status: 400/)
+  it("60 秒冷却在组件内部管理（冷却期卸载滑块，结束后重挂载自动取新题）", () => {
+    expect(src).toMatch(/60/)
   })
 
-  it("未配置时整段跳过（本地开发不受影响）", () => {
-    expect(src).toContain("isCaptchaConfigured()")
+  it("深浅两套主题变量（登录页亮底 / 设置页暗底）", () => {
+    expect(src).toContain("--rcsc-")
   })
 })
 
-describe("客户端 hook 的关键约束", () => {
-  const src = stripComments(read(HOOK))
+describe("服务端闸门（send-sms）", () => {
+  const src = stripComments(read(SEND_ROUTE))
 
-  it("从官方 CDN 动态加载（禁止本地自托管）", () => {
-    expect(src).toContain(
-      "https://o.alicdn.com/captcha-frontend/aliyunCaptcha/AliyunCaptcha.js",
+  it("先原子认领（UPDATE used 0→1）再读答案判分 —— 顺序不能反", () => {
+    const claimAt = src.indexOf(".update(captchaChallenges)")
+    const verifyAt = src.indexOf("verifySliderAnswer(")
+    expect(claimAt).toBeGreaterThan(-1)
+    expect(verifyAt).toBeGreaterThan(claimAt)
+  })
+
+  it("认领以 affectedRows 为准（affectedRows===0 → 拒），一题一用防枚举", () => {
+    expect(src).toMatch(/affectedRows/)
+  })
+
+  it("缺参 / 认领失败 / 判分不过全部 fail-closed，且都带 captchaFailed: true", () => {
+    // 缺参分支
+    expect(src).toMatch(/人机验证无效[\s\S]{0,80}captchaFailed: true/)
+    // 认领失败分支
+    expect(src).toMatch(/人机验证已失效[\s\S]{0,80}captchaFailed: true/)
+    // 判分不过分支
+    expect(src).toMatch(/人机验证未通过[\s\S]{0,80}captchaFailed: true/)
+  })
+
+  it("自建方案没有『不可用放行』分支（阿里云 fail-open 已移除）", () => {
+    expect(src).not.toContain("unavailable")
+  })
+
+  it("阿里云残留清零", () => {
+    expect(src).not.toContain("captchaVerifyParam")
+    expect(src).not.toContain("isCaptchaConfigured")
+    expect(src).not.toContain("@alicloud")
+    expect(src).not.toContain("aliyun-captcha")
+  })
+})
+
+describe("取题路由（issue）", () => {
+  const src = stripComments(read(ISSUE_ROUTE))
+
+  it("取题也有限流（IP 维度），且成功响应不含答案 answerX", () => {
+    expect(src).toContain("checkRateLimit")
+    expect(src).toContain("captchaChallenges")
+    // 锁死成功响应的字段清单：答案 answerX 只进库，不出服务端
+    expect(src).toMatch(
+      /NextResponse\.json\(\{\s*id,\s*background,\s*puzzle,\s*expiresAt/,
     )
-    expect(src).toContain("createElement(\"script\")")
-  })
-
-  it("全局配置在主 JS 之前设好，且区域为 cn", () => {
-    expect(src).toContain("window.AliyunCaptchaConfig = { region: CAPTCHA_REGION, prefix: PREFIX }")
-    expect(src).toMatch(/CAPTCHA_REGION = "cn"/)
-  })
-
-  it("按 buttonId 去重，避免 initAliyunCaptcha 被重复调用", () => {
-    expect(src).toContain("initializedButtons")
-  })
-
-  it("卸载时清理 SDK 插入的遮罩与浮层", () => {
-    expect(src).toContain('"aliyunCaptcha-mask"')
-    expect(src).toContain('"aliyunCaptcha-window-popup"')
-  })
-
-  it("回调必须返回 Promise，且空参数返回 captchaResult:false（不放过）", () => {
-    // 官方 FAQ Q8：只在 .then 里返回会让流程卡住
-    expect(src).toContain("return Promise.resolve({ captchaResult: false })")
-    expect(src).toContain("return verifyRef.current(captchaVerifyParam)")
-  })
-
-  it("popup 模式 + 官方语言取值 cn", () => {
-    expect(src).toContain('mode: "popup"')
-    expect(src).toMatch(/language: "cn"/)
-  })
-
-  it("不 import 服务端校验库（否则 Node SDK 会被打进浏览器产物）", () => {
-    expect(src).not.toContain("@/lib/aliyun-captcha")
-    expect(src).not.toContain("@alicloud/")
   })
 })
 
-describe("环境变量是 NEXT_PUBLIC_（构建期字面替换，客户端才拿得到）", () => {
-  const src = stripComments(read(HOOK))
-  it("场景 ID 与身份标都用 NEXT_PUBLIC_ 前缀", () => {
-    expect(src).toContain("process.env.NEXT_PUBLIC_ALIYUN_CAPTCHA_SCENE_ID")
-    expect(src).toContain("process.env.NEXT_PUBLIC_ALIYUN_CAPTCHA_PREFIX")
-  })
+describe("阿里云实现文件已删除", () => {
+  for (const gone of [
+    "src/lib/aliyun-captcha.ts",
+    "src/lib/hooks/useAliyunCaptcha.ts",
+    "src/__tests__/captcha.test.ts",
+  ]) {
+    it(`${gone} 不应再存在`, () => {
+      expect(fs.existsSync(path.join(ROOT, gone))).toBe(false)
+    })
+  }
 })

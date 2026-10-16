@@ -1,26 +1,93 @@
-import { describe, it, expect, beforeEach, vi } from "vitest"
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest"
 
 /**
- * `/api/auth/send-sms` 的人机校验闸门。
+ * `/api/auth/send-sms` 的人机校验闸门（自建滑块拼图版）。
  *
  * 这是**两个发短信入口**（登录页、设置页绑定手机号）共用的唯一后端入口，
  * 所以校验只在这里做一次、也必须在这里做对。
  *
- * 本用例把 `@/lib/aliyun-captcha` 整个 mock 掉：这里要验的是**路由的编排**
- * （参数缺失拦不拦、失败拦不拦、不可用放不放行、顺序对不对），
- * 而不是校验实现本身（那在 captcha.test.ts 里覆盖）。
+ * 契约（旧阿里云方案的替代，同样 fail-closed）：
+ *   · 请求体带 captcha: { id, x, duration, trail }；缺参/类型不对 → 400 captchaFailed
+ *   · id 先**原子认领**（used 0→1，一题一用，无论对错——防对同一题枚举 x）；
+ *     认领不到（不存在/已用/已过期）→ 400 captchaFailed
+ *   · 再按库里的 answerX 判分（±5px，见 slider-captcha.test.ts）；
+ *     不过 → 400 captchaFailed
+ *   · 全过才放行到限流与发信。全程没有"不可用放行"分支 —— 服务端自管题目，
+ *     不存在外部服务异常的借口。
  *
- * 无 DATABASE_URL 时 `db` 为 null，路由会在校验通过后短路返回"开发模式"
- * 成功响应 —— 正好让我们不用起数据库就能观察到闸门到底放行还是拦截。
+ * captchaFailed 标记的语义：前端 SmsSlider 据此区分「人机没过」（reject →
+ * 控件自动换题重拖）与「业务失败」（resolve + 提示，不把用户赶回去重拖）。
+ *
+ * 这里 mock 掉 db / aliyun-sms / verifySliderAnswer：验的是**路由的编排**
+ * （顺序、拦与放、标记对不对），判分实现在 slider-captcha.test.ts。
  */
 
-const isCaptchaConfigured = vi.fn()
-const verifyCaptcha = vi.fn()
+const h = vi.hoisted(() => {
+  // 形状感知的假 db：按 select 投影的键名决定返回行，模拟各段查询。
+  let updateAffectedRows = 1
+  let challengeRows: Array<{ answerX: number }> = [{ answerX: 100 }]
+  let rateRows: Record<string, number> = { ipCount: 0, ph1h: 0, ph24h: 0 }
+  let recentRows: Array<{ createdAt: Date }> = []
+  const updateCalls: Array<{ set: unknown; table: unknown }> = []
 
-vi.mock("@/lib/aliyun-captcha", () => ({
-  isCaptchaConfigured: () => isCaptchaConfigured(),
-  verifyCaptcha: (p: string) => verifyCaptcha(p),
-}))
+  // 链式假查询：await 立刻解析为 rows，同时支持 .orderBy().limit() 与 .catch()
+  function chain(rows: unknown[]) {
+    const make = () => {
+      const p = {
+        then: (res: (v: unknown[]) => unknown) => res(rows),
+        catch: () => make(),
+        orderBy: () => make(),
+        limit: () => make(),
+      }
+      return p
+    }
+    return {
+      from: () => ({
+        where: () => make(),
+      }),
+    }
+  }
+
+  const db = {
+    update: (table: unknown) => ({
+      set: (vals: unknown) => ({
+        where: async () => {
+          updateCalls.push({ set: vals, table })
+          return [{ affectedRows: updateAffectedRows }]
+        },
+      }),
+    }),
+    select: (proj: Record<string, unknown> | undefined) => {
+      const keys = Object.keys(proj ?? {})
+      if (keys.includes("answerX")) return chain(challengeRows)
+      if (keys.includes("ipCount")) return chain([{ ipCount: rateRows.ipCount }])
+      if (keys.includes("ph1h")) return chain([{ ph1h: rateRows.ph1h }])
+      if (keys.includes("ph24h")) return chain([{ ph24h: rateRows.ph24h }])
+      if (keys.includes("createdAt")) return chain(recentRows)
+      return chain([])
+    },
+    insert: () => ({ values: async () => {} }),
+    delete: () => ({ where: async () => {} }),
+  }
+
+  return {
+    db,
+    updateCalls,
+    reset(opts?: { affectedRows?: number; answerX?: number; ph1h?: number; recent?: boolean }) {
+      updateAffectedRows = opts?.affectedRows ?? 1
+      challengeRows = [{ answerX: opts?.answerX ?? 100 }]
+      rateRows = { ipCount: 0, ph1h: opts?.ph1h ?? 0, ph24h: 0 }
+      recentRows = opts?.recent ? [{ createdAt: new Date() }] : []
+      updateCalls.length = 0
+    },
+    sendVerificationCode: vi.fn(),
+    verifySliderAnswer: vi.fn(),
+  }
+})
+
+vi.mock("@/lib/db", () => ({ db: h.db }))
+vi.mock("@/lib/aliyun-sms", () => ({ sendVerificationCode: h.sendVerificationCode }))
+vi.mock("@/lib/slider-captcha", () => ({ verifySliderAnswer: h.verifySliderAnswer }))
 
 async function loadRoute() {
   vi.resetModules()
@@ -35,95 +102,119 @@ function post(body: unknown) {
   })
 }
 
+const VALID_CAPTCHA = { id: "ch-1", x: 102, duration: 800, trail: [[0, 0], [50, 1], [102, 2]] }
+
 beforeEach(() => {
-  isCaptchaConfigured.mockReset()
-  verifyCaptcha.mockReset()
+  h.reset()
+  h.verifySliderAnswer.mockReturnValue(true)
+  h.sendVerificationCode.mockResolvedValue({ success: true })
+  process.env.ALIYUN_ACCESS_KEY_ID = "test-key"
+  process.env.ALIYUN_ACCESS_KEY_SECRET = "test-secret"
 })
 
-describe("send-sms 人机校验闸门", () => {
-  it("未配置人机校验时完全不介入（本地开发/未开通环境不受影响）", async () => {
-    isCaptchaConfigured.mockReturnValue(false)
-    const { POST } = await loadRoute()
+afterEach(() => {
+  delete process.env.ALIYUN_ACCESS_KEY_ID
+  delete process.env.ALIYUN_ACCESS_KEY_SECRET
+  vi.restoreAllMocks()
+})
 
-    const res = await POST(post({ phone: "13800138000" }))
-    expect(res.status).toBe(200)
-    expect(verifyCaptcha).not.toHaveBeenCalled()
-  })
-
-  it("已配置但请求没带 captchaVerifyParam → 400 拦下（fail-closed，防掐 CDN 绕过）", async () => {
-    isCaptchaConfigured.mockReturnValue(true)
+describe("send-sms 人机校验闸门（自建滑块）", () => {
+  it("没带 captcha → 400 captchaFailed，且不碰题目表（fail-closed）", async () => {
     const { POST } = await loadRoute()
 
     const res = await POST(post({ phone: "13800138000" }))
     expect(res.status).toBe(400)
     const data = await res.json()
     expect(data.captchaFailed).toBe(true)
-    // 关键：连校验请求都不该发出去 —— 没参数就是"没验证过"
-    expect(verifyCaptcha).not.toHaveBeenCalled()
+    expect(h.updateCalls).toHaveLength(0)
   })
 
-  it("空字符串 / 纯空白 参数同样被拦（不能靠塞空串绕过）", async () => {
-    isCaptchaConfigured.mockReturnValue(true)
+  it("captcha.id 不是非空字符串（数字/对象/null/空串）一律拦下", async () => {
     const { POST } = await loadRoute()
 
-    for (const bad of ["", "   ", "\n"]) {
-      const res = await POST(post({ phone: "13800138000", captchaVerifyParam: bad }))
-      expect(res.status, `参数 ${JSON.stringify(bad)} 应被拦`).toBe(400)
+    for (const bad of [123, {}, [], true, null, ""]) {
+      const res = await POST(post({ phone: "13800138000", captcha: { ...VALID_CAPTCHA, id: bad } }))
+      expect(res.status, `id=${JSON.stringify(bad)} 应被拦`).toBe(400)
+      expect((await res.json()).captchaFailed).toBe(true)
     }
-    expect(verifyCaptcha).not.toHaveBeenCalled()
+    expect(h.updateCalls).toHaveLength(0)
   })
 
-  it("参数不是字符串（如对象/数字）也被拦，不会漏给 SDK", async () => {
-    isCaptchaConfigured.mockReturnValue(true)
+  it("手机号非法时先拦参数，不做无谓的题目认领", async () => {
     const { POST } = await loadRoute()
 
-    for (const bad of [123, {}, [], true, null]) {
-      const res = await POST(post({ phone: "13800138000", captchaVerifyParam: bad }))
-      expect(res.status, `参数 ${JSON.stringify(bad)} 应被拦`).toBe(400)
-    }
-    expect(verifyCaptcha).not.toHaveBeenCalled()
+    const res = await POST(post({ phone: "12345", captcha: VALID_CAPTCHA }))
+    expect(res.status).toBe(400)
+    expect(h.updateCalls).toHaveLength(0)
+    expect(h.verifySliderAnswer).not.toHaveBeenCalled()
   })
 
-  it("校验判定 fail → 400 拦下，并标记 captchaFailed（前端据此刷新验证码）", async () => {
-    isCaptchaConfigured.mockReturnValue(true)
-    verifyCaptcha.mockResolvedValue({ result: "fail", code: "F001" })
+  it("认领失败（题目已用/过期/不存在，affectedRows=0）→ 400 captchaFailed", async () => {
+    h.reset({ affectedRows: 0 })
     const { POST } = await loadRoute()
 
-    const res = await POST(post({ phone: "13800138000", captchaVerifyParam: "p" }))
+    const res = await POST(post({ phone: "13800138000", captcha: VALID_CAPTCHA }))
+    expect(res.status).toBe(400)
+    const data = await res.json()
+    expect(data.error).toContain("已失效")
+    expect(data.captchaFailed).toBe(true)
+    // 认领失败就不该再读答案、更不该判分
+    expect(h.verifySliderAnswer).not.toHaveBeenCalled()
+  })
+
+  it("判分不过 → 400 captchaFailed（但题目已被认领消费）", async () => {
+    h.verifySliderAnswer.mockReturnValue(false)
+    const { POST } = await loadRoute()
+
+    const res = await POST(post({ phone: "13800138000", captcha: VALID_CAPTCHA }))
     expect(res.status).toBe(400)
     expect((await res.json()).captchaFailed).toBe(true)
-    expect(verifyCaptcha).toHaveBeenCalledWith("p")
+    expect(h.updateCalls).toHaveLength(1)
   })
 
-  it("校验判定 pass → 放行到后续业务", async () => {
-    isCaptchaConfigured.mockReturnValue(true)
-    verifyCaptcha.mockResolvedValue({ result: "pass", certifyId: "c1" })
+  it("判分依据来自库里的 answerX，x/duration/trail 原样透传给判分器", async () => {
+    h.reset({ answerX: 137 })
     const { POST } = await loadRoute()
 
-    const res = await POST(post({ phone: "13800138000", captchaVerifyParam: "p" }))
+    await POST(post({ phone: "13800138000", captcha: VALID_CAPTCHA }))
+    expect(h.verifySliderAnswer).toHaveBeenCalledWith({
+      expectedX: 137,
+      x: 102,
+      duration: 800,
+      trail: [[0, 0], [50, 1], [102, 2]],
+    })
+  })
+
+  it("人机通过 + 短信成功 → 200，验证码入库走原链路", async () => {
+    const { POST } = await loadRoute()
+
+    const res = await POST(post({ phone: "13800138000", captcha: VALID_CAPTCHA }))
     expect(res.status).toBe(200)
+    const data = await res.json()
+    expect(data.success).toBe(true)
+    expect(h.sendVerificationCode).toHaveBeenCalledTimes(1)
   })
 
-  it("校验服务不可用（超时/5xx）→ **放行**，不阻塞短信", async () => {
-    isCaptchaConfigured.mockReturnValue(true)
-    verifyCaptcha.mockResolvedValue({ result: "unavailable", error: "ETIMEDOUT" })
+  it("人机通过但发送超限（429）不带 captchaFailed —— 人机已过，前端不该把用户赶回去重拖", async () => {
+    h.reset({ ph1h: 5 })
     const { POST } = await loadRoute()
 
-    const res = await POST(post({ phone: "13800138000", captchaVerifyParam: "p" }))
-    expect(res.status).toBe(200)
+    const res = await POST(post({ phone: "13800138000", captcha: VALID_CAPTCHA }))
+    expect(res.status).toBe(429)
+    const data = await res.json()
+    expect(data.captchaFailed).toBeUndefined()
   })
 
-  it("手机号非法时不走人机校验（先拦参数，不做无谓的外部调用）", async () => {
-    isCaptchaConfigured.mockReturnValue(true)
+  it("短信服务未配置 → 500（人机已通过的业务失败，同样不带 captchaFailed）", async () => {
+    delete process.env.ALIYUN_ACCESS_KEY_ID
     const { POST } = await loadRoute()
 
-    const res = await POST(post({ phone: "12345", captchaVerifyParam: "p" }))
-    expect(res.status).toBe(400)
-    expect(verifyCaptcha).not.toHaveBeenCalled()
+    const res = await POST(post({ phone: "13800138000", captcha: VALID_CAPTCHA }))
+    expect(res.status).toBe(500)
+    expect((await res.json()).captchaFailed).toBeUndefined()
   })
 
   it("请求体不是合法 JSON → 400，不抛异常", async () => {
-    isCaptchaConfigured.mockReturnValue(true)
     const { POST } = await loadRoute()
 
     const res = await POST(
@@ -134,16 +225,5 @@ describe("send-sms 人机校验闸门", () => {
       }),
     )
     expect(res.status).toBe(400)
-  })
-
-  it("原样透传参数给校验实现（不得做任何改写，官方明确要求）", async () => {
-    isCaptchaConfigured.mockReturnValue(true)
-    verifyCaptcha.mockResolvedValue({ result: "pass" })
-    const { POST } = await loadRoute()
-
-    await POST(
-      post({ phone: "13800138000", captchaVerifyParam: '{"sceneId":"s1"}' }),
-    )
-    expect(verifyCaptcha).toHaveBeenCalledWith('{"sceneId":"s1"}')
   })
 })

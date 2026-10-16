@@ -1,11 +1,11 @@
 import { NextResponse } from "next/server"
 import crypto from "crypto"
 import { db } from "@/lib/db"
-import { verificationCodes } from "@/lib/db/schema"
-import { eq, and, gte, lt, count } from "drizzle-orm"
+import { captchaChallenges, verificationCodes } from "@/lib/db/schema"
+import { eq, and, gte, gt, lt, count } from "drizzle-orm"
 import { sendVerificationCode } from "@/lib/aliyun-sms"
 import { getClientIP } from "@/lib/rate-limit"
-import { isCaptchaConfigured, verifyCaptcha } from "@/lib/aliyun-captcha"
+import { verifySliderAnswer } from "@/lib/slider-captcha"
 
 const PHONE_REGEX = /^1[3-9]\d{9}$/
 
@@ -14,7 +14,10 @@ function isDevMode() {
 }
 
 export async function POST(request: Request) {
-  let body: { phone?: string; captchaVerifyParam?: string }
+  let body: {
+    phone?: string
+    captcha?: { id?: unknown; x?: unknown; duration?: unknown; trail?: unknown }
+  }
   try {
     body = await request.json()
   } catch {
@@ -26,43 +29,62 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "请输入有效的手机号" }, { status: 400 })
   }
 
-  // ── 人机校验（阿里云验证码 2.0）─────────────────────────────────────────────
-  // 放在手机号校验之后、限流之前：参数不合法就不必再查库。
-  // 未配置环境变量时 (isCaptchaConfigured() === false) 整段跳过，
-  // 本地开发与尚未开通验证码的环境不受影响。
-  if (isCaptchaConfigured()) {
-    const captchaVerifyParam =
-      typeof body.captchaVerifyParam === "string" ? body.captchaVerifyParam : ""
-
-    // 缺参必须**拒**，这是刻意的 fail-closed：
-    // 官方 FAQ Q17 说明验证码脚本初始化失败时仍会触发 captchaVerifyCallback，
-    // 调用时参数为空。若这里放行，攻击者只要屏蔽验证码 CDN (o.alicdn.com)
-    // 就能完全绕过人机校验，把这条防线变成摆设。
-    if (!captchaVerifyParam.trim()) {
-      return NextResponse.json(
-        { error: "人机验证无效，请刷新页面后重试", captchaFailed: true },
-        { status: 400 }
-      )
-    }
-
-    const verdict = await verifyCaptcha(captchaVerifyParam)
-    if (verdict.result === "fail") {
-      // captchaFailed 让前端区分「人机验证没过」与「短信发送失败」：
-      // 前者要把 captchaResult 回传成 false，让验证码控件刷新、用户重试；
-      // 后者是人机已通过、业务失败，不能刷新验证码把用户赶回去重拖一次。
-      return NextResponse.json(
-        { error: "人机验证未通过，请重试", captchaFailed: true },
-        { status: 400 }
-      )
-    }
-    // verdict.result === "unavailable" → 阿里云侧异常/未配好 → **放行**。
-    // 官方口径：验证码是安全增强手段，不应成为业务可用性的单点故障。
-    // verifyCaptcha 内部已 console.error 留痕，这里不再重复。
-  }
-
   // Dev mode (no DB): use fixed code 123456
   if (isDevMode() || !db) {
     return NextResponse.json({ success: true, message: "验证码已发送（开发模式：输入 123456）" })
+  }
+
+  // ── 人机校验（自建滑块拼图）───────────────────────────────────────────────
+  // 题目由 GET /api/auth/captcha 服务端现画（pngjs），缺口答案只存
+  // captcha_challenges，不落客户端。这里先**原子认领**（used 0→1：一题一用、
+  // 无论对错，防止对同一题枚举 x），再按 ±5px 容差判分。原阿里云方案对
+  // "unavailable" 放行；自建方案没有外部依赖，一律 fail-closed：缺参 /
+  // 认领失败（不存在、已用、已过期）/ 判分不过都拒。
+  // captchaFailed 让前端区分「人机验证没过」（滑块要刷新重试）与「短信发送
+  // 失败」（人机已通过，不能把用户赶回去重拖一次）。
+  const captcha = body.captcha
+  if (!captcha || typeof captcha.id !== "string" || !captcha.id) {
+    return NextResponse.json(
+      { error: "人机验证无效，请刷新后重试", captchaFailed: true },
+      { status: 400 }
+    )
+  }
+
+  const claim = await db
+    .update(captchaChallenges)
+    .set({ used: 1 })
+    .where(
+      and(
+        eq(captchaChallenges.id, captcha.id),
+        eq(captchaChallenges.used, 0),
+        gt(captchaChallenges.expiresAt, new Date())
+      )
+    )
+  if ((claim[0]?.affectedRows ?? 0) === 0) {
+    return NextResponse.json(
+      { error: "人机验证已失效，请刷新后重试", captchaFailed: true },
+      { status: 400 }
+    )
+  }
+
+  const [challenge] = await db
+    .select({ answerX: captchaChallenges.answerX })
+    .from(captchaChallenges)
+    .where(eq(captchaChallenges.id, captcha.id))
+
+  if (
+    !challenge ||
+    !verifySliderAnswer({
+      expectedX: challenge.answerX,
+      x: captcha.x,
+      duration: captcha.duration,
+      trail: captcha.trail,
+    })
+  ) {
+    return NextResponse.json(
+      { error: "人机验证未通过，请重试", captchaFailed: true },
+      { status: 400 }
+    )
   }
 
   // 必须用共享的 getClientIP：它优先取 nginx 覆盖写入的 X-Real-IP。

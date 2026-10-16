@@ -33,31 +33,22 @@ DATABASE_URL=mysql://user:pass@127.0.0.1:3306/typenow
 DEEPSEEK_API_KEY=            # 不填则 AI 解析接口返回 503（不会伪造内容）
 ```
 
-### 可选：发短信的人机校验（阿里云验证码 2.0）
+### 可选：发短信的人机校验（自建滑块拼图）
 
-登录页与设置页的「获取/发送验证码」共用 `POST /api/auth/send-sms`。配置下面两项后，
-该接口会要求客户端先通过阿里云人机校验（基准实现基准实现用的是同一套）：
+登录页与设置页的「获取/发送验证码」共用 `POST /api/auth/send-sms`。发短信前必须先通过
+**自建滑块拼图校验**：服务端用 pngjs 现画一张 320×160 背景图 + 60px 圆形拼图（缺口答案
+只存库里的 `captcha_challenges` 表，不落客户端），前端拖动对齐后把 `{id, x, duration,
+trail}` 发给 `send-sms`，服务端先**原子认领**（used 0→1，一题一用、无论对错，防对同一题
+枚举 x）再按 ±5px 容差判分。相关文件：
 
-```bash
-NEXT_PUBLIC_ALIYUN_CAPTCHA_SCENE_ID=   # 控制台「场景管理」→ 场景 ID
-NEXT_PUBLIC_ALIYUN_CAPTCHA_PREFIX=     # 控制台「概览 → 实例基本信息」→ 身份标
-ALIYUN_ACCESS_KEY_ID=                  # 与短信共用；RAM 需额外授予验证码权限
-ALIYUN_ACCESS_KEY_SECRET=
-```
+- `src/app/api/auth/captcha/route.ts` — 取题（IP 限流 30 次/分钟）
+- `src/app/api/auth/send-sms/route.ts` — 认领 + 判分闸门（全 fail-closed）
+- `src/lib/slider-captcha.ts` — 拼图生成与判分
+- `src/components/auth/SmsSlider.tsx` — 滑块控件（rc-slider-captcha），滑块即发送触发器
 
-- **两项都不填 = 整条人机校验自动关闭**，本地开发无需申请阿里云账号。
-- 必须是 `NEXT_PUBLIC_`：客户端 `initAliyunCaptcha` 要用，构建期会替换成字面量；
-  改动后**必须重启 dev server**（`NEXT_PUBLIC_*` 不热更新）。
-- 验证码的**形态**（拖动图片对齐 / 滑块 / 点选…）在控制台建场景时选定，
-  隐含在 SceneId 里，代码侧改不了。
-- `prefix` **不是域名绑定**，只是运行时 API 主机的最左段，因此 localhost 可用、
-  无需 ICP 备案。
-- 校验脚本从 `o.alicdn.com` 动态加载，**禁止自托管**（官方明确要求，自托管会导致
-  无法更新、可能误拦截）。若将来加 CSP，需放行该域及 `*.aliyuncs.com` 相关域名。
-- 故障口径：阿里云侧异常（超时/5xx）→ **放行**；参数缺失或校验不通过 → **拦截**。
-  参数缺失必须拦，否则屏蔽验证码 CDN 即可绕过（见 `src/lib/aliyun-captcha.ts` 注释）。
-- 记账：验证码按次计费（¥0.005/次，**测试模式同样计费**）；上线前记得把场景从
-  「测试」切回「正式」。
+依赖表：`captcha_challenges`（见 `db/migrations/00036_captcha_challenges.sql`，手工执行）。
+无需任何第三方验证码账号或额外环境变量；`ALIYUN_ACCESS_KEY_ID/SECRET` 仍需配置，
+但只用于发短信本身。
 
 ```bash
 pnpm dev      # http://localhost:3000

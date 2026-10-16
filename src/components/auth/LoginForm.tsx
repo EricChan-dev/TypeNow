@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useCallback, useEffect, useRef } from "react"
+import { useState, useCallback, useEffect } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 import Link from "next/link"
 import { Check, Loader2 } from "lucide-react"
@@ -10,10 +10,7 @@ import { signOutAction } from "@/app/actions/auth"
 import QRCode from "qrcode"
 import { WeChatQRCode } from "@/components/auth/WeChatQRCode"
 import { ContactModal } from "@/components/auth/ContactModal"
-import {
-  useAliyunCaptcha,
-  type CaptchaVerifyResult,
-} from "@/lib/hooks/useAliyunCaptcha"
+import SmsSlider from "@/components/auth/SmsSlider"
 
 type LoginTab = "wechat" | "phone"
 
@@ -138,7 +135,6 @@ export function LoginForm() {
 
   const [phone, setPhone] = useState("")
   const [code, setCode] = useState("")
-  const [cooldown, setCooldown] = useState(0)
   const [loading, setLoading] = useState(false)
   // 协议勾选框：纯展示，不参与登录校验（见 FormControl 的注释）
   const [agreed, setAgreed] = useState(false)
@@ -206,157 +202,11 @@ export function LoginForm() {
   }, [searchParams])
 
   /**
-   * 发短信的**唯一**请求实现。`captchaVerifyParam` 由人机校验回调提供；
-   * 未启用校验（或校验服务不可用而放行）时为空。
+   * 发短信改由 SmsSlider 触发：拖动滑块对齐拼图 → 服务端判分（答案只存库）
+   * → 通过才发短信。原「点击按钮 → 阿里云弹层 → captchaVerifyCallback 发送」
+   * 的整条链路（sendSms / verifyCaptcha / useAliyunCaptcha / 冷却定时器）都
+   * 收进 SmsSlider 组件里了，本组件只保留手机号/验证码输入与提交。
    */
-  const sendSms = useCallback(
-    async (captchaVerifyParam?: string) => {
-      const trimmedPhone = phone.trim()
-      try {
-        const res = await fetch("/api/auth/send-sms", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            phone: trimmedPhone,
-            // 只在真的拿到参数时才带上，避免给服务端塞一个空串 ——
-            // 服务端把「空参数」判为**拒绝**（防绕过），空串会变成一次必然失败。
-            ...(captchaVerifyParam?.trim()
-              ? { captchaVerifyParam }
-              : {}),
-          }),
-        })
-
-        const data = await res.json()
-
-        if (!res.ok) {
-          return {
-            ok: false as const,
-            error: data.error || "发送验证码失败",
-            // 服务端用它区分「人机验证没过」与「短信发送失败」：
-            // 前者要让验证码控件刷新、请用户重试；后者人机已通过，不能刷新。
-            captchaFailed: data.captchaFailed === true,
-          }
-        }
-        return { ok: true as const, message: data.message || "验证码已发送" }
-      } catch {
-        return {
-          ok: false as const,
-          error: "发送验证码失败，请重试",
-          captchaFailed: false,
-        }
-      }
-    },
-    [phone],
-  )
-
-  const cooldownTimerRef = useRef<ReturnType<typeof setInterval> | null>(null)
-
-  const startCooldown = useCallback(() => {
-    // **同步**先置 60，不等 setState 落地：否则用户能在 React 提交这次更新之前
-    // 再点一下，于是并发发出第二条短信（服务端 60s 冷却会拦，但用户会看到一次
-    // 莫名其妙的报错）。官方示例也是同步 setCountdown(60)。
-    setCooldown(60)
-    if (cooldownTimerRef.current) clearInterval(cooldownTimerRef.current)
-    cooldownTimerRef.current = setInterval(() => {
-      setCooldown((prev) => {
-        if (prev <= 1) {
-          if (cooldownTimerRef.current) clearInterval(cooldownTimerRef.current)
-          cooldownTimerRef.current = null
-          return 0
-        }
-        return prev - 1
-      })
-    }, 1000)
-  }, [])
-
-  // 组件卸载时别把定时器留着（切 tab / 跳走都会卸载）
-  useEffect(() => {
-    return () => {
-      if (cooldownTimerRef.current) clearInterval(cooldownTimerRef.current)
-    }
-  }, [])
-
-  /**
-   * 人机校验通过后由 SDK 调用（见 useAliyunCaptcha 的说明）。
-   * 必须**返回 Promise**；`captchaResult: false` 会让控件刷新验证码请用户重试。
-   */
-  const verifyCaptcha = useCallback(
-    async (captchaVerifyParam: string): Promise<CaptchaVerifyResult> => {
-      setLoading(true)
-      try {
-        const result = await sendSms(captchaVerifyParam)
-        if (!result.ok) {
-          // 错误提示在这里就地弹：onBizResultCallback 在“验证码没过”时会不会
-          // 被调到，官方没有明确说明，不能把唯一的提示挂在那上面。
-          toast.error(result.error)
-          return { captchaResult: !result.captchaFailed, bizResult: false }
-        }
-        return { captchaResult: true, bizResult: true }
-      } finally {
-        setLoading(false)
-      }
-    },
-    [sendSms],
-  )
-
-  const captcha = useAliyunCaptcha({
-    // 手机 tab 未显示时不要初始化：面板 hidden 时量不出按钮位置，弹层会错位；
-    // 而且 SDK 初始化要求按钮在 DOM 里。见 hook 里 enabled 的说明。
-    enabled: activeTab === "phone",
-    buttonId: "login-send-code",
-    elementId: "login-captcha-element",
-    verify: verifyCaptcha,
-    onBizResult: (bizResult) => {
-      // 只在成功时收尾；失败已在 verify 里提示过，这里再弹一次就重复了。
-      // 这是官方示例的标准分工：verify 发业务请求，onBizResult 做 UI 反馈。
-      if (!bizResult) return
-      toast.success("验证码已发送")
-      startCooldown()
-    },
-    onError: (message) => toast.error(message),
-  })
-
-  /**
-   * 按钮点击。**验证码就绪时 SDK 已接管这个按钮的点击**（这正是传 button 参数的
-   * 目的），此时必须直接返回，否则一次点击既弹验证码、又立刻发出一条没有验证
-   * 参数的短信，被服务端拒成「人机验证无效」。
-   *
-   * 未启用校验（没配环境变量）时走原来的直连逻辑；校验脚本加载失败时给出明确
-   * 提示 —— 直接发是没用的，服务端会因缺参拒绝（这是刻意的 fail-closed）。
-   */
-  const handleSendCode = useCallback(() => {
-    if (captcha.status === "ready") return
-
-    if (captcha.status === "failed") {
-      toast.error("人机验证加载失败，请刷新页面后重试")
-      return
-    }
-
-    const trimmedPhone = phone.trim()
-    if (!trimmedPhone) {
-      toast.error("请输入手机号")
-      return
-    }
-    if (!/^1[3-9]\d{9}$/.test(trimmedPhone)) {
-      toast.error("请输入有效的手机号")
-      return
-    }
-
-    void (async () => {
-      setLoading(true)
-      try {
-        const result = await sendSms()
-        if (!result.ok) {
-          toast.error(result.error)
-          return
-        }
-        toast.success(result.message)
-        startCooldown()
-      } finally {
-        setLoading(false)
-      }
-    })()
-  }, [captcha.status, phone, sendSms, startCooldown])
 
   const handleLogin = useCallback(async () => {
     const trimmedPhone = phone.trim()
@@ -545,30 +395,12 @@ export function LoginForm() {
                 placeholder="请输入验证码"
                 maxLength={6}
               />
-              <button
-                id="login-send-code"
-                type="button"
-                onClick={handleSendCode}
-                disabled={
-                  cooldown > 0 ||
-                  loading ||
-                  captcha.status === "loading" ||
-                  captcha.status === "failed"
-                }
-              >
-                {cooldown > 0
-                  ? `${cooldown}s`
-                  : captcha.status === "loading"
-                    ? "加载中…"
-                    : "获取验证码"}
-              </button>
             </p>
 
-            {/* 人机校验挂载点（阿里云验证码 2.0）。
-                popup 模式下它只是个 0 高度占位节点，验证浮层由 SDK 插到 body 上。
- 位置与基准实现一致：放在「验证码」行之后、「立即登录」之前 ——
- 基准实现那个 div#captcha-element 同样占一个 flex gap，见上方注释。 */}
-            <div id="login-captcha-element" />
+            {/* 滑块人机校验 + 发送触发（自建服务，见 SmsSlider）。
+                滑块就是「获取验证码」按钮：拖对拼图 → 服务端判分 → 发短信。
+                位置与原阿里云挂载点一致：验证码行之后、立即登录之前。 */}
+            <SmsSlider phone={phone} id="login-sms-slider" />
 
             <button
               type="button"

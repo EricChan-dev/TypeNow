@@ -13,10 +13,7 @@ import {
 import { cn } from "@/lib/utils"
 import { toast } from "sonner"
 import { BindWeChatQRCode } from "@/components/auth/BindWeChatQRCode"
-import {
-  useAliyunCaptcha,
-  type CaptchaVerifyResult,
-} from "@/lib/hooks/useAliyunCaptcha"
+import SmsSlider from "@/components/auth/SmsSlider"
 import { DELETION_CONFIRM_PHRASE, isConfirmPhraseValid } from "@/lib/account-deletion"
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -181,8 +178,6 @@ export function SettingsClient({ initialUser }: { initialUser: InitialUser }) {
   const [showWechatBind, setShowWechatBind] = useState(false)
   const [phoneValue, setPhoneValue] = useState("")
   const [codeValue, setCodeValue] = useState("")
-  const [sendingCode, setSendingCode] = useState(false)
-  const [codeCountdown, setCodeCountdown] = useState(0)
   const [binding, setBinding] = useState(false)
   // 注销账号（自助）
   const [showDeleteModal, setShowDeleteModal] = useState(false)
@@ -257,12 +252,7 @@ export function SettingsClient({ initialUser }: { initialUser: InitialUser }) {
     }
   }, [searchParams])
 
-  // Code countdown
-  useEffect(() => {
-    if (codeCountdown <= 0) return
-    const timer = setInterval(() => setCodeCountdown((c) => c - 1), 1000)
-    return () => clearInterval(timer)
-  }, [codeCountdown])
+  // Code countdown 改由 SmsSlider 内部管理（滑块即发送触发器）
 
   // Load subscriptions
   useEffect(() => {
@@ -343,107 +333,10 @@ export function SettingsClient({ initialUser }: { initialUser: InitialUser }) {
   // ─── Bind handlers ──────────────────────────────────────────────────────────
 
   /**
-   * 发短信的**唯一**请求实现。`captchaVerifyParam` 由人机校验回调提供。
-   * 与登录页 LoginForm 里的同名实现保持同口径（两个入口共用 /api/auth/send-sms）。
+   * 发短信改由 SmsSlider 触发（滑块对齐拼图 → 服务端判分 → 发短信），
+   * 与登录页同口径：原 sendSms / verifyCaptcha / useAliyunCaptcha /
+   * handleSendCode 整条阿里云链路已收进 SmsSlider 组件。
    */
-  const sendSms = useCallback(async (captchaVerifyParam?: string) => {
-    try {
-      const res = await fetch("/api/auth/send-sms", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          phone: phoneValue,
-          // 只在真的拿到参数时才带：服务端把「空参数」判为拒绝（防绕过），
-          // 传空串会变成一次必然失败。
-          ...(captchaVerifyParam?.trim() ? { captchaVerifyParam } : {}),
-        }),
-      })
-      const data = await res.json()
-      if (!res.ok) {
-        return {
-          ok: false as const,
-          error: data.error ?? "发送失败",
-          captchaFailed: data.captchaFailed === true,
-        }
-      }
-      return { ok: true as const }
-    } catch {
-      return {
-        ok: false as const,
-        error: "发送失败，请重试",
-        captchaFailed: false,
-      }
-    }
-  }, [phoneValue])
-
-  /** 人机校验通过后由 SDK 调用，必须返回 Promise（见 useAliyunCaptcha）。 */
-  const verifyCaptcha = useCallback(
-    async (captchaVerifyParam: string): Promise<CaptchaVerifyResult> => {
-      setSendingCode(true)
-      try {
-        const result = await sendSms(captchaVerifyParam)
-        if (!result.ok) {
-          toast.error(result.error)
-          // captchaFailed 为 true 时回传 captchaResult:false，让控件刷新验证码重试；
-          // 若只是短信发送失败（人机已过），不能刷新控件把用户赶回去重拖一次。
-          return { captchaResult: !result.captchaFailed, bizResult: false }
-        }
-        return { captchaResult: true, bizResult: true }
-      } finally {
-        setSendingCode(false)
-      }
-    },
-    [sendSms],
-  )
-
-  const captcha = useAliyunCaptcha({
-    // 绑定表单是条件渲染的（见上面 showPhoneBind）：不展开时按钮不在 DOM 里，
-    // 初始化必然失败，所以必须把可见性作为启用条件。
-    enabled: showPhoneBind,
-    buttonId: "settings-send-code",
-    elementId: "settings-captcha-element",
-    verify: verifyCaptcha,
-    onBizResult: (bizResult) => {
-      if (!bizResult) return
-      toast.success("验证码已发送")
-      setCodeCountdown(60)
-    },
-    onError: (message) => toast.error(message),
-  })
-
-  /**
-   * 按钮点击。**校验就绪时 SDK 已接管该按钮的点击**，必须直接返回，
-   * 否则一次点击会既弹验证码、又立刻发出一条无验证参数的短信（被服务端拒绝）。
-   */
-  const handleSendCode = useCallback(() => {
-    if (captcha.status === "ready") return
-
-    if (captcha.status === "failed") {
-      toast.error("人机验证加载失败，请刷新页面后重试")
-      return
-    }
-
-    if (!/^1[3-9]\d{9}$/.test(phoneValue)) {
-      toast.error("请输入有效的手机号")
-      return
-    }
-    if (codeCountdown > 0) return
-
-    void (async () => {
-      setSendingCode(true)
-      try {
-        const result = await sendSms()
-        if (!result.ok) {
-          toast.error(result.error)
-          return
-        }
-        toast.success("验证码已发送")
-        setCodeCountdown(60)
-      } finally {
-        setSendingCode(false)
-      }
-    })()
-  }, [captcha.status, phoneValue, codeCountdown, sendSms])
 
   const handleBindPhone = useCallback(async () => {
     if (!/^1[3-9]\d{9}$/.test(phoneValue)) {
@@ -643,31 +536,12 @@ export function SettingsClient({ initialUser }: { initialUser: InitialUser }) {
                   placeholder="验证码"
                   className="flex-1 bg-muted border border-border rounded-lg px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground/40 focus:outline-none focus:border-violet-500/50 transition-all"
                 />
-                <button
-                  id="settings-send-code"
-                  onClick={handleSendCode}
-                  disabled={
-                    sendingCode ||
-                    codeCountdown > 0 ||
-                    captcha.status === "loading" ||
-                    captcha.status === "failed"
-                  }
-                  className={cn(
-                    "shrink-0 px-3 py-2 rounded-lg text-[11px] font-medium transition-all",
-                    codeCountdown > 0
-                      ? "text-foreground/20 bg-muted"
-                      : "text-violet-400 bg-violet-500/10 hover:bg-violet-500/20"
-                  )}
-                >
-                  {sendingCode ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> :
-                   codeCountdown > 0 ? `${codeCountdown}s` :
-                   captcha.status === "loading" ? "加载中…" : "发送验证码"}
-                </button>
               </div>
 
-              {/* 人机校验挂载点（阿里云验证码 2.0）。popup 模式下只是个 0 高度
-                  占位节点，验证浮层由 SDK 插到 body 上。 */}
-              <div id="settings-captcha-element" />
+              {/* 滑块人机校验 + 发送触发（自建服务，见 SmsSlider）：
+                  拖动对齐拼图 → 服务端判分 → 发短信；60s 冷却由组件内部管理。
+                  替换原阿里云按钮与挂载点（settings-send-code / settings-captcha-element）。 */}
+              <SmsSlider phone={phoneValue} tone="dark" id="settings-sms-slider" />
               <button
                 onClick={handleBindPhone}
                 disabled={binding}
