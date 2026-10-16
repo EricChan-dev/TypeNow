@@ -1,7 +1,7 @@
 /**
  * 结构化答案视图（「看答案」浮层 + 复习屏的语法结构视图）。
  *
- * 基准实现 `renderStructuredAnswer()`把句子按成分切成
+ * 结构视图把句子按成分切成
  * 一串 `<span class="answer-component component-<type>">`，每块里再嵌
  * `.component-label`（「主语」）/`.component-text`（内部是 `.clickable-word`）/
  * `.component-phonetics`（音标）/`.component-meaning`（成分释义）；没有成分
@@ -10,12 +10,11 @@
  *
  * 这里把同一套逻辑抽成**纯函数返回数据**，由 React 渲染（不拼 HTML 字符串 ——
  * 句子来自用户可编辑的题库，拼串就得自己负责转义）。CSS 类名与嵌套结构
- * 对齐基准实现，所以移植过来的样式表能直接生效。
+ * 保持稳定，既有样式表可直接生效。
  *
- * ## 与基准实现的唯一实质差异：成分的单词下标来自数据库
+ * ## 设计要点：成分的单词下标来自数据库
  *
- * 基准实现只有 fragment 的文本，所以它**顺序累加**每个 fragment 的单词数来
- * 现算 `data-word-start/end`。我们库里的 `sentence_structure[].start/end`
+ * 成分的 `data-word-start/end` **不是**顺序累加每个片段的单词数现算出来的：
  * 本来就是权威下标（而且已实测与 `dictationTokens()` 的切法完全一致）。
  *
  * 这不是可有可无的替换：我们的结构数据**允许有缺口**，顺序累加会算错。
@@ -49,7 +48,7 @@ export interface StructuredPart {
   meaning: string
   /**
    * `data-word-start` / `data-word-end`。`null` 表示**禁用高亮** ——
- * 基准实现在「存在以撇号开头的 fragment」时整句都不输出这两个属性
+   * 存在以撇号开头的片段时整句都不输出这两个属性
    * （缩写的切法与输入框不兼容，高亮会错位）。
    */
   wordStart: number | null
@@ -63,7 +62,7 @@ export interface StructuredPart {
   trailingPunctuation: string
   /**
    * 缩写后缀且查不到音标时，插一个 `visibility:hidden` 的占位 span，
- * 让它的中文释义与相邻成分对齐（基准实现原样行为）。
+ * 让它的中文释义与相邻成分对齐。
    */
   phoneticsPlaceholder: boolean
 }
@@ -75,11 +74,11 @@ export interface StructuredAnswer {
   parts: StructuredPart[]
 }
 
-// ─── 纯文本工具（practice.js:5457-5488） ────────────────────────────────────
+// ─── 纯文本工具 ───────────────────────────────────────────────────────────────
 
 /**
  * 归一化用于比对的句子：小写、弯引号转直引号、只留字母数字空格撇号。
- * 标点/空格差异都会被抹平（`practice.js:5457`）。
+ * 标点/空格差异都会被抹平。
  */
 export function normalizeSentenceForComparison(text: string | null | undefined): string {
   if (!text) return ""
@@ -108,20 +107,20 @@ export function buildFragmentsTextForComparison(
   return merged
 }
 
-/** 提取句末标点（含结尾引号/括号）。`practice.js:5474`。 */
+/** 提取句末标点（含结尾引号/括号）。 */
 export function extractSentenceTerminalPunctuation(text: string | null | undefined): string {
   if (!text) return ""
   const match = text.trim().match(/([.!?。！？]+["'”’）)\]]*)$/)
   return match ? match[1] : ""
 }
 
-/** 文本是否已自带句末标点。`practice.js:5486`。 */
+/** 文本是否已自带句末标点。 */
 export function hasSentenceTerminalPunctuation(text: string | null | undefined): boolean {
   if (!text) return false
   return /[.!?。！？]["'”’）)\]]*$/.test(text.trim())
 }
 
-// ─── 可点击单词（practice.js:5405 makeTextClickable） ───────────────────────
+// ─── 可点击单词 ───────────────────────────────────────────────────────────────
 
 const WORD_RE = /([a-zA-Z]+(?:'[a-zA-Z]+)?)/g
 
@@ -135,9 +134,9 @@ function queryFor(lower: string): string {
 /**
  * 把一个成分的文本切成「可点/不可点」的小段。
  *
- * 基准实现对**不含空格**的文本走特殊分支（整段当一个词处理，避免正则把
+ * **不含空格**的文本走特殊分支（整段当一个词处理，避免正则把
  * `trees` 之类切错），含空格的才走 `[a-zA-Z]+(?:'[a-zA-Z]+)?` 正则。
- * 两个分支对单字母词的处理不一致（特殊分支不过滤长度），照抄。
+ * 两个分支对单字母词的处理不一致（特殊分支不过滤长度），保持原样。
  */
 export function clickableTokens(text: string): ClickableToken[] {
   if (!text) return []
@@ -177,11 +176,11 @@ export function clickableTokens(text: string): ClickableToken[] {
   return out
 }
 
-// ─── 音标（practice.js:buildPhoneticMap / getPhoneticForWord） ──────────────
+// ─── 音标 ────────────────────────────────────────────────────────────────────
 
 /**
  * 词 → 音标队列。同一个词出现多次时按**出现顺序**逐条消费
- * （基准实现用 `shift()`，）。
+ * （队列用 `shift()` 逐条出队）。
  */
 function buildPhoneticQueues(
   words: Word[] | null | undefined,
@@ -201,7 +200,7 @@ function buildPhoneticQueues(
 
 const CONTRACTION_SUFFIXES = ["'s", "'re", "'ve", "'ll", "'d", "'t", "'m"]
 
-/** 取一个词的音标，带缩写回溯与短语拆分。`practice.js:873-904`。 */
+/** 取一个词的音标，带缩写回溯与短语拆分。 */
 function phoneticForWord(map: Map<string, string[]> | null, word: string): string {
   if (!map) return ""
   const cleaned = normalizeQuotes(word).replace(/[.,!?;:"()—\-]/g, "").trim()
@@ -241,9 +240,9 @@ function plainAnswer(text: string): StructuredAnswer {
  * 构造结构化答案。
  *
  * @param sentence      句子（读 `english` 与 `sentenceStructure`）
- * @param accent 音标口音（基准实现 `selectedAccentType`，默认美音）
+ * @param accent 音标口音（默认美音）
  * @param enableFallback 结构与原句不一致时是否降级为纯文本。
- * 基准实现**故意**分两种口径：练习中「看答案」传 `true`（宁可给纯文本也
+ * 两种调用口径是**有意**区分的：练习中「看答案」传 `true`（宁可给纯文本也
  *   不能给错的标注），复习/学习界面传 `false`（即使不一致也照渲结构）。
  */
 export function buildStructuredAnswer(
@@ -262,7 +261,7 @@ export function buildStructuredAnswer(
     let fragmentsNormalized = normalizeSentenceForComparison(fragmentsText)
 
     // 容错：结构与原句不一致时，先试「结构在句首多补了一个隐含主语 You」
-    // （祈使句常见），去掉它再比一次（practice.js:5545-5582）。
+    // （祈使句常见），去掉它再比一次。
     if (
       originalNormalized &&
       fragmentsNormalized &&
@@ -322,8 +321,7 @@ export function buildStructuredAnswer(
       const componentType = (f.type ?? "").trim().toLowerCase()
       const meaning = (f.explanation ?? "").trim()
       // 中文标签直接用库里的 role（已是「主语/谓语/…」）。
- // 基准实现要靠一张 type→中文 的映射表是因为它的数据只有英文 type；
- // 我们的 role 更权威（比如它认识 predicative=表语，而基准实现的表里没有）。
+ // role 比英文 type 更权威（比如认识 predicative=表语）。
       const label = (f.role ?? "").trim() || componentType
 
       const trimmedText = text.trim()
@@ -332,7 +330,7 @@ export function buildStructuredAnswer(
       const wordStart = hasContractionSplit ? null : (f.start ?? 0)
       const wordEnd = hasContractionSplit ? null : Math.max(f.start ?? 0, f.end ?? f.start ?? 0)
 
- // 逐个词的音标（按顺序消费，与输入框/基准实现一致）
+ // 逐个词的音标（按顺序消费，与输入框口径一致）
       const componentWords = trimmedText.split(/\s+/).filter((w) => w.length > 0)
       const phonetics = componentWords
         .map((w) => phoneticForWord(phoneticMap, w))

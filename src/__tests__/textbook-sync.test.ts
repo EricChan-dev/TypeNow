@@ -36,7 +36,7 @@ function stage(
   }
 }
 
-describe("textbook-sync 搜索校验（基准实现 doCourseSearch 语义）", () => {
+describe("textbook-sync 搜索校验（搜索语义）", () => {
   it("单字符提示、空串与多字符通过", () => {
     expect(searchTermError("a")).toBe("请输入至少2个字符进行搜索")
     expect(searchTermError("")).toBeNull()

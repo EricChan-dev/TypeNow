@@ -19,8 +19,8 @@ import { selectPhrases, selectVocab, type VocabRow } from "@/lib/lesson-insight"
  *
  * ── 数据形态 ────────────────────────────────────────────────────────────────
  *
- * 基准实现的四块（词汇/短语/语法点/复杂度）是课节级 AI 分析产物，我们库里
- * 没有对应列。按用户决议（m20696）：词汇、短语从已有 JSON 派生，
+ * 课节级的四块内容（词汇/短语/语法点/复杂度）里，库里没有课节级 AI 分析
+ * 产物列。按用户决议（m20696）：词汇、短语从已有 JSON 派生，
  * 语法点、句子复杂度返回 null 占位（前端渲染「暂未生成」），不造假数据。
  *
  * 派生优先级：
@@ -54,7 +54,7 @@ export async function GET(_: Request, { params }: { params: Promise<{ id: string
     // MySQL 里表一旦取了别名原表名即失效（ER_BAD_FIELD_ERROR，实测踩过）。
     // drizzle 0.45 的 mysql2 db.execute 返回的是 mysql2 的原始二元组
     // [rows, fields]（MySql2PreparedQuery.execute 里 raw 分支 `return res`，
-    // session.js:47-72；`result[0]` 只在 session.all() 里，:180）——
+    // `result[0]` 即行数组）——
     // 解构一层拿 rows。
     const [vocabRaw] = (await db.execute(sql`
       SELECT w.english AS word, COALESCE(w.pos, '') AS pos,

@@ -121,17 +121,15 @@ import { TRIAL_DAYS } from "@/lib/trial-days"
 import type { TrialInfo } from "@/lib/free-trial"
 
 /**
- * 音效调用一律包一层守卫 —— 与基准实现逐处对齐：那边 17 个调用点（
- * 3285/3303/3317/3333/… ）全都写成
- *   `if (typeof playTypingSound === 'function') playTypingSound();`
+ * 音效调用一律包一层守卫：先判 `typeof playTypingSound === 'function'` 再调用。
  *
  * 不要把这层守卫当「可有可无的防御」删掉。音频模块是**独立 chunk**，dev 下
  * Turbopack 内存触顶会自动重启（日志：`Server is approaching the used memory
  * threshold, restarting`），此时浏览器缓存里那份 sfx chunk 与新的模块图对不上，
  * 导出对象上根本没有 playTyping。裸调用会抛 `TypeError: ...playTyping is not a
  * function`，把它**下面那行真正干活的语句**一起带走：
- *   · `:832` 抛错 → 字符虽已入槽但后续逻辑中断；
- *   · `:888` 抛错 → `focusSlot(index, 1)` 永不执行 → **空格/右箭头无法跳到下一词**。
+ *   · 打字音效处抛错 → 字符虽已入槽但后续逻辑中断；
+ *   · 跳格处音效抛错 → `focusSlot(index, 1)` 永不执行 → **空格/右箭头无法跳到下一词**。
  * 用户看到的就是「打字报错 + 空格不能切词」两个症状，其实是同一个异常。
  * 加守卫后音效失效只会静音，输入路径不受影响。
  */
@@ -140,11 +138,11 @@ const sfxError = () => { const f = playError; if (typeof f === "function") f() }
 const sfxChime = () => { const f = playChime; if (typeof f === "function") f() }
 
 /**
- * 听写模式（键盘打字）—— 对齐现行版本基准实现。
+ * 听写模式（键盘打字）。
  *
- * 为什么另起一个组件而不是改 LearnClient：基准实现的听写界面与旧版练习页在
+ * 为什么另起一个组件而不是改 LearnClient：听写模式与旧版练习页在
  * 结构、判题口径、键盘行为上几乎没有一处重合（旧版空格确认单词、0.5s 自动跳转，
- * 基准实现空格移动焦点、无自动跳转、答对后必进答案回顾屏）。在 2,569 行的旧组件里
+ * 听写模式空格移动焦点、无自动跳转、答对后必进答案回顾屏）。在 2,569 行的旧组件里
  * 改会造成两套语义互相污染，所以新写一份，旧组件保留给其余三种模式。
  *
  * 数据层（取句、恢复进度、上报、金币、分析）全部复用既有接口，避免两套实现
@@ -170,11 +168,9 @@ export function DictationPractice({
   lessonId: string
   /**
    * 当前练习模式。**外壳（顶栏 / 进度条 / 计时器 / 底部工具栏）四种模式共用**
- * —— 基准实现的练习页只有一份外壳， 在口语模式下执行
-   * `initSpeakingMode(document.getElementById('practiceContent'), …)`，也就是
-   * 只把 `main#practiceContent` 的内容换掉。所以这里也只用 `mode` 决定
-   * `main` 里渲染哪一套内容，而不是另起一个满屏组件（那会让顶栏、模式切换器、
- * 底栏全部消失，与基准实现完全不同）。
+   * —— 口语等模式只把 `main#practiceContent` 的内容换掉，外壳不动。所以这里
+   * 也只用 `mode` 决定 `main` 里渲染哪一套内容，而不是另起一个满屏组件
+   * （那会让顶栏、模式切换器、底栏全部消失）。
    *
    * 默认 `"dictation"`：本组件最初就是听写模式专用，保留默认值让既有调用点
    * （以及只关心听写的测试/探针）无需改动。
@@ -205,32 +201,29 @@ export function DictationPractice({
   const [personalization, setPersonalization] = useState<DictationInputSettings>(
     DEFAULT_DICTATION_INPUT_SETTINGS,
   )
- // 「更多设置」里的开关。默认全开，与基准实现 一致；
+  // 「更多设置」里的开关。默认全开；
   // 首帧用默认值、挂载后再读 localStorage，避免水合不一致。
   const [showPhonetics, setShowPhonetics] = useState(true)
   const [nextPreview, setNextPreview] = useState(true)
- // 答案视图的两种形态。基准实现两个默认都是 true：
-  //   · isHintStructuredMode —— 按 ⌘+A 的「看答案」浮层用结构化还是纯文本
-  //   · isLearningStructureMode —— 复习屏显示语法结构还是注音单词视图
- // 它们**只存在内存里**，基准实现也不持久化（刷新即回默认）。
+  // 答案视图的两种形态，两个默认都是 true：
+  //   · hintStructured —— 按 ⌘+A 的「看答案」浮层用结构化还是纯文本
+  //   · learningStructure —— 复习屏显示语法结构还是注音单词视图
+  // 它们**只存在内存里**，不持久化（刷新即回默认）。
   const [hintStructured, setHintStructured] = useState(true)
   const [learningStructure, setLearningStructure] = useState(true)
   const [confetti, setConfetti] = useState(true)
   const [audioVisualizer, setAudioVisualizer] = useState(true)
   const [shortcutOverlayEnabled, setShortcutOverlayEnabled] = useState(true)
   const [sentenceImage, setSentenceImage] = useState(false)
- // 分段练习配图开关。纯偏好，没有功能依赖（基准实现只拿它决定要不要渲染
-  // `.fragment-word-image`），所以可以完整实现。键值是 'true'/'false' 字符串。
+  // 分段练习配图开关。纯偏好，没有功能依赖，所以可以完整实现。键值是 'true'/'false' 字符串。
   const [fragmentImage, setFragmentImage] = useState(true)
   /**
- * 「分段练习」总开关。基准实现 `fragment_mode`，默认 **OFF**
-   * （practice.js:668 判 `=== '1'`）。开启后当前句先逐段听写、再整句听写。
+   * 「分段练习」总开关，默认 **OFF**。开启后当前句先逐段听写、再整句听写。
    */
   const [fragmentMode, setFragmentMode] = useState(false)
   /**
    * 当前练到第几段。**按句绑定**（带 `sid`），这样切句时无需 effect 重置 ——
- * `sid` 对不上就自动回到 0。基准实现靠 `resetFragmentPracticeState()`
-   * （practice.js:2768）在十几个调用点手工重置，我们改成派生，杜绝漏调。
+   * `sid` 对不上就自动回到 0。用派生代替在十几个调用点手工重置，杜绝漏调。
    */
   // `phase`：分段练习阶梯内的档位 —— "single" 逐段听写，"merged" 相邻 3 段
   // 合并档（mergedFragmentGroups 的产物）。塞进 fragmentPos 而不是独立 state，
@@ -243,11 +236,8 @@ export function DictationPractice({
   /**
    * 本句的分段练习是否已「跳过」或「已结束」。
    *
- * 对应基准实现的 `fragmentPracticeCompletedForSentence` —— 一个**按句**的锁：
-   * 点「跳过 →」、或答完全部片段、或中途关掉开关都会置位，置位后本句不再
- * 进入分段练习。同样按句绑定，切句自动失效（基准实现的
-   * `resetFragmentPracticeState` 把 `fragmentPracticeCompletedForSentence`
-   * 置 false，就是这件事）。
+   * 一个**按句**的锁：点「跳过 →」、或答完全部片段、或中途关掉开关都会置位，
+   * 置位后本句不再进入分段练习。同样按句绑定，切句自动失效。
    */
   const [fragmentDoneFor, setFragmentDoneFor] = useState<string | null>(null)
   /** `#fragmentResultMessage` 的状态：答错是 `error` + 「请再试一次」。 */
@@ -264,9 +254,9 @@ export function DictationPractice({
     ttsSettings.source === "youdao"
       ? (YOUDAO_EN_VOICES.find((v) => v.name === ttsSettings.youdaoVoice)?.label ?? ttsSettings.youdaoVoice).split(" ")[0]
       : ttsSettings.voice || "系统默认"
- // 极简沉浸模式。基准实现默认关闭，键名 cyber_immersive_mode。
+ // 极简沉浸模式。默认关闭。
   const [immersive, setImmersive] = useState(false)
- // 全屏状态跟随浏览器（基准实现 用 fullscreenchange 同步图标）
+ // 全屏状态跟随浏览器（fullscreenchange 事件同步图标）
   const [fullscreen, setFullscreen] = useState(false)
   // 键盘音效直接复用全局 SFX 开关（同一件事，不另起一个键）。
   const sfxEnabled = useSyncExternalStore(
@@ -321,21 +311,18 @@ export function DictationPractice({
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [showHint, setShowHint] = useState(false)
   /**
-   * 底部「已加入错题本」通知（toast.js:49 showMistakeNotification）。
+   * 底部「已加入错题本」通知。
    *
- * 基准实现每次都 `createElement` 一个全新节点，连续两次错误会短暂叠两条；
-   * 我们保持单实例，用 `mistakeNoticeEpoch` 自增来重启时间线（旧通知先收、
+   * 保持单实例：连续两次错误不叠层，用 `mistakeNoticeEpoch` 自增重启时间线（旧通知先收、
    * 再重新滑入），节奏一致且不会叠层。epoch 归 0 表示通知已卸载。
    */
   const [mistakeNoticeEpoch, setMistakeNoticeEpoch] = useState(0)
   /** 通知的 `.show` 相位（滑入/滑出） */
   const [mistakeNoticeShow, setMistakeNoticeShow] = useState(false)
   /**
- * `#resultMessage` 的类名状态。基准实现每次提交先
-   * `classList.remove('show','success','error')`（practice.js:6906），
-   * 答错时置 `result-message error show`（:6947）。
+   * 结果条的类名状态。每次提交先清掉旧类名，答错时置 error。
    * 听写模式答对会直接进复习屏、不写文本；`success show` 只出现在
-   * **学习模式**分支（:6922），听写走不到，所以这里只有 `error` 一种置位。
+   * **学习模式**分支，听写走不到，所以这里只有 `error` 一种置位。
    */
   const [resultMessage, setResultMessage] = useState<"" | "error">("")
   /** 设置面板里展开的卡片下拉（显示风格 / 发音偏好 / 自动播放次数） */
@@ -343,9 +330,8 @@ export function DictationPractice({
   /** 个性化设置模态框 */
   const [personalizationOpen, setPersonalizationOpen] = useState(false)
   /**
- * 模态框里的草稿。基准实现在模态框内改的是 `dictationInputSettings` 这个内存变量，
-   * 只有点「应用设置」才写盘并落到页面上（practice-sys-controls.js:268）。用独立
-   * state 而不是直接改 `personalization`，是为了让「关闭」能真正丢弃改动。
+   * 模态框里的草稿。在模态框内先改草稿，只有点「应用设置」才写盘并落到页面上。
+   * 用独立 state 而不是直接改 `personalization`，是为了让「关闭」能真正丢弃改动。
    */
   const [personalizationDraft, setPersonalizationDraft] = useState<DictationInputSettings>(
     DEFAULT_DICTATION_INPUT_SETTINGS,
@@ -357,8 +343,7 @@ export function DictationPractice({
 
   /**
    * 快捷键设置弹窗（设置面板「自定义快捷键」卡片点开）。
- * 基准实现的快捷键是用户可改的，配置存在 `localStorage.practice_shortcuts`
-   * （见 src/lib/practice-shortcuts.ts），这里保存运行时的那一份。
+   * 快捷键是用户可改的，配置存 localStorage（见 src/lib/practice-shortcuts.ts），这里保存运行时的那一份。
    */
   const [shortcuts, setShortcuts] = useState<Record<ShortcutId, ShortcutBinding>>(DEFAULT_SHORTCUTS)
   const [shortcutModalOpen, setShortcutModalOpen] = useState(false)
@@ -371,8 +356,7 @@ export function DictationPractice({
   /** 录制态的行内警示文案（例如「⚠ 与「播放语音」冲突，请按其他键…」）。 */
   const [recordingWarning, setRecordingWarning] = useState<string | null>(null)
   /**
- * 录制时累积按下的纯修饰键个数。基准实现靠它区分「单按 Control」和
-   * 「Control 作为组合键的前缀」（practice-sys-controls.js:696/716）。
+   * 录制时累积按下的纯修饰键个数，用来区分「单按 Control」和「Control 作为组合键的前缀」。
    */
   const modifiersPressedRef = useRef(0)
 
@@ -381,8 +365,7 @@ export function DictationPractice({
   const [favoriteBusy, setFavoriteBusy] = useState(false)
 
   /**
- * 基准实现用 `PracticeConfig.isMobile`（服务端按 UA 判定的真机标记）决定移动端
-   * 提交按钮是否可见，不是 CSS 媒体查询。初始 false，挂载后再按客户端特征纠正 ——
+   * 移动端提交按钮可见性不走 CSS 媒体查询。初始 false，挂载后再按客户端特征纠正 ——
    * 服务端渲染时拿不到 `matchMedia`，直接用它会在 hydration 时产生不一致。
    */
   const [isMobile, setIsMobile] = useState(false)
@@ -392,20 +375,15 @@ export function DictationPractice({
   const [baseWidths, setBaseWidths] = useState<number[]>([])
   /**
    * 正在发音的单词槽下标（用于 `.word-speak-btn.playing` 的脉冲动画）。
- * 基准实现 给按钮加 `.playing` 类、播完再摘掉。
+   * 播放时给按钮加 `.playing` 类、播完再摘掉。
    */
   const [speakingWordIndex, setSpeakingWordIndex] = useState<number | null>(null)
   /**
    * 当前聚焦的输入槽下标，用来给 `.word-input` 打 `typing` 类。
    *
- * 基准实现在 focus 时 `input.classList.add('typing')`、blur 时移除
-   * （practice.js:6535-6540），提交判题时再统一摘掉
-   * （`:6852` 非只读是 `remove('correct','incorrect','typing')`、
-   * `:6864` 只读是 `remove('incorrect','typing')`）。
+   * focus 时打上 `typing`、blur 时移除，提交判题时再统一摘掉。
    *
- * 基准实现 CSS 里**没有** `.typing` 规则、JS 也不读它，所以它纯粹是 DOM 状态。
- * 但抓下来的基准实现 DOM 上确实带着它（`class="word-input typing"`），
-   * 而且它是「这一格正在被输入」的唯一标记 —— 保留它 DOM 才对得上。
+   * `.typing` 没有对应 CSS 规则、JS 也不读它，纯粹是 DOM 状态；但它是「这一格正在被输入」的唯一标记，保留它便于 DOM 层面对照调试。
    *
    * 为什么用 state 而不是直接 `classList`：React 掌着 `className`，
    * 下一次重渲染会把手改的类名冲掉，状态必须走 React。
@@ -450,25 +428,22 @@ export function DictationPractice({
   /**
    * 手动播放按钮 / 播放快捷键要用的次数。
    *
- * 基准实现 是 `const manualCount = ttsPlaybackCount === 0 ? 1 : null;`
-   * —— 手动档（0）补成 1 次保证一定出声，其余档沿用设定次数。
+   * 手动档（0）补成 1 次保证一定出声，其余档沿用设定次数。
    * 从 `loopCountRef` 直接推比再存一个 ref 稳妥：少一处渲染期写入。
    */
   const manualPlayCount = () => (loopCountRef.current === 0 ? 1 : loopCountRef.current)
   /**
    * 「答对烟花效果」（`confetti_effect`）的同步镜像。
    *
- * 基准实现把它读成一个模块级变量 `confettiEffectEnabled`，
    * 在 `triggerSuccessEffects()` 里**按调用时刻**判断 —— 不是渲染期依赖。
    * 我们的答对分支分散在 4 个 `useCallback` 里（听写/片段/口语/拼图），
- * 顺着 ref 读就与基准实现同构，也省掉往 4 个依赖数组里塞 state。
+   * 顺着 ref 读省掉往 4 个依赖数组里塞 state。
    */
   const confettiRef = useRef(true)
   /**
- * 答对时的视觉奖励 —— 基准实现 `triggerSuccessEffects()`。
+   * 答对时的视觉奖励。
    *
- * 只有「答对烟花效果」开着才炸；关掉时基准实现连 `createCanvasConfettiEffect()`
-   * 都不调用，我们保持一致（该开关的 hint 正是「减少性能开销」）。
+   * 只有「答对烟花效果」开着才炸；关掉时连彩带画布都不创建（该开关的 hint 正是「减少性能开销」）。
    */
   const triggerSuccessEffects = useCallback(() => {
     if (!confettiRef.current) return
@@ -480,7 +455,7 @@ export function DictationPractice({
   /** 收藏请求进行中的同步镜像：快捷键处理器在闭包里读它，避免依赖 state 重建监听 */
   const favoriteBusyRef = useRef(false)
   /**
- * 本片段连错次数。基准实现 `fragmentMistakeCount`（ 一带）
+   * 本片段连错次数。**独立于整句**的计数 —— 分段练习不记录错题，只用来触发自动揭示答案。
    * 是**独立于整句**的计数 —— 分段练习不记录错题，只用来触发自动揭示答案。
    */
   const fragmentMistakesRef = useRef(0)
@@ -536,7 +511,7 @@ export function DictationPractice({
 
   const sentence = sentences[currentIndex] ?? null
 
- /** 本句的输入槽定义 —— 由英文分词推导，与基准实现 words 数组同源。 */
+ /** 本句的输入槽定义 —— 由英文分词推导，与 words 数组同源。 */
   const tokens = useMemo(
     () => (sentence ? dictationTokens(sentence.english) : []),
     [sentence],
@@ -545,8 +520,8 @@ export function DictationPractice({
   /**
    * 「看答案」浮层用的结构化答案。
    *
- * 用 `enableFallback=true` —— 基准实现练习中查看答案走的是这个口径
-   * （`practice.js:5760` 把第四个参数传 true），宁可降级成纯文本也不给
+ * 用 `enableFallback=true` —— 练习中查看答案走的是这个口径
+   * （第四个参数传 true），宁可降级成纯文本也不给
    * 错的成分标注。复习屏那边相反，传 false，所以它自己在 ReviewScreen
    * 内部另算一份（那边还要用 useDeferredValue 让首帧先出注音视图）。
    */
@@ -565,18 +540,18 @@ export function DictationPractice({
   /**
    * 当前是否处于分段练习态。
    *
- * 四个条件与基准实现 逐条对应：
+ * 四个条件逐条对应如下：
    *   1. 开关开着
    *   2. 有可分段的片段
    *   3. 本句尚未跳过/结束（`fragmentDoneFor !== sid`）
- * 4. **本模式是听写** —— 基准实现那条门写的是
+ * 4. **本模式是听写** —— 原判定门写的是
    *      `canUseFragmentPractice() && isFragmentModeEnabled &&
    *       practiceMode === 'dictation' && !isInFragmentPractice && …`。
    *      本组件现在同时承载听写/口语/拼图三种模式（`mode` prop），
    *      所以第 4 条必须显式写出来，不能再靠「本组件就是听写模式」这个
    *      已经失效的假设。
    *
- * 第 5 条基准实现是 `!isInFragmentPractice`（不在分段中才进入），那是它用
+ * 第 5 条原是 `!isInFragmentPractice`（不在分段中才进入），那是用
    * 命令式状态机 + `loadCurrentSentence()` 重入留下的痕迹；我们这个派生量
    * 没有重入问题，不需要。
    */
@@ -616,8 +591,8 @@ export function DictationPractice({
    * 本回合「要敲的词」。
    *
    * 分段练习与整句练习共用同一套输入机件（`slots` / `inputsRef` / `focusSlot` /
- * `handleKeyDown`），只把词表换掉 —— 基准实现其实也是两份几乎逐行相同的代码
-   * （`initFragmentInputs` practice.js:3072 与 `initInputs` :6196），差别仅在
+ * `handleKeyDown`），只把词表换掉 —— 原本也是两份几乎逐行相同的代码
+   * （分段版与整句版各一份），差别仅在
    * 容器 id 与 `measureWordInputWidth` 的紧凑参数（片段传 80、整句传 100）。
    * 我们合并成一份，避免两份实现各自漂移。
    */
@@ -653,14 +628,14 @@ export function DictationPractice({
     setShortcuts(loadShortcuts())
   }, [lessonId])
 
- // 沉浸模式落到壳元素上（基准实现写 document.body，理由同 applyThemeStyle）
+ // 沉浸模式落到壳元素上（不写 document.body，理由同 applyThemeStyle）
   useEffect(() => {
     const el = shellRef.current
     if (!el) return
     applyImmersive(el, immersive)
   }, [immersive])
 
- // 全屏状态跟随浏览器（基准实现 initFullscreenToggle 监听
+ // 全屏状态跟随浏览器（监听
   // fullscreenchange / webkitfullscreenchange 来换图标与显隐退出按钮）
   useEffect(() => {
     const sync = () => setFullscreen(!!document.fullscreenElement)
@@ -687,7 +662,7 @@ export function DictationPractice({
     )
   }, [personalization, tokens])
 
- // 移动端判定：基准实现读的是服务端注入的 `PracticeConfig.isMobile`，我们只能在
+ // 移动端判定：没有服务端注入的 `isMobile` 可读，我们只能在
   // 客户端按指针能力推断。用 `pointer: coarse` + 视口宽而不是单看 UA ——
   // 桌面浏览器的移动端模拟器（DevTools 设备模式）也会给 coarse，这正是我们要的。
   useEffect(() => {
@@ -719,7 +694,7 @@ export function DictationPractice({
         }
         const raw = json.sentences as Sentence[]
         // 听写模式**不**摊平分块：一句一个练习项，`chunks` 原样留给分段练习
- // （基准实现 `chunks` 的唯一用途就是分段练习的数据源）。用 expandSentences
+ // （`chunks` 的唯一用途就是分段练习的数据源）。用 expandSentences
         // 会把 chunks 置 null，分段练习静默失效。
         const normalized = normalizeSentences(raw)
         setTrial(json?.trial ?? null)
@@ -751,7 +726,7 @@ export function DictationPractice({
     return () => { alive = false }
   }, [courseId, lessonId, mode])
 
- // 课程 / 课节标题（基准实现头部会显示「课程名 > 课节名」）
+ // 课程 / 课节标题（头部会显示「课程名 > 课节名」）
   useEffect(() => {
     fetch(`/api/courses/${courseId}`)
       .then((r) => (r.ok ? r.json() : null))
@@ -780,17 +755,17 @@ export function DictationPractice({
   }, [])
 
   /**
- * 自动暂停（基准实现 —— 听写页**没有**手动暂停按钮）：
-   *   - `visibilitychange` 且 `document.hidden` → pausePractice（timer.js:232）
-   *   - `window.blur` 且计时中 → pausePractice（timer.js:240）
-   *   - 2 分钟无操作 → pausePractice（timer.js:158 `INACTIVITY_TIMEOUT = 2 * 60 * 1000`，
+ * 自动暂停（听写页**没有**手动暂停按钮）：
+   *   - `visibilitychange` 且 `document.hidden` → 暂停
+   *   - `window.blur` 且计时中 → 暂停
+   *   - 2 分钟无操作 → 暂停（`INACTIVITY_TIMEOUT = 2 * 60 * 1000`，
    *     每 10s 检查一次；活动事件 mousedown/keydown/touchstart/scroll 刷新计时）
-   * 恢复靠「点任意处」（排除设置面板）或「按任意键」（timer.js:283/293）。
-   * 暂停时 `.header-stats` 加 `.paused`（timer.js:255），时钟与倒计时变红
- * （practice-cyber.css:5964）。基准实现还延迟 300ms 才绑恢复监听，
-   * 避免触发暂停的同一次事件立刻把练习恢复回来（timer.js:257）。
+   * 恢复靠「点任意处」（排除设置面板）或「按任意键」。
+   * 暂停时 `.header-stats` 加 `.paused`，时钟与倒计时变红
+ * 还要延迟 300ms 才绑恢复监听，
+   * 避免触发暂停的同一次事件立刻把练习恢复回来。
    *
- * 与基准实现的一处差异：基准实现同时 `.pause()` 当前音频并停频谱动画，
+ * 暂停时还要 `.pause()` 当前音频并停频谱动画：
    * 我们调 `stopSpeaking()`（它内部会 pause 并 resolve 等待中的 deferred），
    * 语义一致。
    */
@@ -869,7 +844,7 @@ export function DictationPractice({
   // 父组件随后去读就只读到 `dictation` 了。实测：预设 stored=puzzle、不带 `?mode=`
   // 访问，仍然进听写，且 stored 被改写成 dictation。
   //
- // 基准实现也**只在 URL 显式给模式时**才写（：URL 合法 → 用它并写；
+ // 原逻辑也**只在 URL 显式给模式时**才写（URL 合法 → 用它并写；
   // 否则用 savedMode，不写）。落库交给 `PracticeModeGate`，那里只在有 `urlMode` 时写。
   // 本组件的两处切换入口（`:1523` 下拉、`:2365` 确认弹窗）都是整页跳转并带上 `&mode=`，
   // 所以真切换一定经过 gate，不会漏记。
@@ -882,8 +857,8 @@ export function DictationPractice({
       return { value: readonly ? t : "", expected: t, readonly, wasIncorrect: false }
     })
     setSlots(list)
- // 片段用紧凑口径（基准实现 `measureWordInputWidth(word, 80)`，
-    // practice.js:3154）；整句用默认 100。
+ // 片段用紧凑口径（`measureWordInputWidth(word, 80)`）；
+    // 整句用默认 100。
     setBaseWidths(
       activeTokens.map((t) =>
         measureWordInputWidth(t, window.innerWidth <= 1024 || inFragmentPractice),
@@ -896,9 +871,9 @@ export function DictationPractice({
     setStatus("input")
     setShowHint(false)
     setFragmentResult("")
- // 进入本回合后自动朗读原音（基准实现行为）：分段读片段，整句读整句。
+ // 进入本回合后自动朗读原音：分段读片段，整句读整句。
     // 次数取「自动播放次数」——0 表示手动档，此时**不自动出声**
- // （基准实现 `playbackCount = ttsPlaybackCount`，0 时循环不执行）。
+ // （`playbackCount = ttsPlaybackCount`，0 时循环不执行）。
     const text = inFragmentPractice ? currentFragment?.text : sentence.english
     if (text) {
       window.setTimeout(() => { void globalSpeak(text, { count: loopCountRef.current }) }, 60)
@@ -912,12 +887,12 @@ export function DictationPractice({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sentence?.id, fragmentIndex, inFragmentPractice])
 
- // ── 键盘：完全接管（与基准实现逐条对应） ──────────────────────────────────────
+ // ── 键盘：完全接管（逐条对应如下） ──────────────────────────────────────
   const focusSlot = useCallback((from: number, dir: 1 | -1) => {
     const list = slotsRef.current
     let i = from + dir
     while (i >= 0 && i < list.length) {
- // 跳过只读槽（数字自动填入）——基准实现同样跳过
+ // 跳过只读槽（数字自动填入），原逻辑同样跳过
       if (!list[i].readonly) break
       i += dir
     }
@@ -962,7 +937,7 @@ export function DictationPractice({
         kdValueRef.current.set(index, next)
         setSlotValue(index, next)
         sfxTyping()
- // 用户一改动就清掉错误标记（基准实现同）
+ // 用户一改动就清掉错误标记
         if (slot.wasIncorrect) {
           setSlots((prev) => {
             const n = [...prev]
@@ -970,7 +945,7 @@ export function DictationPractice({
             return n
           })
         }
- // 基准实现的自动跳转是**注释掉**的：保留用户自由控制
+ // 原逻辑的自动跳转是**注释掉**的：保留用户自由控制
         return
       }
 
@@ -1014,7 +989,7 @@ export function DictationPractice({
       }
 
       // 听写模式下**空格移动焦点**，不是确认（与旧版练习页相反）
- // 分段练习同样如此（基准实现 空格/右箭头/Tab 都跳下一格）
+ // 分段练习同样如此（空格/右箭头/Tab 都跳下一格）
       if (e.key === " " || e.key === "ArrowRight") {
         e.preventDefault()
         sfxTyping()
@@ -1031,7 +1006,7 @@ export function DictationPractice({
 
       /*
         Tab：整句练习里**保持原生行为**（跳到下一个可聚焦元素），分段练习里
- 基准实现把它并入「跳下一格」（ 是
+ 原逻辑把它并入「跳下一格」（把
         `' ' || 'ArrowRight' || 'Tab'` 一起判的）。
         哪个分支渲染了这个 input 从 id 就能看出来 —— `fragment-word-N` 是分段，
         `word-N` 是整句。用 DOM 判据免掉了第二个「同步镜像」ref。
@@ -1066,7 +1041,7 @@ export function DictationPractice({
 
   /**
    * input 事件兜底：keydown 已经手动设过值，若浏览器仍插入了字符（部分 IME 不遵守
- * preventDefault），把它覆盖回权威值。基准实现用 `_kdValue` 做同一件事。
+ * preventDefault），把它覆盖回权威值（keydown 侧记下的 `kdValueRef` 即权威值）。
    */
   const handleInput = useCallback((index: number, e: React.FormEvent<HTMLInputElement>) => {
     const el = e.currentTarget
@@ -1106,7 +1081,7 @@ export function DictationPractice({
       // 提交后取消焦点，避免横线模式的焦点样式残留
       if (document.activeElement instanceof HTMLInputElement) document.activeElement.blur()
 
- // 基准实现 `resultMessage.classList.remove('show','success','error')`
+ // 等价于 `resultMessage.classList.remove('show','success','error')`
       // —— 每次提交先清空状态；听写模式答对后直接进复习屏，不会再置回来。
       setResultMessage("")
 
@@ -1138,7 +1113,7 @@ export function DictationPractice({
         // 抖动/RED 高亮不在这里做：`.word-input.incorrect` 自带
         // `animation: shake 0.4s ease`，而槽位上的 `wasIncorrect` 已经在渲染时
         // 落到 input 的 class 上（打字时会清掉，所以连错两次动画会重新触发）。
- // 对标页的 `.shake-animation` 只用在拼拼乐模式的
+ // `.shake-animation` 只用在拼拼乐模式的
         // `#puzzleAnswerArea` 上，听写模式没有这层包装动画。
         // 连错达到阈值 → 揭示答案（覆盖层，不替换界面）
         const threshold = revealRef.current
@@ -1149,7 +1124,7 @@ export function DictationPractice({
         ) {
           mistakeRecordedRef.current = true
           setMistaken((prev) => new Set(prev).add(currentIndexRef.current))
-          // toast.js:49 showMistakeNotification —— 底部滑入「已加入错题本」，
+          // 「已加入错题本」通知从底部滑入，
           // 10ms 后加 .show，2s 后移除（再等 300ms 淡出后卸载）。
           setMistakeNoticeEpoch((e) => e + 1)
           const parentId = baseSentenceId(sentence?.id ?? "")
@@ -1166,7 +1141,7 @@ export function DictationPractice({
           }
           setShowHint(true)
         }
- // 基准实现 ：答错时把 #resultMessage 清空文本并
+ // 答错时把结果条清空文本并
         // 置为 `result-message error show`（听写模式文案为空，靠 CSS 着色）。
         setResultMessage("error")
         if (firstWrongIndex >= 0) {
@@ -1182,10 +1157,10 @@ export function DictationPractice({
   }, [courseId, lessonId, mode, sentence?.id])
 
   /**
- * 逐段判题。基准实现 `checkFragmentAnswer`。
+ * 逐段判题。
    *
- * 与整句 `checkAnswer` 的三点实质差异（不是风格差异，都是基准实现的明确行为）：
- * 1. **不记录错题、不上报进度** —— 基准实现注释原文「分段练习不记录错题」，
+ * 与整句 `checkAnswer` 的三点实质差异（不是风格差异，都是明确设计的行为）：
+ * 1. **不记录错题、不上报进度** —— 口径是「分段练习不记录错题」，
    *      连答案都不发 `/api/practice/record`；答错只弹「请再试一次」。
    *   2. 只读槽（数字/人名）不校验，直接标 `correct`。
    *   3. 全对后不是进复习屏，而是 800ms 后自动进入下一段（或整句练习）。
@@ -1223,7 +1198,7 @@ export function DictationPractice({
         sfxChime()
         triggerSuccessEffects()
         fragmentMistakesRef.current = 0
- // 基准实现 `setTimeout(nextFragment, 800)`：给用户看「全绿」的那一下
+ // 延迟 800ms 再进下一段：给用户看「全绿」的那一下
         window.setTimeout(() => {
           setShowHint(false)
           setFragmentResult("")
@@ -1265,7 +1240,7 @@ export function DictationPractice({
   // 所以必须走这条路把「当前闭包」递过去。
   //
   // 这里发布的是**当前该用的判题函数** —— 分段练习与整句练习各一个
- // （基准实现 \`submitCurrentAnswer\` 也是按 \`isInFragmentPractice\`
+ // （也是按 `isInFragmentPractice\`
   // 分叉）。合并到一个 ref 里，回车路径就不需要第二个 ref 了。
   checkAnswerRef.current = inFragmentPractice ? checkFragmentAnswer : checkAnswer
 
@@ -1280,9 +1255,9 @@ export function DictationPractice({
       if (i > 0) await new Promise((r) => window.setTimeout(r, 1000))
       if (epoch !== reviewEpochRef.current) return
       const started = Date.now()
- // 这层循环自己负责「答对后播几次」（`successPlayCount`，基准实现
- //），所以每次只让它念 1 遍 —— 基准实现这里显式传
-      // `overrideCount = 1`（practice.js:4961）。传 `loopCount` 会让两个
+ // 这层循环自己负责「答对后播几次」（`successPlayCount`，这一层
+ // 自己计数），所以每次只让它念 1 遍 —— 这里显式传
+      // `overrideCount = 1`。传 `loopCount` 会让两个
       // 计数相乘，是错的。
       await globalSpeak(text, { count: 1 })
       // 每次播放至少停留 1.5s，防 TTS 静默失败时瞬间跳走
@@ -1303,19 +1278,19 @@ export function DictationPractice({
   }, [sentence?.english])
 
   /**
- * 播放单个单词的发音（基准实现 handleWordSpeakClick，）。
+ * 播放单个单词的发音。
    *
- * 基准实现优先用字幕时间轴从整句音频里截出那个词的片段，字幕数据不可用时
+ * 原设计优先用字幕时间轴从整句音频里截出那个词的片段，字幕数据不可用时
    * 兜底走独立单词 TTS。我们没有字幕接口，所以**始终**走兜底路径 ——
- * 这正是基准实现在无字幕时的行为，语义一致。
+ * 与无字幕场景的原行为语义一致。
    *
    * `.playing` 类的生命周期照抄：开始时加、**播完**摘掉。注意不是 `globalSpeak`
    * 返回就摘 —— 它回答的是「出声了没有」，一开始播就 resolve，用它收尾会让
    * 脉冲动画一闪而过（实测 `finally` 里的 setState 与点击落在同一个事件循环里，
- * `playing` 从未被观察到）。基准实现是 `await playTTS(...)`，而 `playTTS` 内部
-   * `await playSingleAudio` 一直等到 `ended`（tts.js:500）才返回。
+ * `playing` 从未被观察到）。原实现是 `await playTTS(...)`，而 `playTTS` 内部
+   * `await playSingleAudio` 一直等到 `ended` 才返回。
    *
- * 重复点同一个按钮时基准实现直接 return（`if (btn.classList.contains('playing')) return`），
+ * 重复点同一个按钮时原实现直接 return（`if (btn.classList.contains('playing')) return`），
    * 这里用同一个下标挡住。
    */
   const handleWordSpeak = useCallback(async (index: number, word: string) => {
@@ -1347,7 +1322,7 @@ export function DictationPractice({
   /**
    * 学习模式的「下一句 / 完成」。
    *
- * 基准实现 `nextSentenceAfterPaint()` 的非复习态路径（+）：
+ * 沿用原 `nextSentenceAfterPaint()` 的非复习态路径：
    * 配额检查之后**第一件事**就是
    *   `if (completedCount >= totalSentenceCount && totalSentenceCount > 0) { showCompletionMessage(); return; }`
    * 这条早退在学习模式里特别容易命中 —— 因为学习模式「渲染即完成」，只要
@@ -1356,7 +1331,7 @@ export function DictationPractice({
    * 而不是继续逐句前进。听写/拼图不会命中这条（它们靠答对才积满）。
    *
    * 所以本函数 = `advance()` 前面多这一道判断。两道都通向完成页：
- * · 全部完成 → 完成页（基准实现早退）
+ * · 全部完成 → 完成页（这条早退）
    *   · 已是末句 → 完成页（`advance()` 自身）
    * 其余情况与 `advance()` 完全一致：取消朗读、进下一句、回到 input 态。
    */
@@ -1380,17 +1355,17 @@ export function DictationPractice({
 
   // ── 口语模式：评分回调与切句 ────────────────────────────────────────────────
   //
- // 基准实现把这两件事都放在 `markCurrentSentenceComplete()`
-  // （practice.js:3871）与 `nextSentence()`（:1699）里。
+ // 原逻辑把这两件事都放在 `markCurrentSentenceComplete()`
+  // 与 `nextSentence()` 里。
   //
-  // 阈值分工照抄：**评分 ≥ 70 才记完成**（speaking.js:957
+  // 阈值分工照抄：**评分 ≥ 70 才记完成**（
   // `if (roundedScore >= 70) markCurrentSentenceComplete()`），而 ≥ 80 额外
-  // 触发成功音效（speaking.js:960 `triggerSuccessEffects()` +
+  // 触发成功音效（`triggerSuccessEffects()` +
   // `playSuccessSound()`）。所以 70–79 之间是「记了进度但没庆祝」——
   // 这不是笔误。
   //
- // `completed` 这个 Set<number> 就是基准实现 `completedIndexesSet` 与
- // `completedSentences` 的合并物：两个集合在基准实现里恒同增同减（见
+ // `completed` 这个 Set<number> 就是原 `completedIndexesSet` 与
+ // `completedSentences` 的合并物：两个集合原逻辑里恒同增同减（见
   // `markCurrentSentenceComplete` 一次加两处），本仓的听写模式也一直只用下标
   // 这一套，没有理由为口语再拆一份按 id 的。
   const markSpeakingComplete = useCallback(() => {
@@ -1412,7 +1387,7 @@ export function DictationPractice({
     const next = new Set(completedRef.current).add(idx)
     setCompleted((prev) => (prev.has(idx) ? prev : new Set(prev).add(idx)))
 
- // 基准实现记完成时同时上报进度（`recordProgressV2(true,'', [])`）。
+ // 记完成时同时上报进度（`recordProgressV2(true,'', [])`）。
     // 分数 0 只是占位 —— `/api/practice/sessions` 的入参本来就只有
     // 下标/总数/用时，没有分数位。
     void fetch("/api/practice/sessions", {
@@ -1453,7 +1428,7 @@ export function DictationPractice({
   const handleSpeakingScore = useCallback(
     (score: number) => {
       if (score >= 80) {
- // 基准实现 评测 ≥80 分时调 `window.triggerSuccessEffects()`
+ // 评测 ≥80 分时调 `window.triggerSuccessEffects()`
         // + `playSuccessSound()`：烟花（`createCanvasConfettiEffect`）与音效
         // 是**两个各自独立**的判断，只不过在这里阈值恰好相同。
         // 「答对烟花效果」（`confetti_effect`）这个开关只 gate 烟花，
@@ -1470,15 +1445,15 @@ export function DictationPractice({
   /**
    * 口语模式的「下一句 / 完成」。
    *
- * 与听写模式的 `advance()` 有三处**刻意**的不同，全部来自基准实现
-   * `nextSentenceAfterPaint`（practice.js:1805-1900）：
+ * 与听写模式的 `advance()` 有三处**刻意**的不同，全部沿用原
+   * `nextSentenceAfterPaint` 的行为：
    *
- * 1. **先记完成再切。** 基准实现 `shouldMarkComplete = !completedIndexesSet.has(idx)`
+ * 1. **先记完成再切。** 原版 `shouldMarkComplete = !completedIndexesSet.has(idx)`
    *      之后无条件 `commitSentenceSwitch` 前调用 `markCurrentSentenceComplete()`。
    *      即「点下一句」本身就算完成 —— 用户读完但不满意、直接跳过，也记进度。
    *   2. **全部完成 → 完成页。** 判据是 `completedSentences.size >= total`。
    *   3. **末句但还有未完成的 → 跳到第一个未完成句**，而不是去完成页
-   *      （`getNextUncompletedIndex`，practice.js:2545）。听写模式没有这条：
+   *      （`getNextUncompletedIndex`）。听写模式没有这条：
    *      它靠答对来推进，不会「走到末尾还有漏的」。
    */
   const handleSpeakingAdvance = useCallback(() => {
@@ -1486,7 +1461,7 @@ export function DictationPractice({
     const total = sentencesRef.current.length
     markSpeakingComplete()
 
- // 基准实现在切句前有 5 秒冷却（`SENTENCE_SWITCH_COOLDOWN`），
+ // 原逻辑在切句前有 5 秒冷却（`SENTENCE_SWITCH_COOLDOWN`），
     // 但那条只拦「用户主动切句」，`nextSentence` 内部推进不受限。我们的
     // Enter/点按都是主动切句，用 250ms 的物理去抖就够 —— 5 秒的冷却在口语
     // 模式下会让人以为按钮坏了（每句都要盯着读一遍再等 5 秒）。
@@ -1502,7 +1477,7 @@ export function DictationPractice({
       setStatus("input")
       return
     }
- // 末句：跳回第一个未完成句（基准实现）。
+ // 末句：跳回第一个未完成句。
     for (let i = 0; i < total; i++) {
       if (!done.has(i)) {
         reviewEpochRef.current += 1
@@ -1518,7 +1493,7 @@ export function DictationPractice({
 
   // ── 学习模式：进入即记完成 ──────────────────────────────────────────────────
   //
- // 基准实现 `loadCurrentSentence()` 的学习模式分支在
+ // 原 `loadCurrentSentence()` 的学习模式分支在
   // 句子**渲染完之后**立刻把它记为已完成：
   //
   //   completedSentences.add(currentSentence.sentenceId)
@@ -1531,13 +1506,13 @@ export function DictationPractice({
   // 最松的一套。
   //
   // 三处与 `markSpeakingComplete` 的**刻意**差异：
- // 1. 基准实现这里**只**调 `recordProgressV2`。本仓 `recordProgressV2` 对应
+ // 1. 原版这里**只**调 `recordProgressV2`。本仓 `recordProgressV2` 对应
   //      `POST /api/practice/sessions`，所以这里也只发这一个请求 ——
   //      不发 `/api/practice/record`（学习模式没有错题）也不发
   //      `/api/coins/earn`（没有「答对」这个事件可奖励）。
- // 2. **不放成功音效**。基准实现这段没有 `playSuccessSound()` ——
+ // 2. **不放成功音效**。原版这段没有 `playSuccessSound()` ——
   //      每翻一句就叮一声会很吵。
- // 3. **不自动跳转**。基准实现注释写得很明确：「不再自动跳转，等待用户点击
+ // 3. **不自动跳转**。原注释口径很明确：「不再自动跳转，等待用户点击
   //      下一句按钮」，全部完成时也只是 `updateBottomToolbar(..., 'learning')`
   //      把底栏的箭头换成 ✓。所以这里只更新完成集合，不碰 `currentIndex`。
   //
@@ -1576,7 +1551,7 @@ export function DictationPractice({
   /**
    * 学习模式：进入某句后自动记为已完成。
    *
- * 依赖 `sentence?.id`：每换一句跑一次，与基准实现「渲染完就记」的时机一致。
+ * 依赖 `sentence?.id`：每换一句跑一次，与「渲染完就记」的时机一致。
    * 走 `Promise.resolve().then(...)` 而不是同步调用，是为了不触发
    * `react-hooks/set-state-in-effect` —— 该规则会沿调用链追踪到
    * `setCompleted`，同步写状态会被判为「effect 里级联渲染」。微任务推迟一档
@@ -1596,34 +1571,34 @@ export function DictationPractice({
 
   // ── 拼图（拼拼乐）模式：判题回调 ──────────────────────────────────────────────
   //
- // 基准实现的拼图**没有自己的判题函数**：`checkAnswer()`（+）
-  // 开头按 `practiceMode` 分了两条读答案的路径（`:6801` 拼图读
-  // `selectedWords`，`:6842` 听写读输入框），但**从 `allCorrect` 往后完全共用**
+ // 原版的拼图**没有自己的判题函数**：`checkAnswer()`
+  // 开头按 `practiceMode` 分了两条读答案的路径（拼图读
+  // `selectedWords`，听写读输入框），但**从 `allCorrect` 往后完全共用**
   // —— 成功的上报/进复习屏、失败的错误音/错误计数/结果条都是同一段代码。
   //
   // 所以这里也不另起一条判题链：拼图组件把「拼对了没 + 拼出的句子」交回，
   // 由本回调走与听写相同的两条路径。两处**刻意**的差异：
   //
- // 1. **不写错题本，但照常统计准确率。** 基准实现写错题本的那次
+ // 1. **不写错题本，但照常统计准确率。** 原版写错题本的那次
   //      `recordProgressV2(false, …)` 外层条件是 `practiceMode === 'dictation'`
-  //      （practice.js:6979），拼图落进下面的 `else if`，只把下标塞进
+  //      时拼图落进下面的 `else if`，只把下标塞进
   //      `sentencesWithMistakes` 供准确率用。本仓对应 `setMistaken` ——
-  //      已核过它只被 `accuracy`（:1496）与 `trackPracticeComplete`（:1506）
+  //      已核过它只被 `accuracy` 与 `trackPracticeComplete`
   //      读取，**没有任何 JSX 消费**，所以加上它只影响准确率、不会长出
-  //      错题本 UI；写错题本的动作是 `/api/practice/record`（:999-1008），
+  //      错题本 UI；写错题本的动作是 `/api/practice/record`，
   //      那个请求这里一个都不发。
- // 2. **`sentenceMistakesRef.current += 1` 照加。** 基准实现的
-  //      `currentSentenceMistakeCount++`（practice.js:6963）在拼图分支同样执行
+ // 2. **`sentenceMistakesRef.current += 1` 照加。** 原版的
+  //      `currentSentenceMistakeCount++` 在拼图分支同样执行
   //      —— 那是「本句错了几次」的计数器，与写不写错题本是两回事。
- // 3. **答错不聚焦输入框。** 基准实现 `firstIncorrectInput` 只在听写分支
+ // 3. **答错不聚焦输入框。** 原版 `firstIncorrectInput` 只在听写分支
   //      被赋值（拼图没有输入框），拼图自然是 no-op。
   const handlePuzzleResult = useCallback(
     (correct: boolean, userInput: string) => {
- // 基准实现每次提交都先清状态：`checkAnswer()` 开头
+ // 每次提交都先清状态：`checkAnswer()` 开头
       // `resultMessage.classList.remove('show','success','error')`
-      // （practice.js:6906）。听写分支在 :964 做了同一件事，拼图也必须做 ——
+      // 。听写分支已做了同一件事，拼图也必须做 ——
       // 否则「先答错、再改对」时 error 类会残留，并一直带到下一句，
- // 因为基准实现换句时会重建 `#resultMessage`（新元素只有基类），
+ // 因为原版换句时会重建 `#resultMessage`（新元素只有基类），
       // 而 React 复用的是同一个节点、类名来自 state。
       setResultMessage("")
       if (correct) {
@@ -1633,7 +1608,7 @@ export function DictationPractice({
         const total = sentencesRef.current.length
         setCompleted((prev) => new Set(prev).add(idx))
         const parentId = baseSentenceId(sentence?.id ?? "")
- // 基准实现成功分支上报进度（`recordProgressV2(true,'', [])`）并
+ // 成功分支上报进度（`recordProgressV2(true,'', [])`）并
         // `completedIndexesSet.add(currentSentenceIndex)`。
         if (parentId) {
           void fetch("/api/practice/sessions", {
@@ -1651,7 +1626,7 @@ export function DictationPractice({
             }),
           }).catch((e) => { console.error(e) })
         }
- // 与听写同路径：立即进复习屏（基准实现 
+ // 与听写同路径：立即进复习屏（原版 
         // `if (practiceMode === 'dictation' || practiceMode === 'puzzle')
         //  { hideSentenceHint(); await showAnswerReview() }`）。
         setStatus("review")
@@ -1659,25 +1634,25 @@ export function DictationPractice({
       } else {
         sfxError()
         sentenceMistakesRef.current += 1
- // 基准实现拼图答错只做三件事：错误音、本句错误计数、结果条置 error。
+ // 拼图答错只做三件事：错误音、本句错误计数、结果条置 error。
         // `.shake-animation` 由拼图组件自己加在 `#puzzleAnswerArea` 上
         // （那是它自己的 DOM），这里不重复。
         //
- // 准确率统计：基准实现把出错句塞进 `sentencesWithMistakes`
-        // （practice.js:6985），那是**独立于错题本**的一个集合，只喂准确率。
-        // 本仓对应 `setMistaken` —— 已核过：它只被 `accuracy`（:1496）、
-        // `trackPracticeComplete`（:1506）读取，**没有任何 JSX 消费它**，
- // 所以它同样只影响准确率，语义与基准实现的 `sentencesWithMistakes`
+ // 准确率统计：原版把出错句塞进 `sentencesWithMistakes`
+        // ，那是**独立于错题本**的一个集合，只喂准确率。
+        // 本仓对应 `setMistaken` —— 已核过：它只被 `accuracy`、
+        // `trackPracticeComplete` 读取，**没有任何 JSX 消费它**，
+ // 所以它同样只影响准确率，语义与原版 `sentencesWithMistakes`
         // 恰好对齐。
         //
- // 关键区别在**不**做的事：基准实现那次 `recordProgressV2(false, …)`
-        // 由 `practiceMode === 'dictation'` 把拼图挡在外面（practice.js:6979），
+ // 关键区别在**不**做的事：原版那次 `recordProgressV2(false, …)`
+        // 由 `practiceMode === 'dictation'` 把拼图挡在外面，
         // 拼图只落到 `else if` 分支统计准确率、**不写错题本**。本仓写错题本
-        // 的动作是 `/api/practice/record`（:999-1008），所以这里一个写请求
+        // 的动作是 `/api/practice/record`，所以这里一个写请求
         // 都不发 —— 只统计，不记录。
         setMistaken((prev) => new Set(prev).add(currentIndexRef.current))
         setResultMessage("error")
- // `userInput` 是用户拼出的句子。基准实现的 `recordProgressV2` 会带上
+ // `userInput` 是用户拼出的句子。原版 `recordProgressV2` 会带上
         // `userInputs.join(' ')`，但既然拼图根本不走那条路径，这个值没有
         // 去处；留参数是为了让回调签名与听写一致，将来若要给拼图记错题
         // 不必再改组件协议。
@@ -1711,7 +1686,7 @@ export function DictationPractice({
     const sid = sentence?.id
     if (!sid || favoriteBusy) return
     setFavoriteBusy(true)
- // 乐观切换：基准实现在请求期间只锁按钮、不改图标，所以这里也等响应落地再改，
+ // 乐观切换：请求期间只锁按钮、不改图标，所以这里也等响应落地再改，
     // 保证「看到的星标 == 服务端的真实状态」。
     try {
       const r = await fetch(
@@ -1733,8 +1708,8 @@ export function DictationPractice({
       )
       const data = await r.json().catch(() => null)
       if (!r.ok) {
- // 基准实现 /9219 分「取消收藏失败」「收藏失败」两条文案
-        // （服务端给了 message 就优先用它），但 catch 里是统一的「操作失败，请稍后重试」（:9222）。
+ // 按 favorited 状态分「取消收藏失败」「收藏失败」两条文案
+        // （服务端给了 message 就优先用它），但 catch 里是统一的「操作失败，请稍后重试」。
         toast.error(data?.error ?? (favorited ? "取消收藏失败" : "收藏失败"))
         return
       }
@@ -1748,8 +1723,8 @@ export function DictationPractice({
   }, [sentence?.id, sentence?.english, favorited, favoriteBusy, courseId, lessonId])
 
   /**
- * 快捷键文案。基准实现默认 play=⌘/Ctrl+P、answer=⌘/Ctrl+A、favorite=⌘/Ctrl+U
-   * （见 shortcut-config.js 的 DEFAULT_SHORTCUTS），但这些是**用户可改**的，
+ * 快捷键文案。默认 play=⌘/Ctrl+P、answer=⌘/Ctrl+A、favorite=⌘/Ctrl+U
+   * （DEFAULT_SHORTCUTS 的出厂值），但这些是**用户可改**的，
    * 所以文案必须从 `shortcuts` 实时推导 —— 写死成常量就会出现
    * 「提示写着 ⌘+A、用户改成 ⌘+B 后按 ⌘+A 还有提示」的自相矛盾状态。
    */
@@ -1759,7 +1734,7 @@ export function DictationPractice({
   )
   const answerShortcutKbd = shortcutText("answer")
   const playShortcutKbd = shortcutText("play")
- /** 单词发音按钮的 title 里要带快捷键（基准实现 同款）。 */
+ /** 单词发音按钮的 title 里要带快捷键。 */
   const wordSpeakShortcutKbd = shortcutText("wordSpeak")
 
   // ── 上报：整句完成 / 金币 / 分析 ─────────────────────────────────────────────
@@ -1833,7 +1808,7 @@ export function DictationPractice({
     window.location.href = `/home/learn/${courseId}?lesson=${nextLesson.id}&mode=${mode}`
   }, [courseId, nextLesson, mode])
 
- // ── 全局快捷键（基准实现 _handleGlobalShortcuts，） ─────────────
+ // ── 全局快捷键 ─────────────
   //
   // 绑定值来自 `shortcuts`（用户可改，存 localStorage.practice_shortcuts），
   // 默认 play=⌘/Ctrl+P、answer=⌘/Ctrl+A、prevSent=⌘/Ctrl+←、
@@ -1844,11 +1819,11 @@ export function DictationPractice({
   // `if (!mod || e.altKey || e.shiftKey) return`，等于把用户的改键完全忽略，
   // 所以改成逐项比对配置。
   //
- // 「answer」在基准实现只在非学习模式下切换提示浮层（
+ // 「answer」原版只在非学习模式下切换提示浮层（
   // `if (practiceMode !== 'learning') toggleSentenceHint()`）—— 学习模式恒为
   // no-op；其余模式恒可切换。
   //
-  // 学习模式还要额外接管**裸回车**（practice.js:5851-5858）：那条分支要求
+  // 学习模式还要额外接管**裸回车**：那条分支要求
   // `practiceMode === 'learning'` 且无任何修饰键、焦点不在输入框里，按下即
   // `nextSentence('enter-learning')`。学习模式没有输入框，所以这里不必像听写
   // 那样判断焦点 —— 但门卫仍照抄四个修饰键的排除，否则 ⌘+Enter 之类的组合会被
@@ -1858,7 +1833,7 @@ export function DictationPractice({
       if (statusRef.current === "complete") return
       // 快捷键弹窗正在录制按键时，全局绑定必须让路 —— 否则用户按 ⌘+A 想
       // 重绑「答案」，却同时把答案提示切了一次。录制 effect 用的是捕获阶段
- // 监听 + stopPropagation（基准实现同款），本监听挂在冒泡阶段，理论上
+ // 监听 + stopPropagation，本监听挂在冒泡阶段，理论上
       // 已经收不到；这里再挡一道，避免哪天监听阶段被改动时静默串味。
       if (recordingId !== null) return
 
@@ -1902,14 +1877,14 @@ export function DictationPractice({
       if (matchShortcut(e, "play", shortcuts)) {
         e.preventDefault()
         const s = sentencesRef.current[currentIndexRef.current]
- // 手动播放：基准实现 `manualCount = ttsPlaybackCount === 0 ? 1 : null`
-        // （practice.js:1925）—— 手动档也要响一次，其余档沿用设定的次数。
+ // 手动播放：`manualCount = ttsPlaybackCount === 0 ? 1 : null`
+        // —— 手动档也要响一次，其余档沿用设定的次数。
         if (s?.english) void globalSpeak(s.english, { count: manualPlayCount() })
         return
       }
       if (matchShortcut(e, "favorite", shortcuts)) {
         e.preventDefault()
- // 基准实现对长按重复与请求中重复都直接吞掉，避免连点产生一堆请求
+ // 长按重复与请求中重复都直接吞掉，避免连点产生一堆请求
         if (e.repeat || favoriteBusyRef.current) return
         void toggleFavorite()
         return
@@ -1932,14 +1907,14 @@ export function DictationPractice({
   /**
    * 快捷键弹窗里的「录制新按键」。
    *
- * 基准实现把捕获处理器挂在 `document` 的**捕获阶段**并
-   * `stopImmediatePropagation`（practice-sys-controls.js:707-710），
+ * 原版把捕获处理器挂在 `document` 的**捕获阶段**并
+   * `stopImmediatePropagation`，
    * 让这一下击键既不改键也被全局快捷键吞掉。这里用 `recordingId` 驱动 +
    * 全局 effect 里提前 return 达到同样效果，但仍然用 capture:true ——
    * 否则输入框的 keydown 会先处理掉。
    *
    * 特殊处理「只按修饰键就松手」：keydown 时不认，等 keyup 且期间没有别的
- * 键按下，才把那个修饰键本身当成主键（基准实现 :716-728）。
+ * 键按下，才把那个修饰键本身当成主键。
    */
   useEffect(() => {
     if (recordingId === null) return
@@ -2004,9 +1979,9 @@ export function DictationPractice({
     }
   }, [shortcuts, recordingId])
 
- // ESC：优先关闭已打开的模态框（基准实现 给两个
+ // ESC：优先关闭已打开的模态框（原版给两个
   // 模态框各绑了一个 Escape 监听），其次关闭答案提示浮层
- // （基准实现，仅在浮层已显示时拦截）。
+ // （仅在浮层已显示时拦截）。
   //
   // 用 state 值而不是 setState 的 updater 来判断「有没有东西要关」：updater
   // 里的副作用在 React 里不保证同步执行，拿它设标志位再决定 preventDefault 会失效。
@@ -2025,7 +2000,7 @@ export function DictationPractice({
       }
       if (moreSettingsOpen) { setMoreSettingsOpen(false); setRevealMenuOpen(false); e.preventDefault(); return }
       if (revealMenuOpen) { setRevealMenuOpen(false); e.preventDefault(); return }
- // 快捷键弹窗最后关（它是最上层的浮层）。基准实现 closeShortcutModal 还会
+ // 快捷键弹窗最后关（它是最上层的浮层）。原版 closeShortcutModal 还会
       // 顺手 cancelShortcutRecording，所以这里一并清掉录制态。
       if (shortcutModalOpen) {
         setShortcutModalOpen(false)
@@ -2041,7 +2016,7 @@ export function DictationPractice({
   }, [personalizationOpen, moreSettingsOpen, revealMenuOpen, showHint, shortcutModalOpen])
 
   /**
- * 点击面板外收起卡片下拉（对标页的全局 click）：
+ * 点击面板外收起卡片下拉（全局 click 收口）：
    * 目标不在 `.info-card` / `.card-dropdown` / `.personalization-modal-content`
    * 之内就 `closeAllDropdowns()`。设置面板自身由 `.settings-wrapper` 的按钮
    * 切换，这里不碰，免得点卡片就把面板关了。
@@ -2081,11 +2056,11 @@ export function DictationPractice({
   useEffect(() => () => stopVisualizer(), [])
 
   /**
-   * 「已加入错题本」通知的两段式时间线，逐行对齐 toast.js:49：
+   * 「已加入错题本」通知的两段式时间线：
    *   挂载 → `setTimeout(add 'show', 10)` 滑入
    *        → `setTimeout(remove 'show', 2000)` 滑出
    *        → `setTimeout(remove node, 300)` 卸载
- * 用 `mistakeNoticeEpoch` 作依赖：基准实现每次都 `createElement` 一个新节点，
+ * 用 `mistakeNoticeEpoch` 作依赖：原版每次都 `createElement` 一个新节点，
    * 连续两次错误会叠两条；我们单实例，靠自增 epoch 重启时间线（旧通知先收、
    * 再重新滑入），视觉节奏一致，且每次触发前会先清掉上一条的定时器。
    */
@@ -2119,8 +2094,8 @@ export function DictationPractice({
   const timerStr = `${String(Math.floor(timer / 60)).padStart(2, "0")}:${String(timer % 60).padStart(2, "0")}`
 
   const toggleChinese = useCallback(() => {
- // 先算出目标值再落库/提示：基准实现是 `showChineseGlobal = !showChineseGlobal`
-    // 之后再 toast（practice.js:7713-7718）。不能把 toast 塞进 setState 的
+ // 先算出目标值再落库/提示：原版是 `showChineseGlobal = !showChineseGlobal`
+    // 之后再 toast。不能把 toast 塞进 setState 的
     // updater —— updater 必须是纯函数，StrictMode 下会被调用两次，提示弹两遍。
     const next = !showChineseRef.current
     setShowChinese(next)
@@ -2132,7 +2107,7 @@ export function DictationPractice({
     const next = !autoNextRef.current
     setAutoNext(next)
     saveAutoNext(next)
- // 基准实现 （设置卡点击，非弹窗开关）。注意听写模式的设置卡
+ // （设置卡点击口径，非弹窗开关）。注意听写模式的设置卡
     // 是**直接**切 state，不像弹窗里的开关那样先算 `enabled` 再取反。
     toast.info(
       next ? "已开启自动下一句" : "已关闭自动下一句，需手动点击进入下一句",
@@ -2141,7 +2116,7 @@ export function DictationPractice({
   }, [])
 
   /**
- * 打开个性化模态框：先把草稿恢复成已保存的设置（基准实现
+ * 打开个性化模态框：先把草稿恢复成已保存的设置（原版
    * `openPersonalizationModal` 里的 `dictationInputSettings = loadDictationInputSettings()`），
    * 这样上次取消掉的改动不会残留。
    */
@@ -2150,16 +2125,16 @@ export function DictationPractice({
     setPersonalizationOpen(true)
   }, [])
 
- /** 关闭并丢弃草稿 —— 基准实现 closePersonalizationModal 同样会重新读一次 localStorage。 */
+ /** 关闭并丢弃草稿 —— 关闭时同样会重新读一次 localStorage。 */
   const closePersonalization = useCallback(() => {
     setPersonalizationDraft(loadDictationInputSettings())
     setPersonalizationOpen(false)
   }, [])
 
   /**
- * 答对后播放次数在 **1–3** 之间循环（基准实现 
+ * 答对后播放次数在 **1–3** 之间循环（原版 
    * `successPlayCount = successPlayCount >= 3 ? 1 : successPlayCount + 1`），
-   * 并给一条 info toast（:7531 `答对后将播放 N 次语音`）。
+   * 并给一条 info toast（`答对后将播放 N 次语音`）。
    * 上界用 `MAX_SUCCESS_PLAY`，避免与 `loadSuccessPlayCount()` 的夹取漂移。
    */
   const cycleSuccessPlay = useCallback(() => {
@@ -2171,14 +2146,14 @@ export function DictationPractice({
     })
   }, [])
 
- /** 设置自动播放次数（顶栏手动播放指示按钮用，基准实现直接 setPlaybackCount(1)）。 */
+ /** 设置自动播放次数（顶栏手动播放指示按钮用）。 */
   const cycleLoopTo = useCallback((n: number) => {
     setLoopCount(n)
     saveLoopCount(n)
     toast.info(n === 0 ? "已设置为手动播放" : `已设置自动播放次数: ${n}次`, { duration: 2000 })
   }, [])
 
- /** 切换极简沉浸模式（基准实现 toggleImmersiveMode，）。 */
+ /** 切换极简沉浸模式。 */
   const toggleImmersive = useCallback(() => {
     setImmersive((v) => {
       const next = !v
@@ -2189,10 +2164,10 @@ export function DictationPractice({
   }, [])
 
   /**
- * 全屏切换（基准实现 toggleFullscreenMode，）。
- * 基准实现对 `document.documentElement` 调 requestFullscreen；我们一致。
- * 基准实现优先 `requestFullscreen`、退化到 `webkitRequestFullscreen`，
-   * 两者都没有才提示「当前浏览器不支持全屏模式」（practice.js:7896）。
+ * 全屏切换。
+ * 对 `document.documentElement` 调 requestFullscreen。
+ * 优先 `requestFullscreen`、退化到 `webkitRequestFullscreen`，
+   * 两者都没有才提示「当前浏览器不支持全屏模式」。
    */
   const toggleFullscreen = useCallback(async () => {
     const docEl = document.documentElement
@@ -2233,7 +2208,7 @@ export function DictationPractice({
         .join(" ")}
       // 主题（深色/浅色三种变体）统一由 applyThemeStyle 写在这层元素上：
       // 抽取后的 CSS 选择器都是 `.practice-shell[data-theme="light"] …`，
- // 而基准实现写的是 documentElement —— 写在这一层才能命中。
+ // 主题写在壳层元素上才能命中这些选择器。
       ref={(el) => {
         shellRef.current = el
         if (el) applyThemeStyle(el, themeStyle)
@@ -2296,9 +2271,9 @@ export function DictationPractice({
 
             <div className="header-controls">
               {/*
- 基准实现顶栏的顺序是：手动播放指示 → 全屏 → 退出全屏 → 退出沉浸 →
- 设置。这里此前自作主张放了一个「暂停」按钮 —— 基准实现**没有**暂停
-                按钮（`grep 暂停` 在 HTML 里 0 命中）。暂停是 timer.js 的自动行为
+ 顶栏的顺序是：手动播放指示 → 全屏 → 退出全屏 → 退出沉浸 →
+ 设置。这里此前自作主张放了一个「暂停」按钮 —— 但没有暂停
+                按钮。暂停是练习的自动行为
                 （失焦 / 页面隐藏 / 2 分钟无操作 → pausePractice），只把
                 `.header-stats` 加 `.paused` 变红，不存在手动切换入口。
               */}
@@ -2360,8 +2335,8 @@ export function DictationPractice({
                 </div>
                 {/*
                   必须**常驻 DOM** + 用 `.show` 切换，不能条件渲染：移植过来的
- 基础规则是 `display:none`，`.show` 才 `display:block`（基准实现
-                  practice.js:7819/8120 也是 `#settingsPanel.classList` 增删
+ 基础规则是 `display:none`，`.show` 才 `display:block`（同样靠
+                  `#settingsPanel.classList` 增删
                   `show`）。条件渲染会让基础规则永远生效 —— 面板压根不显示。
                 */}
                 <div className={`settings-dropdown-panel${settingsOpen ? " show" : ""}`} id="settingsPanel">
@@ -2374,7 +2349,7 @@ export function DictationPractice({
                         valueId="themeDisplay"
                         status={themeStyle === "dark" ? "ok" : "purple"}
                         /**
- * 基准实现 applyThemeStyle（/8061）会按当前
+ * applyThemeStyle 会按当前
                          * 风格换图标：浅色给太阳（8 条光芒）、深色给月亮。
                          * 之前这里写死 IconMoon，切到浅色后太阳路径永远不会出现
                          * —— `#themeIcon` 是 id 作用域的，探针能查到这个偏差。
@@ -2391,7 +2366,7 @@ export function DictationPractice({
                         title="切换沉浸/极简练习模式"
                         label="界面模式"
                         /*
- 基准实现 toggleImmersiveMode：
+ toggleImmersiveMode 的行为：
                           `#immersiveDisplay` 文本在「沉浸 / 标准」间切换，
                           沉浸时加 `status-ok`，并 toast
                           `已开启极简沉浸模式` / `已恢复标准界面模式`。
@@ -2433,7 +2408,7 @@ export function DictationPractice({
                         value={loopCount === 0 ? "手动" : `${loopCount}次`}
                         valueId="loopDisplayValue"
                         status="plain"
- /* 基准实现 updateManualPlayIndicator：手动播放时值变红 */
+  /* 手动播放时值变红 */
                         valueColor={loopCount === 0 ? "#ef4444" : undefined}
                         icon={<IconLoop />}
                         onClick={(e) => {
@@ -2460,8 +2435,8 @@ export function DictationPractice({
                         status={fragmentMode ? "purple" : "off"}
                         icon={<IconFragment />}
                         onClick={() => {
- // 基准实现 `initFragmentModeToggle`
-                          // 的点击分支，逐条对应：
+ // 分句模式切换的
+                          // 点击分支，逐条对应：
                           //   1. 非会员 → 强制 OFF + 写 '0' + 警告 toast
                           //   2. 翻转开关 + setFragmentMode(next) + 更新显示
                           //   3. 非听写模式到此为止（本组件就是听写模式，恒过）
@@ -2489,11 +2464,11 @@ export function DictationPractice({
                             return
                           }
 
- // 刚开启：用当前句的真实 chunks 探一次路，与基准实现
-                          // practice.js:2743-2757 的三种结果同源。
+ // 刚开启：用当前句的真实 chunks 探一次路，
+                          // 按探路结果分三种情况处理。
                           const available = fragments !== null && fragments.length >= 1
                           if (available) {
- // 基准实现 `fragmentPracticeCompletedForSentence = false`
+ // 重置本句的分段完成标记
                             // —— 允许本句重新进入分段练习
                             setFragmentDoneFor(null)
                             setFragmentPos(null)
@@ -2516,7 +2491,6 @@ export function DictationPractice({
                           const next = !fragmentImage
                           setFragmentImage(next)
                           saveFragmentImage(next)
- // 基准实现 
                           toast.info(
                             next ? "已开启分段练习配图" : "已关闭分段练习配图",
                             { duration: 2000 },
@@ -2552,7 +2526,7 @@ export function DictationPractice({
                         status="cyan"
                         icon={<IconKeyboard />}
                         onClick={() => {
- // 基准实现 openShortcutModal：
+ // 打开快捷键弹窗：
                           // 渲染列表 + 加 `.show`。这里是受控渲染，只置开。
                           setShortcutModalOpen(true)
                         }}
@@ -2570,7 +2544,7 @@ export function DictationPractice({
                     </div>
 
                     {/*
- 卡片下拉。基准实现用 `.dropdowns-container` 铺满面板并
+ 卡片下拉。`.dropdowns-container` 铺满面板并
                       `pointer-events:none` 让点击穿透，真正可点的 `.card-dropdown`
                       再单独 `pointer-events:auto` —— 这两条都在移植的 CSS 里。
                     */}
@@ -2685,13 +2659,13 @@ export function DictationPractice({
           {/*
             === Layer 2.4: 触屏设备提示（PC 优先）===
 
- 位置放在 `main` 的第一子节点而不是 `header` 里：基准实现顶栏是
+ 位置放在 `main` 的第一子节点而不是 `header` 里：顶栏是
             `position:fixed`（`height:44px`），而 `.cyber-main` 用
             `padding-top:54px` 让开它；把提示条塞进 fixed 顶栏会撑破那 44px，
             放在这里则自然落在顶栏正下方、把内容往下推一行。
 
             样式用内联而不是新建类：`practice.css` 是
- `scripts/extract-practice-css.py` 从基准实现抽取的产物，文件头写着
+ `scripts/extract-practice-css.py` 抽取的产物，文件头写着
             「自动生成 —— 请勿手改」，手写类会在下次重新生成时被抹掉。
             这里取壳上已有的 `--neon-yellow` 变量，保证深浅三种主题下都不跑偏。
           */}
@@ -2772,8 +2746,8 @@ export function DictationPractice({
             />
           ) : mode === "speaking" ? (
             /*
- 口语跟读模式。基准实现只把 `main#practiceContent` 的内容换掉
-              （practice.js:4421-4423 `initSpeakingMode(document.getElementById('practiceContent'), …)`），
+ 口语跟读模式。只把 `main#practiceContent` 的内容换掉
+              （`initSpeakingMode(document.getElementById('practiceContent'), …)`），
               顶栏 / 进度条 / 计时器 / 底部工具栏全部照旧 —— 所以这里是
               `main` 里的一个分支，不是另起一个满屏组件。
             */
@@ -2787,8 +2761,8 @@ export function DictationPractice({
           ) : mode === "puzzle" ? (
             /*
               拼图（拼拼乐）模式。
- 基准实现把整个模式的 DOM 建在 `#inputContainer.input-slots-container`
-              **里面**（`initInputs()` practice.js:6217-6220：拿到 `#inputContainer`
+ 把整个模式的 DOM 建在 `#inputContainer.input-slots-container`
+              **里面**（`initInputs()`：拿到 `#inputContainer`
               后 `container.innerHTML = ''` 再 `initPuzzleMode(container)`），
               而 `#inputContainer` 是整句渲染模板的一部分 —— 所以拼图模式
               **保留**中文提示条与 `#resultMessage` 结果条，只把输入槽换成词按钮。
@@ -2799,7 +2773,7 @@ export function DictationPractice({
               所以下面把中文提示条与结果条按整句分支原样保留。
 
               容器仍复用 `inputContainer` / `.input-slots-container`：
- 基准实现的 `initPuzzleMode` 收的就是这个同一容器；`.puzzle-container`
+ `initPuzzleMode` 收的就是这个同一容器；`.puzzle-container`
               自带 `align-items:center`（生成 CSS `:3900`），不会串听写样式。
             */
             <>
@@ -2815,7 +2789,7 @@ export function DictationPractice({
                   `key` 是必需的，不是可选优化：拼图组件的词表由挂载时的
                   lazy initializer 洗牌一次（`useState(() => …)`），
                   换句时靠**整体重挂**来重新洗牌并把已选词归零 ——
- 等价于基准实现 `initPuzzleMode()` 里 `container.innerHTML =''`
+ 等价于 `initPuzzleMode()` 里 `container.innerHTML =''`
                   的「拆了重建」。若不加 key，React 会复用实例，
                   下一句的按钮还是上一句的词。
                 */}
@@ -2832,18 +2806,18 @@ export function DictationPractice({
             </>
           ) : mode === "learning" ? (
             /*
- 学习模式。基准实现 `loadCurrentSentence()`在这一
+ 学习模式。`loadCurrentSentence()`在这一
               分支把 `main#practiceContent` 整个换成 `.learning-container`：
               中文翻译 + （可选）视图切换按钮 + 注音/结构化句子 + 口语评估条。
               **没有输入框**，句子一显示就自动记完成（见下方 learning 自动完成
               effect），且**永不自动跳转** —— 由用户点底栏下一句/按回车推进。
 
- 这套标记与复习屏几乎相同，基准实现自己就写了两遍
-              （`loadCurrentSentence` :4363 与 `renderAnswerReviewContent` :4833），
+ 这套标记与复习屏几乎相同，此前就写了两遍
+              （`loadCurrentSentence` 与 `renderAnswerReviewContent` 各一处），
               所以这里复用 `ReviewScreen` 并传 `variant="learning"` 承载那三处
               差异（外层类名 `long-content`、结构化字号变量、无下一句预览）。
 
- 与拼图/口语一致，这里仍只是 `main` 里的一个分支 —— 基准实现的
+ 与拼图/口语一致，这里仍只是 `main` 里的一个分支 ——
               顶栏 / 进度条 / 计时器 / 模式切换器 / 底栏全部照旧。
             */
             <ReviewScreen
@@ -2851,8 +2825,8 @@ export function DictationPractice({
               nextSentence={null}
               currentIndex={currentIndex}
               total={sentences.length}
- /* 学习模式**没有**下一句预览：基准实现的守卫是
-                 `practiceMode === 'dictation' || 'puzzle'`（practice.js:4786）。 */
+ /* 学习模式**没有**下一句预览：守卫是
+                 `practiceMode === 'dictation' || 'puzzle'`。 */
               showNextPreview={false}
               autoNext={autoNext}
               trial={trial}
@@ -2865,19 +2839,19 @@ export function DictationPractice({
           ) : (
             <>
               {/*
- 分段练习与整句练习的容器结构不同，对齐基准实现：
+ 分段练习与整句练习的容器结构不同，差异如下：
                   · 整句（静态 HTML .cyber-main 首屏）：
                     `.mission-prompt-wrapper` > `.prompt-border-left` **在**
                     `.chinese-prompt` **之前**
                     `#inputContainer.input-slots-container`
                     结果条外面套一层 `div`（`text-align:center`）
-                  · 分段（`loadFragmentPractice` practice.js:2793-2806 注入的
+                  · 分段（`loadFragmentPractice` 注入的
                     innerHTML）：外层多一个 `.fragment-practice-container`，
                     `.chinese-prompt` 在 `.prompt-border-left` **之前**
                     （顺序真的反过来，见源码），
                     `#fragmentInputContainer.input-container`
                     结果条自己带 `style="text-align: center;"`，不套外层 div。
- 两处顺序差异是基准实现自己的，不是笔误 —— DOM 对比时会看出来。
+ 两处顺序差异是原有设计，不是笔误 —— DOM 对比时会看出来。
               */}
               {inFragmentPractice && currentFragment ? (
                 <div className="fragment-practice-container">
@@ -2889,10 +2863,10 @@ export function DictationPractice({
                   </div>
 
                   {/*
- 基准实现这里还有 `#fragmentWordImage`（`loadFragmentWordImage`
-                    practice.js:2938 调 `GET /api/searchWord/image`）。我们没有这个
+ 这里原本还有 `#fragmentWordImage`（`loadFragmentWordImage`
+                    调 `GET /api/searchWord/image`）。我们没有这个
                     接口（`grep -rln image src/app/api/` 零命中），所以**整块不渲染**
- —— 基准实现在取不到图时也是把容器 `container.remove()`，语义一致；
+ —— 取不到图时也把容器 `container.remove()`，语义一致；
                     渲染一个空容器反而会多出 24px 上边距和一块占位。
                   */}
 
@@ -2939,8 +2913,8 @@ export function DictationPractice({
                             }}
                           />
                           {/*
- 分段练习**没有**单词发音按钮 —— 基准实现
-                            `initFragmentInputs`（practice.js:3072-3460）只创建
+ 分段练习**没有**单词发音按钮 ——
+                            `initFragmentInputs` 只创建
                             `input`，整段的 `word-speak-btn` 一个都没有。
                           */}
                         </div>
@@ -2981,11 +2955,11 @@ export function DictationPractice({
                             type="text"
                             data-index={i}
                         /**
- * 基准实现 `input.dataset.wasIncorrect ='true'`（，
-                         * 答错时打标；3542 行分段练习同理）。`dataset.wasIncorrect`
+ * `input.dataset.wasIncorrect ='true'`（，
+                         * 答错时打标；分段练习同理）。`dataset.wasIncorrect`
                          * 落到 DOM 上就是 `data-was-incorrect`。当前 CSS 里没有规则用
- * 它，但它是基准实现会写在 DOM 上的真实状态，且曾用于
-                         * 「输满长度自动跳下一格」的兜底判断（practice.js:6378，
+ * 它，但它是会写在 DOM 上的真实状态，且曾用于
+                         * 「输满长度自动跳下一格」的兜底判断（
                          * 现已注释掉）。保留以备对齐。
                          */
                         data-was-incorrect={slot.wasIncorrect ? "true" : undefined}
@@ -2996,7 +2970,7 @@ export function DictationPractice({
                         lang="en"
                         enterKeyHint="done"
                         /**
- * 基准实现写的是 `inputmode="latin"`（HTML 规范里的合法值，
+ * 这里写的是 `inputmode="latin"`（HTML 规范里的合法值，
                          * 让移动端弹拉丁键盘而不是本地语言键盘）。React 的
                          * `inputMode` 类型联合里**没有** "latin"（它只收 none/text/
                          * tel/url/email/numeric/decimal/search），所以需要断言绕过；
@@ -3012,7 +2986,7 @@ export function DictationPractice({
                         onChange={(e) => handleInput(i, e)}
                         onKeyDown={(e) => handleKeyDown(i, e)}
                         onFocus={(e) => {
- // 基准实现 focus 时打 `typing`
+ // focus 时打 `typing`
                           setFocusedSlot(i)
                           // 聚焦时按当前值重算一次宽度（个性化变更后可能不准了）
                           const w = dynamicInputWidth(
@@ -3024,7 +2998,7 @@ export function DictationPractice({
                           e.currentTarget.style.width = `${w}px`
                         }}
                         onBlur={() => {
- // 基准实现 blur 时摘掉 `typing`
+ // blur 时摘掉 `typing`
                           setFocusedSlot((cur) => (cur === i ? null : cur))
                         }}
                       />
@@ -3036,14 +3010,14 @@ export function DictationPractice({
                         data-word={token}
                         data-word-index={i}
                         onClick={(e) => {
- // 基准实现 先拦默认行为与冒泡：这个按钮
+ // 先拦默认行为与冒泡：这个按钮
                           // 就在输入框旁边，不拦的话点它会先把焦点从 input 上抢走。
                           e.preventDefault()
                           e.stopPropagation()
                           void handleWordSpeak(i, token)
                         }}
                       >
- {/* 基准实现 practice.js:6554 的原样 SVG（12×12、polygon + path）。 */}
+ {/* 原样 SVG（12×12、polygon + path）。 */}
                         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                           <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" />
                           <path d="M15.54 8.46a5 5 0 0 1 0 7.07" />
@@ -3067,12 +3041,12 @@ export function DictationPractice({
           <footer className="cyber-footer">
             <div className="footer-stack">
               {/*
- 声音频谱条：基准实现 footer > .footer-stack 的**第一个子节点**。
+ 声音频谱条：footer > .footer-stack 的**第一个子节点**。
                 基类虽然 `visibility:hidden; opacity:0`，但它仍占 30px 布局
                 （`height:30px; margin:0 auto 4px`）—— 漏掉整块会让底栏相对
- 基准实现上移 34px。
+ 预期位置上移 34px。
 
- `.active` 跟随真实播放状态增删（基准实现 在
+ `.active` 跟随真实播放状态增删（在
                 `_webAudioAvailable && vizEnabled` 时加，stopAudioVisualizer
                 里删）。静态 HTML 快照里带 `.active` 只是因为抓取那一刻
                 首句 TTS 正在自动播。
@@ -3084,16 +3058,16 @@ export function DictationPractice({
                 <canvas id="audioCanvas" width={600} height={120} style={{ width: 300, height: 60 }} />
               </div>
               {/*
- 底栏按对标页的 DOM 顺序逐项对齐：
+ 底栏按以下 DOM 顺序逐项对齐：
                 prevBtn → 分隔 → ttsBtn → showEnglishBtn → favoriteBtn → 分隔
                 → fragmentInfo → fragmentDivider → submitAnswerBtn → nextBtn
                 → 三个被 CSS 强制隐藏的兼容占位 → voiceSelect。
 
- `#chineseToggleBtn` 这类占位**必须渲染出来**：基准实现 CSS 用
+ `#chineseToggleBtn` 这类占位**必须渲染出来**：CSS 用
                 `display:none !important` 把它们压成 0 尺寸（见
-                practice-cyber.css「Force hide compatibility elements」），所以
+                「Force hide compatibility elements」段），所以
                 它们在视觉与布局上都不可见 —— 渲染它们既不影响像素，又让
- DOM 结构与基准实现一致（否则任何按结构做的对比都会误报）。
+ DOM 结构与设计保持一致（否则任何按结构做的对比都会误报）。
               */}
               <div className="control-dock" id="bottomToolbar">
                 <button
@@ -3121,7 +3095,7 @@ export function DictationPractice({
                   </svg>
                 </button>
 
- {/* 慢声发音按钮在基准实现已被后端停用，DOM 留在注释里。 */}
+ {/* 慢声发音按钮已被后端停用，DOM 留在注释里。 */}
                 {/* <button className="dock-btn" id="slowTtsBtn" disabled>…</button> */}
 
                 <button
@@ -3129,8 +3103,8 @@ export function DictationPractice({
                   id="showEnglishBtn"
                   className="dock-btn"
                   /*
- 口语与学习模式隐藏「显示答案」（基准实现 `updateBottomToolbar`
-                    practice.js:2004-2011 的 `showEnglishBtn.style.display = 'none'`）。
+ 口语与学习模式隐藏「显示答案」（`updateBottomToolbar`
+                    里 `showEnglishBtn.style.display = 'none'`）。
                     这两个模式整句本来就摊开着，看了答案也没东西可变。
                     听写/拼图恢复 `flex`。
                   */
@@ -3141,7 +3115,7 @@ export function DictationPractice({
                     <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
                     <circle cx="12" cy="12" r="3" />
                   </svg>
- {/* 基准实现用这个 span 存文案给 JS 读，自身恒为 display:none */}
+ {/* 用这个 span 存文案给 JS 读，自身恒为 display:none */}
                   <span className="kbd" style={{ display: "none" }}>{answerShortcutKbd}</span>
                 </button>
 
@@ -3169,15 +3143,15 @@ export function DictationPractice({
                 <div className="dock-divider" />
 
                 {/*
- 分段练习信息条。基准实现 `#fragmentInfo` 的可见性只由
-                  `updateFragmentInfo()` / `hideFragmentInfo()`（practice.js:3617-3632）
+ 分段练习信息条。`#fragmentInfo` 的可见性只由
+                  `updateFragmentInfo()` / `hideFragmentInfo()`
                   控制：进入分段练习置 `flex`（注意**不是** `''` —— 它显式写
                   `flex`，因为基类 `.fragment-info` 本身就是 `display:flex`，
- 写空串也能复原，但基准实现写死 `flex`），`#fragmentDivider`
+ 写空串也能复原，但显式写死 `flex`），`#fragmentDivider`
                   置空串（恢复样式表默认的可视态）。
 
                   这里不再写 `mode !== "speaking"`：`inFragmentPractice` 的
-                  定义里已经含 `mode === "dictation"`（见 :451），TypeScript 的
+                  定义里已经含 `mode === "dictation"`，TypeScript 的
                   别名条件收窄会认定该比较恒真并报 TS2367。分段练习本就只属于
                   听写模式，条件简化为单一来源也更难写错。
                 */}
@@ -3208,7 +3182,7 @@ export function DictationPractice({
                 />
 
                 {/*
- 移动端听写提交按钮。基准实现的可见性由
+ 移动端听写提交按钮。可见性由
                   `practiceIsMobileDevice && mode === 'dictation' && !isInAnswerReviewMode`
                   决定，桌面端恒为 `display:none`（由 `.mobile-submit-btn` 的
                   默认样式保证）。这里同样只在 `isMobile` 时加 `is-visible`。
@@ -3221,7 +3195,7 @@ export function DictationPractice({
                   aria-hidden={!(isMobile && mode === "dictation" && status === "input")}
                   disabled={!(isMobile && mode === "dictation" && status === "input")}
                   /*
- 基准实现 `submitCurrentAnswer`按
+ 提交时按
                     `isInFragmentPractice` 分叉：分段走 `checkFragmentAnswer`，
                     整句走 `checkAnswer`。
                   */
@@ -3241,11 +3215,11 @@ export function DictationPractice({
                   id="nextBtn"
                   /*
                     ✓/`.finish-btn` 的判据是**全部完成**，不是「停在最后一句」。
- 基准实现 `updateBottomToolbar`：
+ 判据公式：
                       allCompleted = (mode==='learning'||mode==='speaking')
                         ? completedSentences.size >= totalSentenceCount
                         : completedCount >= totalSentenceCount
-                    而 `completedCount = completedSentences.size`（:3886、:4407），
+                    而 `completedCount = completedSentences.size`，
                     两条分支判的是同一个集合大小 —— 所以这里一个条件通吃四模式。
                     用下标判是错的：末句还没做时它就会亮✓，而中间几句没做、
                     停在末句上时反而该亮。
@@ -3253,8 +3227,8 @@ export function DictationPractice({
                   className={`dock-btn${completedCount >= sentences.length && sentences.length > 0 ? " finish-btn" : ""}`}
                   onClick={() => {
                     reviewEpochRef.current += 1
- // 学习模式多一道「全部完成即进完成页」的早退（基准实现
-                    // nextSentenceAfterPaint 的 completedCount 检查）。学习模式
+ // 学习模式多一道「全部完成即进完成页」的早退：
+                    // 学习模式
                     // 渲染即完成，翻完一遍后再点箭头就该收尾，不该继续逐句绕。
                     if (mode === "learning") handleLearningAdvance()
                     else advance()
@@ -3265,7 +3239,7 @@ export function DictationPractice({
                   )}
                 </button>
 
- {/* 以下四项是基准实现的 JS 兼容占位，被 CSS 强制隐藏，无视觉影响。 */}
+ {/* 以下四项是 JS 兼容占位，被 CSS 强制隐藏，无视觉影响。 */}
                 <button type="button" id="chineseToggleBtn" style={{ display: "none" }} aria-hidden="true" />
                 <button type="button" id="immersiveToggleBtn" style={{ display: "none" }} aria-hidden="true" />
                 <span id="playShortcutDisplay" style={{ display: "none" }}>{playShortcutKbd}</span>
@@ -3278,9 +3252,9 @@ export function DictationPractice({
         )}
 
         {/*
- 答案揭示浮层。基准实现的结构是 `div.answer-reveal-panel#sentenceHint` >
-          `div#sentenceHintContent`，内容由 `_renderSentenceHintWithCurrentData()`
-          (practice.js:5736) 注入，再**恒定**追加 `.answer-panel-footer`
+ 答案揭示浮层。结构是 `div.answer-reveal-panel#sentenceHint` >
+          `div#sentenceHintContent`，由 `_renderSentenceHintWithCurrentData()`
+          注入，再**恒定**追加 `.answer-panel-footer`
           显示「{快捷键} 或 ESC」——这条页脚是浮层唯一常驻的操作提示。
 
           内容有两种形态，由 `isHintStructuredMode`（默认 true）切换：
@@ -3294,7 +3268,7 @@ export function DictationPractice({
           **常驻 DOM + `.show` 切换**，理由同设置面板：移植过来的 CSS 是
           `.answer-reveal-panel:not(.show) { display:none }`（practice.css:1961），
           条件渲染虽然视觉等价，但会让 `#sentenceHint` 在收起时不存在，
- 而基准实现的 `toggleSentenceHint`判断的正是
+ 而 `toggleSentenceHint` 判断的正是
           `hintBox.classList.contains('show')`，DOM 对比也会缺 id。
         */}
         <div
@@ -3303,8 +3277,8 @@ export function DictationPractice({
         >
           <div id="sentenceHintContent">
             {/*
- 分段练习的 hint **完全短路**：基准实现 `showSentenceHint`
-              （practice.js:5710-5725）在进入结构化渲染前先判断
+ 分段练习的 hint **完全短路**：`showSentenceHint`
+              在进入结构化渲染前先判断
               `isInFragmentPractice`，命中就只塞
               `<span class="answer-text-plain">{fragment.text}</span>`
               然后 `return` —— 既没有 `.structured-answer`，也**没有页脚**
@@ -3329,7 +3303,7 @@ export function DictationPractice({
             >
               {hintAnswer.structured ? (
                 /*
- 基准实现这里是 `div.footer-action[onclick=toggleHintMode]`
+ 原结构是 `div.footer-action[onclick=toggleHintMode]`
                   —— 是 div 不是 button（CSS 也没给它按钮态），照抄。
                   图标与文字之间靠一个空格分隔，不是 margin。
                 */
@@ -3352,7 +3326,7 @@ export function DictationPractice({
                 >
                   {/*
                     文案方向：当前是结构视图 → 按钮提示可以切到纯文本。
- 对标页的判据是 isHintStructuredMode 本身。
+ 判据是 isHintStructuredMode 本身。
                     图标同理：结构模式给「列表」图标，纯文本模式给「宫格」图标。
                   */}
                   <svg
@@ -3386,16 +3360,14 @@ export function DictationPractice({
 
         {/*
           常驻的快捷键提示条（此前是长按 ⌘/Ctrl 才滑出，用户反馈不明显）。
- 基准实现把它挂到 `document.body` 并重建整个节点；这里用条件 class 切换
+ 旧做法在 `document.body` 上重建整个节点；这里用条件 class 切换
           `.active`，CSS 里 `.shortcut-overlay-bar` 是 `position:fixed`，放在壳内
           同样相对视口定位。开关关闭或快捷键弹窗录制时回到隐藏态，不删节点。
         */}
         <div className={`shortcut-overlay-bar${shortcutOverlayEnabled && !shortcutModalOpen ? " active" : ""}`}>
           {/*
- 每一段各自包一层 <kbd>，段间用 + 连接 —— 基准实现 renderShortcutOverlay
-            （practice.js:9385）用的是 `getShortcutKbd`，它对每一段都返回
-            `<kbd>…</kbd>` 然后用 '+' join。早先这里是 `replace("+","")`，
- 把 ⌘ 和 P 并在同一个 <kbd> 里，与基准实现的胶囊样式不一致。
+ 每一段各自包一层 <kbd>，段间用 + 连接。早先这里是 `replace("+","")`，
+            把 ⌘ 和 P 并在同一个 <kbd> 里，胶囊样式刻意不同。
             文案也一并读实时配置（用户改键后提示条必须跟着变）。
           */}
           <div className="shortcut-item">
@@ -3419,10 +3391,9 @@ export function DictationPractice({
         </div>
 
         {/*
- 「已加入错题本」通知。基准实现 showMistakeNotification 动态
-          创建 `div.mistake-notification` 挂到 body 上，10ms 后加 `.show` 滑入，
-          2s 后移除 `.show`、再 300ms 后删除节点。这里用 epoch + show 两个相位
-          复刻同样的时间线（CSS 已移植：`position:fixed` + `bottom` 从下方滑入）。
+ 「已加入错题本」通知。时间线：出现后 10ms 加 `.show` 滑入，
+          2s 后移除 `.show`、再 300ms 后卸载；用 epoch + show 两个相位
+          驱动（CSS 已移植：`position:fixed` + `bottom` 从下方滑入）。
         */}
         {mistakeNoticeEpoch > 0 && (
           <div className={`mistake-notification${mistakeNoticeShow ? " show" : ""}`}>
@@ -3436,15 +3407,14 @@ export function DictationPractice({
       </div>
 
       {/*
- 快捷键设置弹窗。基准实现把它写在页面末尾（`句子练习 - 基准实现.html:599`），
+ 快捷键设置弹窗。
         结构是 `.shortcut-modal > .shortcut-modal-content > header/body/hint/footer`；
-        body 里的行由 `renderShortcutList()`（practice-sys-controls.js:630）动态生成。
+        body 里的行由 `VISIBLE_SHORTCUT_IDS.map()` 动态生成。
 
         同样**不能**条件渲染：`.shortcut-modal` 基类是 `display:none`，
-        靠 `.show` 切成 `flex`（practice-cyber.css:1761/1774）。
+        靠 `.show` 切成 `flex`。
 
- 基准实现点遮罩即关（`modal.addEventListener('click', e => { if (e.target === modal) close })`），
-        所以这里也判 `e.target === e.currentTarget`。
+ 点遮罩即关：判 `e.target === e.currentTarget`，点到弹窗内容不会误关。
       */}
       <div
         className={`shortcut-modal${shortcutModalOpen ? " show" : ""}`}
@@ -3473,7 +3443,7 @@ export function DictationPractice({
                         {recordingWarning ?? "⏺ 请按下新快捷键..."}
                       </span>
                     ) : (
- // 基准实现 getShortcutKbd 把每一段都包一层 <kbd>，段间用 + 连。
+ // 每一段都包一层 <kbd>，段间用 + 连。
                       shortcutKbdParts(id, shortcuts).map((p, i) => (
                         <span key={i}>
                           {i > 0 && "+"}
@@ -3545,12 +3515,11 @@ export function DictationPractice({
       */}
 
       {/*
- 个性化设置模态框。基准实现是 `#personalizationModal`，块级 `position:fixed`
+ 个性化设置模态框。模态框 id 为 `#personalizationModal`，块级 `position:fixed`
         且默认 `display:none`，靠 `.show` 切成 flex —— 不能用条件渲染，否则
         `input#previewInput` 等受控节点会在关闭时被卸载、CSS 过渡也失效。
 
- 交互口径对齐基准实现 `initPersonalizationSettings`
-        (practice-sys-controls.js:200)：模态框里改的是一个**草稿**，只有点
+ 交互口径：模态框里改的是一个**草稿**，只有点
         「应用设置」才 `saveDictationInputSettings` + 落到壳元素上；「恢复默认」
         只把草稿改回默认值并刷新界面、**不写盘**；关闭/ESC/点遮罩都是丢弃草稿、
         重新从 localStorage 读回。
@@ -3578,7 +3547,7 @@ export function DictationPractice({
                     onClick={() => setPersonalizationDraft((d) => ({ ...d, font: f }))}
                   >
                     {/*
- 基准实现是外层 button + 内层 span[style=fontFamily]，
+ 外层 button + 内层 span[style=fontFamily]，
                       内层 span 里再套一个 1.2em 的「Aa」。字体族必须落在
                       内层 span 上，落在 button 上会被按钮自身样式覆盖。
                     */}
@@ -3637,9 +3606,8 @@ export function DictationPractice({
             <div className="personalization-section">
               <div className="personalization-label">预览效果</div>
               {/*
- 基准实现同时切两个类（`syncPersonalizationModalUI` 末尾）：
-                `input-style-underline` 与 `input-style-box` 必须互斥，只加不减
-                会让方框模式被横线模式的规则覆盖。
+ `input-style-underline` 与 `input-style-box` 两个类必须互斥（切换时一加一减），
+                只加不减会让方框模式被横线模式的规则覆盖。
               */}
               <div
                 className={`personalization-preview${personalizationDraft.inputStyle === "underline" ? " input-style-underline" : " input-style-box"}`}
@@ -3665,7 +3633,7 @@ export function DictationPractice({
               type="button"
               className="personalization-reset-btn"
               id="resetPersonalization"
- // 基准实现只改草稿 + 刷新界面，不写盘 —— 写盘要等「应用设置」
+ // 只改草稿 + 刷新界面，不写盘 —— 写盘要等「应用设置」
               onClick={() => setPersonalizationDraft(DEFAULT_DICTATION_INPUT_SETTINGS)}
             >
               恢复默认
@@ -3687,7 +3655,7 @@ export function DictationPractice({
         </div>
       </div>
 
- {/* 「更多设置」模态框 —— 基准实现里与个性化设置并列的独立模态框 */}
+ {/* 「更多设置」模态框 —— 与个性化设置并列的独立模态框 */}
       <div className={`personalization-modal${moreSettingsOpen ? " show" : ""}`} id="moreSettingsModal">
         <div className="personalization-modal-content">
           <div className="personalization-modal-header">
@@ -3767,18 +3735,18 @@ export function DictationPractice({
 
             {/*
               听写整句配图开关。**开关在、渲染器永远不会触发** —— 但这不是缺陷，
- 对「我们有的数据」而言行为与基准实现完全一致：
+ 对「我们有的数据」而言，不渲染就是正确行为：
 
- 基准实现 `canDisplayFullSentenceImage`要求
+ `canDisplayFullSentenceImage` 的门禁要求
               `getSentenceImageStatus(sentence) === 3 && !!getSentenceImageName(sentence)`，
               而 `imageGenStatus` / `imageName` 在 `sentences` 表里**不存在**
               （39 张表里没有任何图片列；`courses.cover_url` 是课程封面，不是句子配图），
               也没有 `PracticeConfig.sentenceImageBaseUrl` 这个地址前缀。
-              所以即使把 `renderFullSentenceImage`（practice.js:3727）逐字搬过来，
+              所以即使把 `renderFullSentenceImage` 逐字搬过来，
               取 `imageName` 恒为空串 → 第一道 `return` 就出去了，DOM 里同样没有
               `#fullSentenceImage`。开关的默认值也是两边一致（`=== 'on'` ⇒ 默认关）。
 
- 因此这里保留的是**与基准实现等价的控件**，而不是一个待实现的空缺：
+ 因此这里保留的是**行为正确的控件**，而不是一个待实现的空缺：
               等哪天有了句图数据源，只需补 `canDisplayFullSentenceImage` +
               `renderFullSentenceImage` 两段，开关不必再改。
             */}
@@ -3792,7 +3760,6 @@ export function DictationPractice({
                   onChange={(next) => {
                     setSentenceImage(next)
                     saveSentenceImage(next)
- // 基准实现 
                     toast.info(next ? "已开启听写整句配图" : "已关闭听写整句配图", { duration: 2000 })
                   }}
                 />
@@ -3809,7 +3776,7 @@ export function DictationPractice({
                   onChange={(next) => {
                     setNextPreview(next)
                     saveNextPreview(next)
- // 基准实现 —— 关闭时的文案特意点明「下一句进入时生效」，
+ // 关闭时的文案特意点明「下一句进入时生效」，
                     // 因为复习屏是当帧就已经渲染好的，改开关不会立刻收起当前预览。
                     toast.info(
                       next ? "已开启下一句预览" : "已关闭下一句预览（下一句进入时生效）",
@@ -3856,7 +3823,7 @@ export function DictationPractice({
               label="底部工具栏样式"
               hint="紧凑模式可减少工具栏高度，为输入区域留出更多空间"
               control={
- // 基准实现用 label[for] 包原生 select，点击任意位置都能展开
+ // 用 label[for] 包原生 select，点击任意位置都能展开
                 <label className="more-settings-native-select-wrap" htmlFor="toolbarDensitySelect">
                   <select
                     className="more-settings-native-select"
@@ -3867,7 +3834,6 @@ export function DictationPractice({
                       const next = e.target.value as ToolbarDensity
                       setToolbarDensity(next)
                       saveToolbarDensity(next)
- // 基准实现 
                       toast.info(
                         next === "compact" ? "已切换为紧凑工具栏" : "已切换为常规工具栏",
                         { duration: 2000 },
@@ -3891,8 +3857,7 @@ export function DictationPractice({
                   onChange={(next) => {
                     setShortcutOverlayEnabled(next)
                     saveShortcutOverlay(next)
- // 基准实现 用的是**切换前**的 `enabled` 做文案判据：
-                    // `showToast(enabled ? '已关闭…' : '已开启…')`，等价于按 next 判断。
+ // 文案判据是**切换后**的 `next`（等价于用切换前的值取反判断）。
                     toast.info(next ? "已开启快捷键提示" : "已关闭快捷键提示", { duration: 2000 })
                   }}
                 />
@@ -3926,7 +3891,7 @@ function MoreSettingsRow({
 }
 
 /**
- * 基准实现的开关是 `button.more-settings-toggle-btn[data-on]`，文案为
+ * 开关是 `button.more-settings-toggle-btn[data-on]`，文案为
  * 「已开启」/「已关闭」，选中态完全由 `[data-on="true"]` 的 CSS 决定。
  */
 function MoreSettingsToggle({
@@ -3957,16 +3922,16 @@ function MoreSettingsToggle({
  * 非听写模式也必须能切回听写，否则用户切过去就回不来了。
  * 文案仍复用 `practice-mode.ts` 的 `switchModeConfirmText` —— 早先这里把来源
  * 模式写死成「听写模式」，一旦四种模式都能进，对「从拼图切到学习」这种路径
- * 就会撒谎（基准实现 是按当前模式动态取名的）。
+ * 就会撒谎（文案必须按当前模式动态取名）。
  */
 
 /**
- * 设置面板的一张信息卡，对应基准实现的 `div.info-card > .ic-left > (.ic-label +
+ * 设置面板的一张信息卡，结构为 `div.info-card > .ic-left > (.ic-label +
  * .ic-value#xxxDisplay) + .ic-icon`。
  *
- * `status` 的取值来自基准实现：`ok`/`off`/`muted`/`purple`/`cyan`，另外加了一个
- * `plain` 表示不带状态类（基准实现的「界面模式」「发音偏好」「自动播放次数」三张卡
- * 就没有 status 类）。`.status-off` / `.status-muted` 在参考 CSS 里没有基础规则
+ * `status` 的取值：`ok`/`off`/`muted`/`purple`/`cyan`，另外加了一个
+ * `plain` 表示不带状态类（「界面模式」「发音偏好」「自动播放次数」三张卡
+ * 都会用到）。`.status-off` / `.status-muted` 在参考 CSS 里没有基础规则
  * （grep 计数 0），颜色只靠内联样式给出 —— 我们这里显式带上内联色保持一致。
  */
 function InfoCard({
@@ -3976,17 +3941,17 @@ function InfoCard({
   title: string
   label: string
   value: string
- /** 基准实现这四张卡的值 id 并不等于 `${id去掉Card}Display`：
+ /** 这四张卡的值 id 并不等于 `${id去掉Card}Display`：
    *  `soundCard→kbdSoundDisplay`、`loopCard→loopDisplayValue`、
    *  `fragmentCard→fragmentModeDisplay`、`voiceCard→voiceDisplayShort`。
    *  做成显式参数比推导更忠实。 */
   valueId: string
   status: "ok" | "off" | "muted" | "purple" | "cyan" | "plain"
- /** 基准实现对 `#loopDisplayValue` 单独写内联色（updateManualPlayIndicator）：
+ /** `#loopDisplayValue` 需要单独写内联色：
    *  手动播放时 `style.color = '#ef4444'`，否则清空。 */
   valueColor?: string
   icon: ReactNode
- /** 基准实现只给 themeCard / immersiveCard 的图标写了 id。 */
+ /** 只有 themeCard / immersiveCard 的图标写了 id。 */
   iconId?: string
   onClick: (e: React.MouseEvent<HTMLDivElement>) => void
 }) {
@@ -4019,14 +3984,14 @@ function InfoCard({
           {value}
         </span>
       </div>
- {/* 基准实现只给 themeCard / immersiveCard 的 .ic-icon 写了 id，其余 10 张
-          卡的图标没有 id —— 照抄，不自己补。 */}
+ {/* 只有 themeCard / immersiveCard 的 .ic-icon 写了 id，其余 10 张
+          卡的图标没有 id —— 不自己补。 */}
       <div className="ic-icon" id={iconId}>{icon}</div>
     </div>
   )
 }
 
-/* ── 设置面板图标（逐条对照基准实现 HTML 的 svg） ───────────────────────────── */
+/* ── 设置面板图标（面板用到的 svg 集中在这里） ─────────────────────────── */
 
 function SvgIcon({ children, size = 16 }: { children: ReactNode; size?: number }) {
   return (
@@ -4137,19 +4102,19 @@ function IconChevronDown() {
 /**
  * 「学习容器」主体：中文翻译 + 视图切换 + 注音/结构化句子 + 口语评估条。
  *
- * 基准实现里这套标记被**两处**几乎重复地拼出来：
- *   · `loadCurrentSentence()` 的学习模式分支（practice.js:4363）
- *   · `renderAnswerReviewContent()`（practice.js:4833，听写/拼图答对后的复习屏）
+ * 这套标记在旧代码里被**两处**几乎重复地拼出来：
+ *   · `loadCurrentSentence()` 的学习模式分支
+ *   · `renderAnswerReviewContent()`（听写/拼图答对后的复习屏）
  * 两者只在三处不同，所以这里用一个组件 + `variant` 承载，而不是抄两份：
  *   1. 外层类名：学习模式按 `targetSentence.length > 80` 追加 `long-content`
- *      （practice.js:4295）；复习屏恒为 `learning-container`。
- * ⚠️ `long-content` 在基准实现 CSS 里**没有任何规则**（`grep -c` 为 0），
+ *      复习屏恒为 `learning-container`。
+ * ⚠️ `long-content` 没有任何 CSS 规则（`grep -c` 为 0），
  *      纯 DOM 标记 —— 加上它只为结构对比一致，不影响像素。
  *   2. 结构化容器的字号：学习模式写
- *      `calc(1.5rem * var(--dictation-review-font-scale, 1))`（practice.js:4336），
- *      复习屏写死 `1.5rem`（practice.js:4774）。
+ *      `calc(1.5rem * var(--dictation-review-font-scale, 1))`，
+ *      复习屏写死 `1.5rem`。
  *   3. 底部「下一句预览」：只在听写/拼图模式的复习屏出现
- *      （practice.js:4786 的守卫是 `practiceMode === 'dictation' || 'puzzle'`），
+ *      （守卫条件：模式为 `'dictation'` 或 `'puzzle'`），
  *      学习模式**永远没有**（学习模式不自动推进，由用户点下一句）。
  *      这里用 `showNextPreview` 表达，学习模式传 `false`。
  */
@@ -4163,16 +4128,15 @@ function ReviewScreen({
   currentIndex: number
   total: number
   /** 「更多设置」→「下一句预览」；关掉后复习界面不显示底部下一句提示
- * （对标页的 next_sentence_preview，默认开）。 */
+ * （默认开）。 */
   showNextPreview: boolean
- /** 设置里的「自动下一句」。开着时不渲染内联口语评估条：基准实现的门槛是
-   *  `!autoNextEnabled`（practice.js:4811），自动跳转下没有回顾停留时间。 */
+ /** 设置里的「自动下一句」。开着时不渲染内联口语评估条：门槛是
+   *  `!autoNextEnabled`，自动跳转下没有回顾停留时间。 */
   autoNext: boolean
   trial: TrialInfo | null
   trialAvailable: boolean
   onClaimTrial: () => void
-  /** 复习屏显示语法结构（true）还是注音单词视图（false）。
- * 基准实现 `isLearningStructureMode`，默认 true。 */
+  /** 复习屏显示语法结构（true）还是注音单词视图（false）。默认 true。 */
   learningStructure: boolean
   onToggleLearningStructure: () => void
   /** `"learning"` 时对齐 `loadCurrentSentence()` 学习模式分支的三处差异
@@ -4180,20 +4144,19 @@ function ReviewScreen({
   variant?: "review" | "learning"
 }) {
   const hasNext = currentIndex + 1 < total
- // 学习模式的长内容类（基准实现）。阈值 80 是基准实现写死的。
+ // 学习模式的长内容类。阈值 80 是写死的。
   const isLongContent = variant === "learning" && (sentence?.english?.length ?? 0) > 80
- // 基准实现在 requestIdleCallback 里才把纯文本换成注音版（同步注音在 iPad 上
+ // 注音版延后到空闲时机再换（同步注音在 iPad 上
   // 会阻塞主线程 100–400ms），这里先渲纯文本、下一帧再换 —— 用同一套
   // 「先给内容，再补装饰」的顺序，慢设备上不会白屏。
   //
- // 注意判据是 `segments` 而不是 `words`：基准实现 `generateAnnotatedSentence`
-  // 无论有没有词汇分析都**总是**输出 `<div class="annotated-sentence">`
-  // （practice.js:1131 起手就是它），词表为空时退化成
-  // `extractFallbackWords`，再空就把整句塞成一个 entry（:966-971）。
+ // 注意判据是 `segments` 而不是 `words`：只要 `english` 非空，`buildAnnotation`
+  // 就会产出 segments，`<div class="annotated-sentence">` 也照常渲染；
+  // 词表为空时整句并成一个纯文本段。
   // 只有 `english` 本身为空才会走到纯文本分支。
   const annotation = useDeferredValue(buildAnnotation(sentence))
   const hasSentence = annotation.segments.length > 0
-  // `enableFallback=false`：复习界面结构与原句对不上也照渲（practice.js:4793）。
+  // `enableFallback=false`：复习界面结构与原句对不上也照渲。
   const structure = useDeferredValue(buildStructuredAnswer(sentence, "us", false))
   const hasStructureData = structure.structured
   return (
@@ -4201,8 +4164,8 @@ function ReviewScreen({
       <div className="learning-chinese">{sentence?.chinese || "（无中文翻译）"}</div>
 
       {/*
- 语法结构 / 单词视图切换按钮。基准实现只有**有结构数据**时才渲染它
-        （practice.js:4765 `if (hasStructureData)`），且文案与图标随当前模式翻转：
+ 语法结构 / 单词视图切换按钮。只有**有结构数据**时才渲染它
+        （`if (hasStructureData)`），且文案与图标随当前模式翻转：
         结构模式 →「切换到单词视图」+ 列表图标；单词模式 →「查看语法结构」+ 宫格图标。
         居中靠 inline style，因为参考 CSS 里**没有** `.view-switch-container` 规则
         （grep 计数 0，只有 JS 里出现）。
@@ -4242,11 +4205,10 @@ function ReviewScreen({
 
       {/*
         主体：结构模式下换成 `.structure-view-wrapper` 里的结构化答案。
- 对标页的 `displayHTML` 分叉正是如此 ——
-        结构模式时**完全替换**掉注音视图，不是并列显示。
+ 结构模式时**完全替换**掉注音视图，不是并列显示。
         外层 inline style 的 margin 两处一致（12px 0），字号则按 variant 分开：
-        复习屏写死 `1.5rem`（practice.js:4774），学习模式带字号变量
-        `calc(1.5rem * var(--dictation-review-font-scale, 1))`（practice.js:4336）
+        复习屏写死 `1.5rem`，学习模式带字号变量
+        `calc(1.5rem * var(--dictation-review-font-scale, 1))`
         —— 学习模式跟着「设置 → 字号」缩放，复习屏不跟。这不是笔误。
       */}
       {hasStructureData && learningStructure ? (
@@ -4259,7 +4221,7 @@ function ReviewScreen({
         >
           {/*
             复习屏不做聚焦高亮 —— 那时输入框已经不存在了（status === "review"），
- 没有 focus 事件可挂。基准实现的 highlightAnswerWord 虽然在复习屏
+ 没有 focus 事件可挂。highlightAnswerWord 虽然在复习屏
             也能生效（它只找 `.answer-reveal-panel.show`），但复习屏里那个
             浮层是收起的，实际永远不触发。
           */}
@@ -4337,7 +4299,7 @@ function ReviewScreen({
       )}
 
       {/*
- 内联口语评估入口。门槛与基准实现一致：
+ 内联口语评估入口。门槛：
         `!autoNextEnabled && practiceMode !== 'speaking'`。第一个条件由设置里的
         「自动下一句」决定 —— 开了自动跳转就没有回顾屏停留时间，这条自然不该
         出现。第二个条件在这个组件里**结构上已经满足**：本组件只在
@@ -4351,7 +4313,7 @@ function ReviewScreen({
 
       {/*
         单词卡：点击提示浮层/复习屏里的 `.clickable-word` 弹出。
- 基准实现是在 document 上全局挂 click 的（，`:9032` 调用），
+ 提示浮层监听的是 document 上的全局 click，
         所以这里渲染位置无所谓 —— 它自己 portal 到 `.practice-shell`
         （不能挂 body：抽取后的样式都收敛在 `.practice-shell` 下）。
         挂载点必须在本组件内，以便拿到当前句的 id 去收藏。
@@ -4373,18 +4335,18 @@ function ReviewScreen({
       )}
 
       {/*
- 基准实现的 `.grammar-info` 整块只在 `grammarNotes` 存在时才拼出来
-        （practice.js:4735 `if (grammarTags.length > 0)`），标签来自
+ `.grammar-info` 整块只在 `grammarNotes` 存在时才拼出来
+        （`if (grammarTags.length > 0)`），标签来自
         `grammarNotes.Tense/Structure/Points`。我们的 `sentences` 表没有
- 对应的语法列，所以这里保持「整块不渲染」——与基准实现在无语法数据时
- 的行为一致。此前硬编码的 `答案` 标签是发明出来的，基准实现从未
-        `grammarTags.push` 过它（practice.js:4267/4273/4279 只有那三个来源）。
+ 对应的语法列，所以这里保持「整块不渲染」——与无语法数据时
+ 的行为一致。此前硬编码的 `答案` 标签是发明出来的，从未被
+        `grammarTags.push` 推入（只有那三个来源）。
       */}
 
       {hasNext && showNextPreview && (
         <div style={{ display: "flex", justifyContent: "center", width: "100%" }}>
           {/*
- 基准实现。三处易漏：
+ 三处易漏：
             - `data-next-index` 是 0 基下标（`currentSentenceIndex + 1`），
               而 `.nsp-label` 里的数字是 1 基（`currentSentenceIndex + 2`）。
             - `.nsp-enter-hint` 同时有 `title` 和 `aria-label`（同文案）。
@@ -4425,14 +4387,14 @@ function CompletionScreen({
   onBack: () => void
 }) {
   /**
- * 课节完成烟花 —— 基准实现 `showCompletionMessage()`。
+ * 课节完成烟花。
    *
- * 基准实现的顺序是：先 `currentAudio.pause()` + `currentAudio = null` +
+ * 顺序是：先 `currentAudio.pause()` + `currentAudio = null` +
    * `stopAudioVisualizer()` + 退出答案复习模式，**然后**才
    * `triggerCompletionFireworks()`，最后播完成音效。这里同样先掐掉语音，
    * 免得 TTS 拖着「答案复习」的尾音把庆祝盖过去。
    *
- * 注意**不受「答对烟花效果」开关控制**：基准实现 `triggerCompletionFireworks()`
+ * 注意**不受「答对烟花效果」开关控制**：`triggerCompletionFireworks()`
    * 开头只判 `typeof confetti !== 'function'`，压根不读 `confettiEffectEnabled`
    * —— 那个开关只 gate 答对时的那一发（`createCanvasConfettiEffect`）。
    * 所以这里不要传 `confetti` 进来。

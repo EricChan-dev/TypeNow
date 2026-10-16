@@ -4,7 +4,7 @@ import { BRAND } from "@/lib/brand"
 import "./store-market.css"
 
 /**
- * 课程广场 —— 基准实现 课程市场页 的对齐。
+ * 课程广场。
  *
  * 版式（hero + 搜索框、两级筛选标签、16:9 卡片网格、提示条）来自归档的
  * market.css；样式由 scripts/extract-store-market-css.py 生成，

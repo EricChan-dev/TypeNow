@@ -11,16 +11,16 @@ import {
 import type { EvaluateResult } from "@/lib/pronunciation"
 
 /**
- * 口语评分的展示口径。这些阈值与文案必须与基准实现 一致
+ * 口语评分的展示口径。这些阈值与文案必须前后一致
  * —— 它们是「一模一样」里最容易悄悄漂移的部分（没有类型系统兜着，
  * 只有数字和字符串）。
  *
- * 基准实现对应位置：
- *   · `getSpeakingScoreLevel` speaking.js:965
- *   · `getScoreColor`        speaking.js:972
- *   · `getFeedbackMessage`   speaking.js:979
- *   · `renderSentenceWithScores` speaking.js:411（逐词三段阈值）
- *   · `buildSpeakingLimitMessage` speaking.js:109
+ * 覆盖的实现：
+ *   · `getSpeakingScoreLevel`
+ *   · `getScoreColor`
+ *   · `getFeedbackMessage`
+ *   · `speakingWordStatus`（逐词三段阈值）
+ *   · `buildSpeakingLimitMessage`
  */
 
 describe("getSpeakingScoreLevel", () => {
@@ -62,7 +62,7 @@ describe("getFeedbackMessage", () => {
   })
 
   it("70 档的存在意味着 70–79 会出现「不错」但等级是 Good", () => {
- // 两者阈值不同源（等级 60/80/90，评语 60/70/80/90），这是基准实现原样。
+ // 两者阈值不同源（等级 60/80/90，评语 60/70/80/90），这是刻意保留的口径。
     expect(getSpeakingScoreLevel(75).text).toBe("Good")
     expect(getFeedbackMessage(75)).toBe("不错，继续保持！")
   })
@@ -165,7 +165,7 @@ describe("formatSpeakingClock", () => {
     expect(formatSpeakingClock(605)).toBe("10:05")
   })
 
- it("超过一小时不进位到时（基准实现也不进位，继续累加分钟）", () => {
+ it("超过一小时不进位到时（继续累加分钟）", () => {
     expect(formatSpeakingClock(3661)).toBe("61:01")
   })
 

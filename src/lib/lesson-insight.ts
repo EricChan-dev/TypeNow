@@ -3,7 +3,7 @@
  *
  * ── 为什么单独一个文件 ────────────────────────────────────────────────────────
  *
- * 基准实现的课节展开区有四块：核心词汇 / 核心短语 / 语法点 / 句子复杂度，
+ * 课节展开区需要四块：核心词汇 / 核心短语 / 语法点 / 句子复杂度，
  * 它们是**课节级 AI 分析**的产物。我们库里 `lessons` 表只有
  * `id / course_id / title / summary / sort_order`，**没有**这四块。
  *
@@ -77,8 +77,8 @@ export function selectVocab(rows: readonly VocabRow[], limit = 20): VocabRow[] {
 /**
  * 短语候选的清洗规则。
  *
- * 基准实现的核心短语是人工/AI 挑的「固定搭配」（favourite toy、next to），
- * 我们只能从依存分析节点里捞。实测三类脏数据必须挡掉：
+ * 理想的短语候选是人工/AI 挑的「固定搭配」（favourite toy、next to），
+ * 但我们只能从依存分析节点里捞。实测三类脏数据必须挡掉：
  *   1. `jelly +` / `bird + house = birdhouse` —— 复合词构词法课节的算式，不是短语
  *   2. `I ’ve got to go .` / `See you next week .` —— 整句被当成一个节点，
  *      而且**标点前带空格**（分词遗留），直接显示很难看

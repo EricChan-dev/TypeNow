@@ -4,12 +4,11 @@ import { alignWordsWithEnglish } from "@/lib/word-align"
 /**
  * 只做 words 归一，**不摊平**分块：一句就是一条练习项，`chunks` 原样保留。
  *
- * 这是听写模式（`DictationPractice`）该走的路径。基准实现没有任何「按分块练习」的概念
- * —— 它的 `chunks` 只有一处用途，就是**分段练习**的数据源
- * （practice.js:2743/3019/4455/4746 四处都是 `Chunks || chunks || fragments`，
- * 全部落在分段练习分支里；speaking.js 里 `chunk` 出现 0 次）。
- * 而 `fragmentsForSentence()` 恰恰要读 `sentence.chunks`，一旦这些句子被摊平、
- * `chunks` 被置 null，分段练习就永远进不去 —— 而且**不会报错**，只是默默失效。
+ * 这是听写模式（`DictationPractice`）该走的路径。本产品没有「按分块练习」的概念
+ * —— `chunks` 只有**分段练习**这一个用途：分段练习分支读到的是
+ * `Chunks || chunks || fragments`，而 `fragmentsForSentence()` 恰恰要读 `sentence.chunks`，
+ * 一旦这些句子被摊平、`chunks` 被置 null，分段练习就永远进不去 ——
+ * 而且**不会报错**，只是默默失效。
  *
  * words 仍需归一：导入的 words 普遍缺标点，直接用会让练习页那行的标点与翻译对不上。
  */

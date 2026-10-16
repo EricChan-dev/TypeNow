@@ -21,9 +21,9 @@ import { CourseCard } from "./CourseCard"
 const PAGE_SIZE = 20
 
 /**
- * 排序下拉 —— 基准实现的 hero 右侧只有搜索框，没有排序控件；本仓的排序是既有功能
+ * 排序下拉 —— hero 右侧只有搜索框，排序是既有功能
  * （`SORT_OPTIONS` 三档），不能因为改版丢掉。于是挂进提示卡的右侧，
- * 直接用基准实现 `.kefu-btn` 的白色胶囊外观 —— 那本来就是「右侧动作」的样式。
+ * 用 `.kefu-btn` 的白色胶囊外观 —— 那本来就是「右侧动作」的样式。
  */
 function SortMenu({
   sortMode,
@@ -265,7 +265,7 @@ export function StoreClient() {
     <ErrorBoundary>
     <div className="store-market-page">
       <div className="maxWidth">
- {/* ── Hero：标题 + 副标题 + 搜索框（基准实现 .market-hero-section）── */}
+ {/* ── Hero：标题 + 副标题 + 搜索框（.market-hero-section）── */}
         <div className="market-hero-section">
           <div className="hero-left">
             <h2>课程广场</h2>
@@ -276,7 +276,7 @@ export function StoreClient() {
           <div className="hero-right">
             <div className="searchInp modern-search">
               <p>
- {/* 基准实现把搜索图标也做成「点击即搜」的触发器，这里保持一致 */}
+ {/* 搜索图标也做成「点击即搜」的触发器 */}
                 <i
                   className="search-icon-main"
                   role="button"
@@ -317,7 +317,7 @@ export function StoreClient() {
           </div>
         </div>
 
- {/* ── 提示条：课程总数 + 排序（基准实现 .modern-tip-card）── */}
+ {/* ── 提示条：课程总数 + 排序（.modern-tip-card）── */}
         <div className="modern-tip-card">
           <div className="tip-left">
             <i>
@@ -334,7 +334,7 @@ export function StoreClient() {
         </div>
       </div>
 
- {/* ── 两级筛选标签（基准实现 .fixedTab > .courseTab）── */}
+ {/* ── 两级筛选标签（.fixedTab > .courseTab）── */}
       <div className="maxWidth">
         <CourseTabs
           activeMainTab={activeMainTab}
@@ -345,7 +345,7 @@ export function StoreClient() {
         />
       </div>
 
- {/* ── 卡片网格（基准实现 .TypeList）── */}
+ {/* ── 卡片网格（.TypeList）── */}
       <div className="maxWidth">
         <div className="TypeList">
           {loadError ? (

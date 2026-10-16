@@ -8,7 +8,7 @@ import { ArrowLeft } from "lucide-react"
 import PartnerDashboard from "./PartnerDashboard"
 import PartnerJoin from "./PartnerJoin"
 
-// 合伙人招募页的版式样式（按对标页版式实现）。与会员页同样的做法：
+// 合伙人招募页的版式样式。与会员页同样的做法：
 // 全部规则挂在 `.home-ref-shell` 作用域下，不会波及站内其它页面。
 import "./partner-recruit.css"
 

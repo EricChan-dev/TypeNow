@@ -10,26 +10,25 @@ import { MembershipPlans } from "./MembershipPlans"
 import "./membership-upgrade.css"
 
 /**
- * 会员权益页 —— 对齐对标页 的版式。
+ * 会员权益页。
  *
- * 用户裁定（m07434）：基准实现与我们的差异太大，要求改到一致。沿用登录页
- * （app/login）与首页内容区（app/home/home-ref.css）的先例：只搬**表现层**，
- * 业务逻辑、路由与全部数字仍走本项目的事实源。
+ * 版式沿用登录页（app/login）与首页内容区（app/home/home-ref.css）的先例：
+ * 只搬**表现层**，业务逻辑、路由与全部数字仍走本项目的事实源。
  *
- * 为什么不是「把基准实现 HTML 抄过来」：
- * 1. 基准实现把定价写在 button 的 `data-price` 属性里（29.00 / 79.00 / 199.00），
- *      我们改价时那种写法必然漂移 —— 数字一律从 `lib/pricing` 取。
- * 2. 基准实现的对比表里有 3 行卖的是**我们没有的功能**
- *      （「发音偏好选择」「分段练习」「高级 AI 语音引擎」）。照抄等于虚假宣传，
+ * 写这个页面时守住的几条规矩：
+ * 1. 定价不写死在 button 的 `data-price` 属性里 —— 那种写法改价时必然漂移，
+ *      数字一律从 `lib/pricing` 取。
+ * 2. 对比表不写我们**没有的功能**
+ *      （如「发音偏好选择」「分段练习」「高级 AI 语音引擎」）。写上去等于虚假宣传，
  *      正是 `lib/membership-benefits` 文件头记录过的「7 条里 4 条是代码里不存在的
- *      功能」那个坑。所以表格结构照搬，**行内容用我们自己的 `COMPARISON_ROWS`**。
- * 3. 基准实现的 `练习时长 30 分钟` 免费限额我们没有（打字练习人人不限次），
+ *      功能」那个坑。所以表格里只渲染 `COMPARISON_ROWS` 的行。
+ * 3. 「练习时长 30 分钟」这类免费限额我们没有（打字练习人人不限次），
  *      首页 hero 的三枚胶囊相应改成我们真实的差异点。
  *
  * 三张套餐卡在 `./MembershipPlans`（客户端组件）—— 畅学版卡上有月/季/年切换。
  */
 
-/** 当前身份的一句话摘要（基准实现没有身份卡，这里压成 hero 下方一行，不占版面）。 */
+/** 当前身份的一句话摘要（压成 hero 下方一行，不占版面）。 */
 function statusLine(memberTier: MemberTier, proExpires: Date | null): string {
   if (memberTier === "partner") return `${memberTierLabel(memberTier)} · 永久有效，无需续费`
   if (memberTier === "free") return `${memberTierLabel(memberTier)} · 尚未开通付费权益`
@@ -39,7 +38,7 @@ function statusLine(memberTier: MemberTier, proExpires: Date | null): string {
   return `${plan} · 有效期至 ${d.getFullYear()} 年 ${d.getMonth() + 1} 月 ${d.getDate()} 日`
 }
 
-/** 服务承诺（基准实现 4 张卡的结构与长度；措辞按我们的真实能力写，不抄不可验证的承诺）。 */
+/** 服务承诺（4 张卡的结构与长度；措辞按我们的真实能力写，不写不可验证的承诺）。 */
 const SERVICE_PROMISES = [
   {
     Icon: ShieldCheck,
@@ -82,8 +81,8 @@ export default async function MembershipPage() {
   // 客户端组件的 props 声明成 boolean，这里显式收敛，别把 0/1 漏下去。
   const isPro = memberTier !== "free"
 
- // 基准实现把「价格」放在对比表**第一行**，而 `COMPARISON_ROWS` 按价格页的历史顺序
-  // 把它排在最后。这里只调整渲染顺序，不另写一份数字 —— 曾经额外补过一行价格，
+ // 「价格」行在 `COMPARISON_ROWS` 里按价格页的历史顺序排在最后；这里把它调到
+  // 对比表的**第一行**渲染。只调整顺序，不另写一份数字 —— 曾经额外补过一行价格，
   // 结果是同一个表格里出现两遍价格。
   const priceRow = COMPARISON_ROWS.find((row) => row.feature === "价格")
   const comparisonRows = priceRow
@@ -100,8 +99,7 @@ export default async function MembershipPage() {
               解锁 <b className="brand-text-gradient">{BRAND.nameZh}</b> 全部潜力
             </h2>
           </div>
- {/* 基准实现三枚胶囊说的是「每日练习时长」；我们没有时长限制，
-              改为三条真实的差异点（内容门禁 / 额度 / 终身）。 */}
+ {/* 我们没有时长限制，三枚胶囊改为三条真实的差异点（内容门禁 / 额度 / 终身）。 */}
           <div className="hero-highlights">
             <span>免费版每课可试学</span>
             <span>畅学版解锁全部课程</span>

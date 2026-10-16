@@ -38,7 +38,7 @@ async function main() {
   const pem = loadWechatPayPublicKey()
   console.log("  公钥已加载     =", pem ? `是 (${pem.split("\n")[0]}…)` : "否")
 
-  // 复刻 buildAuthHeader（请求签名本身已被真实支付验证过，这里不需要测它）
+  // 复用 buildAuthHeader 的签名逻辑（请求签名本身已被真实支付验证过，这里不需要测它）
   const urlPath = `/v3/pay/transactions/out-trade-no/${outTradeNo}?mchid=${mchId}`
   const timestamp = Math.floor(Date.now() / 1000)
   const nonce = randomUUID().replace(/-/g, "").substring(0, 32)

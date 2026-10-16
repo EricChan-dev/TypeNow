@@ -1,16 +1,16 @@
 /**
- * 输入槽宽度测量 —— 基准实现 measureWordInputWidth / adjustInputDynamicWidth 的等价实现。
+ * 输入槽宽度测量 —— measureWordInputWidth / adjustInputDynamicWidth 两个入口都在这里。
  *
- * 为什么必须有这一层：基准实现每个输入框的宽度**不是 CSS 算的**，是用一个隐藏的
+ * 为什么必须有这一层：每个输入框的宽度**不是 CSS 算的**，是用一个隐藏的
  * 探针元素量出这段文字的真实像素宽，再加上若干按字号缩放的余量反推出来的。
  * 所以字体、字号、内边距、边框宽任何一项变了，算出的宽度都会变 —— 这正是
  * `--dictation-input-font-size` 变更后必须 `invalidateMeasureCache()` 的原因。
  *
  * 不照抄这套机制的后果：槽位要么把长词裁掉（宽度不够），要么整行间距松垮
- * （统一给一个够大的宽度），跟基准实现一眼就能看出差别。
+ * （统一给一个够大的宽度），观感一眼就能看出差别。
  *
  * 实现上按 React 的方式重写，但**数值公式逐字保留**（含那些 magic number：
- * 0.18 / 0.10 / 0.45 / 0.35 / 28）。这些数字是基准实现调出来的手感，不是随便写的。
+ * 0.18 / 0.10 / 0.45 / 0.35 / 28）。这些数字是反复调试出来的手感，不是随便写的。
  */
 
 /** 探针与被测文字之间允许的像素误差（浮点测量会有亚像素抖动）。 */
@@ -41,14 +41,13 @@ let cachedStyle: MeasureStyle | null = null
  *
  * **必须传带 `.input-style-underline` 类的那个壳元素**，不能挂在 document.body 上，
  * 有两个原因：
- * 1. 基准实现的字体变量定义在 `:root`（全局），所以它把探针挂到 body 也能继承到
- *      Rajdhani；而我们的 CSS 被收敛到 `.practice-shell` 作用域下，挂到 body 的
- *      探针读不到 `--font-tech` / `--dictation-input-font-size`，量出来的宽会整体
+ * 1. 我们的字体变量定义在 `.practice-shell` 作用域下（不是 `:root` 全局）：挂到 body
+ *      的探针读不到 `--font-tech` / `--dictation-input-font-size`，量出来的宽会整体
  *      偏小，表现为「长词被裁」。
- * 2. 基准实现把 `input-style-underline` 加在 `document.body` 上，我们的抽取结果却是
- *      `.practice-shell .input-style-underline …`（必须是后代），所以这个类只能落在
- *      `.practice-shell` **内部**的元素上 —— 传 `cyber-interface` 正是这个元素。
- *      探针挂进它里面，才能量到横线模式下的内边距/边框。
+ * 2. `input-style-underline` 的选择器是 `.practice-shell .input-style-underline …`
+ *      （必须是后代），所以这个类只能落在 `.practice-shell` **内部**的元素上 ——
+ *      传 `cyber-interface` 正是这个元素。探针挂进它里面，才能量到横线模式下的
+ *      内边距/边框。
  */
 export function configureMeasureHost(host: HTMLElement | null): void {
   if (ctx && ctx.host === host) return
@@ -115,7 +114,7 @@ export function disposeMeasureElements(): void {
 }
 
 /**
- * 量一个词在输入框里需要多宽。公式与基准实现 一致。
+ * 量一个词在输入框里需要多宽。
  *
  * @param word      要量的文字（原词）
  * @param isCompact 紧凑布局（窄屏）。方框模式下作为最小宽度传入。
@@ -181,7 +180,7 @@ export function measureWordInputWidth(word: string, isCompact = false): number {
 }
 
 /**
- * 打字时动态放宽当前输入框 —— 基准实现 adjustInputDynamicWidth 的等价实现。
+ * 打字时动态放宽当前输入框（adjustInputDynamicWidth）。
  *
  * 语义：**宽度只会从「基准宽」往上涨，不会缩回基准以下**。
  *   - 输入比原词长 → 按当前内容量宽（可能超出基准）

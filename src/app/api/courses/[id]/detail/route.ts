@@ -23,12 +23,11 @@ import { aliveCourse, aliveLesson, aliveSentence } from "@/lib/soft-delete"
  * 每课练习状态、课程级学习统计、会员/获取态。逐个调现有接口是 4 次往返
  * 且拿不到「按课节分组的会话状态」。这里一次拼好，口径全部写在服务端。
  *
- * ── 锁定模型：刻意不搬基准实现的课节级付费墙 ──────────────────────────────────
+ * ── 锁定模型：课节级不做付费墙 ─────────────────────────────────────────────
  *
- * 基准实现对免费用户把第 2 节起标成 pay-locked（按钮「开通解锁」弹升级框）。
- * 但我们的真实模型是**每节课都能进，非会员每课前 5 句试学**
+ * 本站的真实模型是**每节课都能进，非会员每课前 5 句试学**
  * （lib/free-trial.ts，sliceForTrial 在 /api/courses/sentences 截断）。
- * 照搬课节锁等于虚假宣传——按钮承诺解锁的东西并不存在。
+ * 课节级锁等于虚假宣传——按钮承诺解锁的东西并不存在。
  * 因此本接口不下发任何 locked 字段；课程级的会员引导由前端根据
  * viewer.isPro 渲染，文案说真话（「开通会员，解锁全部句子」）。
  *
@@ -136,7 +135,7 @@ export async function GET(_: Request, { params }: { params: Promise<{ id: string
       if (r.lessonId) countByLesson.set(r.lessonId, Number(r.n))
     }
 
- // 课节状态派生（与基准实现三态对齐：completed / current / none）：
+ // 课节状态派生（三态：completed / current / none）：
     // · completed —— 任一模式练完（state='completed'）
     // · current   —— 有 active 槽位且推进过（currentIndex>0），「继续练习」
     // · none      —— 没碰过或刚开过头

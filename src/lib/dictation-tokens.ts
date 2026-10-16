@@ -1,26 +1,23 @@
 /**
- * 听写模式的分词与判题 —— 对齐基准实现的口径。
+ * 听写模式的分词与判题。
  *
  * 为什么不复用 `typing-compare.ts`：那个模块服务的是**旧版**练习页，
- * 它的归一化比基准实现宽（额外把 en dash `–`、minus `−` 折成 `-`，
- * 把省略号 `…` 折成 `...`）。而基准实现的分词在抹标点时**只**抹
+ * 它的归一化更宽（额外把 en dash `–`、minus `−` 折成 `-`，
+ * 把省略号 `…` 折成 `...`）。而本模块的分词在抹标点时**只**抹
  * `[.,!?;:"()—]`（em dash），en dash 是被原样留在词里的。
  * 若拿旧模块判题，「用户敲的」与「期望的」会在一小撮含 en dash 的句子上
- * 出现基准实现不会有的宽松通过 —— 用户要的是「一模一样」，
- * 所以这里另起一份，且以 practice.js 的行为为唯一依据。
+ * 出现不该有的宽松通过 —— 判题口径必须严格一致，
+ * 所以这里另起一份。
  *
- * 依据（逐字）：
- *   practice.js:4207-4212 分词；text-utils.js:35-43 normalizeQuotes；
- *   practice.js:6845+ checkAnswer 的比较方式。
  * 纯净模块：无 React、无 DB、无 DOM，可直接单测。
  */
 
 /**
- * 引号/连字符归一 —— 与基准实现 一致。
+ * 引号/连字符归一。
  *
- * 注意它**不**处理 en dash（`–`）、minus（`−`）、省略号：基准实现的注释
- * 明确写着「不转换 en/em dash 等句间标点」。em dash `—` 会在分词阶段
- * 被当标点抹掉，en dash 则留在词里 —— 这是基准实现的既有行为，对齐。
+ * 注意它**不**处理 en dash（`–`）、minus（`−`）、省略号：这些句间标点
+ * 不做转换。em dash `—` 会在分词阶段
+ * 被当标点抹掉，en dash 则留在词里 —— 这是既定口径。
  */
 export function normalizeQuotes(text: string): string {
   return text
@@ -32,7 +29,7 @@ export function normalizeQuotes(text: string): string {
 /**
  * 把一个句子切成听写槽位。
  *
- * 与基准实现 对应：
+ * 分词流水线：
  *   normalizeQuotes(sentence).toLowerCase()
  *     .replace(/[.,!?;:"()—]/g, ' ')
  *     .split(/\s+/).filter(w => w.length > 0)
@@ -49,8 +46,8 @@ export function dictationTokens(sentence: string): string[] {
 }
 
 /**
- * 判题前的输入归一 —— 对应 practice.js 的
- * `normalizeQuotes(input.value.trim().toLowerCase())`。
+ * 判题前的输入归一：
+ * `normalizeQuotes(value.trim().toLowerCase())`。
  */
 export function normalizeDictationInput(value: string): string {
   return normalizeQuotes(value.trim().toLowerCase())
@@ -59,7 +56,7 @@ export function normalizeDictationInput(value: string): string {
 /**
  * 单词判题：**精确相等**，没有模糊匹配、没有编辑距离。
  *
- * 基准实现 rawExpected 也过一遍 normalizeQuotes（因为槽位里显示的是原始大小写
+ * expected 侧也要过一遍 normalizeQuotes（因为槽位里显示的是原始大小写
  * 词形，用户敲的会被 lower），所以两侧都要归一后再比。
  */
 export function isDictationMatch(userValue: string, expected: string): boolean {
@@ -69,11 +66,11 @@ export function isDictationMatch(userValue: string, expected: string): boolean {
 /**
  * 该槽位是否「自动填入且只读」。
  *
- * 目前只有一种数据支撑得起的判定：**含数字的词**（基准实现 `/\d/.test(word)`），
+ * 目前只有一种数据支撑得起的判定：**含数字的词**（`/\d/.test(word)`），
  * 比如日期、价格、数量 —— 这些不要求用户听写。
  *
- * 基准实现还有一类「人名自动填充」，靠 `wordAnalysis[pos] ==='person_name' |'name'`，
- * 那是后端 NER 产物。我们的 `words[].pos` 存的是中文词性（如「代词」「名词」），
+ * 「人名自动填充」要靠 `wordAnalysis[pos] ==='person_name' |'name'` 的
+ * 后端 NER 产物。我们的 `words[].pos` 存的是中文词性（如「代词」「名词」），
  * 没有 NER 标注，所以这里**刻意不实现人名判定** —— 与其猜错把要练的词
  * 变成只读，不如老老实实让用户敲。
  */
@@ -81,12 +78,12 @@ export function isAutoFilledToken(token: string): boolean {
   return /\d/.test(token)
 }
 
-/** 基准实现的人名判定口径，保留为常量以免日后接上 NER 时各处写法不一致。 */
+/** 人名判定的词性口径，保留为常量以免日后接上 NER 时各处写法不一致。 */
 export const PROPER_NAME_POS = ["person_name", "name"] as const
 
 /**
- * 基准实现用于查 wordAnalysis 的人名键：去标点（含连字符，**不含撇号**）。
- * 目前 PROPER_NAME 数据不存在，此函数是为对齐口径而保留。
+ * 人名键的清洗规则：去标点（含连字符，**不含撇号**）。
+ * 目前 PROPER_NAME 数据不存在，此函数是为统一口径而保留。
  */
 export function cleanWordForNameLookup(word: string): string {
   return word

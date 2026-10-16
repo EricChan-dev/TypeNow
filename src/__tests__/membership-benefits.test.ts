@@ -57,8 +57,8 @@ describe("额度常量", () => {
     expect(PRO_AI_ANALYZE_PER_DAY).toBeGreaterThan(FREE_AI_ANALYZE_PER_DAY)
   })
 
- it("免费用户的 AI 助手额度必须 > 0（2026-09-29 修正：原为 0，是误抄基准实现）", () => {
- // 基准实现的「每日 2 次免费提问」是给所有人的；我们把 2 抄到了 PRO 上、
+ it("免费用户的 AI 助手额度必须 > 0（2026-09-29 修正：原为 0，是配置错误）", () => {
+ // 「每日 2 次免费提问」本来是给所有人的；此前误把 2 配到了 PRO 上、
     // 把免费设成 0，导致免费用户一次都用不了。这条看住它不许回退。
     expect(FREE_AI_CHAT_PER_DAY).toBeGreaterThan(0)
   })
@@ -330,7 +330,7 @@ describe("事实源本身", () => {
   it("额度类权益的文案确实被面向用户的界面消费（不是只写在测试里）", () => {
     // 2026-10-08 从这张清单里移除了落地页（当时在 src/app/(public)/page.tsx，
     // 同日搬进 (landing) 路由组）：
-    // 首页改版后不再展示会员价格与额度（对齐竞品首页结构，价格统一去 /pricing），
+    // 首页改版后不再展示会员价格与额度（价格统一去 /pricing），
     // 所以它不再 import 这个模块是**预期行为**，不是漂移。
     // 但"额度文案必须有人真的渲染"这条约束不能因此失效 —— 于是把首页换成
     // 真正把额度数字写进用户可见文案的两个位置：价格页的权益清单（PricingClient）
@@ -354,7 +354,7 @@ describe("事实源本身", () => {
     )
     for (const p of [
       "src/components/pricing/PricingClient.tsx",
- // 2026-10-08：落地页搬进 (landing) 路由组（基准实现自带顶栏/页脚，
+ // 2026-10-08：落地页搬进 (landing) 路由组（该路由组自带顶栏/页脚，
       // 与 (public)/layout.tsx 的 Navbar+Footer 冲突）。被盯住的仍是首页本身。
       "src/app/(landing)/page.tsx",
       "src/app/(public)/pricing/page.tsx",

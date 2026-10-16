@@ -12,15 +12,15 @@ import {
 /**
  * 顶部「练习模式」下拉切换器 —— 听写页与非听写页**共用**。
  *
- * 为什么要抽成组件：基准实现四种模式共用同一个顶栏，切换器常驻在
- * `.header-right` 里（`practice.js:1351 switchMode`）。我们重写听写模式时
+ * 为什么要抽成组件：四种练习模式共用同一个顶栏，切换器常驻在
+ * `.header-right` 里。我们重写听写模式时
  * 只在 `DictationPractice` 里实现了一份，当时拼图/学习/口语仍走旧的
  * `LearnClient` —— 那个界面是 Tailwind 写的、没有顶栏，于是切过去之后
  * **没有入口切回来**。抽出来两处共用，切换器才真正成为「模式底座」。
  * （后来四种模式全部收编进 `DictationPractice`，那个旧界面已连同
  * `LearnClient` 整棵树删除；组件这层抽象保留，因为它仍然是唯一入口。）
  *
- * 样式来自基准实现，但作用域前缀是 `.mode-switcher-scope` 而不是
+ * 样式沿用移植过来的那套，但作用域前缀是 `.mode-switcher-scope` 而不是
  * `.practice-shell`：当初非听写模式整棵树都不在 `.practice-shell` 里，
  * 用后者一条规则都命中不了。规则由 `scripts/extract-practice-css.py`
  * 从同一份参考 CSS 生成到 `mode-switcher.css`，不手写、不复制。
@@ -33,7 +33,7 @@ import {
  * 删掉这份文件下拉就会退化成无样式裸按钮。
  *
  * 切换确认弹窗用 portal 挂到 `.practice-shell`（拿不到才退回 `body`）：
- * 基准实现把它挂在 `body` 下，但我们的主题变量写在壳上。
+ * 不能简单挂 `body`：我们的主题变量写在壳上。
  * 而若**就地**渲染，弹窗会落进那些带 `transform`/`will-change` 的祖先里
  * —— 参考 CSS 的 `position:fixed` 会改以那个祖先为 containing block，
  * 遮罩盖不满视口（内联口语条就踩过这个坑）。portal 出来就没有这层祖先。
@@ -49,7 +49,7 @@ export function ModeSwitcher({
   courseId: string
   lessonId: string
   mode: PracticeMode
- /** 已完成句数。> 0 才弹「会结束当前进度」的确认框，同基准实现。 */
+ /** 已完成句数。> 0 才弹「会结束当前进度」的确认框。 */
   completedCount: number
 }) {
   const [menuOpen, setMenuOpen] = useState(false)
@@ -58,8 +58,8 @@ export function ModeSwitcher({
    * 确认弹窗的挂载点。
    *
    * **不能**挂 `document.body`：弹窗颜色全走 `var(--neon-cyan)` 等变量，而
- * 主题变量是写在 `.practice-shell` 上的（`applyThemeStyle`，基准实现写
-   * `document.body`，我们收敛到壳元素）。挂 body 就落在变量作用域之外，
+ * 主题变量是写在 `.practice-shell` 上的（`applyThemeStyle`）。
+   * 挂 body 就落在变量作用域之外，
    * 浅色主题下弹窗仍是深色霓虹（实测：`--neon-cyan` 在壳上是 `#0c4a6e`，
    * 而挂 body 的弹窗量到 `rgb(0,240,255)`）。
    *
@@ -93,7 +93,7 @@ export function ModeSwitcher({
    * 用 `stopImmediatePropagation`：父级（听写页）也在 document 上挂了 ESC
    * 监听去关各种浮层，而**子组件的 effect 先于父组件注册**，所以我们一定
    * 先收到事件。不停掉的话一次 ESC 会同时关掉弹窗和它下面那层浮层。
- * 基准实现等价： 的 ESC 监听是弹窗创建时才挂的，
+ * 等价于把 ESC 监听只在弹窗创建时才挂，
    * 当时页面上只有它能收到事件。
    */
   useEffect(() => {
@@ -110,7 +110,7 @@ export function ModeSwitcher({
 
   const overlay = pendingMode !== null && (
     <div className="mode-switcher-scope">
- {/* 基准实现点遮罩即关（`modal.js` `if (e.target === overlay) close`） */}
+ {/* 点遮罩（空白处）即关 */}
       <div
         className="custom-modal-overlay"
         id="customModalOverlay"
@@ -167,9 +167,9 @@ export function ModeSwitcher({
           </button>
           {/*
             常驻 DOM + `.open` 切换，理由同设置面板：移植过来的基础规则是
-            `display:none`，`.mode-dropdown-wrapper.open` 才 `display:block`
-            （reference practice-cyber.css:874/890）。条件渲染虽然也能出效果，
- 但会让 `#modeDropdownMenu` 在关着时不存在，DOM 与基准实现不一致。
+            `display:none`，`.mode-dropdown-wrapper.open` 才 `display:block`。
+            条件渲染虽然也能出效果，
+            但会让 `#modeDropdownMenu` 在关着时不存在，DOM 结构就不稳定。
           */}
           <div className="mode-dropdown-menu" id="modeDropdownMenu">
             {PRACTICE_MODES.map((m) => (
@@ -184,7 +184,6 @@ export function ModeSwitcher({
                   setMenuOpen(false)
                   if (m === mode) return
                   // 已有进度才提示；切换会结束当前进度并从句首重来
- // （基准实现 `if (completedCount > 0)`）。
                   if (completedCount > 0) { openConfirm(m); return }
                   goto(m)
                 }}
@@ -202,7 +201,7 @@ export function ModeSwitcher({
   )
 }
 
-/** 四种模式各一个小图标，形状照基准实现顶栏的 inline SVG 重画。 */
+/** 四种模式各一个小图标（顶栏同款 inline SVG 形状）。 */
 function ModeIcon({ mode }: { mode: PracticeMode }) {
   const paths: Record<PracticeMode, string> = {
     dictation: "M3 7h18M3 12h18M3 17h10",

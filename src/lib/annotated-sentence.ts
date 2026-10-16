@@ -1,32 +1,23 @@
 /**
  * 听写模式「答案回顾屏」里那条带注释的句子。
  *
- * 基准实现的流程是：先用纯文本 `.answer-sentence` 占位，再在
- * `requestIdleCallback` 里用 `generateAnnotatedSentence()` 的 HTML 换掉它
- * （practice.js:921 / :1133）。这里把同一套「分段 + 注音 + 词性着色」的逻辑
+ * 这里把「分段 + 注音 + 词性着色」的逻辑
  * 抽成纯函数，返回结构化数据由 React 渲染（不拼 HTML 字符串 —— 句子来自用户
  * 可编辑的题库，拼串就得自己负责转义，交给 JSX 更安全）。
  *
- * 逐字对齐的参考实现：
- *   · 词性规范化/中文标签 ……… 句子练习_files/pos-utils.js:216 / :237 / :394
- *   · 词性配色 ……………………… pos-utils.js:94
- *   · 音标查找 ……………………… practice.js:buildPhoneticMap / getPhoneticForWord
- *   · 可点击单词 ………………… practice.js:makeTextWordsClickable
- *
- * 与基准实现的**唯一**实质差异：基准实现拿 `phoneticsData` 单独查音标，我们直接
- * 用已经对齐好的 `words[]`（`alignWordsWithEnglish` 保证 token 与 `words` 一一
- * 对应），所以不需要再对整句做短语搜索 —— 那样反而会把顺序错乱的脏数据
+ * 音标直接取自已对齐好的 `words[]`（`alignWordsWithEnglish` 保证 token 与 `words` 一一
+ * 对应），不需要再对整句做短语搜索 —— 那样反而会把顺序错乱的脏数据
  * 匹配到别的词上。
  */
 import type { Sentence, Word } from "@/types"
 import { PUNCT_SENTINEL, WORD_SENTINEL } from "@/lib/word-align"
 
-/** 音标口音。基准实现 `selectedAccentType` 默认 0，即优先美音。 */
+/** 音标口音。默认优先美音。 */
 export type Accent = "us" | "uk"
 
 // ─── 词性 ────────────────────────────────────────────────────────────────────
 
-/** 各种缩写 → 标准词性（pos-utils.js:12 POS_ALIAS_MAP）。 */
+/** 各种缩写 → 标准词性。 */
 const POS_ALIAS_MAP: Record<string, string> = {
   "n.": "noun",
   "noun.": "noun",
@@ -101,8 +92,7 @@ const POS_ALIAS_MAP: Record<string, string> = {
 
   // ── Universal Dependencies 缩写（线上 words[].pos 的真实取值） ──
   //
- // 基准实现的 `POS_ALIAS_MAP` 只登记了词典体例的缩写（n./adj./aux.v…），
-  // 因为它的语料来自词典接口。我们的语料是 spaCy 跑出来的 UD 标签
+  // 除词典体例缩写（n./adj./aux.v…）外，我们的语料是 spaCy 跑出来的 UD 标签
   // （生产库分布：NOUN/VERB/PRON/DET/ADP/AUX/ADV/PART/CCONJ/SCONJ/
   // PROPN_PERSON/NUM/INTJ/PROPN/SYM/X/PUNCT）。不登记这些，复习屏就会
   // 把 `ADP` 原样渲成 "adp"、`PROPN_PERSON` 渲成 "propn_person"。
@@ -120,7 +110,7 @@ const POS_ALIAS_MAP: Record<string, string> = {
   x: "other",
 }
 
-/** 英文词性 → 中文全称（pos-utils.js:394 translatePOS）。 */
+/** 英文词性 → 中文全称。 */
 const POS_LABELS: Record<string, string> = {
   noun: "名词",
   verb: "动词",
@@ -202,14 +192,14 @@ const POS_LABELS: Record<string, string> = {
   other: "其他",
 }
 
-/** 词性启发式兜底用的固定词表（data-utils.js:260-264）。 */
+/** 词性启发式兜底用的固定词表。 */
 const MODAL_VERBS = new Set(["can", "could", "would", "should", "might", "may", "must", "shall", "will"])
 const PRONOUNS = new Set(["i", "me", "you", "he", "him", "she", "her", "it", "we", "us", "they", "them", "who", "whom", "whose", "someone", "everyone", "anyone", "something", "nothing", "this", "that", "these", "those"])
 const ARTICLES = new Set(["a", "an", "the"])
 const CONJUNCTIONS = new Set(["and", "or", "but", "so", "because", "if", "while", "when", "after", "before", "as", "though", "although", "since", "unless"])
 const PREPOSITIONS = new Set(["in", "on", "at", "to", "for", "from", "with", "without", "about", "into", "onto", "over", "under", "between", "among", "through", "across", "around", "during", "until", "till", "besides", "beyond", "within"])
 
-/** 规范化词性（pos-utils.js:216）。查不到时回退为小写原文。 */
+/** 规范化词性。查不到时回退为小写原文。 */
 export function normalizePos(pos: string | null | undefined): string {
   if (!pos) return ""
   const raw = pos.trim()
@@ -222,12 +212,12 @@ export function normalizePos(pos: string | null | undefined): string {
 }
 
 /**
- * 词性中文全称（pos-utils.js:237 getFullPOSLabel）。
+ * 词性中文全称。
  *
  * `词` 是 `word-align.ts` 给「是词但词性未知」打的**内部哨兵**，不是词性：
  * `alignWordsWithEnglish` 用它把 token 分成「可输入的词」和「不可输入的标点」。
- * 基准实现在词性缺失时输出**空**标签（ 的
- * `if (assignedPos)` 守卫），所以哨兵绝不能出现在界面上 —— 线上实测
+ * 词性缺失时输出**空**标签（`if (assignedPos)` 守卫），所以哨兵绝不能
+ * 出现在界面上 —— 线上实测
  * `analyze` 这类无词性数据的句子会渲染成一个孤零零的「词」字。
  */
 export function posLabel(pos: string | null | undefined): string {
@@ -239,9 +229,9 @@ export function posLabel(pos: string | null | undefined): string {
 }
 
 /**
- * 词性缺失时的启发式推断（practice.js:1076-1096）。
+ * 词性缺失时的启发式推断。
  *
- * 基准实现在 `words[].pos` 拿不到词性时，用一组固定词表 + 后缀规则兜底，
+ * `words[].pos` 拿不到词性时，用一组固定词表 + 后缀规则兜底，
  * 让 `the` / `and` / `in` 这类高频功能词至少有正确的颜色和标签。
  * 顺序有语义：情态动词必须在 `be` 之前，代词/冠词/连词/介词依次短路。
  */
@@ -259,7 +249,7 @@ export function inferPos(word: string | null | undefined): string {
 }
 
 /**
- * 词性配色（pos-utils.js:94 getPosColor）。
+ * 词性配色。
  * 判断顺序有语义：动词的分支在名词之前，`modal verb` 又必须在 `verb` 之前，
  * 否则情态动词会先命中 `includes('verb')` 变成珊瑚红。
  */
@@ -286,7 +276,7 @@ export function posColor(pos: string | null | undefined): string {
   return "#94a3b8"
 }
 
-/** 颜色兜底序列（practice.js:MODERN_COLOR_PALETTE），词性缺失时按词序取色。 */
+/** 颜色兜底序列，词性缺失时按词序取色。 */
 const MODERN_COLOR_PALETTE = [
   "#3b82f6",
   "#10b981",
@@ -297,7 +287,7 @@ const MODERN_COLOR_PALETTE = [
   "#14b8a6",
 ]
 
-/** hex → rgba（ hexToRgba）。非法输入回退蓝色，与基准实现一致。 */
+/** hex → rgba。非法输入回退蓝色。 */
 export function hexToRgba(hex: string | null | undefined, alpha = 1): string {
   if (!hex) return `rgba(59, 130, 246, ${alpha})`
   if (hex.startsWith("rgb")) {
@@ -333,7 +323,7 @@ export function extractPhonetic(
 
 // ─── 可点击单词 ──────────────────────────────────────────────────────────────
 
-/** 缩写 → 原形（practice.js:makeTextWordsClickable 的 contractionMap）。 */
+/** 缩写 → 原形。 */
 const CONTRACTION_MAP: Record<string, string> = {
   "don't": "do",
   "doesn't": "do",
@@ -392,7 +382,7 @@ function normalizeApostrophes(s: string): string {
 /** 单词 → 查词用的原形（`makeTextWordsClickable`）。 */
 export function wordLookupKey(match: string): string | null {
   const lower = normalizeApostrophes(match).toLowerCase()
- // 单字母不查词，a / i 除外 —— 与基准实现一致。
+ // 单字母不查词，a / i 除外。
   if (lower.length < 2 && lower !== "a" && lower !== "i") return null
   if (CONTRACTION_MAP[lower]) return CONTRACTION_MAP[lower]
   if (lower.endsWith("n't")) return lower.slice(0, -3)
@@ -414,8 +404,8 @@ export interface AnnotationWord {
   /** 缩写后缀（'s / 're 等）渲染时要贴紧前一个词。 */
   contractionSuffix: boolean
   /**
- * 内联样式变量。基准实现把配色写到 `style` 上而不是 class 上
-   * （practice.js:1104 的 `styleVars`），所以这里也必须内联。
+ * 内联样式变量。配色写到 `style` 上而不是 class 上
+   * （`styleVars`）—— 词性着色按词动态计算，必须内联。
    */
   styleVars: Record<string, string>
 }
@@ -485,7 +475,7 @@ export function buildAnnotation(
   const english = sentence?.english ?? ""
   const rawWords = sentence?.words ?? []
   // pos === "标点" 是 `alignWordsWithEnglish` 对非字母 token 打的标记，
- // 它们不参与注音/着色，和基准实现的 plain 段落等价。
+ // 它们不参与注音/着色，等价于普通文本段。
   const words = rawWords.filter((w) => w.pos !== "标点")
   if (!english) return { segments: [], hasPhonetics: false, words: [] }
 
@@ -512,8 +502,7 @@ export function buildAnnotation(
 
     // 哨兵 `词`（是词但词性未知）要当作「拿不到词性」处理：先试启发式推断，
     // 推断不出就既不给标签也不给词性色，落回调色板取色 ——
- // 这正是基准实现 `if (!assignedPos) { …heuristic… }` 后
-    // `const finalColor = color || paletteColor` 的行为（practice.js:1076/1102）。
+ // 即「先启发式、再回退调色板」的兜底顺序。
     const rawPos = (w.pos ?? "").trim()
     const hasRealPos =
       rawPos !== "" && rawPos !== WORD_SENTINEL && rawPos !== PUNCT_SENTINEL

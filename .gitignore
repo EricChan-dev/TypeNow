@@ -92,14 +92,13 @@ cover-samples/
 # 本地视觉核对截图（临时工作产物，不入库）
 .screenshots/
 
-# 「TypeNow 新项目·完全重写」的规划稿与竞品参考图（本地留存，不入库）。
+# 「TypeNow 新项目·完全重写」的规划稿与界面参考素材（本地留存，不入库）。
 #
 # 两个原因：
 #   ① 路线冲突：本项目已定「渐进改造既有系统」，不是重写；把重写方案放进仓库
 #      会让后来的人以为存在两条并行路线（旧项目 1644 个测试/练习引擎/会员体系
 #      都得重做，那才是真正会被误读的成本）。
-#   ② 素材来源：reference/ 里是第三方界面原帧与推广视频截图，属于「看结构、
-#      不抄表达」阶段的取证材料，不适合作为仓库内容分发。
+#   ② 素材来源：reference/ 里是第三方界面原帧与推广视频截图，不适合作为仓库内容分发。
 # 需要时本地直接看 v2/ 即可。
 /v2/
 
@@ -109,11 +108,9 @@ cover-samples/
 # 课程质量分析产物（按课程聚合的体检输出，可随时重新生成，不入库）
 course-quality-by-course.json
 
-# ── 业务/合规敏感文档：本地保留，不入库 ──────────────────────────────────
-# 竞品拆解、逆向笔记、命名/商标策略、分销合规、增长与定价、页面设计稿等
-# 属于内部经营材料（含竞品名称与自认性表述），不随代码分发。
-# 仍入库的技术文档：docs/architecture.md、docs/archive/{README,dev-plan}.md、
-# docs/课程数据补全计划.md、PRD_V3.md、db/README.md、tests/README.md。
+# ── 内部经营文档：本地保留，不入库 ──────────────────────────────────────
+# 市场/定价/合规/命名策略、页面设计稿与内部待办等经营材料，不随代码分发。
+# 仍入库的技术文档：docs/architecture.md、PRD_V3.md、db/README.md、tests/README.md。
 /docs/README.md
 /docs/business-model.md
 /docs/strategy.md
@@ -129,8 +126,7 @@ course-quality-by-course.json
 /docs/practice-page-alignment-matrix.md
 /docs/implementation-plan-2026-09.md
 /docs/course-cleanup-candidates.csv
-/docs/archive/PRD-V2.md
-/docs/archive/typenow-improvement-plan.md
+/docs/archive/
 /docs/pages/
 /docs/superpowers/
 /specs/

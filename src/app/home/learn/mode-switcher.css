@@ -5,7 +5,7 @@
  *
  * 为什么单独一份：模式切换器是听写页与非听写页共用的组件，最初非听写
  * 模式走的是旧 LearnClient（没有 .practice-shell），.practice-shell 前缀
- * 的规则在那里一条都不会命中。规则仍从基准实现抽取，与 practice.css 同源。
+ * 的规则在那里一条都不会命中。规则与 practice.css 同源（同一脚本抽取）。
  * 注意：旧界面已删除，但这份**仍不能省** —— 它的规则带
  * `:not(:where(.practice-shell) *)` 守卫，在壳内依然命中 mode-dropdown /
  * mdt- / custom-modal 三族，而 practice.css 那份对这三族是 0 命中。

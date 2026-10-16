@@ -28,8 +28,7 @@ export async function GET() {
         eq(taskLogs.userId, session.userId),
         eq(taskLogs.taskType, "invite_register"),
       )),
-    // 已付费的被邀请人数。这是「邀请有礼」真正发天数的那一档，用户最关心的数字，
- // 也是基准实现邀请后台里有的「成功付费人数」口径。
+    // 已付费的被邀请人数。这是「邀请有礼」真正发天数的那一档，用户最关心的数字。
     db.select({ total: count() }).from(taskLogs)
       .where(and(
         eq(taskLogs.userId, session.userId),

@@ -7,19 +7,18 @@ import { ArrowLeft, Mic, Puzzle, Keyboard, BookOpen } from "lucide-react"
 /**
  * 登录页左栏轮播。
  *
- * 结构与文案 对齐对标页（用户 m01483 明确「尽量保持一致」；本次问答确认
- * 轮播沿用基准实现原文，只换品牌）。基准实现这四屏是纯静态 HTML + 一段 jQuery
- * 定时器，这里换成 React state，行为完全一致：3s 自动切换 + 圆点可点。
+ * 结构与文案：四屏轮播（用户 m01483 明确「尽量保持一致」）。
+ * 实现是 React state（3s 自动切换 + 圆点可点），不是静态 HTML + jQuery 定时器。
  *
- * 图标差异：基准实现用的是自己的 iconfont（`icon-yuyin1` / `icon-pintueditor-puzzle`
- * / `icon-jianpan` / `icon-shuji`），我们没有那套字体，改用 lucide 的同类图标。
- * 尺寸仍是基准实现的 32px 圆形底，所以版式不变、只有字形不同。
+ * 图标：不引入 iconfont（`icon-yuyin1` / `icon-pintueditor-puzzle`
+ * / `icon-jianpan` / `icon-shuji` 这类字形），改用 lucide 的同类图标。
+ * 尺寸保持 32px 圆形底，所以版式不变、只有字形不同。
  */
 
 interface Slide {
- /** 标题第一行（基准实现 strong 的正文） */
+ /** 标题第一行（strong 的正文） */
   title: string
- /** 标题第二行（基准实现 strong 里的 b，带本屏专属颜色） */
+ /** 标题第二行（strong 里的 b，带本屏专属颜色） */
   highlight: string
   desc: string
   icon: typeof Mic
@@ -81,8 +80,8 @@ const AUTOPLAY_MS = 3000
 export function LoginBanner() {
   const [current, setCurrent] = useState(0)
 
- // 基准实现固定 3s 自动轮播；圆点被点后重新计时（stopAutoPlay → switchTo → startAutoPlay）。
- // 开了「减少动态效果」就不自动播 —— 这是基准实现没有、但属于无障碍底线的一条。
+ // 固定 3s 自动轮播；圆点被点后重新计时。
+ // 开了「减少动态效果」就不自动播 —— 属于无障碍底线的一条。
   useEffect(() => {
     const reduced = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches
     if (reduced) return

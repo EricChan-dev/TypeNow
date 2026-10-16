@@ -37,7 +37,7 @@ function CountBadge({ count }: { count: number | undefined }) {
 }
 
 /**
- * 点击 + 键盘的回调。基准实现这两排标签是 `label`/`em` 加 onclick，本身不可聚焦；
+ * 点击 + 键盘的回调。这两排标签是 `label`/`em` 加 onclick，本身不可聚焦；
  * 这里补上 `role="button"` + `tabIndex` + Enter/Space，键盘用户才点得到。
  */
 function tapHandlers(onActivate: () => void) {
@@ -55,12 +55,12 @@ function tapHandlers(onActivate: () => void) {
 }
 
 /**
- * 两级筛选标签 —— 对齐基准实现课程市场的 `.courseTab`。
+ * 两级筛选标签 —— 课程市场的 `.courseTab`。
  *
- * 元素名必须与基准实现一致（主标签 `<label>`、子标签 `<em>`）：生成器把
- * market.css 的选择器逐字收进本页作用域，`.courseTab p label.on`（黑底白字）
+ * 元素名不能改（主标签 `<label>`、子标签 `<em>`）：生成器把
+ * 样式选择器逐字收进本页作用域，`.courseTab p label.on`（黑底白字）
  * 与 `.courseTab span em.on`（#2C5AF4 蓝底白字）都是**按元素名**匹配的 ——
- * 换成 `<button>` 会让这套样式整块失效，那就不是复刻了。
+ * 换成 `<button>` 会让这套样式整块失效。
  * 与 TextbookSyncClient 对 `textbook-grades-tab label` 的处理同口径。
  */
 export function CourseTabs({
@@ -99,7 +99,7 @@ export function CourseTabs({
     <div className="fixedTab">
       <div className="courseTab">
         <div className="Tab">
- {/* 主标签：基准实现是 <p> 里一排 <label>。
+ {/* 主标签：<p> 里一排 <label>。
               横向滚动的容器属性由生成的 @media (max-width: 900px) 提供，
               这里不放 Tailwind 工具类 —— 桌面上不该有滚动容器，而
               `overflow-x: auto` 会把 overflow-y 也算成 auto，凭空造出裁剪上下文。 */}
@@ -116,7 +116,7 @@ export function CourseTabs({
             ))}
           </p>
 
- {/* 子标签：基准实现是 <span> 里一排小胶囊 <em> */}
+ {/* 子标签：<span> 里一排小胶囊 <em> */}
           {showSubTabs && (
             <span ref={subTabsRef}>
               <em

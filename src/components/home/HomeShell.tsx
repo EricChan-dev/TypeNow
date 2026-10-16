@@ -10,16 +10,16 @@ import { ExpiryBanner } from "@/components/home/ExpiryBanner"
 import type { ServerUser } from "@/components/layout/UserActions"
 
 /**
- * 站内外框（基准实现的 `.container-fuild` + `.sidebar-wrapper` + `.main-wrapper`）。
+ * 站内外框（`.container-fuild` + `.sidebar-wrapper` + `.main-wrapper`）。
  *
  * 与旧版 HomeShell 的差别（不是微调，是换了一套外框）：
- * · 删掉 64px 顶栏和 48px 内容标题栏 —— 基准实现两者都没有，右侧直接是
+ * · 删掉 64px 顶栏和 48px 内容标题栏 —— 右侧直接是
  *     main-wrapper/mainBox 通到底。顶栏上的用户区移进侧边栏底部。
- * · 删掉移动端底部 tab 栏（MobileBottomNav）—— 基准实现移动端用的是
+ * · 删掉移动端底部 tab 栏（MobileBottomNav）—— 移动端用
  *     64px 图标栏 + 抽屉，不是底部 tab。
  *   · 页面标题原来靠 48px 标题栏显示，现在不再有标题栏。原本自带 `<h1>` 的
  *     页面（leaderboard、membership）不受影响；其余页面的标题改由内容区首屏
- * 区块自己承担 —— 基准实现也是这样做的。
+ * 区块自己承担。
  */
 export function HomeShell({
   serverUser,
@@ -60,7 +60,7 @@ export function HomeShell({
         <div className="ref-drawer-backdrop" onClick={() => setDrawerOpen(false)} />
       )}
 
- {/* 悬浮折叠圆钮（基准实现 .display-switch 的重建） */}
+ {/* 悬浮折叠圆钮（.display-switch 的重建） */}
       <button
         type="button"
         className="ref-display-switch"

@@ -16,7 +16,7 @@
  *   · `src/app/(public)/pricing/page.tsx` 与 `PricingFAQ.tsx`（对外口径）
  */
 
-/** 归因窗口：被推荐人**注册后**多少天内付款才产生佣金。比基准实现的"永久绑定"保守。 */
+/** 归因窗口：被推荐人**注册后** 90 天内付款才产生佣金（刻意保守）。 */
 export const ATTRIBUTION_WINDOW_DAYS = 90
 
 export const ATTRIBUTION_WINDOW_MS = ATTRIBUTION_WINDOW_DAYS * 24 * 60 * 60 * 1000

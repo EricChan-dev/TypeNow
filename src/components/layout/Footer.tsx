@@ -4,7 +4,7 @@ import { BRAND, brandLockupWithEn } from "@/lib/brand"
 
 // 页脚「产品」列指向独立内容页。
 //
-// 改版注意：原先这里还有 /#testimonials 与 /#faq 两个锚点。新版落地页参照竞品
+// 改版注意：原先这里还有 /#testimonials 与 /#faq 两个锚点。新版落地页
 // 收缩成了「玩法 / 演示 / 特色」三段，已经**没有**这两个 section —— 留着就是
 // 点了没反应的死链。它们对应的独立页是 /pricing（含 FAQ 与会员方案），
 // 所以这里直接指过去，而不是保留两个空锚点。

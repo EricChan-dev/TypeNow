@@ -26,13 +26,13 @@ function noServerSnapshot() {
 /**
  * 按模式把练习页分发到不同的实现。
  *
- * 为什么需要这一层：基准实现四种模式的界面差异大到无法共用一套 DOM，
+ * 为什么需要这一层：四种模式的界面差异大到无法共用一套 DOM，
  * 但**外壳只有一套** —— 所以四种模式全部走重写版 `DictationPractice`，
  * 各自传 `mode` 复用同一外壳，只有 `main` 分支里换一套填充。
  * （早期 `puzzle` / `learning` 曾暂走旧版 `LearnClient`，现已全部收编。）
  * 这一层只负责回答「现在该渲染哪一个」。
  *
- * 模式解析优先级与基准实现一致：URL `?mode=` > localStorage > 默认听写。
+ * 模式解析优先级：URL `?mode=` > localStorage > 默认听写。
  * URL 在服务端就能读到，所以 `urlMode` 由 server component 传进来；
  * localStorage 读不到（服务端没有 window），只能在挂载后补读。
  *
@@ -97,8 +97,7 @@ export function PracticeModeGate({
   if (mode === "speaking") {
     /*
       口语模式复用**同一个练习外壳**，只把内部内容换成跟读界面。
- 基准实现也是这么做的：练习页只有一份外壳， 在口语
-      模式下执行 `initSpeakingMode(document.getElementById('practiceContent'), …)`，
+ 练习页只有一份外壳，口语下只是替换 `main`（`#practiceContent`）的内容，
       顶栏 / 进度条 / 计时器 / 底部工具栏全部保留。所以这里传 `mode` 而不是
       挂一个新页面 —— 另起满屏组件会让顶栏、模式切换器、底栏一起消失。
     */
@@ -106,8 +105,8 @@ export function PracticeModeGate({
   }
   if (mode === "puzzle") {
     /*
- 拼图（拼拼乐）模式同样复用外壳，而且比口语更彻底：基准实现
-      `initInputs()`（practice.js:6217-6220）只是把 `#inputContainer` 的内容
+ 拼图（拼拼乐）模式同样复用外壳，而且比口语更彻底：
+      只把 `#inputContainer` 的内容
       换成词按钮，连中文提示条与 `#resultMessage` 结果条都留着 ——
       所以本仓也让 `DictationPractice` 来承载，只是它的 `main` 分支里换一套
       填充。顶栏 / 进度条 / 模式切换器 / 底栏与听写完全一致。
@@ -116,11 +115,10 @@ export function PracticeModeGate({
   }
   if (mode === "learning") {
     /*
- 学习模式同样复用外壳。基准实现 `loadCurrentSentence()` 的学习模式分支
-      （practice.js:4216）只把 `main#practiceContent` 换成 `.learning-container`，
+ 学习模式同样复用外壳：只把 `main#practiceContent` 换成 `.learning-container`，
       顶栏 / 进度条 / 计时器 / 模式切换器 / 底部工具栏全部保留 —— 与口语、拼图
-      一模一样。学习模式与其余三种的差别只在**何时算完成**：它是「渲染即完成」
-      （practice.js:4400），且永不自动跳转。
+      一致。学习模式与其余三种的差别只在**何时算完成**：它是「渲染即完成」，
+      且永不自动跳转。
     */
     return <DictationPractice courseId={courseId} lessonId={lessonId} mode={mode} />
   }

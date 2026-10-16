@@ -5,10 +5,9 @@ import { getSession } from "@/app/actions/auth"
 import { parseMistakeSource, type MistakeSource } from "@/lib/mistake-book"
 
 /**
- * 批量删除（基准实现 BatchDeleteMistakes{mistakeIds}）。
+ * 批量删除。
  *
- * 与基准实现不同的是：基准实现的批量删除只吃错题 id（收藏/单词各自单独删）；
- * 本站聚合列表的复选框勾的是三类混合行，所以请求体是 [{kind, key}] 的异构列表，
+ * 聚合列表的复选框勾的是三类混合行，所以请求体是 [{kind, key}] 的异构列表，
  * 服务端按 kind 分派到对应的表。全部在一个事务里执行：要么全删要么全不删，
  * 避免「删了一半失败」之后列表与计数对不上。
  */
@@ -21,7 +20,7 @@ interface BatchItem {
   key: string
 }
 
-/** 单批上限：基准实现前端全选后一次性提交，这里给个防滥用的硬闸。 */
+/** 单批上限：前端全选后可一次性提交大量行，这里给个防滥用的硬闸。 */
 const MAX_BATCH = 200
 
 export async function POST(request: Request) {

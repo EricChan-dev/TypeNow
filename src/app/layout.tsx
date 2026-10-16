@@ -17,8 +17,8 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 })
 
-// 选项卡标题走 lib/brand 的唯一事实源。格式对齐竞品「品牌名 - 定位语」，
-// 但两根字符串都是我们自己的话（不含任何竞品文案）。
+// 选项卡标题走 lib/brand 的唯一事实源。格式用「品牌名 - 定位语」的通用形式，
+// 两根字符串都是我们自己的话。
 export const metadata: Metadata = {
   title: BRAND.tabTitle,
   description:

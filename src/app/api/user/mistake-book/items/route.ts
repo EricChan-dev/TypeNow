@@ -15,7 +15,7 @@ import {
 
 /**
  * 错题本统一列表：错题 + 收藏句子 + 收藏单词按统一时间序混排、统一分页
- * （基准实现 GetMistakeList 是一张列表，sourceType 只是过滤器）。
+ * （一张列表，sourceType 只是过滤器）。
  *
  * 分页参数收敛走 parsePagination（NaN 会变成 LIMIT NULL 绕过上限，见该模块注释）。
  * drizzle 0.45 的 mysql2 db.execute 返回原始二元组 [rows, fields]，解构一层拿 rows
@@ -68,7 +68,7 @@ export async function GET(request: Request) {
   const source = parseMistakeSource(searchParams.get("sourceType"))
   const courseId = searchParams.get("courseId") || null
   const lessonId = searchParams.get("lessonId") || null
- // 基准实现搜索框收首尾空格；超长直接截断（脏输入不该打到 LIKE 上）。
+ // 搜索框收首尾空格；超长直接截断（脏输入不该打到 LIKE 上）。
   const q = (searchParams.get("q") ?? "").trim().slice(0, MAX_SEARCH_LENGTH) || null
   const { page, pageSize, offset } = parsePagination(searchParams, 20)
 
@@ -95,13 +95,13 @@ export async function GET(request: Request) {
 }
 
 /**
- * 单条删除（基准实现 DeleteMistake / RemoveFavorite；单词走收藏接口的 DELETE）。
+ * 单条删除（单词走收藏接口的 DELETE）。
  *
  * key 的含义随 kind 而变 —— 这是聚合列表的代价，必须在这里收敛成一张对照表：
  *   · mistake  → review_queue.sentence_id（原句级，UNIQUE(user_id, sentence_id)）
  *   · sentence → sentence_favorites.id（收藏行主键；练习项级快照行）
  *   · word     → wordbook_items.word（UNIQUE(user_id, word)）
- * 全部幂等：重复删除按成功返回（基准实现 RemoveFavorite 重复调用也不报错）。
+ * 全部幂等：重复删除按成功返回，不报错。
  * 删除错题只摘 review_queue 行，practice_records 历史保留（练过就是练过）。
  */
 export async function DELETE(request: Request) {

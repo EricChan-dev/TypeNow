@@ -58,14 +58,14 @@ describe("normalizePos / posLabel", () => {
   it("内部哨兵 `词`/`标点` 不能漏进界面", () => {
     // word-align.ts 用 `词` 表示「是词但词性未知」、`标点` 表示不可输入位。
     // 生产库里存过 `标点`，但 `词` 纯属我们的内部约定；两者都不是词性，
- // 基准实现在拿不到词性时输出空标签（ 的 `if (assignedPos)`）。
+ // 拿不到词性时输出空标签（`if (assignedPos)` 分支）。
     expect(posLabel("词")).toBe("")
     expect(posLabel("标点")).toBe("")
   })
 
   it("生产库出现过的 UD 标签全部翻成中文，不漏英文", () => {
     // 这些是线上 words[].pos 的真实取值（spaCy 的 Universal Dependencies 标签）。
- // 基准实现的 POS_ALIAS_MAP 只登记词典体例缩写（n./adj./aux.v…），不认 UD，
+ // POS_ALIAS_MAP 只登记词典体例缩写（n./adj./aux.v…），不认 UD，
     // 所以这一层映射是我们为自家语料补的 —— 漏一个，复习屏就会把
     // `ADP` 渲成 "adp"、`PROPN_PERSON` 渲成 "propn_person"。
     const ud: Array<[string, string]> = [
@@ -217,7 +217,7 @@ describe("buildAnnotation", () => {
   it("词性哨兵 `词` 既不进标签、也不进词性色，而是走启发式/调色板", () => {
     // 线上 `analyze` 这类句子 `words` 为空，API 用 alignWordsWithEnglish 补出
     // pos:"词" 的骨架。它必须在展示层被消化掉：
- // · 标签为空（基准实现 只在有词性时输出 .word-pos-label）
+ // · 标签为空（只在有词性时输出 .word-pos-label）
     //   · 颜色落回 MODERN_COLOR_PALETTE 首位 #3b82f6，而不是 #94a3b8 默认灰
     const s = sentence("analyze", [
       { english: "analyze", chinese: null, phonetic: null, pos: "词" },
@@ -264,7 +264,7 @@ describe("buildAnnotation", () => {
     expect(buildAnnotation(s).hasPhonetics).toBe(false)
   })
 
- it("把配色写成内联 CSS 变量（基准实现不写 class）", () => {
+ it("把配色写成内联 CSS 变量（不写 class）", () => {
     const s = sentence("Cats sleep", [
       { english: "Cats", chinese: "猫", phonetic: null, pos: "NOUN" },
       { english: "sleep", chinese: "睡觉", phonetic: null, pos: "VERB" },
@@ -280,7 +280,7 @@ describe("buildAnnotation", () => {
     expect(buildAnnotation(null).segments).toEqual([])
     expect(buildAnnotation(sentence("", [])).segments).toEqual([])
     // 没有 words 时不能整句丢掉：降级成一段纯文本，由渲染层回退到
- // `.answer-text-plain`（基准实现在 generateAnnotatedSentence 里也是这个兜底）。
+ // `.answer-text-plain`（generateAnnotatedSentence 的兜底路径）。
     const noWords = buildAnnotation(sentence("Hello", null))
     expect(noWords.words).toEqual([])
     expect(

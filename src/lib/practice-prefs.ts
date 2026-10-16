@@ -1,14 +1,14 @@
 /**
- * 练习页的课时级偏好 —— 键名与默认值对齐基准实现。
+ * 练习页的课时级偏好。
  *
- * 为什么键名要照抄：用户可能两个站都开了（同一浏览器的不同标签页），键名一致
- * 才能让「我在这里选了隐藏中文」在那边也生效。这不是内部实现细节，是可观测行为。
+ * 键名不是内部实现细节，是可观测行为：一旦发布就不要再改名，
+ * 改名等于把用户的既有偏好全部作废。
  *
  * 全部读写都包 try/catch：隐私模式 / 存储配额满时 localStorage 会直接抛异常，
  * 而「读不到偏好」不应该让整个练习页崩掉 —— 回落到默认值即可。
  */
 
-/** 中文提示是否显示。默认 **true**（基准实现 `let showChineseHint = true`）。 */
+/** 中文提示是否显示。默认 **true**。 */
 export function showChineseKey(lessonId: string): string {
   return `lesson_${lessonId}_showChinese`
 }
@@ -36,8 +36,8 @@ export function saveShowChinese(lessonId: string, value: boolean): void {
 /**
  * 答对后自动跳到下一句。默认 **关**。
  *
- * 基准实现读的是 `==='on'`（不是 `'1'`），所以写入时也必须写 `'on'`/`'off'`,
- * 否则基准实现的设置面板读不懂我们写的值。
+ * 读取端按 `==='on'` 判断（不是 `'1'`），所以写入时也必须写 `'on'`/`'off'`，
+ * 写成 `'1'`/`'0'` 会读不回来。
  */
 export const AUTO_NEXT_KEY = "auto_next"
 
@@ -60,7 +60,7 @@ export function saveAutoNext(value: boolean): void {
 /**
  * 连错几次后自动揭示答案。默认 **3**，`0` 表示永不揭示。
  *
- * 基准实现允许 0/3/4/5 四档（设置面板是个下拉）。这里不写死合法集合，
+ * 不写死合法集合，
  * 只钳制到 [0, 10]：值来自我们自己的 UI，写不进脏值。
  */
 export const AUTO_REVEAL_KEY = "auto_reveal_mistake_threshold"
@@ -88,25 +88,18 @@ export function saveAutoRevealThreshold(value: number): void {
 /**
  * 答对后原音重播次数。
  *
- * 基准实现默认 1（ `parseInt(localStorage.getItem('success_play_count') ||'1', 10)`，
- * 静态 HTML 里 `#successPlayDisplay` 就是 `1X`），合法取值被 :7411 夹在 **[1,3]**，
- * :7526 也在 3 处循环。
- *
- * 注意 :4945 的 `successPlayCount || 2` **不是**「默认念 2 次」：`1` 是真值，
- * `1 || 2` 仍然是 1 —— 那个 `|| 2` 只在取值 falsy 时兜底，而夹取已经把
- * 这种情况排除掉了。所以设置写几就念几次，默认念 1 次。
+ * 默认 **1**，合法取值范围 **[1,3]**：设置写几就念几次，越界或脏值回落到默认。
  */
 export const SUCCESS_PLAY_KEY = "success_play_count"
 export const DEFAULT_SUCCESS_PLAY = 1
-/** 对标页的合法区间上界。 */
+/** 合法区间上界。 */
 export const MAX_SUCCESS_PLAY = 3
 
 export function loadSuccessPlayCount(): number {
   try {
     const raw = window.localStorage.getItem(SUCCESS_PLAY_KEY)
     const n = Number.parseInt(raw ?? "", 10)
- // 基准实现 `if (successPlayCount < 1 || successPlayCount > 3) successPlayCount = 1`
-    // —— 越界是**重置为 1**，不是夹到边界（写 9 会回到 1 而不是 3）。
+    // 越界是**重置为 1**，不是夹到边界（写 9 会回到 1 而不是 3）。
     if (!Number.isFinite(n) || n < 1 || n > MAX_SUCCESS_PLAY) return DEFAULT_SUCCESS_PLAY
     return n
   } catch {
@@ -125,8 +118,8 @@ export function saveSuccessPlayCount(value: number): void {
 /**
  * 输入框个性化（字体 / 字号 / 样式）。
  *
- * 三个键与基准实现 一致；`size` 钳制到 [16, 40]，
- * `style` 非 `'box'` 一律归 `'underline'` —— 与基准实现的容错口径一致，
+ * 三个键的容错口径：`size` 钳制到 [16, 40]，
+ * `style` 非 `'box'` 一律归 `'underline'`，
  * 因为字号直接进宽度测量公式，脏值会让输入框宽度算成 NaN。
  */
 export type DictationInputStyle = "underline" | "box"
@@ -144,7 +137,7 @@ export const DEFAULT_DICTATION_INPUT_SETTINGS: DictationInputSettings = {
   inputStyle: "underline",
 }
 
-/** 字体族映射，与基准实现 DICTATION_FONT_OPTIONS 一致。 */
+/** 字体族映射。 */
 export const DICTATION_FONT_OPTIONS: Record<DictationInputFont, string> = {
   default: "var(--font-tech)",
   monospace: "'Outfit', sans-serif",
@@ -153,8 +146,7 @@ export const DICTATION_FONT_OPTIONS: Record<DictationInputFont, string> = {
 }
 
 /**
- * 卡片显示用的短标签，对应基准实现 `updatePersonalizationDisplay()`
- * (practice-sys-controls.js:308) 里的 `labels` 表。
+ * 卡片显示用的短标签。
  */
 export const DICTATION_FONT_LABELS: Record<DictationInputFont, string> = {
   default: "默认字体",
@@ -164,8 +156,7 @@ export const DICTATION_FONT_LABELS: Record<DictationInputFont, string> = {
 }
 
 /**
- * 个性化模态框按钮上的长标签，对应基准实现
- * 本地存档页 里 `.font-option-btn` 的文本。
+ * 个性化模态框按钮上的长标签。
  * 与卡片标签**不同** —— `rounded` 在按钮上是「圆体字体」、在卡片上是「圆体」。
  */
 export const DICTATION_FONT_MODAL_LABELS: Record<DictationInputFont, string> = {
@@ -214,15 +205,14 @@ export function saveDictationInputSettings(s: DictationInputSettings): void {
 /**
  * 把个性化设置写到壳元素上。
  *
- * 与基准实现的**唯一**差异：它写 `document.documentElement`，我们写 `.practice-shell`
- * 元素。原因见 dictation-measure.ts 的 configureMeasureHost —— 我们的抽取 CSS
+ * 写 `.practice-shell` 元素而不是 `document.documentElement`。原因见 dictation-measure.ts 的 configureMeasureHost —— 我们的抽取 CSS
  * 全部收敛在 `.practice-shell` 作用域下，变量写在 :root 虽然能靠继承生效，
  * 但 `input-style-underline` 这个**类**必须落在壳内部元素上，两者放一起更好维护。
  */
 export function applyPersonalization(el: HTMLElement, s: DictationInputSettings): void {
   el.style.setProperty("--dictation-input-font-family", DICTATION_FONT_OPTIONS[s.font])
   el.style.setProperty("--dictation-input-font-size", `${s.size / 10}rem`)
- // 答案回顾屏的字号跟随输入字号一起缩放，比例与基准实现一致（基准 24）
+ // 答案回顾屏的字号跟随输入字号一起缩放，除数为默认字号 24
   el.style.setProperty("--dictation-review-font-scale", String(s.size / 24))
   // 注意：类名要落在**壳内部的容器**上（调用方传 cyber-interface），
   // 因为抽取后的选择器是 `.practice-shell .input-style-underline …`
@@ -232,10 +222,10 @@ export function applyPersonalization(el: HTMLElement, s: DictationInputSettings)
 /**
  * ── 「更多设置」里的开关 ────────────────────────────────────────────────────
  *
- * 下面这批键的读写口径全部对齐基准实现 ：
+ * 下面这批键的读写口径：
  * **默认都是「开」**，只有显式写入 `'off'` 才关。所以判定统一写成
  * `!== 'off'`，而不是 `=== 'on'` —— 用后者的话，用户从没进过设置页时
- * 会得到「关」，与基准实现首次进入的表现相反。
+ * 会得到「关」，而默认应当是「开」。
  */
 function loadOnByDefault(key: string): boolean {
   try {
@@ -274,9 +264,9 @@ export function saveNextPreview(v: boolean): void {
 /**
  * 答对是否放烟花。默认开。
  *
- * 基准实现用 canvas-confetti（约 6 秒）；我们没有这个依赖，用 `sfx.ts` 的
- * 合成音 + CSS 动画代替 —— 这是**唯一**需要替换外部资源的设置项，
- * 因为用户明确说过那 5 个音频文件没有、用现有合成音。
+ * 不用 canvas-confetti（约 6 秒的粒子），改用 `sfx.ts` 的
+ * 合成音 + CSS 动画 —— 这是**唯一**需要替换外部资源的设置项，
+ * 因为音频文件缺失、用现有合成音。
  */
 export const CONFETTI_KEY = "confetti_effect"
 export function loadConfetti(): boolean {
@@ -304,7 +294,7 @@ export function saveShortcutOverlay(v: boolean): void {
   saveOnOff(SHORTCUT_OVERLAY_KEY, v)
 }
 
-/** 句子配图。基准实现**默认关**（`sentence_image_enabled`，仅 `'on'` 才加载）。 */
+/** 句子配图。**默认关**（仅写入 `'on'` 才加载）。 */
 export const SENTENCE_IMAGE_KEY = "sentence_image_enabled"
 export function loadSentenceImage(): boolean {
   try {
@@ -320,7 +310,7 @@ export function saveSentenceImage(v: boolean): void {
 /**
  * 「分段练习」总开关。
  *
- * 对标页的口径是
+ * 读取口径是
  * `localStorage.getItem('fragment_mode') === '1'` —— **默认关**，写入 `'1'`/`'0'`
  * （不是 on/off）。AND 上一个会员门控 `canUseFragmentPractice()`，但那个门控
  * 属于「能不能开」的判定，落库与否仍看这个键，所以这里只负责存取。
@@ -342,12 +332,11 @@ export function saveFragmentMode(v: boolean): void {
 }
 
 /**
- * 分段练习里的单词配图。基准实现用 `!=='false'` 判真（默认**开**），
- * 写入的是 `String(bool)` 即 `'true'`/`'false'`（practice-sys-controls.js:468-470）。
+ * 分段练习里的单词配图。用 `!=='false'` 判真（默认**开**），
+ * 写入的是 `String(bool)` 即 `'true'`/`'false'`。
  * 不能用 `saveOnOff` —— 键值语义是布尔字符串，不是 on/off。
  *
- * 我们仓库**没有** `GET /api/searchWord/image` 接口（基准实现 
- * `fetchWordImage`），所以这个开关目前只负责存取偏好，界面不渲染配图位。
+ * 仓库**没有** `GET /api/searchWord/image` 配图接口，所以这个开关目前只负责存取偏好，界面不渲染配图位。
  */
 export const FRAGMENT_IMAGE_KEY = "fragment_image_enabled"
 export function loadFragmentImage(): boolean {
@@ -365,7 +354,7 @@ export function saveFragmentImage(v: boolean): void {
   }
 }
 
-/** 底栏密度。基准实现 `'compact'` 才紧凑，其余一律常规。 */
+/** 底栏密度。仅 `'compact'` 紧凑，其余一律常规。 */
 export type ToolbarDensity = "normal" | "compact"
 export const TOOLBAR_DENSITY_KEY = "practice_toolbar_density"
 export function loadToolbarDensity(): ToolbarDensity {
@@ -386,7 +375,7 @@ export function saveToolbarDensity(v: ToolbarDensity): void {
 /**
  * 显示风格（主题 + 浅色背景变体）。
  *
- * 基准实现的四个值见 `THEME_OPTIONS`：`dark` /
+ * 四个取值：`dark` /
  * `light-standard` / `light-white` / `light-grey`。浅色三种都落在
  * `data-theme="light"`，差异靠 `data-light-bg`（standard 时**移除**该属性）。
  */
@@ -404,7 +393,7 @@ const THEME_KEY = "app_theme"
 export function loadThemeStyle(): ThemeStyle {
   try {
     const raw = window.localStorage.getItem(THEME_KEY)
- // 兼容旧值'light'（基准实现 migrateThemeSetting 也做这件事）
+ // 兼容旧值'light'（读取时迁移为 light-standard）
     if (raw === "light") return "light-standard"
     if (raw && raw in THEME_STYLE_LABELS) return raw as ThemeStyle
   } catch {
@@ -421,7 +410,7 @@ export function saveThemeStyle(v: ThemeStyle): void {
   }
 }
 
-/** 把主题写到壳元素上（基准实现写 documentElement，理由同 applyPersonalization）。 */
+/** 把主题写到壳元素上（不写 documentElement，理由同 applyPersonalization）。 */
 export function applyThemeStyle(el: HTMLElement, style: ThemeStyle): void {
   if (style === "dark") {
     el.removeAttribute("data-theme")
@@ -436,13 +425,10 @@ export function applyThemeStyle(el: HTMLElement, style: ThemeStyle): void {
 }
 
 /**
- * 极简沉浸模式。基准实现键名 `cyber_immersive_mode`，存 `String(bool)`
- * （practice.js:1427 `localStorage.setItem('cyber_immersive_mode', String(isImmersiveMode))`）。
+ * 极简沉浸模式。键名 `cyber_immersive_mode`，存 `String(bool)`。
  *
- * 开启后基准实现在 `document.body` 上挂 `immersive-mode`，
- * 顶栏只剩「退出沉浸」按钮（practice-cyber.css:10411 `body.immersive-mode
- * .header-left, .mode-dropdown-wrapper, .header-stats, .header-divider
- * { display:none }`）。我们把这套规则作用域改写到壳元素上，所以开关类也必须
+ * 开启后在壳元素上挂 `immersive-mode` 类（顶栏只留「退出沉浸」入口）：
+ * 隐藏顶栏等元素的 CSS 规则作用域在壳内选择器上，所以开关类也必须
  * 落在壳元素，而不是 `document.body` —— 理由同 applyPersonalization。
  */
 export const IMMERSIVE_KEY = "cyber_immersive_mode"
@@ -461,13 +447,13 @@ export function saveImmersive(v: boolean): void {
   }
 }
 
-/** 把沉浸模式写到壳元素上（基准实现写 document.body）。 */
+/** 把沉浸模式写到壳元素上。 */
 export function applyImmersive(el: HTMLElement, on: boolean): void {
   el.classList.toggle("immersive-mode", on)
 }
 
 /**
- * 句子自动播放次数（练习时英文语音播几遍）。基准实现键名 `tts_playback_count`，
+ * 句子自动播放次数（练习时英文语音播几遍）。键名 `tts_playback_count`，
  * `0` 显示为「手动」。
  */
 export const LOOP_COUNT_KEY = "tts_playback_count"

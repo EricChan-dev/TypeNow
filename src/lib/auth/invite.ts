@@ -8,9 +8,10 @@ import { isDuplicateKeyError } from "@/lib/db/duplicate-key"
 /**
  * 「邀请有礼」天数制的发放逻辑（与佣金制 partner_commissions 并行，互不冲突）。
  *
- * 两档规则（对齐基准实现）：
- *   注册档：被邀请人得 7 天体验会员，**邀请人不得天数**。
- *           被邀请人的 7 天由注册流程直接写入（见 lib/trial 的 trialGrantFields），
+ * 两档规则：
+ *   注册档：被邀请人得 5 天体验会员（`INVITE_REGISTER_DAYS`，2026-09-29 由 7 收紧到 5），
+ *           **邀请人不得天数**。
+ *           被邀请人的天数由注册流程直接写入（见 lib/trial 的 trialGrantFields），
  *           本函数只负责**记账**（供「已邀请 N 人」统计）与幂等。
  *   首购档：双方都得天数，仅首次购买有效，建立关系后 30 天内有效。
  *

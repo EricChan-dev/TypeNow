@@ -1,10 +1,10 @@
 /* =========================================================
- 本文件是合伙人招募页展示层样式（版式按对标页实现）。
+ 本文件是合伙人招募页展示层样式。
    所有规则统一以 .home-ref-shell 作为作用域前缀，确保不会泄漏到其他页面。
    原站使用的 remixicon 字体图标已改写为 lucide-react 的 inline svg 元素：
    原来的 font-size 尺寸改为等值的 width / height。
    本项目已删除整套暗色模式 token，因此所有深色模式规则一律丢弃。
- 基准实现的支付弹窗规则不在此文件内，因为本项目已有自己的结算组件。
+   支付弹窗规则不在此文件内，因为本项目已有自己的结算组件。
    ========================================================= */
     /* 核心页面样式重塑，偏向创作者经济与精美图文风 */
     .home-ref-shell .partner-wrap {
@@ -194,7 +194,7 @@
     .home-ref-shell .btn-massive svg { width: 26px; height: 26px; flex: none; margin-right: 14px; }
 
 
- /* ── 内容区段与卡片列阵（基准实现浅色基础规则）── */
+ /* ── 内容区段与卡片列阵（浅色基础规则）── */
     .home-ref-shell .aud-item {
         padding: 20px;
         border-radius: 16px;
@@ -308,17 +308,17 @@
     }
 
     /* =========================================
- ⚠️ 以下规则**不在基准实现的 CSS 里**，是移植时补的。
- 原因：基准实现把这一批区块的外观**全写在行内 style 属性上**，CSS 文件里
-       一个字都没有；而它针对行内样式写的那几条响应式覆盖用的是
+ ⚠️ 以下规则是移植时补的，原始 CSS 文件里没有。
+ 原因：这一批区块的外观**全写在行内 style 属性上**，CSS 文件里
+       一个字都没有；而针对行内样式写的那几条响应式覆盖用的是
        `div[style*="display: flex; gap: 30px;"]` 这类属性选择器。
        这些属性选择器在本项目**永远匹配不上**：React 会把 style 对象序列化成
- `display:flex;gap:30px`（不带空格），而基准实现的写法带空格。
+ `display:flex;gap:30px`（不带空格），而原始写法带空格。
        所以这里把那些行内值原样提成真实类名，属性选择器也改写成类选择器
- （见上方 @media 块）。数值取自基准实现的行内 style，未做改动。
+ （见上方 @media 块）。数值取自行内 style，未做改动。
        ========================================= */
 
- /* ── 三步流程（基准实现行内：flex; gap:30px + 绝对定位虚线）── */
+ /* ── 三步流程（行内来源：flex; gap:30px + 绝对定位虚线）── */
     .home-ref-shell .steps-row { display: flex; gap: 30px; position: relative; }
     .home-ref-shell .step-line {
         position: absolute; top: 40px; left: 15%; right: 15%;
@@ -341,7 +341,7 @@
         color: #64748b; font-size: 14px; margin: 0; padding: 0 10px;
     }
 
- /* ── 核心权益面板（基准实现行内）── */
+ /* ── 核心权益面板 ── */
     .home-ref-shell .cta-panel {
         background: #ffffff; border-radius: 24px; padding: 50px;
         box-shadow: 0 20px 40px rgba(0,0,0,0.04);
@@ -425,7 +425,7 @@
     }
     .home-ref-shell .cta-note svg { width: 14px; height: 14px; flex: none; }
 
- /* ── FAQ（基准实现行内：grid 1fr 1fr + gap 20px）── */
+ /* ── FAQ（行内来源：grid 1fr 1fr + gap 20px）── */
     .home-ref-shell .faq-grid {
         display: grid; grid-template-columns: 1fr 1fr; gap: 20px;
     }
@@ -467,7 +467,7 @@
     }
     .home-ref-shell .bottom-cta p a { color: #2563eb; text-decoration: underline; }
 
- /* ── 趋势风口卡片（基准实现行内）── */
+ /* ── 趋势风口卡片 ── */
     .home-ref-shell .trend-wrapper {
         background: #ffffff; border: 1px solid #e2e8f0; border-radius: 24px;
         padding: 50px 60px; color: #1e293b; position: relative; overflow: hidden;
@@ -512,7 +512,7 @@
         flex: none;
     }
 
- /* ── 用户见证卡（基准实现行内，本页只保留场景描述、不放收益数字）── */
+ /* ── 用户见证卡（本页只保留场景描述、不放收益数字）── */
     .home-ref-shell .social-proof-grid {
         display: grid; grid-template-columns: repeat(3, 1fr); gap: 25px;
     }
@@ -542,7 +542,7 @@
     .home-ref-shell .tm-scene span { font-size: 13px; color: #64748b; }
     .home-ref-shell .tm-scene strong { color: #059669; font-size: 18px; }
 
- /* ── 品牌故事卡片（基准实现行内）── */
+ /* ── 品牌故事卡片 ── */
     .home-ref-shell .brand-card {
         background: #ffffff; border: 1px solid #e2e8f0; border-radius: 24px;
         padding: 50px; display: flex; align-items: center; gap: 50px;
@@ -616,7 +616,7 @@
         }
     }
 /* =========================================================
- 返回条（本项目新增，基准实现没有这一段）。
+ 返回条（本项目新增）。
 
    合伙人卡的 CTA 现在会跳进本页，所以本页必须有一条明确的回路，
    否则用户只能依赖浏览器后退键（从侧边栏直接进入本页时，历史里

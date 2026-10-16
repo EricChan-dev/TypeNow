@@ -78,8 +78,7 @@ export function checkRateLimit(
  * 看一眼额度，**不消费**。
  *
  * 为什么需要它：口语模式的「今日评测次数已用完」卡片必须在**开口之前**就
- * 显示出来（基准实现 updateSpeakingLimitUI` 在 `idle` 时就会
- * 跑一次）。而 `checkRateLimit` 是「判 + 记账」一体，拿它去查询会白扣一次额度
+ * 显示出来（idle 状态下就得先查一次额度）。而 `checkRateLimit` 是「判 + 记账」一体，拿它去查询会白扣一次额度
  * —— 那是**比没有卡片更糟**的 bug：用户每次刷新页面都少一次评测机会。
  *
  * 返回值与 `checkRateLimit` 的判据完全同源（同一个桶、同一条

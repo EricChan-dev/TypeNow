@@ -2,9 +2,8 @@
  * 分段练习（fragment practice）的数据层 —— 把库里 `sentences.chunks` 裁成
  * 一串「可以按顺序逐段听写」的片段。
  *
- * 为什么不对齐基准实现的 `parseAndSortFragments`：
- * 基准实现的 `fragments` 是**线性互斥**分段 —— 数组里每一项都是句子的一截，
- * 按数组顺序拼起来正好等于原句，所以它直接用数组顺序。
+ * 为什么不直接按数组顺序取片段：只有**线性互斥**的分段（数组里每一项都是
+ * 句子的一截，按数组顺序拼起来正好等于原句）才吃得上数组顺序。
  *
  * 我们的 `chunks` 是**层级累积**型：数组里同时含短片段、由短片段组合出的
  * 长片段、甚至整句本身，还常常不按顺序。实测 6000 条带 chunks 的句子：
@@ -16,8 +15,8 @@
  * 用动态规划求一个**不重叠、恰好铺满、片段数最多**的组合。实测 6000 条：
  * 数组顺序贪心能线性化出 ≥2 段的占 52.8%，本 DP 实现占 **83.7%**。
  * 铺不满的（数据本身有缺口，如 `Do you remember Daddy's number?` 只标了
- * 宾语 `Daddy's number?`）返回 null，该句退化成整句听写 —— 与基准实现
- * 「没有有效片段就跳过分段练习」的口径一致。
+ * 宾语 `Daddy's number?`）返回 null，该句退化成整句听写 ——
+ * 没有有效片段就跳过分段练习。
  *
  * 纯净模块：无 React、无 DOM、无 DB，可直接单测。
  */
@@ -26,22 +25,21 @@ import type { Chunk, Sentence, Word } from "@/types"
 import { normalizeSentenceForComparison } from "@/lib/structured-answer"
 import { PROPER_NAME_POS, cleanWordForNameLookup } from "@/lib/dictation-tokens"
 
-/** 一个可以单独听写的片段。字段对应基准实现 `parseAndSortFragments` 的产物。 */
+/** 一个可以单独听写的片段。 */
 export interface PracticeFragment {
   text: string
- /** 中文提示。基准实现取 `item.zh || item.meaning || …`；我们库里是 `chinese`。 */
+ /** 中文提示。库字段是 `chinese`，其余键是兼容回退。 */
   meaning: string
   /**
- * 基准实现 `parseAndSortFragments` **硬编码** `'chunk'`，
-   * 不读数据里的成分字段。照抄。
+   * 硬编码 `'chunk'`：不读数据里的成分字段，成分名一律取这个常量。
    */
   component: string
 }
 
-/** 纯数字/标点片段（如日期、编号）不构成可练内容，基准实现 会剔掉。 */
+/** 纯数字/标点片段（如日期、编号）不构成可练内容，直接剔除。 */
 const PURE_NUMBER_FRAGMENT = /^[\d\s.,!?;:()\-—]+$/
 
-/** 末尾所有格剥离，与对标页的 `stripTokenPossessive` 一致。 */
+/** 末尾所有格剥离（`'s` / `s'`）。 */
 function stripTokenPossessive(token: string): string {
   return token.replace(/['`’]s$/i, "").replace(/s['`’]$/i, "s")
 }
@@ -53,7 +51,7 @@ function words(text: string): string[] {
 
 /**
  * 把 `chunks`（可能是数组，也可能是 JSON 字符串）解成候选片段。
- * 对应基准实现 ：字符串则 `JSON.parse`，非数组或空 → null，
+ * 字符串则 `JSON.parse`，非数组或空 → 空数组，
  * 逐项取 text/meaning，text 为空则跳过。
  */
 function parseCandidates(chunks: unknown): Array<PracticeFragment & { order: number }> {
@@ -70,9 +68,9 @@ function parseCandidates(chunks: unknown): Array<PracticeFragment & { order: num
   return raw
     .map((item, index) => {
       const rec = (item ?? {}) as Record<string, unknown>
- // 基准实现读 `en || text || Text`；我们的库字段是 `text`。
+ // 优先读库字段 `text`，兼容 `en || Text`。
       const text = String(rec.text ?? rec.en ?? rec.Text ?? "").trim()
- // 基准实现读 `zh || meaning || translation || Meaning`；我们的是 `chinese`。
+ // 优先读库字段 `chinese`，兼容 `zh || meaning || translation || Meaning`。
       const meaning = String(
         rec.chinese ?? rec.zh ?? rec.meaning ?? rec.translation ?? rec.Meaning ?? "",
       ).trim()
@@ -88,7 +86,7 @@ function parseCandidates(chunks: unknown): Array<PracticeFragment & { order: num
 }
 
 /**
- * 去掉「整个片段都是人名」的候选（基准实现）。
+ * 去掉「整个片段都是人名」的候选。
  *
  * 我们目前**没有** NER 标注 —— `words[].pos` 存的是中文词性（「代词」「名词」），
  * 不是 `person_name`。所以传入的 `personNameTokens` 通常是空集，这个过滤是
@@ -115,10 +113,10 @@ export function filterPersonNameOnlyFragments(
 /**
  * 从 `sentence.words` 收集人名 token（当前数据下为空集，见上）。
  *
- * 对齐基准实现 `buildWordAnalysisMap`：
+ * 收集算法：
  * 先剥末尾所有格（`Jeremy Short's` → `Jeremy Short`）；**剥完仍含空格**的
  * 视为多词人名，把**每个 part** 分别登记（`jeremy`、`short`）；否则整体登记。
- * 基准实现对 part 的去标点口径含连字符、**不含撇号**，见
+ * part 的去标点口径含连字符、**不含撇号**，见
  * `cleanWordForNameLookup`。
  */
 export function personNameTokensFromWords(wordsData: Word[] | null | undefined): Set<string> {
@@ -144,8 +142,8 @@ export function personNameTokensFromWords(wordsData: Word[] | null | undefined):
 }
 
 /**
- * 过滤 + 兜底：基准实现先做人名过滤、再剔纯数字片段，**过滤后为空则回退原始片段**
- * （practice.js:2596-2605）。照抄这个兜底，避免把有数据的句子清成没数据。
+ * 过滤 + 兜底：先做人名过滤、再剔纯数字片段，**过滤后为空则回退原始片段**，
+ * 避免把有数据的句子清成没数据。
  */
 function finalizeFragments(
   fragments: PracticeFragment[],
@@ -165,11 +163,10 @@ function finalizeFragments(
  * @returns 至少 2 个片段且恰好铺满原句时返回片段数组；否则返回 null
  *          （该句不做分段练习，直接整句听写）
  *
- * 边界与基准实现一致：
+ * 边界：
  * - 解不出候选 / 原句为空 / 铺不满 → null
- * - 只能铺出 **1** 段 → null。对标页的跳过条件是
- *   「单片段且去非词字符后等于原句」，而我们的片段必须铺满原句，
- *   所以 1 段必然等于整句，两个判据等价。
+ * - 只能铺出 **1** 段 → null。此时片段必然铺满原句、等于整句，
+ *   与「单片段去非词字符后等于原句」的整句跳过判据等价。
  */
 export function linearizeChunks(
   chunks: unknown,
@@ -182,8 +179,7 @@ export function linearizeChunks(
   const target = words(sentence)
   if (target.length === 0) return null
 
- // 基准实现不读 order 字段、不排序，完全依赖数组顺序（已 grep 确认）。
-  // 我们这里**按 order 升序**遍历，让同长度的候选里「序号更小者」优先 ——
+ // 这里**按 order 升序**遍历，让同长度的候选里「序号更小者」优先 ——
   // 因为我们的数组是层级累积的，低 order 更接近原子片段。
   // DP 只在「严格更优」时替换，所以先遍历到的那条胜出。
   const ordered = candidates
@@ -270,8 +266,7 @@ export function fragmentsForSentence(sentence: Sentence | null): PracticeFragmen
 }
 
 /**
- * 从片段里挑「更适合配图」的核心词 —— 移植基准实现 `extractCoreWords`
- * （practice.js:2858-2900）。
+ * 从片段里挑「更适合配图」的核心词。
  *
  * 规则：去标点小写切词；**单个词直接返回**；实义词超过 4 个返回 null；
  * 用虚词表过滤后取实义词；去重后**倒序**返回（英语里名词多在后面，
@@ -279,7 +274,7 @@ export function fragmentsForSentence(sentence: Sentence | null): PracticeFragmen
  *
  * 注意：我们仓库没有 `GET /api/searchWord/image` 接口，所以这个函数的产物
  * 目前只用于决定「是否渲染配图位」——而因为没有图源，界面**不渲染**该容器。
- * 保留完整实现是为了口径一致（基准实现的 `fragment_image_enabled` 卡也还在）。
+ * 保留完整实现是为了口径一致，后续接上图源即可直接启用。
  */
 export function extractCoreWords(text: string): string[] | null {
   if (!text) return null
@@ -294,7 +289,7 @@ export function extractCoreWords(text: string): string[] | null {
   return [...new Set(contentWords)].reverse()
 }
 
-/** 对标页的虚词表，对齐。 */
+/** 配图核心词用的虚词表：这些词不作为核心词候选。 */
 const FRAGMENT_STOP_WORDS = new Set([
   "a", "an", "the",
   "in", "on", "at", "to", "for", "of", "with", "by", "from", "up", "down",

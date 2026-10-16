@@ -1,13 +1,13 @@
-/* 落地页专用字体层 —— 与基准实现 style.css 第 2 行一致。
+/* 落地页专用字体层 —— 与原版式全局样式的 @import 一致。
  *
- * 基准实现就是这么加载字体的（外链 Google Fonts，不走本地自托管）。这里保持同样
+ * 原版式就是这么加载字体的（外链 Google Fonts，不走本地自托管）。这里保持同样
  * 的 @import，是为了让「拉丁字母走 Plus Jakarta Sans、汉字走 Noto Sans SC」这套
- * 字形与基准实现完全对齐 —— 字形宽度和字距变了，整页看起来就会像「排版错乱」，
+ * 字形与原版式完全对齐 —— 字形宽度和字距变了，整页看起来就会像「排版错乱」，
  * 哪怕盒模型尺寸分毫不差。
  *
  * 曾经试过用 next/font/google 自托管，但 Turbopack 在本机拉不到字体文件
  * （`Can't resolve '@vercel/turbopack-next/internal/font/google/font'`），
- * 所以退回基准实现的原方案。
+ * 所以改回外链 Google Fonts 的方案。
  *
  * 这个文件只被 src/app/(landing)/layout.tsx 引入，因此只有首页会请求这两个
  * 字体族，站内其它页面（/home、/practice…）不受影响。

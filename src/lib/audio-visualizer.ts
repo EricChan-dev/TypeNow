@@ -1,16 +1,14 @@
 /**
  * 底栏声音频谱条（`.audio-visualizer > #audioCanvas`）的绘制层。
  *
- * 移植自对标页的 `drawAudioVisualization` / `stopAudioVisualization`
- * 与 `initShared` 里的 Web Audio 接线，几何参数逐项照抄：
+ * 频谱条的绘制层，几何参数是反复调试后的定稿：
  * 画布 300×60、48 根柱、柱间距 2px、`globalAlpha 0.6`、填充 `#9ca3af`、
  * 柱高 `(value/255) * 60 * 0.6`、最小高度 4、居中、圆角 `min(barWidth/2, 1.5)`。
  *
- * ## 与基准实现的唯一结构差异
+ * ## 与 TTS 播放器接线的结构约束
  *
- * 基准实现全局复用**同一个** `<audio>`（`sharedTTSAudio`），所以它只在
- * `initShared` 里 `createMediaElementSource` 一次，之后反复用同一个 analyser。
- * 我们的 `useTTSSettings` 每念一句都 `new Audio(blobUrl)`，所以每次播放都得
+ * 我们的 `useTTSSettings` 每念一句都 `new Audio(blobUrl)`，不是全局复用同一个
+ * `<audio>`，所以每次播放都得
  * 给新的元素建节点；旧节点必须 `disconnect()` 掉，否则每念一句就往
  * AudioContext 里挂一个永不释源的节点。
  *
@@ -21,13 +19,13 @@
  * 按仓库既有约定（`lib/sfx.ts`、`lib/hooks/useTTSSettings.ts`）用模块级单例。
  */
 
-/** 柱子数量与画布尺寸，与基准实现一致（基准实现把 300×60 写死在绘制函数里）。 */
+/** 柱子数量与画布尺寸（绘制函数里的几何参数与此处一致）。 */
 const CANVAS_W = 300
 const CANVAS_H = 60
 const BAR_COUNT = 48
 const BAR_GAP = 2
 const BAR_COLOR = "#9ca3af"
-/** 音频暂停多久后自动收尾（基准实现用 3000ms）。pause() 不触发 ended。 */
+/** 音频暂停多久后自动收尾（3000ms）。pause() 不触发 ended。 */
 const PAUSE_GRACE_MS = 3000
 
 let audioCtx: AudioContext | null = null
@@ -38,7 +36,7 @@ let raf = 0
 let freqData: Uint8Array | null = null
 let canvas: HTMLCanvasElement | null = null
 let ctx2d: CanvasRenderingContext2D | null = null
-/** 音频「已暂停」的起始时刻，用于兜底收尾（基准实现 `_visStartTime`）。 */
+/** 音频「已暂停」的起始时刻，用于兜底收尾。 */
 let pausedSince = 0
 
 function ensureGraph(el: HTMLAudioElement): AnalyserNode | null {
@@ -92,7 +90,7 @@ function paint() {
 
   const bufferLength = analyser.frequencyBinCount
   if (!freqData || freqData.length !== bufferLength) {
- // 基准实现用裸 Uint8Array；这里用同一类型以节复现它的取数口径。
+ // 用裸 Uint8Array 按 frequencyBinCount 取数。
     freqData = new Uint8Array(bufferLength)
   }
   analyser.getByteFrequencyData(freqData as Uint8Array<ArrayBuffer>)
@@ -107,7 +105,7 @@ function paint() {
     const value = freqData[dataIndex]
     const barHeight = (value / 255) * CANVAS_H * 0.6
     const x = i * (barWidth + BAR_GAP)
- // 对齐基准实现：y 用未夹紧的 barHeight 算，但绘制高度夹到至少 4px。
+ // y 用未夹紧的 barHeight 算，但绘制高度夹到至少 4px。
     const y = (CANVAS_H - barHeight) / 2
     const h = Math.max(barHeight, 4)
     const radius = Math.min(barWidth / 2, 1.5)

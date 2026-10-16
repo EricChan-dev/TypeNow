@@ -3,29 +3,24 @@
  *
  * ── 为什么单独抽一个模块 ────────────────────────────────────────────────────
  *
- * 这些规则全部从基准实现 逐条搬来，且**必须**与它一致：
- * 分数等级文案、环形进度条颜色、评语、逐词状态阈值。它们此前分散在
- * `speaking.js` 的 `displaySpeakingResult` / `getSpeakingScoreLevel` /
- * `getScoreColor` / `getFeedbackMessage` / `renderSentenceWithScores` 里，
- * 混在 DOM 操作中间。抽成纯函数有两个直接好处：
+ * 这些规则覆盖：分数等级文案、环形进度条颜色、评语、逐词状态阈值。
+ * 它们此前混在组件的 DOM 操作中间。抽成纯函数有两个直接好处：
  *
  *   1. 本仓库的 vitest 是 `environment: "node"`（`vitest.config.ts:6`），
  *      **没有 jsdom、也不允许加依赖**（见 AGENTS 约束），组件根本没法单测。
  *      把这些规则抽出来，它们才第一次有了测试覆盖。
  *   2. 组件只负责「什么时候显示」，不负责「显示成什么」。
  *
- * ── 与基准实现的一处**刻意的**数值差异 ────────────────────────────────────────
+ * ── 分数口径 ────────────────────────────────────────────────────
  *
- * 基准实现走讯飞 ISE，逐词的 `total_score` 是 **0–5** 制，所以它统一
- * `× 20` 换算成百分制（`speaking.js:1021`）。我们的 `EvaluateResult` 来自
- * 有道（`lib/pronunciation.ts` 的 `mapYoudaoEvaluate`），有道的
- * `pronunciation` 本来就是 **0–100**。因此这里**不再乘 20** ——
- * 照抄那个 `× 20` 会把 80 分变成 1600 分。
+ * `EvaluateResult` 来自有道（`lib/pronunciation.ts` 的 `mapYoudaoEvaluate`），
+ * 有道的 `pronunciation` 本来就是 **0–100** 百分制 —— 这里**不要**再乘 20，
+ * 否则会把 80 分变成 1600 分。
  */
 
 import type { EvaluateResult } from "@/lib/pronunciation"
 
-/** 基准实现 `getSpeakingScoreLevel`。 */
+/** 分数 → 等级文案与样式类。 */
 export function getSpeakingScoreLevel(score: number): { text: string; className: string } {
   if (score >= 90) return { text: "Outstanding", className: "excellent" }
   if (score >= 80) return { text: "Excellent", className: "good" }
@@ -34,7 +29,7 @@ export function getSpeakingScoreLevel(score: number): { text: string; className:
 }
 
 /**
- * 基准实现 `getScoreColor`。
+ * 分数对应的颜色。
  *
  * 返回的是 **CSS 变量名**，不是色值 —— 主题有三套（深色/浅色/护眼），
  * 变量表写在 `.practice-shell[data-theme=…]` 上，硬编码色值在浅色主题下
@@ -51,7 +46,7 @@ export function getScoreColor(score: number): string {
   return "var(--score-poor)"
 }
 
-/** 基准实现 `getFeedbackMessage`。五档文案一致。 */
+/** 分数 → 评语文案（五档）。 */
 export function getFeedbackMessage(score: number): string {
   if (score >= 90) return "发音完美，甚至超越了原音！"
   if (score >= 80) return "发音清晰，非常地道！"
@@ -61,9 +56,8 @@ export function getFeedbackMessage(score: number): string {
 }
 
 /**
- * 逐词状态。基准实现 `renderSentenceWithScores`的
- * 三段阈值：`< 60` 红（error）、`< 80` 黄（warning）、其余青（correct）；
- * 「漏读」单独一档（`dpMessage === 1`），优先级最高。
+ * 逐词状态。三段阈值：`< 60` 红（error）、`< 80` 黄（warning）、其余青（correct）；
+ * 「漏读」单独一档（`isMissing`），优先级最高。
  */
 export type SpeakingWordStatus = "missing" | "error" | "warning" | "correct"
 
@@ -74,28 +68,24 @@ export function speakingWordStatus(totalScore: number, isMissing: boolean): Spea
   return "correct"
 }
 
-/** 逐词的展示数据（对应基准实现 `parseSpeakingWordDetails` 的输出）。 */
+/** 逐词的展示数据。 */
 export interface SpeakingWordDetail {
   content: string
- /** 百分制。基准实现原值是 0–5 并在此乘 20；我们已在有道的映射里是百分制。 */
+ /** 百分制（0–100），有道的映射里已换算好。 */
   totalScore: number
- /** 基准实现 `dp_message`：1 = 漏读。其余值只用于过滤（2 增读 / 16 回读）。 */
+ /** 是否漏读（评测没给分的词按漏读处理）。 */
   isMissing: boolean
 }
 
 /**
  * 把 `EvaluateResult.words` 映射成逐词展示数据。
  *
- * 与基准实现 `parseSpeakingWordDetails`的对应关系：
+ * 处理规则：
  *
- * · 基准实现从 `grade.xml_result.read_sentence.rec_paper.read_chapter.sentence[].word[]`
- *     里逐词取 `content` / `total_score` / `dp_message`；我们的有道映射
- *     （`mapYoudaoEvaluate`）已经产出 `{ word, score }`，是同一层信息。
- * · 基准实现跳过 `content ==='sil' ||'silv'`（静音占位）—— 有道不返回这种
+ * · 输入来自有道映射（`mapYoudaoEvaluate`）产出的 `{ word, score }`，逐词取
+ *     `word` 作内容、`score` 作分数。
+ * · 跳过 `content ==='sil' ||'silv'`（静音占位）—— 有道目前不返回这种
  *     条目，但过滤保留，避免未来出现时空词进 DOM。
- * · 基准实现跳过 `dpMsg === 2`（增读）与 `16`（回读）：这两个是**多读出来的**
- *     词，不属于原句，渲染进去会让句子看起来被改写。有道不给 dp_message，
- * 所以这两条在我们这儿恒不命中 —— 保留判断是为了与基准实现的结构对齐。
  *   · `score === null` 代表有道没给这个词的分数，**不是 0 分**。这种情况下
  *     不显示数字（`word-score` 留空）而不是画一个 0 分红字 ——
  *     与 `EvaluateWordScore.score` 的契约一致（见 `lib/pronunciation.ts:41`）。
@@ -119,8 +109,7 @@ export function mapEvaluateToSpeakingWords(result: EvaluateResult | null): Speak
 }
 
 /**
- * 「今日评测次数已用完」的文案。基准实现 `buildSpeakingLimitMessage`
- * （`speaking.js:109`）：服务端给了 message 就用服务端的，否则按
+ * 「今日评测次数已用完」的文案：服务端给了 message 就用服务端的，否则按
  * `currentCount/maxCount` 拼。
  */
 export function buildSpeakingLimitMessage(state: {
@@ -135,10 +124,10 @@ export function buildSpeakingLimitMessage(state: {
   return "今日口语评测次数已用完，明天 00:00 后恢复。"
 }
 
-/** 环形进度条的一圈长度。基准实现 `viewBox="0 0 36 36"`，r=15.9155 → 周长 100。 */
+/** 环形进度条的一圈长度。SVG `viewBox="0 0 36 36"`、r=15.9155 → 周长 100。 */
 export const SCORE_RING_CIRCUMFERENCE = 100
 
-/** 秒 → `mm:ss`。基准实现 `startSpeakingVisualizerTimer`。 */
+/** 秒 → `mm:ss`。 */
 export function formatSpeakingClock(totalSeconds: number): string {
   const safe = Math.max(0, Math.floor(totalSeconds))
   const mins = Math.floor(safe / 60)

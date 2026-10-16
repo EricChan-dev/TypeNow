@@ -1,17 +1,17 @@
 /* 自动生成 —— 请勿手改。
 
- * （共享 hero/搜索/卡片）+ common.css（.pages 分页器/.maxWidth）。
+ * 版式 = 共享基样式（hero/搜索/卡片）+ 版式基础件（.pages 分页器/.maxWidth）。
  * 生成器：scripts/extract-textbook-sync-css.py（选择器已收敛到 .textbook-sync-page 下）。
  * 重新生成：python3 scripts/extract-textbook-sync-css.py
  *
- * 层叠顺序 = 基准实现真实加载顺序：common → market → textbook-sync，
+ * 层叠顺序 = 原版式真实加载顺序：版式基础件 → 共享基样式 → 本页规则，
  * 页内覆盖（.searchInp .search-clear:hover 等）因此排在共享基样式之后。
- * 基准实现根元素 mainBox course-market sync-market-page 三合一：mainBox 底板
+ * 原版式根元素 mainBox course-market sync-market-page 三合一：mainBox 底板
  * 由 home-shell.css 复刻，course-market/sync-market-page 两个类保留在本页根节点。
  *
  * 其它搬运约定（与 home-ref.css / course-detail.css 同口径）：
- * 1. 字号/行高/内边距/圆角/阴影/色值全部保留基准实现原值，不做「优化」。
- * 2. 基准实现用 remixicon 字体图标（<i class="ri-*">），本仓统一用 lucide
+ * 1. 字号/行高/内边距/圆角/阴影/色值全部保留原值，不做「优化」。
+ * 2. 原版式用 remixicon 字体图标（<i class="ri-*">），本仓统一用 lucide
  *      组件；字体图标的 font-size 规则改写成 svg 的宽高（在组件里给 size）。
  */
 
@@ -23,7 +23,7 @@
   --f1f5f9: #f1f4f7;
 }
 
-/* ── 外壳件：.pages 分页器 + .maxWidth（来自 common.css，最先加载）── */
+/* ── 外壳件：.pages 分页器 + .maxWidth（版式基础件，最先加载）── */
 .textbook-sync-page .maxWidth {
     max-width: 1140px;
     margin: 0 auto;
@@ -81,7 +81,7 @@
     background: #f9fafb;
 }
 
-/* ── 共享基样式：hero/搜索框/课程卡（来自 market.css）── */
+/* ── 共享基样式：hero/搜索框/课程卡 ── */
 .textbook-sync-page .market-hero-section {
     display: flex;
     justify-content: space-between;

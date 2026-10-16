@@ -8,7 +8,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
  * 测的是**我们不能丢的那部分行为**：
  *   · 模块导入期不碰浏览器全局（SSR 安全）；
  *   · 非浏览器环境下所有导出都安静 no-op，不抛；
- * · 各 API 的粒子数与调色板与基准实现练习页一致
+ * · 各 API 的粒子数与调色板与练习页的既定观感一致
  *     （答对 50 粒、默认 12 色；完成 每侧 3 粒、7 色、每 250ms 一发、6 秒收工）。
  */
 
@@ -148,14 +148,14 @@ describe("confetti（打桩浏览器）", () => {
     vi.restoreAllMocks()
   })
 
- it("fireSuccessBurst 用基准实现答对参数：中心 50 粒、默认调色板", async () => {
+ it("fireSuccessBurst 用答对参数：中心 50 粒、默认调色板", async () => {
     const b = installBrowserStubs()
     const { fireSuccessBurst } = await loadModule()
 
     fireSuccessBurst()
     b.step() // 第一帧把所有粒子画出来
 
-    // practice.js:8280 `{ particleCount: 50, spread: 80, origin: { y: 0.55 }, … }`
+    // 参数约定：`{ particleCount: 50, spread: 80, origin: { y: 0.55 }, … }`
     expect(b.drawn.length).toBe(50)
     for (const d of b.drawn) expect(DEFAULT_COLORS).toContain(d.color)
     // origin.y = 0.55 × 800 = 440（第一帧已有位移，所以放宽容差）。
@@ -170,11 +170,11 @@ describe("confetti（打桩浏览器）", () => {
     const { startCompletionFireworks } = await loadModule()
 
     const stop = startCompletionFireworks(1000)
- // 与基准实现 setInterval 一致：第一发在 250ms 之后，不是立刻。
+ // setInterval 语义：第一发在 250ms 之后，不是立刻。
     expect(b.drawn.length).toBe(0)
 
     vi.advanceTimersByTime(250)
-    // 一帧里画出来 6 粒 = 左右各 3 粒（practice.js:8321-8333）。
+    // 一帧里画出来 6 粒 = 左右各 3 粒。
     expect(b.stepFresh()).toBe(6)
     for (const d of b.drawn) expect(COMPLETION_COLORS).toContain(d.color)
     // 左上（origin.x=1 ⇒ x≈1000 向左上飞）与右上（origin.x=0 ⇒ x≈0 向右上飞）
@@ -182,7 +182,7 @@ describe("confetti（打桩浏览器）", () => {
     expect(b.drawn.some((d) => d.x < 500)).toBe(true)
     expect(b.drawn.some((d) => d.x > 500)).toBe(true)
 
-    // 超过 1000ms 的 duration 之后 interval 必须自己收掉（practice.js:8308-8311）。
+    // 超过 1000ms 的 duration 之后 interval 必须自己收掉。
     vi.advanceTimersByTime(2000)
     expect(vi.getTimerCount()).toBe(0)
     stop() // 幂等，不该抛

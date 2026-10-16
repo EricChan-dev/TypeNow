@@ -134,16 +134,12 @@ let speakSeq = 0
  * 按钮的脉冲动画」「念完再干下一件事」这类场景要的却是**播完了没有**。
  * 把两者混在一个 promise 上，调用方只能二选一：要么按钮永远不亮，要么
  * 「停止」按钮失效。
- *
- * 基准实现对应的是 `playTTS` → `playSingleAudio`，它 `await` 到 `ended`
- * 才 resolve（tts.js:500），所以 `handleWordSpeakClick` 的
- * `finally { btn.classList.remove('playing') }` 能撑满整段播放。
  */
 let endDeferred: { promise: Promise<void>; resolve: () => void } | null = null
 let endTimer: ReturnType<typeof setTimeout> | null = null
 
 /**
- * 播放超时兜底。基准实现同样是 15s（ `PLAYBACK_TIMEOUT_MS`）：
+ * 播放超时兜底（15s）：
  * `ended` / `pause` / `error` 都不触发时（解码卡死、设备被拔），
  * 没有它等待方会永远挂着。
  */
@@ -306,13 +302,11 @@ function speakWithBrowser(
  *
  * 现在如实返回 false，由调用方决定怎么交代（练习页给一个「点一下开启发音」的按钮）。
  *
- * `overrides.count` 是**连播次数**，对应基准实现 `playTTS(text, autoPlay, overrideCount)`
- * 的第三参。口径与基准实现对齐：
+ * `overrides.count` 是**连播次数**，口径：
  *   · 不传 ⇒ 1 次（词发音、设置页试听、回顾屏朗读都是这个口径）；
- * · 0 ⇒ **一声不响**，即「自动播放次数 = 手动」那一档 —— 基准实现此时
- *     `playbackCount` 就是 0，`for` 循环体一次都不进；
- *   · N>1 ⇒ 连播 N 次，每次等上一遍**播完**再停 600ms（tts.js:841）。
- * 手动点播放按钮时调用方要把 0 换成 1（基准实现 `manualCount`，）。
+ * · 0 ⇒ **一声不响**，即「自动播放次数 = 手动」那一档，连播循环体一次都不进；
+ *   · N>1 ⇒ 连播 N 次，每次等上一遍**播完**再停 600ms。
+ * 手动点播放按钮时调用方要把 0 换成 1。
  */
 export async function globalSpeak(
   text: string,
@@ -337,7 +331,7 @@ export async function globalSpeak(
     speakWithBrowser(text, { voice, rate: s.rate, volume: s.volume }, mySeq)
 
   /**
- * 连播时的遍间等待：先等上一遍播完，再停 600ms（基准实现）。
+ * 连播时的遍间等待：先等上一遍播完，再停 600ms。
    * 返回 false 表示期间有更新的朗读把它顶掉了，循环应立即退出。
    *
    * **失效令牌不能用最初的 `mySeq`**：循环里每一遍都要先 `stopSpeaking()`
@@ -390,8 +384,7 @@ export async function globalSpeak(
     if (mySeq !== speakSeq) return false
 
     let playedAny = false
- // 音频只取一次，之后复用同一个 blob —— 基准实现也是先 `audioSourceData`
-    // 取好再在循环里反复 `playSingleAudio`（tts.js:838-845），不重复请求接口。
+ // 音频只取一次，之后复用同一个 blob，不重复请求接口。
     for (let i = 0; i < count; i++) {
       if (!(await gapBefore(i))) return playedAny
       /**

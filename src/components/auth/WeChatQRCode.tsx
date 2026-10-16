@@ -329,7 +329,7 @@ export function WeChatQRCode({ active = true, onNeedsBind }: Props) {
   // QR code ready — show with optional expired mask overlay
   return (
     <div className="flex flex-col items-center gap-4">
- {/* 二维码容器沿用基准实现 .content .code 的虚线框（见 app/login/login.css） */}
+ {/* 二维码容器用 .content .code 的虚线框（见 app/login/login.css） */}
       <div className="code-box">
         <div className="relative overflow-hidden rounded-lg border border-[#E2E8F0] bg-white">
           {qrImageUrl ? (

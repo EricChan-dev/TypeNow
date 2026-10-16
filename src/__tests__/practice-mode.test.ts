@@ -14,19 +14,19 @@ import {
 /**
  * 练习模式词汇表与模式恢复的行为契约。
  *
- * 这里锁的都是「改了会让老进度读不回来」或「文案与基准实现不一致」的地方：
+ * 这里锁的都是「改了会让老进度读不回来」或「文案与产品口径不一致」的地方：
  * 取值本身、存储键名、优先级顺序、确认文案的逐字内容。
  */
 
 describe("practice-mode", () => {
- it("四种模式的取值与基准实现一致", () => {
- // 基准实现 data-mode 依次是 dictation / puzzle / learning / speaking。
+ it("四种模式的取值", () => {
+ // data-mode 依次是 dictation / puzzle / learning / speaking。
     // 这些字符串会写进 practice_sessions.mode，漂移会让存量进度失效。
     expect(PRACTICE_MODES).toEqual(["dictation", "puzzle", "learning", "speaking"])
     expect(DEFAULT_PRACTICE_MODE).toBe("dictation")
   })
 
- it("中文名与基准实现下拉菜单一致", () => {
+ it("中文名与下拉菜单一致", () => {
     expect(PRACTICE_MODE_LABELS).toEqual({
       dictation: "听写",
       puzzle: "拼图",
@@ -56,8 +56,8 @@ describe("practice-mode", () => {
     expect(normalizePracticeMode({ mode: "dictation" })).toBe(DEFAULT_PRACTICE_MODE)
   })
 
- it("存储键名与基准实现同款 lesson_<lessonId>_mode", () => {
- // 同名是刻意的：从基准实现迁移过来的用户，偏好是同一份数据
+ it("存储键名是 lesson_<lessonId>_mode", () => {
+ // 键名固定是刻意的：升级后用户已存的偏好仍是同一份数据
     expect(modeStorageKey("abc-123")).toBe("lesson_abc-123_mode")
   })
 
@@ -72,8 +72,8 @@ describe("practice-mode", () => {
     expect(resolvePracticeMode({ urlMode: "nope", storedMode: "nope" })).toBe("dictation")
   })
 
- it("确认文案对齐基准实现，且按当前模式动态取名", () => {
- // 确认文案取自基准实现。
+ it("确认文案按当前模式动态取名", () => {
+ // 文案逐字断言，防止误改。
     expect(switchModeConfirmText("dictation", "speaking")).toBe(
       "确定要从【听写模式】切换到【口语模式】吗？\n\n切换模式会结束当前进度，并从第一句重新开始。",
     )

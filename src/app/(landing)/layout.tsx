@@ -6,10 +6,10 @@ import "./landing.css"
  *
  * ── 为什么单独给 (landing) 加一层 layout ─────────────────────────────────────
  *
- * 基准实现的字体来自它外链的 style.css：
+ * 原版式的字体来自其外链的全局样式表：
  *   body { font-family:'Plus Jakarta Sans','Noto Sans SC',-apple-system,…;
  *          letter-spacing:-0.01em; }
- * 这套字体是基准实现版式的组成部分 —— 拉丁字母走 Plus Jakarta Sans，汉字走
+ * 这套字体是原版式的组成部分 —— 拉丁字母走 Plus Jakarta Sans，汉字走
  * Noto Sans SC。换成别字体（原本的 Inter + 系统苹方）会让每个字形的宽高和字距
  * 都不一样，整页看起来就像「排版错乱」，哪怕盒模型尺寸是对齐的。
  *
@@ -21,7 +21,7 @@ import "./landing.css"
  * 试过 next/font/google 自托管，Turbopack 在本机拉不到字体文件：
  *   Module not found: Can't resolve
  *   '@vercel/turbopack-next/internal/font/google/font'
- * 于是退回基准实现原方案（外链 @import），见 ./landing-fonts.css。
+ * 于是改回外链 @import 方案，见 ./landing-fonts.css。
  */
 
 export default function LandingLayout({

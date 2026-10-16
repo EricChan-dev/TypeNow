@@ -2,7 +2,7 @@ import "../market-course-detail.css"
 import { CourseDetailClient } from "@/components/home/store/CourseDetailClient"
 
 /**
- * 课程市场 · 课程详情页（对齐基准实现课程广场点进课程，课本同步页 系）。
+ * 课程市场 · 课程详情页。
  *
  * 页面级样式是生成物（scripts/extract-market-course-css.py，选择器收敛在
  * .course-market-detail 下），在这里整页引入；组件见 CourseDetailClient.tsx。

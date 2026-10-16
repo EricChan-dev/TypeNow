@@ -1,12 +1,11 @@
 "use client"
 
 /**
- * 课程市场详情页（/home/store/[courseId]）—— 对齐基准实现基准实现。
+ * 课程市场详情页（/home/store/[courseId]）。
  *
- * ── 基准实现 ──────────────────────────────────────────────────────────────────
+ * ── 页面概览 ──────────────────────────────────────────────────────────────────
  *
- * 本地存档页（对标官网 的课程市场
- * /User/TextbookSync 点进某门课的详情页）。页面级样式由
+ * 课程市场列表点进某门课的详情页。页面级样式由
  * `scripts/extract-market-course-css.py` 从 `marketCourseDetail.css` + `common.css`
  * 生成到 `src/app/home/store/market-course-detail.css`，选择器全部收敛在
  * `.course-market-detail` 下；本组件按参考 DOM 结构输出同名类。
@@ -15,26 +14,24 @@
  *
  * 1. **单 fetch 复用 /api/courses/[id]/detail**：该接口已带每课节句数
  *    （sentenceCount）与 viewer.acquired，正好是本页「N 句」列与按钮态的
- * 两个数据源；总句数 = 各课节句数求和（基准实现页头 319 也是 9 课节之和，
+ * 两个数据源；总句数 = 各课节句数求和（页头口径与课节之和一致，
  *    同口径）。因此旧的 /api/courses/[id] + /[id]/lessons 两次请求不再使用。
- * 2. **难度标签不渲染**：基准实现有 初级/中级/高级 label.level；我们 courses 表
- *    没有难度字段，派生不出真实难度（no-fake-data）。
- * 3. **语法点 / 句子复杂度两节整节省略**：基准实现按「有无 AI 分析数据」条件渲染
- * 这两节，没有数据就不出节；我们永无该数据，照基准实现的「无数据不出节」
- *    行为省略（不同于我的课程详情页的「暂未生成」占位——那边参考样例本来就渲染）。
+ * 2. **难度标签不渲染**：courses 表没有难度字段，派生不出真实难度
+ *    （no-fake-data）。
+ * 3. **语法点 / 句子复杂度两节整节省略**：按「有无 AI 分析数据」条件渲染
+ * 这两节，没有数据就不出节；我们永无该数据，照「无数据不出节」
+ *    行为省略（不同于我的课程详情页的「暂未生成」占位）。
  *    核心词汇/核心短语照旧现场派生（/api/lessons/[id]/insight，懒加载）。
- * 4. **paid-course-notice 不搬**：基准实现该提示只对付费课程出现；本库没有
+ * 4. **paid-course-notice 不搬**：付费课程才需要该提示；本库没有
  *    「付费课程」概念（所有课都能加入、非会员每课前 5 句试学），无中生有的
  *    付费提示是虚假信息。
- * 5. **needUpgrade 上限弹窗不搬**：基准实现免费用户有「可加入课程数上限」，加满
- *    返回 needUpgrade；我们模型里没有这个上限。
- * 6. **移除确认用 window.confirm**：基准实现是自制确认弹窗
- *    （customConfirmAsync，「确定要移除此课程吗?」）；本仓没有全局确认组件，
+ * 5. **加入数上限弹窗不搬**：我们的模型里没有「可加入课程数上限」这个概念。
+ * 6. **移除确认用 window.confirm**：本仓没有全局确认组件，
  *    与我的课程详情页同用原生 confirm。
- * 7. **「立即学习」跳 /home/courses/{id}**：基准实现跳它自己的「我的课程详情」
- *    （/User/CourseDetail/{id}）；我们的对应页是 /home/courses/[courseId]。
- * 8. **加载更多 = 客户端切片 20/页**：基准实现 GetLessonList 服务端分页
- *    pagesize=20；我们 detail 接口一次返回全部课节，前端切片模拟同款
+ * 7. **「立即学习」跳 /home/courses/{id}**：我们的课程学习详情页是
+ *    /home/courses/[courseId]。
+ * 8. **加载更多 = 客户端切片 20/页**：detail 接口一次返回全部课节，
+ *    前端按 20/页切片模拟分页
  *    交互（.load-more/.btn-load-more，数据少于等于 20 时不渲染按钮）。
  * 9. **remixicon → lucide**：course-market-detail.css 里的 font-size 规则落在
  *    `i` 元素上，所以 lucide 组件外包一层 `<i style={iconWrap}>`，装饰交给
@@ -49,7 +46,7 @@
  * 「服务端 ∪ 本地 ∪ 练习过」三源并集，为「我的课程」列表一致性设计——
  * 练过但已移除的课在那里也算「我的」。市场页的加入/移除按钮必须反映服务端
  * 真值，否则会出现「已移除的课仍显示已加入、点移除无效」的死锁。
- * 展开箭头的有无对应基准实现 hasEnhancement 门控：基准实现有 AI 分析数据才出
+ * 展开箭头的有无按内容门控：有 AI 分析数据才出
  * 箭头，我们词汇/短语总能现场派生，只有 0 句的课节派生不出任何东西，才隐藏。
  */
 
@@ -75,7 +72,7 @@ import {
 import { getCategoryLabel, resolveCourseCover } from "@/lib/course-cover"
 import { trackCourseOpen } from "@/lib/analytics"
 
-/** 基准实现 GetLessonList 的 pagesize=20，客户端切片沿用同值。 */
+/** 客户端切片分页大小沿用 20/页。 */
 const PAGE_SIZE = 20
 
 interface LessonInfo {
@@ -131,7 +128,7 @@ function Icon({ children }: { children: ReactNode }) {
   return <i style={iconWrap}>{children}</i>
 }
 
-/** 基准实现 tag-vocab 标签流：只有词面。词汇已按 word 聚合，可作 key。 */
+/** 核心词汇标签流：只有词面。词汇已按 word 聚合，可作 key。 */
 function renderVocab(d: InsightData): ReactNode | null {
   if (!d.vocab.length) return null
   return (
@@ -203,16 +200,16 @@ export function CourseDetailClient({ courseId }: { courseId: string }) {
   const [notFound, setNotFound] = useState(false)
   // 封面兜底：coverUrl 可能是外链或 base64，加载失败退回分类渐变色卡
   const [coverFailed, setCoverFailed] = useState(false)
- // 展开的课节（基准实现允许多个同时展开）
+ // 展开的课节（允许多个同时展开）
   const [expandedIds, setExpandedIds] = useState<ReadonlySet<string>>(new Set())
   // 课节学习要点缓存：展开时才拉，拉过就不再拉
   const [insights, setInsights] = useState<Record<string, InsightSlot>>({})
   // 加入态 + 在学人数：初值来自 detail 接口，加入/移除成功后就地翻转
   const [acquired, setAcquired] = useState(false)
   const [learnerCount, setLearnerCount] = useState(0)
- // 加入成功的大 toast 遮罩（基准实现 #toastOverlay，不自动消失）
+ // 加入成功的大 toast 遮罩（.toast-overlay，不自动消失）
   const [showToast, setShowToast] = useState(false)
- // 加入/移除失败的小 toast（基准实现 showToast，3s 自动消失）
+ // 加入/移除失败的小 toast（3s 自动消失）
   const [notice, setNotice] = useState<string | null>(null)
   // 加载更多的已显示条数
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE)
@@ -293,7 +290,7 @@ export function CourseDetailClient({ courseId }: { courseId: string }) {
     }
   }
 
- // 基准实现 enrollCourse：成功 → toast 遮罩 + 人数 +1 + 按钮翻成「已加入课程库/移除」
+ // 加入课程：成功 → toast 遮罩 + 人数 +1 + 按钮翻成「已加入课程库/移除」
   const enroll = async () => {
     if (busy) return
     setBusy(true)
@@ -317,10 +314,10 @@ export function CourseDetailClient({ courseId }: { courseId: string }) {
     }
   }
 
- // 基准实现 unenrollCourse：确认 → DELETE → 按钮翻回「加入我的课程库」+ 人数 -1，
- // 停留在本页（与基准实现一致；「我的课程」列表页才会在移除后跳走）
+ // 移除课程：确认 → DELETE → 按钮翻回「加入我的课程库」+ 人数 -1，
+ // 停留在本页；「我的课程」列表页才会在移除后跳走）
   const unenroll = async () => {
- // 基准实现 customConfirmAsync 的对应物；本仓没有全局确认弹窗组件，用原生 confirm
+ // 本仓没有全局确认弹窗组件，用原生 confirm
     if (!window.confirm("确定要移除此课程吗？")) return
     if (busy) return
     setBusy(true)
@@ -385,7 +382,7 @@ export function CourseDetailClient({ courseId }: { courseId: string }) {
 
   const course = data.course
   const lessons = data.lessons
- // 总句数 = 各课节句数求和（基准实现页头口径：319 = 9 课节之和）
+ // 总句数 = 各课节句数求和（页头口径与课节之和一致）
   const totalSentences = lessons.reduce((sum, l) => sum + l.sentenceCount, 0)
   const visibleLessons = lessons.slice(0, visibleCount)
   const hasMore = lessons.length > visibleCount
@@ -395,7 +392,7 @@ export function CourseDetailClient({ courseId }: { courseId: string }) {
   return (
     <div className="course-market-detail">
       {notice && (
- // 基准实现 showToast 的顶部落位与红/绿配色；本页只有失败分支，固定红色
+ // toast 顶部落位与红/绿配色沿用整页样式；本页只有失败分支，固定红色
         <div
           style={{
             position: "fixed",
@@ -417,7 +414,7 @@ export function CourseDetailClient({ courseId }: { courseId: string }) {
       )}
 
       <div className="maxWidth">
- {/* 返回条 + 面包屑：基准实现返回箭头与首层面包屑都指向课程市场列表 */}
+ {/* 返回条 + 面包屑：返回箭头与首层面包屑都指向课程市场列表 */}
         <div className="location">
           <Link href="/home/store" className="back" aria-label="返回课程广场">
             <Icon>
@@ -491,7 +488,7 @@ export function CourseDetailClient({ courseId }: { courseId: string }) {
           <div className="course-info">
             <h1 className="course-title">{course.title}</h1>
 
- {/* 统计行：基准实现 4 项（难度/在学/课节/句子），难度无数据不渲染。
+ {/* 统计行：4 项（难度/在学/课节/句子），难度无数据不渲染。
                 图标配色由 CSS 的 .stat-item:nth-child 规则给，元素顺序变了
                 配色随之前移——这是 CSS 原样，不是 bug。 */}
             <div className="course-stats">
@@ -580,17 +577,17 @@ export function CourseDetailClient({ courseId }: { courseId: string }) {
                 return (
                   <li key={lesson.id} className={`lesson-item-wrapper${expanded ? " expanded" : ""}`}>
                     <div className="lesson-item" onClick={() => toggleLesson(lesson.id)}>
- {/* 基准实现 renderLessons 的 padStart(2,'0')；用 sortOrder 而不是
+ {/* 课节编号用 padStart(2,'0') 补零的 sortOrder 而不是
                           可见序号，加载更多翻页后编号不跳变 */}
                       <div className="lesson-number">{String(lesson.sortOrder).padStart(2, "0")}</div>
                       <div className="lesson-content">
                         <span className="lesson-title">{lesson.title}</span>
- {/* 基准实现只在描述非空时渲染 p.lesson-description */}
+ {/* 只在描述非空时渲染 p.lesson-description */}
                         {lesson.summary && <p className="lesson-description">{lesson.summary}</p>}
                       </div>
                       <div className="lesson-right">
                         <span className="sentence-count">{lesson.sentenceCount} 句</span>
- {/* 基准实现 hasEnhancement 门控的对应物：0 句的课节派生不出
+ {/* 展开箭头按内容门控：0 句的课节派生不出
                             任何要点，没有可展开的内容就不给箭头（头注释裁定说明） */}
                         {lesson.sentenceCount > 0 && (
                           <span className={`lesson-toggle-icon${expanded ? " rotated" : ""}`}>
@@ -602,8 +599,8 @@ export function CourseDetailClient({ courseId }: { courseId: string }) {
                       </div>
                     </div>
 
- {/* 基准实现语法点/句子复杂度两节按数据有无渲染，我们永无数据，
- 照基准实现行为整节省略（头注释裁定 3） */}
+ {/* 语法点/句子复杂度两节按数据有无渲染，我们永无数据，
+ 照「无数据不出节」行为整节省略 */}
                     {expanded && (
                       <div className="lesson-detail">
                         <DetailSection
@@ -628,7 +625,7 @@ export function CourseDetailClient({ courseId }: { courseId: string }) {
             </ul>
           )}
 
- {/* 基准实现 GetLessonList 分页 20/页；我们前端切片，不足一页不出按钮 */}
+ {/* 前端按 20/页切片分页，不足一页不出按钮 */}
           {hasMore && (
             <div className="load-more">
               <button
@@ -646,7 +643,7 @@ export function CourseDetailClient({ courseId }: { courseId: string }) {
         </div>
       </div>
 
- {/* 加入成功 toast 遮罩：点遮罩自身关闭，点内容区不关（基准实现行为） */}
+ {/* 加入成功 toast 遮罩：点遮罩自身关闭，点内容区不关 */}
       {showToast && (
         <div
           className="toast-overlay show"

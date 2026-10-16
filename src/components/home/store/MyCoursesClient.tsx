@@ -34,7 +34,7 @@ function relativeTime(iso: string): string {
 /**
  * 我的课程。
  *
- * 卡片与课程广场统一为基准实现式 `.market-course-card`（用户要求：广场和我的课程一起改）——
+ * 卡片与课程广场统一为 `.market-course-card`（用户要求：广场和我的课程一起改）——
  * 差异只在 variant="mine" 多一条学习进度，以及封面右上角的「N天前学过」。
  * 网格与卡片样式复用同一份生成的 store-market.css（scoped 到 `.store-market-page`，
  * 所以这里根节点也必须带上这个类名）。

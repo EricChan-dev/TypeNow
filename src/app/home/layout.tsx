@@ -1,10 +1,10 @@
-// 首页改版样式（对齐对标页版式）。沿用登录页的先例（app/login/layout.tsx
+// 首页改版样式（对齐验收版式）。沿用登录页的先例（app/login/layout.tsx
 // 导入 ./login.css）：全部规则挂在 `.home-ref` / `.home-ref-shell` 作用域下，
 // 所以放在 /home 的 layout 里不会波及站内其它页面，也不需要额外包一层组件。
 //
 // 两个文件分工：
-// · home-ref.css —— 内容区（`.home-ref` 作用域），对应基准实现的 .bgwhite / .col3 等区块
-// · home-shell.css —— 外框骨架（`.home-ref-shell` 作用域），对应基准实现的
+// · home-ref.css —— 内容区（`.home-ref` 作用域），对应 .bgwhite / .col3 等区块
+// · home-shell.css —— 外框骨架（`.home-ref-shell` 作用域），对应
 //                       .container-fuild / .sidebar-wrapper / .main-wrapper / .mainBox
 import "./home-ref.css"
 import "./home-shell.css"
@@ -83,7 +83,7 @@ export default async function HomeLayout({
     : null
 
   // 不再包一层 flex 容器：外框根节点 `.home-ref-shell` 自己就是 100dvh 的固定外壳
- // （基准实现 body 也是 overflow:hidden 的固定外壳）。多包一层只会让根布局的
+ // （原版式 body 也是 overflow:hidden 的固定外壳）。多包一层只会让根布局的
   // `body.flex.flex-col` 参与进来，把 100dvh 撑成 100% + 兄弟节点高度。
   return (
     <>

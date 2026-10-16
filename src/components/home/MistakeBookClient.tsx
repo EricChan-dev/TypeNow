@@ -4,21 +4,21 @@ import { useCallback, useEffect, useRef, useState } from "react"
 import { useRouter } from "next/navigation"
 
 /**
- * 错题本（复习本）—— 对齐对标页 错题本页 的结构与交互。
+ * 错题本（复习本）。
  *
  * 数据源映射（与 /api/user/mistake-book* 对齐）：
- * - 错题 ← review_queue（status 全态，userWrong 为本次作答原文，基准实现的 wrongWords 结构我们没有，降级为单条 diff-chip）
+ * - 错题 ← review_queue（status 全态，userWrong 为本次作答原文，无逐词 wrongWords 结构，降级为单条 diff-chip）
  * - 收藏句子    ← sentence_favorites（句子快照文本）
  * - 收藏单词    ← wordbook_items（带来源句上下文）
  *
- * CSS 由 scripts/extract-mistake-book-css.py 从基准实现生成（mistake-book.css），类名与
- * 基准实现一致，禁止手改生成文件。
+ * CSS 由 scripts/extract-mistake-book-css.py 生成（mistake-book.css），类名与
+ * 版式选择器一致，禁止手改生成文件。
  */
 
 const PAGE_SIZE = 8
 const PAGE_BUTTON_SIZE = 5
 const SCROLL_STEP = 400
-// 与基准实现 pager 一致：含当前页的 5 页窗口；每页 8 条。
+// 分页器：含当前页的 5 页窗口；每页 8 条。
 
 type Kind = "mistake" | "sentence" | "word"
 type SourceFilter = "" | Kind
@@ -122,7 +122,7 @@ export function MistakeBookClient() {
   const [items, setItems] = useState<BookItem[]>([])
   const [totalCount, setTotalCount] = useState(0)
 
- // ── 筛选态（与基准实现变量一一对应）────────────────────────────────────────
+ // ── 筛选态（课程/课节/来源/关键词）────────────────────────────────────────
   const [courseId, setCourseId] = useState("")
   const [lessonId, setLessonId] = useState("")
   const [sourceType, setSourceType] = useState<SourceFilter>("")
@@ -149,7 +149,7 @@ export function MistakeBookClient() {
   )
 
   // 手动重拉计数：清空/删除成功后由事件处理器自增，两个 effect 同时重跑
- //（基准实现删除成功后 loadMistakes+loadReviewStats+loadSourceTypeStats+loadMistakeCourses 四源全刷）
+ //（删除成功后 loadMistakes+loadReviewStats+loadSourceTypeStats+loadMistakeCourses 四源全刷）
   const [reloadNonce, setReloadNonce] = useState(0)
   const reloadAll = useCallback(() => setReloadNonce((n) => n + 1), [])
 
@@ -176,7 +176,7 @@ export function MistakeBookClient() {
     }
   }, [courseId, lessonId, reloadNonce])
 
- // ── 列表：服务端分页（基准实现 pageSize=8）；拉取后勾选/展开一律重置 ──────
+ // ── 列表：服务端分页（pageSize=8）；拉取后勾选/展开一律重置 ──────
   useEffect(() => {
     let cancelled = false
     const params = new URLSearchParams()
@@ -201,7 +201,7 @@ export function MistakeBookClient() {
     }
   }, [courseId, lessonId, sourceType, q, page, reloadNonce])
 
- // ── 交互：课程/课节/来源/搜索（均回第 1 页，基准实现 reSearch 语义）────────
+ // ── 交互：课程/课节/来源/搜索（均回第 1 页，重查语义）────────
   const selectCourse = (id: string) => {
     if (id === courseId) return
     setCourseId(id)
@@ -334,7 +334,7 @@ export function MistakeBookClient() {
     }
   }
 
- // ── 课程卡横向滚动（拖拽 + 箭头，基准实现 initCardsScroll 语义）───────────
+ // ── 课程卡横向滚动（拖拽 + 箭头）───────────
   const updateScrollArrows = useCallback(() => {
     const el = cardsRef.current
     if (!el) return
@@ -351,7 +351,7 @@ export function MistakeBookClient() {
   }
 
   const onCardsMouseDown = (e: React.MouseEvent) => {
- // 基准实现：点在卡片上不进入拖拽（保证点击选课），只在空白处拖动
+ // 点在卡片上不进入拖拽（保证点击选课），只在空白处拖动
     if ((e.target as HTMLElement).closest(".course-card")) return
     dragRef.current = { startX: e.clientX, scrollLeft: cardsRef.current?.scrollLeft ?? 0 }
     setDragging(true)
@@ -368,7 +368,7 @@ export function MistakeBookClient() {
     setDragging(false)
   }
 
- // ── 展开/收起（基准实现：.ai-btn 或 .tit 空白处点击切换）──────────────────
+ // ── 展开/收起（.ai-btn 或 .tit 空白处点击切换）──────────────────
   const toggleExpanded = (key: string) => {
     setExpanded((prev) => {
       const next = new Set(prev)
@@ -403,7 +403,7 @@ export function MistakeBookClient() {
   }
 
   const hideCoverImage = (e: React.SyntheticEvent<HTMLImageElement>) => {
- // 基准实现 onerror：隐藏破图并让容器显示兜底图标
+ // onerror：隐藏破图并让容器显示兜底图标
     e.currentTarget.style.display = "none"
     e.currentTarget.parentElement?.classList.add("no-image")
   }
@@ -585,7 +585,7 @@ export function MistakeBookClient() {
                 >
                   <div className={`card-cover${c.coverUrl ? "" : " no-image"}`}>
                     {c.coverUrl ? (
- // eslint-disable-next-line @next/next/no-img-element -- 基准实现原样使用 <img>，需要 onerror 兜底
+ // eslint-disable-next-line @next/next/no-img-element -- 需要 onerror 兜底
                       <img src={c.coverUrl} alt={c.courseName} onError={hideCoverImage} />
                     ) : (
                       <i className="ri-book-2-line" />
@@ -837,7 +837,7 @@ export function MistakeBookClient() {
           )}
         </div>
       </div>
- {/* 基准实现自定义确认弹窗（Promise 语义；遮罩点击 = 取消） */}
+ {/* 自定义确认弹窗（Promise 语义；遮罩点击 = 取消） */}
       {confirmState && (
         <div
           className="mb-modal-overlay"

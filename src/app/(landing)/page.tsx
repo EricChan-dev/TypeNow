@@ -8,31 +8,31 @@ import { BRAND, brandLockupWithEn } from "@/lib/brand"
 import type { Metadata } from "next"
 
 /**
- * 落地页 —— 按用户提供的对标页还原。
+ * 落地页。
  *
- * ── 还原范围 ────────────────────────────────────────────────────────────────
+ * ── 品牌相关只换四处 ────────────────────────────────────────────────────────
  *
- * 结构、区块划分、字段、间距、配色、文案全部与基准实现一致；**只换四处**：
+ * 结构、区块划分、字段、间距、配色、文案按验收版式保持不变；换成的是本站自己的值：
  *
- * 1. 品牌名 基准实现 → {BRAND.nameZh}
+ * 1. 品牌名 → {BRAND.nameZh}
  *   2. 页面标题    → BRAND.tabTitle（格式「品牌名 - 定位语」）
- * 3. 主口号 → BRAND.slogan（基准实现首屏 H1 那句）
+ * 3. 主口号 → BRAND.slogan
  *   4. Logo        → public/brand/icon.png（AI 彩色徽标去水印版）
  *
- * 页脚里的公司信息（备案号、协议链接、版权行）也换成本站的 —— 那些属于
+ * 页脚里的公司信息（备案号、协议链接、版权行）也是本站的 —— 那些属于
  * 「公司相关」，不能照抄别人的主体。
  *
  * ── 为什么这个文件在 (landing) 而不是 (public) ───────────────────────────────
  *
- * 基准实现自带一整套顶栏与页脚，与本站 (public) 布局里的 Navbar/Footer 不是同一套。
- * 路由组 (public)/layout.tsx 会给组内每个页面套上 Navbar+Footer，而还原要求
- * 首页用基准实现自己的那套，所以首页单独放到 (landing) 组，只继承根布局。
+ * 落地页的顶栏与页脚，与本站 (public) 布局里的 Navbar/Footer 不是同一套。
+ * 路由组 (public)/layout.tsx 会给组内每个页面套上 Navbar+Footer，而落地页要求
+ * 用自己的那套，所以首页单独放到 (landing) 组，只继承根布局。
  * 其余公开页（/pricing、/privacy、/terms…）仍在 (public) 组里共用站内导航。
  *
- * ── 基准实现附件缺了什么 ──────────────────────────────────────────────────────
+ * ── 原始素材缺了什么 ──────────────────────────────────────────────────────
  *
- * 附件只保存了 .html，`_files/` 目录（logo.png、jigsaw/jianpan/yuyin.png、
- * style.css、app.js）都没有跟过来。处理方式：
+ * 原始素材只保存了单页 HTML，`_files/` 资源目录（logo.png、jigsaw/jianpan/yuyin.png、
+ * style.css、app.js）没有跟过来。处理方式：
  * · 三张功能卡插画 → 换成等价语义的 lucide 图标（Puzzle/Keyboard/Mic）
  * · `.word-btn` 的样式 → 直接用等价的 Tailwind 类写在组件里
  * · app.js 的拼词交互 → 在 PuzzleDemoCard 里按可见行为重写
@@ -43,7 +43,7 @@ export const metadata: Metadata = {
   description: `${BRAND.nameZh}将枯燥的语法拆解成有趣的拼图游戏，提供单词拼图、键盘打字、AI口语纠错三种高效学习模式。无需下载，打开浏览器即可开始学习。`,
 }
 
-/** 基准实现里反复出现的绿色对勾（`w-4 h-4` 与 `w-3.5 h-3.5` 两种尺寸） */
+/** 绿色对勾（`w-4 h-4` 与 `w-3.5 h-3.5` 两种尺寸），列表项里反复出现 */
 function Tick({ className }: { className: string }) {
   return (
     <svg className={className} fill="currentColor" viewBox="0 0 20 20">
@@ -60,7 +60,7 @@ function Tick({ className }: { className: string }) {
  * 首屏 H1 的两段式拆法。
  *
  * 文案取自 `BRAND.slogan`（唯一事实源），在**全角逗号**处断成两行：
- * 前半句纯黑，后半句染蓝并加手绘下划线 —— 这是基准实现的版式。
+ * 前半句纯黑，后半句染蓝并加手绘下划线 —— 首屏的两段式版式。
  *
  * 此前这里**硬编码**着旧口号，导致改 `BRAND.slogan` 对首屏毫无影响，
  * 两处文案各自漂移（旧句换掉后首屏仍显示旧句）。现在统一从事实源派生，
@@ -72,9 +72,9 @@ const [HERO_LINE_1, HERO_LINE_2 = ""] = BRAND.slogan.split("，")
 export default function LandingPage() {
   return (
     <div className="relative min-h-screen bg-slate-50 text-slate-800 selection:bg-blue-500 selection:text-white">
- {/* 背景装饰光晕。基准实现是 `fixed … -z-10`，靠 body 背景在最低层透出来；
-          这里 body 背景来自主题变量，所以改成 z-0 光晕 + z-10 内容块，
- 视觉结果与基准实现一致，但不会被自家背景盖掉。 */}
+ {/* 背景装饰光晕。这里 body 背景来自主题变量，若把光晕压到 -z-10 会被盖住；
+          所以改成 z-0 光晕 + z-10 内容块，
+ 不会被自家背景盖掉。 */}
       <div className="pointer-events-none fixed inset-0 z-0 overflow-hidden" aria-hidden>
         <div className="absolute -top-40 left-1/2 -translate-x-1/2 w-[800px] h-[500px] bg-gradient-to-tr from-blue-100/70 via-indigo-100/50 to-amber-100/40 blur-3xl rounded-full"></div>
         <div className="absolute top-1/2 -right-40 w-[500px] h-[500px] bg-emerald-100/40 blur-3xl rounded-full"></div>
@@ -85,12 +85,11 @@ export default function LandingPage() {
         <header className="sticky top-0 z-50 backdrop-blur-md bg-white/80 border-b border-slate-100 transition-all">
           <div className="max-w-6xl mx-auto px-4 sm:px-6 h-20 flex items-center justify-between">
             {/* 品牌锁定标：图标 + 中文名横排。
- 基准实现的 logo.png 是把「图标 + 基准实现」烘焙进一张 338×80 位图，
-                所以它一行就是完整的品牌名。我们的图标（public/brand/icon.png，
+                我们的图标（public/brand/icon.png，
                 AI 彩色徽标去水印抠图版）是单图形，单独放进去就只剩图、没有名字，
- 于是这里按基准实现的比例用「图标 + 真实文字」拼出同样版式：
- · 文字墨高 ≈ 图标高的 0.6（基准实现 36px 图标对应 49/80 的文字高）
- · 图标与文字间距 ≈ 图标宽的 1/3（基准实现 78→104 共 26px）
+ 于是这里用「图标 + 真实文字」拼出完整锁标，比例对齐整块位图版式：
+ · 文字墨高 ≈ 图标高的 0.6
+ · 图标与文字间距 ≈ 图标宽的 1/3
                 brand/web-logo/ 里已有烘焙好的横排锁标 PNG（build-brand-lockup.py），
                 但站内保持「图标 + 真实文字」：文字是活的（跟 brand.ts 走、可选中、
                 不糊），锁标图留给印刷/OG 等需要整块位图的场合。 */}
@@ -99,7 +98,7 @@ export default function LandingPage() {
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img src="/brand/icon.png" alt="" aria-hidden className="h-14 w-auto object-contain" />
                 {/* 尺寸层级（m00559 用户要求）：文字只大一号，图标要比文字再大几个号 ——
- 图标 h-14(56px) vs 文字 32px（m00630：m00559 的比例保持，整体再大一号）。站酷快乐体即基准实现同款
+ 图标 h-14(56px) vs 文字 32px（m00630：m00559 的比例保持，整体再大一号）。站酷快乐体
                     （见 globals.css 的 @font-face 注释，字形 IoU 0.907）；
                     font-brand 内含 400 字重锁定（该字体只有 Regular）。 */}
                 <span className="font-brand text-[32px] leading-none tracking-tight text-slate-900">
@@ -152,7 +151,7 @@ export default function LandingPage() {
                 </div>
 
                 {/* 主口号。
- 行高要分两段写：基准实现用的是 Tailwind v3 编译产物，
+ 行高要分两段写：验收版式用的是 Tailwind v3 编译产物，
                     `.sm\:text-5xl{line-height:1}` / `.lg\:text-6xl{line-height:1}`
                     排在基础工具类**之后**，所以 ≥640px 时它们的 line-height:1
                     会盖掉 `leading-[1.15]`；只有 <640px 才是 1.15。
@@ -175,7 +174,7 @@ export default function LandingPage() {
                 </h1>
 
                 {/* 简洁副标题。
- 行高同样分两段：基准实现 v3 产物里 `sm:text-xl{line-height:1.75rem}`
+ 行高同样分两段：验收版式的 v3 产物里 `sm:text-xl{line-height:1.75rem}`
                     位于媒体查询中、排在 `leading-relaxed` 之后，所以 ≥640px 取 28px；
                     <640px 才是 leading-relaxed 的 29.25px（18×1.625）。
                     v4 的 leading-* 排在 text-* 之后，不补 `sm:leading-7` 会一直是 32.5px。 */}
@@ -349,7 +348,7 @@ export default function LandingPage() {
               准备好开始你的英语游戏了吗？
             </h2>
 
- {/* 舒适副标题。与首屏那段同理：基准实现 ≥640px 走 `sm:text-lg` 的
+ {/* 舒适副标题。与首屏那段同理：≥640px 要走 `sm:text-lg` 的
                 28px 行高，v4 需要显式 `sm:leading-7` 才能压过 leading-relaxed。 */}
             <p className="text-slate-600 text-base sm:text-lg max-w-xl mx-auto mb-8 font-normal leading-relaxed sm:leading-7">
               加入我们，无需下载安装，打开网页即刻开启练习。<br className="hidden sm:inline" />每天 15 分钟，体验在游戏中轻松掌握地道英语的乐趣。
@@ -409,8 +408,8 @@ export default function LandingPage() {
               <Link href="/privacy" className="hover:text-blue-600 transition-colors">
                 隐私政策
               </Link>
- {/* 基准实现第三个链接就是独立页面「儿童隐私」，现在本站也有独立页了
-                  （/children-privacy）。此前没有单开页时指向 /privacy#minors，
+ {/* 页脚第三个链接是独立页面「儿童隐私」（/children-privacy）。
+                  此前没有单开页时指向 /privacy#minors，
                   那个锚点仍然保留在隐私政策第 7 节，不会因为改了这里就失效。 */}
               <Link
                 href="/children-privacy"

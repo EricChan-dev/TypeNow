@@ -10,7 +10,7 @@ import { cn } from "@/lib/utils"
 import { BRAND } from "@/lib/brand"
 import { UserActions } from "@/components/layout/UserActions"
 
-// 锚点对齐新版落地页的区块（照竞品首页的三个锚点结构：玩法 / 演示 / 特色）。
+// 锚点对齐新版落地页的三个区块：玩法 / 演示 / 特色。
 // section 值必须与 page.tsx 里的 section id 一致，否则 scrollIntoView 会静默失败。
 const navLinks = [
   { href: "#features", label: "核心玩法", section: "features" },

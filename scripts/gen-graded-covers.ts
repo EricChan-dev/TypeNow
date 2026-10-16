@@ -13,7 +13,7 @@
  *
  * school_sync 194 门已在 10-11 日用同一管线全量重做，
  * 需求方点名的「风格和中小学同步一致」= 同一套 STYLE 提示词 + 标题版式随机池 + OCR 校验，
- * 所以这里逐字复刻 /tmp/all194/gen_all.py 的结构，只改课程来源与标题蒸馏规则。
+ * 所以这里沿用 school_sync 管线脚本 gen_all.py 的结构，只改课程来源与标题蒸馏规则。
  *
  * ── 关键参数（与 school_sync 实测一致）──────────────────────────────────────
  *
@@ -51,7 +51,7 @@ const VISION_MODEL = "glm-4.6v-flash"
 const SIZE = "1440x960"
 const OCR_TOOL = "/tmp/ocrtool/ocr"
 
-/** school_sync 全量生产的 STYLE 提示词（gen_all.py 逐字复刻） */
+/** school_sync 全量生产的 STYLE 提示词（沿用 gen_all.py 写法） */
 const STYLE =
   "儿童教育课程封面。扁平矢量插画风格，几何化圆润造型，平涂上色，边缘干净利落。" +
   "明亮鲜艳的高饱和度配色，互补色碰撞，画面饱满铺满整幅。" +

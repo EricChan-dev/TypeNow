@@ -4,7 +4,7 @@ import { usableSentenceSql } from "@/lib/sentence-quality"
 /**
  * 错题本聚合查询的共享 SQL 构件。
  *
- * 基准实现（对标页）把三类记录混在一张列表里：
+ * 错题本要把三类记录聚合在一张列表里：
  *   · 错题        —— 自动进队列，本库对应 review_queue（原句级，UNIQUE(user_id, sentence_id)）
  *   · 收藏句子    —— 手动收藏，本库对应 sentence_favorites（练习项级，id 可能带 `_c<order>`）
  *   · 收藏单词    —— 手动收藏，本库对应 wordbook_items
@@ -22,7 +22,7 @@ import { usableSentenceSql } from "@/lib/sentence-quality"
 
 export type MistakeSource = "mistake" | "sentence" | "word" | "all"
 
-/** 非法值一律回落 all（与基准实现 sourceType 缺省行为一致），不抛 400。 */
+/** 非法值一律回落 all（sourceType 缺省行为），不抛 400。 */
 export function parseMistakeSource(raw: string | null | undefined): MistakeSource {
   if (raw === "mistake" || raw === "sentence" || raw === "word") return raw
   return "all"
@@ -44,7 +44,7 @@ export function likeMatch(raw: string): string {
   return `%${escapeLikeLike(raw)}%`
 }
 
-/** 搜索关键词的清洗上限：基准实现 searchInp 无长度限制，这里兜住病态输入。 */
+/** 搜索关键词的清洗上限：兜住病态输入。 */
 export const MAX_SEARCH_LENGTH = 100
 
 /** 三个来源统一的筛选口径（课程 / 课节 / 关键词）。 */

@@ -1,17 +1,16 @@
 /**
- * 快捷键配置。移植基准实现 `句子练习 - 
+ * 快捷键配置。
  *
  * 为什么要有这一层：练习页的五个全局快捷键（播放/答案/上一句/下一句/收藏）
- * 在基准实现里是**用户可改**的，改完存 `localStorage.practice_shortcuts`，
+ * 快捷键是**用户可改**的，改完存 `localStorage.practice_shortcuts`，
  * 设置面板的「自定义快捷键」卡片就是入口（弹窗里逐行录制按键）。
  * 改键之后，悬浮提示条、按钮 title、全局 keydown 匹配都必须读同一份配置，
  * 否则会出现「提示写着 ⌘+A、实际按 ⌘+A 没反应」这种自相矛盾的状态 ——
  * 所以这里做成唯一事实源，由 `DictationPractice.tsx` 统一消费。
  *
- * 基准实现把 `slow`（慢声发音）和 `wordSpeak`（焦点词发音）也列在默认表里，
- * 但渲染列表时明确跳过（`practice-sys-controls.js:637` 注释
- * 「[暂时] 慢声发音和焦点词发音功能已隐藏」）。这里同样保留它们的默认值
- * （保持存储结构与基准实现一致，换回来时不用迁移），只是不渲染、不匹配。
+ * `slow`（慢声发音）和 `wordSpeak`（焦点词发音）保留在默认表里
+ * （保持存储结构稳定，之后恢复功能时不用迁移），只是不渲染、不匹配
+ * —— 这两个功能暂时隐藏。
  */
 
 // 平台判定统一走 platform.ts，避免出现「两处各判一次 Mac」的分裂。
@@ -19,7 +18,7 @@ import { modifierKeyLabel, prefersMetaKey } from "@/lib/platform"
 
 const SHORTCUT_STORAGE_KEY = "practice_shortcuts"
 
-/** 动作 id 的联合。基准实现用字符串键，这里收窄成字面量联合以便类型检查。 */
+/** 动作 id 的联合。收窄成字面量联合以便类型检查。 */
 export type ShortcutId =
   | "play"
   | "slow"
@@ -37,7 +36,7 @@ export interface ShortcutBinding {
   label: string
 }
 
-/** 默认绑定，逐条对应 `shortcut-config.js:12-20`。 */
+/** 默认绑定。 */
 export const DEFAULT_SHORTCUTS: Record<ShortcutId, ShortcutBinding> = {
   play: { key: "p", ctrl: true, shift: false, alt: false, label: "播放语音" },
   slow: { key: "m", ctrl: true, shift: false, alt: false, label: "慢声发音" },
@@ -48,18 +47,18 @@ export const DEFAULT_SHORTCUTS: Record<ShortcutId, ShortcutBinding> = {
   favorite: { key: "u", ctrl: true, shift: false, alt: false, label: "收藏句子" },
 }
 
-/** 基准实现渲染弹窗列表时跳过的动作。 */
+/** 弹窗列表里跳过渲染的动作。 */
 const HIDDEN_SHORTCUT_IDS: readonly ShortcutId[] = ["slow", "wordSpeak"]
 
-/** 弹窗里逐行展示的动作，顺序即基准实现 `for (const id in shortcuts)` 的顺序。 */
+/** 弹窗里逐行展示的动作，顺序即 `Object.keys(DEFAULT_SHORTCUTS)` 的顺序。 */
 export const VISIBLE_SHORTCUT_IDS: readonly ShortcutId[] = (
   Object.keys(DEFAULT_SHORTCUTS) as ShortcutId[]
 ).filter((id) => !HIDDEN_SHORTCUT_IDS.includes(id))
 
 /**
- * 浏览器保留键，不许用户占用（`shortcut-config.js:23-40`）。
- * 仅当**没有** shift/alt 时才拒（基准实现 `isBrowserReserved` 里的
- * `!combo.shift && !combo.alt`），所以 Ctrl+Shift+C 之类是允许的。
+ * 浏览器保留键，不许用户占用。
+ * 仅当**没有** shift/alt 时才拒（`!combo.shift && !combo.alt`），
+ * 所以 Ctrl+Shift+C 之类是允许的。
  */
 const BROWSER_RESERVED_KEYS: ReadonlyArray<{ key: string; ctrl: boolean }> = [
   { key: "c", ctrl: true },
@@ -82,8 +81,7 @@ const BROWSER_RESERVED_KEYS: ReadonlyArray<{ key: string; ctrl: boolean }> = [
 
 /**
  * 不许作为主键的值。Enter 是答题提交/切句，空格是输入与滚动，
- * 基准实现两处独立判定：加载时 `FORBIDDEN_KEYS`
- * 与录制时 `lowerKey`（`practice-sys-controls.js:733`）。这里合二为一。
+ * 加载与录制两处共用这一份判定。
  */
 const FORBIDDEN_KEYS = new Set(["enter", " ", "space", "spacebar"])
 
@@ -99,7 +97,6 @@ export function mergeShortcuts(saved: unknown): Record<ShortcutId, ShortcutBindi
     const def = DEFAULT_SHORTCUTS[id]
     const got = parsed?.[id]
     // 有值、有 key、且不是禁用键才采纳；否则整项回退默认
- // （基准实现）。
     if (got && got.key && !isForbiddenKey(got.key)) {
       result[id] = {
         ...def,
@@ -127,7 +124,7 @@ export function loadShortcuts(): Record<ShortcutId, ShortcutBinding> {
 
 /**
  * 写回 `localStorage`。只存 key/ctrl/shift/alt 四个字段，
- * **不存 label**（基准实现 同款）——
+ * **不存 label** ——
  * label 是展示文案，存进去会让改文案变成一次数据迁移。
  */
 export function saveShortcuts(shortcuts: Record<ShortcutId, ShortcutBinding>): void {
@@ -143,7 +140,7 @@ export function saveShortcuts(shortcuts: Record<ShortcutId, ShortcutBinding>): v
   }
 }
 
-/** 全部恢复默认并落盘（基准实现 `resetShortcuts`）。 */
+/** 全部恢复默认并落盘。 */
 export function resetShortcuts(): Record<ShortcutId, ShortcutBinding> {
   const fresh = mergeShortcuts(null)
   saveShortcuts(fresh)
@@ -151,8 +148,7 @@ export function resetShortcuts(): Record<ShortcutId, ShortcutBinding> {
 }
 
 /**
- * 判断是否有任意一项偏离默认 —— 决定 `#shortcutDisplay` 显示「默认」还是「自定义」
- * （基准实现 `updateShortcutDisplay`，）。
+ * 判断是否有任意一项偏离默认 —— 决定 `#shortcutDisplay` 显示「默认」还是「自定义」。
  */
 export function isDefaultShortcuts(shortcuts: Record<ShortcutId, ShortcutBinding>): boolean {
   for (const id of Object.keys(DEFAULT_SHORTCUTS) as ShortcutId[]) {
@@ -166,7 +162,7 @@ export function isDefaultShortcuts(shortcuts: Record<ShortcutId, ShortcutBinding
 }
 
 /**
- * 键盘事件是否命中某个动作（基准实现 `matchShortcut`，）。
+ * 键盘事件是否命中某个动作。
  *
  * 要点：修饰键要求**完全一致** —— 绑了 ctrl 的项，没按 ctrl 不算；
  * 没绑 ctrl 的项，按了 ctrl 也不算。shift/alt 同理。主键比较大小写不敏感。
@@ -185,7 +181,7 @@ export function matchShortcut(
   return ctrlMatch && shiftMatch && altMatch && keyMatch
 }
 
-/** 主键的友好显示名（基准实现 `getShortcutDisplay` 的 `keyNames`）。 */
+/** 主键的友好显示名。 */
 function keyDisplayName(key: string): string {
   const mac = prefersMetaKey()
   const names: Record<string, string> = {
@@ -216,7 +212,7 @@ export function shortcutDisplay(
   return parts.join("+")
 }
 
-/** 快捷键的 `<kbd>` 片段，逐段包标签（基准实现 `getShortcutKbd`）。 */
+/** 快捷键的 `<kbd>` 片段，逐段包标签。 */
 export function shortcutKbdParts(
   actionId: ShortcutId,
   shortcuts: Record<ShortcutId, ShortcutBinding>,
@@ -231,7 +227,7 @@ export function shortcutKbdParts(
   return parts
 }
 
-/** 是否是浏览器保留键（`shortcut-config.js:217`）。 */
+/** 是否是浏览器保留键。 */
 export function isBrowserReserved(combo: {
   key: string
   ctrl: boolean
@@ -247,7 +243,7 @@ export function isBrowserReserved(combo: {
   )
 }
 
-/** 与其它动作是否冲突，返回冲突项的 label（基准实现 `findShortcutConflict`）。 */
+/** 与其它动作是否冲突，返回冲突项的 label。 */
 export function findShortcutConflict(
   actionId: ShortcutId,
   combo: { key: string; ctrl: boolean; shift: boolean; alt: boolean },
@@ -283,18 +279,17 @@ export function extractComboFromEvent(
 
 /**
  * 录制一个新组合时的合法性校验。返回 `null` 表示可接受，
- * 否则返回「为什么不行」——类型决定提示语气，message 决定提示文案，
- * 与基准实现 `_processShortcutCombo`逐条对应。
+ * 否则返回「为什么不行」——类型决定提示语气，message 决定提示文案。
  */
 export type ComboRejection = {
   reason: "forbidden" | "single-char" | "reserved" | "conflict"
   message: string
- /** 行内替换的提示文案（基准实现把 `.shortcut-key-display` 换成警示文本）。 */
+ /** 行内替换的提示文案。 */
   inline: string
   conflictLabel?: string
 }
 
-/** 不带修饰键时可单独使用的「安全键」（基准实现 `safeSingleKeys`）。 */
+/** 不带修饰键时可单独使用的「安全键」。 */
 const SAFE_SINGLE_KEYS = [
   "Escape", "Enter", "Backspace", "Tab",
   "ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight",

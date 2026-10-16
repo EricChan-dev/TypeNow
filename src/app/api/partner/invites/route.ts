@@ -11,8 +11,7 @@ import { eq, and, ne, desc, count, inArray, notInArray, gt } from "drizzle-orm"
  *
  * 为什么需要这个接口：`/api/partner/dashboard` 只给两个**总数**（邀请人数、付费人数）。
  * 总数能让推广员知道成绩，但**不能让他做任何事** —— 他不知道该跟进谁。
- * 这是推广员唯一能自己动手提升转化的抓手，也是基准实现两套推广后台都做了
- * 「待付费邀请记录」这个视图的原因（见 docs/membership-growth-plan.md 的 P2-4）。
+ * 这是推广员唯一能自己动手提升转化的抓手（见 docs/membership-growth-plan.md 的 P2-4）。
  *
  * 三个必须带上的字段，各自解决一个具体问题：
  *
