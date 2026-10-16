@@ -7,7 +7,13 @@
  */
 import { describe, it, expect } from "vitest"
 import * as mod from "@/lib/phone-gate"
-import { decideBindCollision, needsPhoneBinding, loginBindPath } from "@/lib/phone-gate"
+import {
+  decideBindCollision,
+  needsPhoneBinding,
+  loginBindPath,
+  inheritReferral,
+  isDevWechatOpenid,
+} from "@/lib/phone-gate"
 
 const base = {
   currentUserId: "shell",
@@ -120,6 +126,29 @@ describe("decideBindCollision", () => {
     ).toEqual({ action: "transfer" })
   })
 
+  it("手机号账号挂的是 dev 旁路的假 openid → 视同未绑定，可转移", () => {
+    // 真实案例：老板的手机号账号是本地开发连生产库调试时建的，挂着
+    // dev_wechat_user。若把它当成「另一个微信号」，他扫自己的微信绑手机号
+    // 会被无端拒绝，只能来找人工。dev_* 必须视同未绑定。
+    for (const devOpenid of ["dev_wechat_user", "dev_oa_user"]) {
+      expect(
+        decideBindCollision({
+          ...base,
+          existingUserId: "phone-account",
+          existingWechatOpenid: devOpenid,
+        }),
+      ).toEqual({ action: "transfer" })
+    }
+  })
+
+  it("dev 假 openid 的判定只看 dev_ 前缀，真 openid 不受影响", () => {
+    expect(isDevWechatOpenid("dev_wechat_user")).toBe(true)
+    expect(isDevWechatOpenid("dev_oa_user")).toBe(true)
+    expect(isDevWechatOpenid("oSZ4m3Zq87o0CXJz8aAGgxLljjVo")).toBe(false)
+    expect(isDevWechatOpenid(null)).toBe(false)
+    expect(isDevWechatOpenid(undefined)).toBe(false)
+  })
+
   it("拒绝优先于转移：有练习数据时，即使是同一个微信号也不自动动它", () => {
     const v = decideBindCollision({
       ...base,
@@ -141,5 +170,25 @@ describe("decideBindCollision", () => {
         expect(v.reason).toMatch(/[\u4e00-\u9fa5]/)
       }
     }
+  })
+})
+
+describe("inheritReferral", () => {
+  it("壳账号经邀请链接注册的归因，在转移时继承给没有归因的目标账号", () => {
+    // 这是「把邀请码存下来对接推荐体系」的关键一步：归因记在壳账号上，
+    // 转移只搬微信身份的话，归因会随壳账号一起被注销口径抹掉。
+    expect(inheritReferral({ targetReferredBy: null, shellReferredBy: "inviter-1" })).toBe(
+      "inviter-1",
+    )
+  })
+
+  it("目标账号已有自己的归因时保持不动（先到的归因不作废）", () => {
+    expect(inheritReferral({ targetReferredBy: "inviter-0", shellReferredBy: "inviter-1" })).toBe(
+      "inviter-0",
+    )
+  })
+
+  it("两边都没有归因 → null", () => {
+    expect(inheritReferral({ targetReferredBy: null, shellReferredBy: null })).toBeNull()
   })
 })

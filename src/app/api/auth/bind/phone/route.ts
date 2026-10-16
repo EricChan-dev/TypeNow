@@ -5,7 +5,7 @@ import { eq, and, gt, count as sqlCount } from "drizzle-orm"
 import { createSession, getSession } from "@/lib/auth/session"
 import { getUserByPhone } from "@/lib/auth/user"
 import { checkRateLimit, getClientIP } from "@/lib/rate-limit"
-import { decideBindCollision } from "@/lib/phone-gate"
+import { decideBindCollision, inheritReferral } from "@/lib/phone-gate"
 import { anonymizedProfile } from "@/lib/account-deletion"
 
 const PHONE_REGEX = /^1[3-9]\d{9}$/
@@ -82,7 +82,11 @@ export async function POST(request: NextRequest) {
   const [existingUser, me] = await Promise.all([
     getUserByPhone(phone),
     db
-      .select({ wechatOpenid: users.wechatOpenid, wechatUnionid: users.wechatUnionid })
+      .select({
+        wechatOpenid: users.wechatOpenid,
+        wechatUnionid: users.wechatUnionid,
+        referredBy: users.referredBy,
+      })
       .from(users)
       .where(eq(users.id, session.userId))
       .limit(1)
@@ -131,9 +135,19 @@ export async function POST(request: NextRequest) {
       .update(users)
       .set({ wechatOpenid: null, wechatUnionid: null })
       .where(eq(users.id, session.userId))
+    // 邀请归因随微信身份一起搬家：壳账号经由邀请链接注册时，referred_by 记在壳
+    // 账号上（ref_code cookie），转移后必须落到目标账号，否则推荐体系收不到
+    // 这位被邀请用户的分成；目标账号已有归因时保持不动（先到的归因不作废）。
     await tx
       .update(users)
-      .set({ wechatOpenid: me?.wechatOpenid ?? null, wechatUnionid: me?.wechatUnionid ?? null })
+      .set({
+        wechatOpenid: me?.wechatOpenid ?? null,
+        wechatUnionid: me?.wechatUnionid ?? null,
+        referredBy: inheritReferral({
+          targetReferredBy: existingUser.referredBy,
+          shellReferredBy: me?.referredBy ?? null,
+        }),
+      })
       .where(eq(users.id, targetId))
     // 壳账号按注销口径清空（清 PII、权益归零、角色回落为 user）
     await tx.update(users).set(anonymizedProfile()).where(eq(users.id, session.userId))

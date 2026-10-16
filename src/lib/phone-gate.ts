@@ -72,6 +72,33 @@ export interface BindCollisionInput {
   currentHasPracticeData: boolean
 }
 
+/**
+ * dev 旁路写进库里的**假**微信身份（`dev_wechat_user` / `dev_oa_user`）。
+ *
+ * 本地开发连生产库调试时，dev 旁路登录/绑定会把这种假 openid 写到账号上
+ * （见 api/auth/wechat/callback 的 handleDevLogin / handleDevBind）。它们不是
+ * 真微信号：若在撞号判定里把它当成「已绑定另一个微信号」，真实用户绑自己的
+ * 手机号会被无端拒绝，只能来找人工。判定时必须视同「未绑定」。
+ */
+export function isDevWechatOpenid(openid: string | null | undefined): boolean {
+  return typeof openid === "string" && openid.startsWith("dev_")
+}
+
+/**
+ * 转移时邀请归因（referred_by）怎么落。
+ *
+ * 微信壳账号经由邀请链接注册时，归因记在**壳账号**上（ref_code cookie → referred_by）。
+ * 把微信身份转移到手机号账号后，若目标账号自己没有归因，就必须继承壳账号的 ——
+ * 否则推荐体系永远等不到这位被邀请用户的消费分成（邀请码存了却在转移时丢了）。
+ * 目标账号已有归因时保持不动：先到的归因不作废。
+ */
+export function inheritReferral(input: {
+  targetReferredBy: string | null
+  shellReferredBy: string | null
+}): string | null {
+  return input.targetReferredBy ?? input.shellReferredBy
+}
+
 export function decideBindCollision(input: BindCollisionInput): BindCollisionVerdict {
   const { currentUserId, existingUserId } = input
 
@@ -88,8 +115,13 @@ export function decideBindCollision(input: BindCollisionInput): BindCollisionVer
     }
   }
 
-  // 手机号账号已经绑了**另一个**微信号 → 不能悄悄把它换掉
-  if (input.existingWechatOpenid && input.existingWechatOpenid !== input.currentWechatOpenid) {
+  // 手机号账号已经绑了**另一个**微信号 → 不能悄悄把它换掉。
+  // dev 旁路的假 openid（dev_*）不算「另一个微信号」——那是本地开发连生产库
+  // 调试时留下的产物，真实用户撞上它必须能正常完成绑定/转移。
+  const existingOpenid = isDevWechatOpenid(input.existingWechatOpenid)
+    ? null
+    : input.existingWechatOpenid
+  if (existingOpenid && existingOpenid !== input.currentWechatOpenid) {
     return {
       action: "refuse",
       reason: "该手机号已绑定另一个微信号，请联系客服处理。",
