@@ -92,8 +92,15 @@ export function AiChatWidget() {
    * 在后台既没用又碍事；管理员恰好是登录状态，所以在原来的判断下它一定会冒出来。
    */
   const isAdminRoute = pathname?.startsWith("/admin") ?? false
+  /**
+   * 登录/绑定手机号页也不显示。这两个是认证流程页：未登录时组件本来就被
+   * `!loggedIn` 拦住，但**已登录用户回到 /login**（或强制绑号流程走到
+   * /bind-phone）时 loggedIn 已是 true，浮窗会盖在登录表单上 ——
+   * AI小咪应该登录后才可用，也要在登录动作发生的页面上让位。
+   */
+  const isAuthFlowRoute = pathname === "/login" || pathname === "/bind-phone"
   // 落地页保持隐藏：那是营销页，浮窗会盖住定价卡片的 CTA
-  if (pathname === "/" || isAdminRoute || !loggedIn || (immersive && !open)) return null
+  if (pathname === "/" || isAuthFlowRoute || isAdminRoute || !loggedIn || (immersive && !open)) return null
 
   async function handleSend() {
     if (!input.trim() || sending) return
